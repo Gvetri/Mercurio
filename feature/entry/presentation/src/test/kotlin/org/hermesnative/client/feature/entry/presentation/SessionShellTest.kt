@@ -17,6 +17,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
@@ -49,7 +50,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sessions").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(1)
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
@@ -72,7 +73,7 @@ class SessionShellTest {
 
         composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Second Session").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(2)
     }
@@ -123,7 +124,7 @@ class SessionShellTest {
         composeTestRule
             .onNodeWithText("Select a Session from the list to view its conversation.")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertDoesNotExist()
     }
 
     @Test
@@ -394,7 +395,7 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Message").assertIsDisplayed()
         composeTestRule.onNodeWithText("Send").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
@@ -412,7 +413,7 @@ class SessionShellTest {
         }
 
         composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Send").assertIsDisplayed().assertHasClickAction()
     }
 
@@ -421,7 +422,7 @@ class SessionShellTest {
         val state = mutableStateOf(conversationEntryState())
         setShellContent(state)
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeTestRule.onNodeWithText("Send").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeTestRule.onNodeWithText("Refresh history").assertHasClickAction().assertHeightIsAtLeast(48.dp)
 

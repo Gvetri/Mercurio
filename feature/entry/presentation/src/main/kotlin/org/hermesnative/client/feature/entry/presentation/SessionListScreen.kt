@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,12 +26,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -58,6 +62,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.hermesnative.client.feature.entry.domain.RunId
@@ -954,24 +959,6 @@ private fun paneTailMaxHeight(available: Dp): Dp = (available - 120.dp).coerceAt
  */
 private fun panePinnedHeaderMaxHeight(available: Dp): Dp = (available - 120.dp - 48.dp).coerceAtLeast(minOf(24.dp, available))
 
-/**
- * The opened Session's title and preview. With a transcript they ride inside it, so a short pane
- * or a large font scale scrolls them instead of pushing the composer and Send out of reach.
- */
-@Composable
-private fun SessionDetailHeader(state: OpenSessionUiState) {
-    Text(
-        text = state.session.title,
-        style = MaterialTheme.typography.headlineMedium,
-        modifier = Modifier.semantics { heading() },
-    )
-    state.session.preview?.let { preview ->
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = preview, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SessionDetailContent(
     state: OpenSessionUiState,
@@ -984,6 +971,7 @@ internal fun SessionDetailContent(
     modifier: Modifier = Modifier,
 ) {
     val displayedMessages = state.messages + listOfNotNull(state.activeResponse)
+    val spacing = LocalHermesDesignTokens.current.spacing
     val canSubmit =
         RunSubmissionState(
             latestRun = state.latestRun,
@@ -999,9 +987,6 @@ internal fun SessionDetailContent(
             !state.isReconciliationInProgress &&
             !state.hasUnresolvedSubmission &&
             !listRequestActive
-    // Without a transcript there is no weighted list to absorb the free space, so the pane
-    // scrolls as one surface and the composer and Send stay reachable in short windows.
-    val paneScrollState = rememberScrollState()
     val tailScrollState = rememberScrollState()
     // The transcript opens at its newest content and follows the messages that arrive while
     // the reader is at that content; a reader who scrolled away is never pulled back down.
@@ -1035,84 +1020,67 @@ internal fun SessionDetailContent(
         if (showMutationContext && displayedMessages.isNotEmpty()) transcriptListState.scrollToItem(0)
     }
     Column(
-        modifier =
-            if (displayedMessages.isEmpty()) {
-                modifier.fillMaxSize().verticalScroll(paneScrollState)
-            } else {
-                modifier.fillMaxSize()
-            },
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Top,
     ) {
-        FlowRow(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing.s),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedButton(
+            IconButton(
                 onClick = { onEvent(EntryUiEvent.ReturnToSessionListClicked) },
                 modifier = Modifier.heightIn(min = 48.dp),
             ) {
-                Text(text = "Back to Sessions")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Sessions")
             }
+            Text(
+                text = state.session.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
             SessionActionMenu(
                 session = state.session,
                 enabled = actionsEnabled && mutation?.pendingAction == null && mutation?.rename == null && mutation?.delete == null,
                 onEvent = onEvent,
+                compact = true,
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
-        if (displayedMessages.isEmpty()) {
-            SessionDetailHeader(state = state)
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-        if (displayedMessages.isEmpty()) {
-            SessionDetailSummary(
-                state = state,
-                mutation = mutation,
-                actionsEnabled = actionsEnabled,
-                retryEnabled = retryEnabled,
-                listRequestActive = listRequestActive,
-                listIsStale = listIsStale,
-                listErrorCategory = listErrorCategory,
-                onEvent = onEvent,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-        if (displayedMessages.isEmpty()) {
-            Text(text = "No messages in this Session.")
-        } else {
-            LazyColumn(
-                state = transcriptListState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // The header travels with the transcript, so a short pane or a large font
-                // scale scrolls it instead of pushing the composer and Send out of reach.
-                item {
-                    SessionDetailHeader(state = state)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    SessionDetailSummary(
-                        state = state,
-                        mutation = mutation,
-                        actionsEnabled = actionsEnabled,
-                        retryEnabled = retryEnabled,
-                        listRequestActive = listRequestActive,
-                        listIsStale = listIsStale,
-                        listErrorCategory = listErrorCategory,
-                        onEvent = onEvent,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+        // The same weighted history area reserves the composer's position even before
+        // the first message arrives.
+        LazyColumn(
+            state = transcriptListState,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item {
+                SessionDetailSummary(
+                    state = state,
+                    mutation = mutation,
+                    actionsEnabled = actionsEnabled,
+                    retryEnabled = retryEnabled,
+                    listRequestActive = listRequestActive,
+                    listIsStale = listIsStale,
+                    listErrorCategory = listErrorCategory,
+                    onEvent = onEvent,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (displayedMessages.isEmpty()) {
+                    Text(text = "No messages in this Session.")
                 }
-                items(
-                    items = displayedMessages,
-                    key = { message -> message.id },
-                ) { message ->
-                    SessionMessageContent(
-                        message = message,
-                        retryEnabled = retryEnabled,
-                        onRetry = { runId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
-                    )
-                }
+            }
+            items(
+                items = displayedMessages,
+                key = { message -> message.id },
+            ) { message ->
+                SessionMessageContent(
+                    message = message,
+                    retryEnabled = retryEnabled,
+                    onRetry = { runId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
+                )
             }
         }
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -1123,61 +1091,11 @@ internal fun SessionDetailContent(
             val tailMaxHeight = paneTailMaxHeight(maxHeight)
             Column(
                 modifier =
-                    Modifier.testTag("conversation-composer-tail").then(
-                        if (displayedMessages.isEmpty()) {
-                            Modifier
-                        } else {
-                            Modifier.fillMaxWidth()
-                                .heightIn(max = tailMaxHeight)
-                                .verticalScroll(tailScrollState)
-                        },
-                    ),
+                    Modifier.testTag("conversation-composer-tail")
+                        .fillMaxWidth()
+                        .heightIn(max = tailMaxHeight)
+                        .verticalScroll(tailScrollState),
             ) {
-                Spacer(modifier = Modifier.height(12.dp))
-                val composerEnabled = !state.isRefreshing && mutation?.pendingAction == null
-                val sendEnabled =
-                    composerEnabled &&
-                        !state.isReconciliationInProgress &&
-                        state.latestRunState != RunPresentationState.UNCERTAIN &&
-                        state.sendErrorCategory != MessageSendErrorCategory.UNCERTAIN &&
-                        !state.hasUnresolvedSubmission &&
-                        canSubmit &&
-                        state.composerText.isNotBlank()
-                OutlinedTextField(
-                    value = state.composerText,
-                    onValueChange = { onEvent(EntryUiEvent.ComposerTextChanged(it)) },
-                    label = { Text("Message") },
-                    placeholder = { Text("Write a message") },
-                    // A long draft scrolls inside the field instead of growing it without bound,
-                    // which would otherwise push Send out of a short window.
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = composerEnabled,
-                    singleLine = false,
-                    maxLines = 5,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions =
-                        KeyboardActions(
-                            onSend = {
-                                if (sendEnabled) onEvent(EntryUiEvent.SendMessageClicked)
-                            },
-                        ),
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
-                    enabled = sendEnabled,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) {
-                    Text(
-                        text =
-                            when {
-                                state.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
-                                    state.hasUnresolvedSubmission -> "Refresh history to resolve"
-                                state.sendErrorCategory != null -> "Try again"
-                                else -> "Send"
-                            },
-                    )
-                }
                 if (state.isSending) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -1192,6 +1110,59 @@ internal fun SessionDetailContent(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
                     )
+                }
+                val unresolved = state.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN || state.hasUnresolvedSubmission
+                if (unresolved) {
+                    Text(text = "Refresh history to resolve", style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                val composerEnabled = !state.isRefreshing && mutation?.pendingAction == null
+                val sendEnabled =
+                    composerEnabled &&
+                        !state.isReconciliationInProgress &&
+                        state.latestRunState != RunPresentationState.UNCERTAIN &&
+                        state.sendErrorCategory != MessageSendErrorCategory.UNCERTAIN &&
+                        !state.hasUnresolvedSubmission &&
+                        canSubmit &&
+                        state.composerText.isNotBlank()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.s),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    OutlinedTextField(
+                        value = state.composerText,
+                        onValueChange = { onEvent(EntryUiEvent.ComposerTextChanged(it)) },
+                        label = { Text("Message") },
+                        placeholder = { Text("Write a message") },
+                        // A long draft scrolls inside the field instead of growing it without bound,
+                        // which would otherwise push Send out of a short window.
+                        modifier = Modifier.weight(1f),
+                        enabled = composerEnabled,
+                        singleLine = false,
+                        maxLines = 5,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions =
+                            KeyboardActions(
+                                onSend = {
+                                    if (sendEnabled) onEvent(EntryUiEvent.SendMessageClicked)
+                                },
+                            ),
+                    )
+                    Button(
+                        onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
+                        enabled = sendEnabled,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Text(
+                            text =
+                                when {
+                                    unresolved -> "Send"
+                                    state.sendErrorCategory != null -> "Try again"
+                                    else -> "Send"
+                                },
+                        )
+                    }
                 }
             }
         }
@@ -1238,8 +1209,8 @@ internal fun rememberTranscriptFollow(listState: LazyListState): Boolean {
 }
 
 /**
- * The Session summary above the transcript: history refresh, state warnings, Session actions,
- * and Run information. It renders inside the transcript when one exists.
+ * The summary in the history area: refresh, state warnings, mutation confirmations, and
+ * Run information. Empty and populated conversations share this scrollable area.
  */
 @Composable
 private fun SessionDetailSummary(
@@ -1309,7 +1280,11 @@ private fun SessionDetailSummary(
     )
     state.latestRun?.let { run ->
         Spacer(modifier = Modifier.height(12.dp))
-        Text(text = "Latest Run: ${run.id.value}")
+        Text(
+            text = "Latest Run: ${run.id.value}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         state.latestRunState?.let { runState ->
             Text(
                 text = "Run state: ${runState.label}",
@@ -1339,80 +1314,107 @@ internal fun SessionMessageContent(
     onRetry: (RunId) -> Unit,
     actions: MessageActions = rememberMessageActions(),
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        message.role?.takeIf(String::isNotBlank)?.let { role ->
-            Text(text = "Role: $role")
-        }
-        message.content
-            ?.takeIf { message.failureSafeMessage == null && it.isNotBlank() }
-            ?.let { content ->
-                MarkdownContent(markdown = content, actions = actions)
-                Spacer(modifier = Modifier.height(4.dp))
-                MessageActionControls(content = content, actions = actions)
-            }
-        message.runId?.let { runId ->
-            Text(text = "Run ID: ${runId.value}")
-        }
-        message.runState?.let { runState ->
-            Text(
-                text = "Run state: ${runState.label}",
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        } ?: message.runStatus?.let { status ->
-            Text(text = "Run status: ${status.stableRunStatusLabel()}")
-        }
-        if (message.isStreaming) {
-            Text(
-                text = "Streaming response…",
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        }
-        if (message.streamInterrupted) {
-            Text(
-                text = "Stream interrupted. Run result is uncertain.",
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-            )
-        }
-        message.failureSafeMessage?.let { safeMessage ->
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = safeMessage,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-            )
-        }
-        var showTechnicalDetail by remember(message.id) { mutableStateOf(false) }
-        message.failureTechnicalDetail?.let { technicalDetail ->
-            TextButton(onClick = { showTechnicalDetail = !showTechnicalDetail }) {
-                Text(text = if (showTechnicalDetail) "Hide technical detail" else "Show technical detail")
-            }
-            if (showTechnicalDetail) {
+    val spacing = LocalHermesDesignTokens.current.spacing
+    val isUser = message.role == "user"
+    Surface(
+        modifier =
+            Modifier.fillMaxWidth().padding(
+                start = if (isUser) spacing.xl else 0.dp,
+                top = spacing.xs,
+                bottom = spacing.xs,
+            ),
+        color = if (isUser) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Column(modifier = Modifier.padding(spacing.m)) {
+            message.role?.takeIf(String::isNotBlank)?.let { role ->
                 Text(
-                    text = technicalDetail,
+                    text =
+                        when (role) {
+                            "user" -> "User"
+                            "assistant" -> "Assistant"
+                            else -> role
+                        },
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Spacer(modifier = Modifier.height(spacing.s))
+            }
+            message.content
+                ?.takeIf { message.failureSafeMessage == null && it.isNotBlank() }
+                ?.let { content ->
+                    MarkdownContent(markdown = content, actions = actions)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    MessageActionControls(content = content, actions = actions)
+                }
+            message.runId?.let { runId ->
+                Text(
+                    text = "Run ID: ${runId.value}",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            message.runState?.let { runState ->
+                Text(
+                    text = "Run state: ${runState.label}",
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            } ?: message.runStatus?.let { status ->
+                Text(text = "Run status: ${status.stableRunStatusLabel()}")
+            }
+            if (message.isStreaming) {
+                Text(
+                    text = "Streaming response…",
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
-        }
-        if (message.retryAvailable) {
-            message.runId?.let { runId ->
-                OutlinedButton(
-                    onClick = { onRetry(runId) },
-                    enabled = retryEnabled,
-                    modifier = Modifier.heightIn(min = 40.dp),
-                ) {
-                    Text(text = "Try again")
+            if (message.streamInterrupted) {
+                Text(
+                    text = "Stream interrupted. Run result is uncertain.",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                )
+            }
+            message.failureSafeMessage?.let { safeMessage ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = safeMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                )
+            }
+            var showTechnicalDetail by remember(message.id) { mutableStateOf(false) }
+            message.failureTechnicalDetail?.let { technicalDetail ->
+                TextButton(onClick = { showTechnicalDetail = !showTechnicalDetail }) {
+                    Text(text = if (showTechnicalDetail) "Hide technical detail" else "Show technical detail")
+                }
+                if (showTechnicalDetail) {
+                    Text(
+                        text = technicalDetail,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                 }
             }
-        }
-        if (message.failureSafeMessage == null) {
-            message.runResult?.let { result ->
-                Text(text = "Run result: $result")
+            if (message.retryAvailable) {
+                message.runId?.let { runId ->
+                    OutlinedButton(
+                        onClick = { onRetry(runId) },
+                        enabled = retryEnabled,
+                        modifier = Modifier.heightIn(min = 40.dp),
+                    ) {
+                        Text(text = "Try again")
+                    }
+                }
             }
-        }
-        message.timestamp?.let { timestamp ->
-            Text(text = "Timestamp: ${formatGatewayTimestamp(timestamp)}")
+            if (message.failureSafeMessage == null) {
+                message.runResult?.let { result ->
+                    Text(text = "Run result: $result")
+                }
+            }
+            message.timestamp?.let { timestamp ->
+                Text(text = "Timestamp: ${formatGatewayTimestamp(timestamp)}")
+            }
         }
     }
 }
@@ -1432,17 +1434,17 @@ private fun MessageActionControls(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(spacing.s),
     ) {
-        OutlinedButton(
+        TextButton(
             onClick = { actions.copy(content) },
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Copy message" },
         ) {
-            Text(text = "Copy message")
+            Text(text = "Copy")
         }
-        OutlinedButton(
+        TextButton(
             onClick = { actions.share(content) },
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Share message" },
         ) {
-            Text(text = "Share message")
+            Text(text = "Share")
         }
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -52,7 +53,7 @@ class ShellIntegrationTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sessions").assertDoesNotExist()
 
         composeTestRule.runOnUiThread {
@@ -61,7 +62,7 @@ class ShellIntegrationTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertDoesNotExist()
         assertFalse(composeTestRule.activity.isFinishing)
     }
 
@@ -78,7 +79,7 @@ class ShellIntegrationTest {
         }
 
         composeTestRule
-            .onNodeWithText("Back to Sessions")
+            .onNodeWithContentDescription("Back to Sessions")
             .assertIsDisplayed()
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)

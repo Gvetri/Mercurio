@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -411,11 +412,16 @@ class SessionActionMenuIntegrationTest {
         requireNotNull(holder.uiState.value.sessionList).sessions.single { it.id == FIRST }
 
     private fun openMenu(title: String) {
-        composeTestRule.onAllNodesWithContentDescription("Session actions for $title").onLast().performScrollTo().performClick()
+        composeTestRule.onAllNodesWithContentDescription("Session actions for $title").onLast()
+            .apply { if (!isDisplayed()) performScrollTo() }.assertIsDisplayed().performClick()
     }
 
     private fun choose(text: String) {
-        composeTestRule.onNodeWithText(text).performScrollTo().performClick()
+        if (text == "Back to Sessions") {
+            composeTestRule.onNodeWithContentDescription(text).assertIsDisplayed().performClick()
+        } else {
+            composeTestRule.onNodeWithText(text).performScrollTo().performClick()
+        }
         composeTestRule.waitForIdle()
     }
 

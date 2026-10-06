@@ -2,8 +2,12 @@ package org.hermesnative.client.feature.entry.presentation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -21,18 +25,22 @@ internal fun SessionActionMenu(
     session: SessionItemUiState,
     enabled: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
+    compact: Boolean = false,
 ) {
     var expanded by remember(session.id, enabled) { mutableStateOf(false) }
+    val triggerModifier =
+        Modifier.heightIn(min = 48.dp).semantics {
+            contentDescription = "Session actions for ${session.title}"
+        }
     Box {
-        TextButton(
-            onClick = { expanded = true },
-            enabled = enabled,
-            modifier =
-                Modifier.heightIn(min = 48.dp).semantics {
-                    contentDescription = "Session actions for ${session.title}"
-                },
-        ) {
-            Text(text = "Session actions")
+        if (compact) {
+            IconButton(onClick = { expanded = true }, enabled = enabled, modifier = triggerModifier) {
+                Icon(Icons.Default.MoreVert, contentDescription = null)
+            }
+        } else {
+            TextButton(onClick = { expanded = true }, enabled = enabled, modifier = triggerModifier) {
+                Text(text = "Session actions")
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(

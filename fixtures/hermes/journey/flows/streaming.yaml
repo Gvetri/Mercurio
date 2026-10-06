@@ -18,10 +18,17 @@ name: streaming
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
+- assertVisible: "No messages in this Session."
+- takeScreenshot: "empty-conversation"
 - tapOn: "Message"
 - inputText: "Stream this"
-- hideKeyboard
+- assertVisible: "Send"
+- takeScreenshot: "keyboard-ready-to-send"
 - tapOn: "Send"
 - extendedWaitUntil:
     visible: "Streaming partial text"
     timeout: 30000
+- assertVisible: "Assistant"
+- assertVisible: "Message"
+- assertVisible: "Send"
+- takeScreenshot: "keyboard-first-reply"

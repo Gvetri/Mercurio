@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -238,7 +239,7 @@ class EntryScreenTest {
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First draft")) }
             composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
 
-            composeTestRule.onNodeWithText("Back to Sessions").performClick()
+            composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             assertTrue(gateway.firstObservation.closed.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             composeTestRule.onNodeWithText("Second Session").performClick()
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
@@ -250,7 +251,7 @@ class EntryScreenTest {
             composeTestRule.onNodeWithText("Send").performClick()
             assertTrue(gateway.secondRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            composeTestRule.onNodeWithText("Back to Sessions").performClick()
+            composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             composeTestRule.onNodeWithText("First Session").performClick()
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
@@ -820,7 +821,7 @@ class EntryScreenTest {
 
         composeTestRule.onNodeWithText("Authoritative title").assertIsDisplayed()
         composeTestRule.onNodeWithText("Authoritative history").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertHasClickAction().performClick()
         assertEquals(EntryUiEvent.ReturnToSessionListClicked, events.single())
     }
 

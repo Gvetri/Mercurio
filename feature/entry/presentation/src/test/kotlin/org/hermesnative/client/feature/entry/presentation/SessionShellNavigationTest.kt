@@ -159,7 +159,7 @@ class SessionShellNavigationTest {
         val bottomInset = 48
         setContent(conversationEntryState(), {})
 
-        val backTopBefore = composeTestRule.onNodeWithText("Back to Sessions").fetchSemanticsNode().boundsInWindow.top
+        val backTopBefore = composeTestRule.onNodeWithContentDescription("Back to Sessions").fetchSemanticsNode().boundsInWindow.top
         val sendBottomBefore = composeTestRule.onNodeWithText("Send").fetchSemanticsNode().boundsInWindow.bottom
 
         composeTestRule.runOnUiThread {
@@ -172,7 +172,7 @@ class SessionShellNavigationTest {
         }
         composeTestRule.waitForIdle()
 
-        val backTopAfter = composeTestRule.onNodeWithText("Back to Sessions").fetchSemanticsNode().boundsInWindow.top
+        val backTopAfter = composeTestRule.onNodeWithContentDescription("Back to Sessions").fetchSemanticsNode().boundsInWindow.top
         val sendBottomAfter = composeTestRule.onNodeWithText("Send").fetchSemanticsNode().boundsInWindow.bottom
 
         assertEquals(topInset.toFloat(), backTopAfter - backTopBefore, 0.5f)

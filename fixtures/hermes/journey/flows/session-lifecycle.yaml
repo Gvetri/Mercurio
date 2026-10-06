@@ -27,7 +27,7 @@ name: session-lifecycle
 - assertVisible: "Back to Sessions"
 - assertVisible: "Message"
 - assertVisible: "No messages in this Session."
-- assertNotVisible: "Role: assistant"
+- assertNotVisible: "Assistant"
 
 # Conversation: Back dismisses the menu, and cancelled confirmations do not write.
 - tapOn: "Session actions for Lifecycle Session"

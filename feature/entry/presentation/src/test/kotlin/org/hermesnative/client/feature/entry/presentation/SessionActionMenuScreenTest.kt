@@ -134,8 +134,8 @@ class SessionActionMenuScreenTest {
         composeTestRule.onNodeWithText("Rename Session").assertDoesNotExist()
         composeTestRule.onNodeWithText("Delete Session").assertDoesNotExist()
         composeTestRule.onNodeWithContentDescription("Session actions for First Session")
-            .performScrollTo()
-            .assertHasClickAction()
+            .apply { if (!opened) performScrollTo() }
+            .assertIsDisplayed().assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
             .performClick()
         composeTestRule.onNodeWithText("Pin Session").assertIsDisplayed()
@@ -148,7 +148,7 @@ class SessionActionMenuScreenTest {
         val events = mutableListOf<EntryUiEvent>()
         setSurface(opened, events)
         composeTestRule.onAllNodesWithContentDescription("Session actions for First Session").onLast()
-            .performScrollTo().performClick()
+            .apply { if (!opened) performScrollTo() }.assertIsDisplayed().performClick()
         composeTestRule.onNodeWithText("Pin Session").assertIsDisplayed()
         composeTestRule.runOnUiThread {
             val popup = WindowInspector.getGlobalWindowViews().single { it !== composeTestRule.activity.window.decorView }
@@ -165,7 +165,7 @@ class SessionActionMenuScreenTest {
         val events = mutableListOf<EntryUiEvent>()
         setSurface(opened, events, mutation = SessionMutationUiState(pendingAction = SessionMutationAction.PIN))
         composeTestRule.onNodeWithContentDescription("Session actions for First Session")
-            .performScrollTo().assertIsNotEnabled()
+            .apply { if (!opened) performScrollTo() }.assertIsDisplayed().assertIsNotEnabled()
         composeTestRule.onNodeWithText("Pin Session").assertDoesNotExist()
         composeTestRule.onNodeWithText("Pinning Session…").performScrollTo().assertIsDisplayed()
         assertTrue(events.isEmpty())
@@ -175,7 +175,8 @@ class SessionActionMenuScreenTest {
         val events = mutableListOf<EntryUiEvent>()
         setSurface(opened, events, fontScale = 2f)
         composeTestRule.onNodeWithContentDescription("Session actions for First Session")
-            .performScrollTo().assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
+            .apply { if (!opened) performScrollTo() }.assertIsDisplayed()
+            .assertHasClickAction().assertHeightIsAtLeast(48.dp).performClick()
         listOf("Pin Session", "Rename Session", "Delete Session").forEach { text ->
             composeTestRule.onNodeWithText(text)
                 .performScrollTo().assertIsDisplayed().assertHasClickAction().assertHeightIsAtLeast(48.dp)
