@@ -7,6 +7,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -304,6 +306,42 @@ class JourneyGatewayProcessTest {
             val endpoint = process.endpoint
             assertEquals(503, get(endpoint, "/api/sessions"))
             assertEquals(200, get(endpoint, "/api/sessions"))
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun held_create_response_is_recorded_before_the_bounded_release() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"held-create","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions","session_create"],"hold_create_ms":1000}""",
+            )
+        val scenario = JourneyScenarioParser.parse(file, revision)
+        val process = JourneyGatewayProcess.start(scenario.copy(port = freePort(), tls = false))
+        try {
+            val endpoint = process.endpoint
+            get(endpoint, "/api/sessions")
+            val result = java.util.concurrent.atomic.AtomicReference<HttpResponse>()
+            val start = System.nanoTime()
+            val thread = Thread { result.set(post(endpoint, "/api/sessions", """{"title":"Pending draft"}""")) }
+            thread.start()
+            Thread.sleep(250)
+            val duringHold = getBody(endpoint, "/__fixture/telemetry")
+            assertTrue(
+                "The create request was not recorded before the hold.",
+                duringHold.contains("\"method\":\"POST\"") && duringHold.contains("\"path\":\"/api/sessions\""),
+            )
+            assertNull("The held create response was released before the bounded hold.", result.get())
+            thread.join(5_000)
+            val elapsedMs = (System.nanoTime() - start) / 1_000_000
+            val released = result.get()
+            assertNotNull("The held create response was never released.", released)
+            assertEquals(201, released!!.status)
+            assertTrue("The held response was released after ${elapsedMs}ms, before the 1000ms hold.", elapsedMs >= 950)
+            assertTrue(released.body.contains("synthetic-created-session-1"))
         } finally {
             process.stop()
         }
