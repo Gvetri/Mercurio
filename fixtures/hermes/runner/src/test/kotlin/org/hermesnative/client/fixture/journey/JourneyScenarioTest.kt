@@ -125,4 +125,57 @@ class JourneyScenarioTest {
             file.delete()
         }
     }
+
+    @Test
+    fun pending_creation_scenario_parses_with_the_bounded_hold() {
+        val scenarioFile = File(scenariosDir, "pending-creation.json")
+        val scenario = JourneyScenarioParser.parse(scenarioFile, pinnedDescriptor.provenance.value)
+        assertEquals("pending-creation", scenario.name)
+        assertEquals(8000, scenario.holdCreateMs)
+    }
+
+    @Test
+    fun hold_create_millis_must_stay_positive_and_inside_the_client_read_timeout() {
+        val revision = pinnedDescriptor.provenance.value
+
+        fun scenarioWithHold(hold: String): File =
+            tempScenario(
+                """{"name":"hold-bounds","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions"],"hold_create_ms":$hold}""",
+            )
+        listOf("0", "-1", "9001").forEach { hold ->
+            val error = runCatching { JourneyScenarioParser.parse(scenarioWithHold(hold), revision) }.exceptionOrNull()
+            assertTrue("hold_create_ms=$hold should be rejected", error is JourneyScenarioFormatException)
+        }
+        val accepted = JourneyScenarioParser.parse(scenarioWithHold("9000"), revision)
+        assertEquals(9000, accepted.holdCreateMs)
+    }
+
+    @Test
+    fun pending_creation_flow_exercises_duplicate_back_and_outside_while_held() {
+        val flow = File(repositoryRoot, "fixtures/hermes/journey/flows/pending-creation.yaml").readText()
+        val pendingWindow =
+            flow.substringAfter("takeScreenshot: pending-creation-02-pending")
+                .substringBefore("extendedWaitUntil")
+        assertTrue("The duplicate confirm tap is missing.", pendingWindow.contains("- tapOn: \"Create\""))
+        assertTrue("The Back dismissal attempt is missing.", pendingWindow.contains("- back"))
+        assertTrue("The outside tap is missing.", pendingWindow.contains("point:"))
+        assertTrue("The still-pending assertion is missing.", pendingWindow.contains("\"Creating Session…\""))
+    }
+
+    @Test
+    fun pending_creation_flow_asserts_dialog_absence_after_result_open() {
+        val flow = File(repositoryRoot, "fixtures/hermes/journey/flows/pending-creation.yaml").readText()
+        val settledWindow = flow.substringAfter("takeScreenshot: pending-creation-04-result-open")
+        val settleIndex = settledWindow.indexOf("waitForAnimationToEnd")
+        val absentIndex = settledWindow.indexOf("assertNotVisible: \"Creating Session…\"")
+        val settledScreenshotIndex = settledWindow.indexOf("takeScreenshot: pending-creation-05-result-settled")
+        assertTrue("The post-result settle is missing.", settleIndex >= 0)
+        assertTrue("The dialog-absence assertion does not follow the settle.", absentIndex > settleIndex)
+        assertTrue("The settled result frame does not follow the assertion.", settledScreenshotIndex > absentIndex)
+        assertTrue(
+            "The dialog field label absence assertion is missing.",
+            settledWindow.contains("assertNotVisible: \"Title (optional)\""),
+        )
+    }
 }

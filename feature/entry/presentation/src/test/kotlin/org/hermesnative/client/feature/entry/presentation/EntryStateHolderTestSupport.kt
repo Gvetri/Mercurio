@@ -217,6 +217,9 @@ internal class BlockingCreateGateway(
     private val createResult = CompletableFuture<Session>()
     val createStarted = CountDownLatch(1)
     val listRequests = CopyOnWriteArrayList<SessionListRequest>()
+    val operations = CopyOnWriteArrayList<String>()
+    var createCalls = 0
+        private set
     private var created = false
 
     override fun listSessions(request: SessionListRequest): SessionPage {
@@ -225,6 +228,8 @@ internal class BlockingCreateGateway(
     }
 
     override fun createSession(title: String?): Session {
+        operations += "create"
+        synchronized(this) { createCalls += 1 }
         createStarted.countDown()
         return createResult.get(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).also {
             created = true
@@ -232,11 +237,13 @@ internal class BlockingCreateGateway(
     }
 
     override fun openSession(sessionId: SessionId): Session {
+        operations += "open"
         check(sessionId == createdSession.id) { "Unexpected Session open: $sessionId" }
         return createdSession
     }
 
     override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
+        operations += "history"
         return SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
     }
 

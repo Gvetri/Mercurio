@@ -28,6 +28,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -77,6 +78,12 @@ class SessionShellTest {
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(2)
     }
 
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
     fun list_pane_controls_are_disabled_while_creation_is_open() {
@@ -94,6 +101,12 @@ class SessionShellTest {
         composeTestRule.onNodeWithText("Load more Sessions").assertIsNotEnabled()
     }
 
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
     fun gateway_removal_is_disabled_while_creation_is_open() {
@@ -507,6 +520,54 @@ class SessionShellTest {
         setShellContent(sessionList = SessionListUiState(sessions = listOf(session("first", "First Session"))))
 
         composeTestRule.onNodeWithText("No Session selected").assertIsDisplayed()
+    }
+
+    /**
+     * D07: creation keeps the notes-filtered list in place, and the cleared selection is not
+     * restored behind the standard dialog on either layout.
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_dialog_opens_over_the_filtered_list_without_restoring_a_selection() {
+        setShellContent(
+            sessionList =
+                SessionListUiState(
+                    sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
+                    searchQuery = "notes",
+                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
+                ),
+        )
+
+        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun two_pane_create_dialog_keeps_the_filtered_list_and_the_cleared_selection() {
+        setShellContent(
+            sessionList =
+                SessionListUiState(
+                    sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
+                    searchQuery = "notes",
+                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
+                ),
+        )
+
+        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("No Session selected").assertExists()
     }
 
     @Test

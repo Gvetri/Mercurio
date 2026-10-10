@@ -4,14 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -273,57 +269,6 @@ private fun DeleteSessionContent(
         }
         SessionMutationProgress(visible = state.isSubmitting, label = "Deleting Session…", topSpacing = 8.dp)
         SessionMutationErrorMessage(message = errorCategory?.safeMessage, topSpacing = 8.dp)
-    }
-}
-
-@Composable
-internal fun CreateSessionContent(
-    state: SessionCreationUiState,
-    onEvent: (EntryUiEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .imePadding()
-                .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.Top,
-    ) {
-        OutlinedButton(
-            onClick = { onEvent(EntryUiEvent.CancelCreateSessionClicked) },
-            enabled = !state.isSubmitting,
-            modifier = Modifier.heightIn(min = 48.dp),
-        ) {
-            Text(text = "Cancel")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Create Session",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.semantics { heading() },
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = "Optionally add a title. The Session is created only after confirmation.")
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(
-            value = state.titleDraft,
-            onValueChange = { onEvent(EntryUiEvent.CreateSessionTitleChanged(it)) },
-            enabled = !state.isSubmitting,
-            label = { Text("Session title (optional)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = { onEvent(EntryUiEvent.ConfirmCreateSessionClicked) },
-            enabled = !state.isSubmitting,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) {
-            Text(text = if (state.errorCategory == null) "Confirm Create Session" else "Try again")
-        }
-        SessionMutationProgress(visible = state.isSubmitting, label = "Creating Session…", topSpacing = 16.dp)
-        SessionMutationErrorMessage(message = state.errorCategory?.safeMessage, topSpacing = 16.dp)
     }
 }
 

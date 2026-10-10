@@ -18,11 +18,28 @@ name: empty-sessions
     visible: "No Sessions on this Gateway"
     timeout: 30000
 - assertVisible: "The Gateway returned no Sessions. Create one to get started."
+# Pre-submit dismissal writes nothing: cancel a named draft, then confirm the empty
+# list is unchanged after a real Gateway read.
 - tapOn: "Create Session"
-- tapOn: "Session title (optional)"
-- inputText: "Created Journey Session"
+- assertVisible: "Title (optional)"
+- tapOn: "Title (optional)"
+- inputText: "Discarded draft"
 - hideKeyboard
-- tapOn: "Confirm Create Session"
+- takeScreenshot: empty-sessions-01-named-draft-open
+- tapOn: "Cancel"
+- assertNotVisible: "Discarded draft"
+- tapOn: "Refresh"
 - extendedWaitUntil:
-    visible: "Created Journey Session"
+    visible: "No Sessions on this Gateway"
     timeout: 30000
+- takeScreenshot: empty-sessions-02-after-cancel-empty-list
+# The unnamed creation: a blank title submits null and the returned Session uses
+# the existing Untitled Session fallback.
+- tapOn: "Create Session"
+- assertVisible: "Leave blank for Untitled Session."
+- takeScreenshot: empty-sessions-03-unnamed-dialog
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Untitled Session"
+    timeout: 30000
+- takeScreenshot: empty-sessions-04-unnamed-result

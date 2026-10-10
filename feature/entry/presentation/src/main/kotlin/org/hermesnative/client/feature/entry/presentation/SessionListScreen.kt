@@ -40,12 +40,13 @@ internal fun SessionModeContent(
                 onEvent = onEvent,
                 modifier = modifier.imePadding(),
             )
-        SessionShellMode.CreateSession ->
-            CreateSessionContent(
+        SessionShellMode.CreateSession -> {
+            fallback()
+            CreateSessionDialog(
                 state = requireNotNull(state.createSession),
                 onEvent = onEvent,
-                modifier = modifier,
             )
+        }
         SessionShellMode.SessionList -> fallback()
     }
 }
