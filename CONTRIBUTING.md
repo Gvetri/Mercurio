@@ -52,15 +52,10 @@ If an emulator is available, also run the app instrumentation scope:
 ./gradlew :app:verifyConnectedAndroidTests
 ```
 
-## Kotlin comments
+## Coding guidelines
 
-KDoc is the only allowed comment form in the Kotlin sources. Line comments (`//`) and non-KDoc block
-comments (`/* ... */`) are not allowed in `.kt` files, and neither is KDoc over a private
-declaration: detekt reports `CommentOverPrivateFunction` and `CommentOverPrivateProperty`, and the
-gate fails on every reported finding. KDoc is never required, though: document a declaration when
-the documentation earns its place, and let the code and its tests speak otherwise. Build scripts
-(`.kts`) are outside this policy. For now this is the policy; it is revisitable as the codebase
-evolves.
+The repository's coding rules — including the comments policy — and what enforces each one live in
+[Coding guidelines](docs/coding-guidelines.md).
 
 ## Branch and pull request workflow
 
