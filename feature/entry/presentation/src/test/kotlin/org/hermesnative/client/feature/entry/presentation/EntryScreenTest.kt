@@ -763,6 +763,15 @@ class EntryScreenTest {
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.ConfirmCreateSessionClicked), events)
+
+        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
+        assertEquals(
+            listOf(
+                EntryUiEvent.ConfirmCreateSessionClicked,
+                EntryUiEvent.CancelCreateSessionClicked,
+            ),
+            events,
+        )
     }
 
     // The standard dialog window with its text field cannot settle under Robolectric's

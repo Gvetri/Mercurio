@@ -94,6 +94,12 @@ Markdown rendering contracts.
 | `populated_session_list` | Session list | Pinned and unpinned server metadata |
 | `session_list_unavailable` | Session list | Stale data, unavailable state, and retry |
 | `create_session` | Session list | In-memory title draft before confirmation |
+| `create_session_empty` | Session list | Blank optional title with the Untitled Session fallback |
+| `create_session_failure` | Session list | Confirmed creation failure with the retained title and explicit retry |
+| `create_session_dark` | Session list | The same dialog on the dark token set |
+| `create_session_two_pane` | Session list | The dialog beside the populated list in the two-pane layout |
+| `create_session_short_window_long_error` | Session list | Constrained-height witness at twice the font scale (long draft, actions reachable) |
+| `create_session_short_window_long_error_scrolled` | Session list | The same witness scrolled to the retained failure message |
 | `rename_session_confirmation` | Session list | Inline modal-equivalent rename confirmation mode |
 | `delete_session_confirmation` | Session list | Inline modal-equivalent delete confirmation mode |
 | `empty_session_detail` | Session detail | New Session with no history |
@@ -129,20 +135,24 @@ token set.
 | `markdown_long_content_light` | `w411dp-h891dp-notnight` | Long multi-block response that scrolls natively instead of truncating |
 | `markdown_long_content_dark` | `w411dp-h891dp-night` | The same state on the dark token set |
 
-The current implementation has no dialog overlay such as `Dialog` or
-`AlertDialog`. Here, "modal" means a conditional confirmation mode in the
-existing Compose state model. The rename and delete confirmation modes are
-therefore covered without changing production behavior only to create a
+The Create Session surface is now the standard Material 3 `AlertDialog`: the
+`create_session*` states capture that real dialog window over the Session list (and beside
+it in the two-pane layout). The remaining confirmation modes are inline: Rename and Delete
+confirmation render as a conditional mode in the existing Compose state model and have no
+dialog overlay, so they stay covered without changing production behavior only to create a
 screenshot.
 
-The matrix uses Robolectric SDK 35, a fixed `w411dp-h891dp-notnight` viewport,
-native graphics mode, the light `HermesTheme`, and synthetic in-memory values.
-The shell contract and markdown contract classes use the viewport qualifiers
-above and select the light or dark token set explicitly, so each capture proves
-one designed theme instead of the ambient system setting. All three classes
-exclude timestamps, live Gateway/provider data, credentials, animated loading
-states, Activity lifecycle behavior, and other system-dependent rendering.
-Behavior and semantics tests remain in their existing test classes.
+The matrix uses Robolectric SDK 35, native graphics mode, and synthetic in-memory values.
+The default capture viewport is `w411dp-h891dp-notnight`; the dialog variants select their
+own window qualifiers (`w411dp-h891dp-night` for the dark capture, `w1000dp-h800dp-notnight`
+for the two-pane capture, `w411dp-h289dp-notnight` for the constrained-height witness), and
+the constrained-height witness sets a 2x font scale, so each capture proves one designed
+window/theme configuration. The shell contract and markdown contract classes use the
+viewport qualifiers above and select the light or dark token set explicitly, so each capture
+proves one designed theme instead of the ambient system setting. All three classes exclude
+timestamps, live Gateway/provider data, credentials, animated loading states, Activity
+lifecycle behavior, and other system-dependent rendering. Behavior and semantics tests
+remain in their existing test classes.
 
 The pull-request Compose job first runs
 `verifyRoborazziBaselineManifest`. It reports `Missing baselines` and

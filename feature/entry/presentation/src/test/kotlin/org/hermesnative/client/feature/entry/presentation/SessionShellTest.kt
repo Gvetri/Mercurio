@@ -524,6 +524,51 @@ class SessionShellTest {
         composeTestRule.onNodeWithText("No Session selected").assertIsDisplayed()
     }
 
+    // D07: creation keeps the notes-filtered list in place, and the cleared selection is not
+    // restored behind the standard dialog on either layout.
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+    // is the same, and the real dialog window is exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_dialog_opens_over_the_filtered_list_without_restoring_a_selection() {
+        setShellContent(
+            sessionList =
+                SessionListUiState(
+                    sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
+                    searchQuery = "notes",
+                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
+                ),
+        )
+
+        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+    // is the same, and the real dialog window is exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun two_pane_create_dialog_keeps_the_filtered_list_and_the_cleared_selection() {
+        setShellContent(
+            sessionList =
+                SessionListUiState(
+                    sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
+                    searchQuery = "notes",
+                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
+                ),
+        )
+
+        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
+        // The cleared selection leaves the guidance pane behind the dialog, not the old conversation.
+        composeTestRule.onNodeWithText("No Session selected").assertExists()
+    }
+
     @Test
     fun width_configuration_change_switches_between_single_pane_and_two_pane() {
         val configuration = mutableStateOf(phoneConfiguration())

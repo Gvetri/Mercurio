@@ -524,6 +524,49 @@ class JourneyScenarioTest {
         assertEarlyMutationRejected("session-alpha")
     }
 
+    @Test
+    fun empty_sessions_verifier_accepts_only_the_cancellation_checkpoint_order() {
+        JourneyInvariants.verify("empty-sessions", emptySessionsTelemetry(emptySessionsRequests))
+    }
+
+    @Test
+    fun empty_sessions_verifier_rejects_a_create_before_the_post_cancel_list_read() {
+        val requests = emptySessionsRequests.toMutableList()
+        val createIndex = requests.indexOf("POST" to "/api/sessions")
+        val create = requests.removeAt(createIndex)
+        requests.add(createIndex - 1, create)
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("empty-sessions", emptySessionsTelemetry(requests))
+        }
+    }
+
+    @Test
+    fun empty_sessions_verifier_rejects_a_missing_post_cancel_checkpoint_read() {
+        val requests = emptySessionsRequests.toMutableList()
+        val secondListRead =
+            requests.withIndex().filter { it.value == "GET" to "/api/sessions" }.elementAt(1).index
+        requests.removeAt(secondListRead)
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("empty-sessions", emptySessionsTelemetry(requests))
+        }
+    }
+
+    @Test
+    fun empty_sessions_verifier_rejects_a_missing_initial_list_read() {
+        val requests = emptySessionsRequests.toMutableList()
+        requests.removeAt(requests.indexOf("GET" to "/api/sessions"))
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("empty-sessions", emptySessionsTelemetry(requests))
+        }
+    }
+
+    @Test
+    fun empty_sessions_verifier_rejects_a_recorded_run_creation() {
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("empty-sessions", emptySessionsTelemetry(emptySessionsRequests, runCreates = true))
+        }
+    }
+
     private fun assertEarlyMutationRejected(sessionId: String) {
         val requests = lifecycleRequests.toMutableList()
         val firstMutation = requests.indexOfFirst { it == "PATCH" to "/api/sessions/$sessionId" }
@@ -574,6 +617,55 @@ class JourneyScenarioTest {
             "unpin" to "session-alpha",
             "delete" to "session-alpha",
         )
+
+    private val emptySessionsRequests =
+        listOf(
+            "GET" to "/api/sessions",
+            // The cancelled named draft ends in a real list read with no write.
+            "GET" to "/api/sessions",
+            "POST" to "/api/sessions",
+            "GET" to "/api/sessions/synthetic-created-session-1",
+            "GET" to "/api/sessions/synthetic-created-session-1/messages",
+            "GET" to "/api/sessions",
+        )
+
+    private fun emptySessionsTelemetry(
+        requests: List<Pair<String, String>> = emptySessionsRequests,
+        runCreates: Boolean = false,
+    ) = buildJsonObject {
+        put(
+            "session_mutations",
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("operation", "create")
+                        put("session_id", "synthetic-created-session-1")
+                    },
+                )
+            },
+        )
+        put(
+            "requests",
+            buildJsonArray {
+                (listOf("GET" to "/v1/capabilities") + requests).forEach { (method, path) ->
+                    add(
+                        buildJsonObject {
+                            put("method", method)
+                            put("path", path)
+                        },
+                    )
+                }
+            },
+        )
+        if (runCreates) {
+            put(
+                "run_creates",
+                buildJsonObject {
+                    put("synthetic-created-session-1", 1)
+                },
+            )
+        }
+    }
 
     private fun lifecycleTelemetry(
         requests: List<Pair<String, String>> = lifecycleRequests,

@@ -173,19 +173,16 @@ internal object JourneyInvariants {
     }
 
     private fun verifyEmptySessions(telemetry: JsonObject) {
-        // The journey cancels a named draft before creating without a title: the confirmed
-        // creation must be the only write, and it must follow a real list read.
+        // The journey cancels a named draft before creating without a title. The confirmed
+        // creation must be the only write, and it must follow the two real list reads at zero
+        // writes: the initial load and the post-Cancel checkpoint read. The refreshed list
+        // read after the creation completes is the only later read the journey produces.
         requireConnectionAttempted(telemetry)
         val requests =
             telemetry.getValue("requests").jsonArray.map { request ->
                 val fields = request.jsonObject
                 fields.getValue("method").jsonPrimitive.content to fields.getValue("path").jsonPrimitive.content
             }
-        val firstWriteIndex = requests.indexOfFirst { (method, _) -> method != "GET" }
-        check(firstWriteIndex >= 0) { "The journey did not confirm the Session creation." }
-        check(requests.take(firstWriteIndex).any { (_, path) -> path == "/api/sessions" }) {
-            "The client wrote before it had read the Session list."
-        }
         val writes = requests.filter { (method, _) -> method != "GET" }
         check(writes == listOf("POST" to "/api/sessions")) {
             "The confirmed creation and its pre-submit dismissal did not write exactly one Session create: $writes"
@@ -197,6 +194,28 @@ internal object JourneyInvariants {
             }
         check(operations == listOf("create" to "synthetic-created-session-1")) {
             "The confirmed creation did not record exactly one create operation: $operations"
+        }
+        // Creating a Session never starts a Run, so the journey must record no Run creation.
+        val runCreates = telemetry["run_creates"]?.jsonObject.orEmpty()
+        check(runCreates.isEmpty()) { "The empty-sessions journey recorded a Run creation: $runCreates" }
+        // Read/write checkpoints: the initial read and the post-Cancel read must both be real
+        // list reads at zero writes, and the creation must be followed by the refreshed list
+        // read. A missing read, a read after an earlier write, or a premature write fails here.
+        var writesSeen = 0
+        val checkpoints =
+            buildList {
+                requests.forEach { (method, path) ->
+                    if (method != "GET") {
+                        writesSeen += 1
+                    } else {
+                        when (path) {
+                            "/api/sessions" -> add("list" to writesSeen)
+                        }
+                    }
+                }
+            }
+        check(checkpoints == listOf("list" to 0, "list" to 0, "list" to 1)) {
+            "Empty-session cancellation checkpoints recorded missing reads or premature writes: $checkpoints"
         }
     }
 

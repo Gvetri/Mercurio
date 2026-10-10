@@ -647,6 +647,9 @@ internal fun CreateSessionDialog(
                     enabled = !state.isSubmitting,
                     label = { Text(text = "Title (optional)") },
                     singleLine = true,
+                    // The dialog's text slot provides bodyMedium, so the owner-approved
+                    // bodyLarge role is set explicitly on the input.
+                    textStyle = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(modifier = Modifier.height(12.dp))

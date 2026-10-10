@@ -1143,6 +1143,202 @@ class EntryStateHolderTest {
         holder.close()
     }
 
+    // The pending window is held after the real create request is recorded; the duplicate
+    // confirmation, a title edit and the dialog's Back/outside dismissal event (the event
+    // the standard dialog sends from its dismiss request) must neither duplicate the
+    // creation nor cancel or edit it.
+    @Test
+    fun pending_creation_ignores_duplicate_confirm_edits_and_dialog_dismissal_until_one_result() {
+        val created = session("created", title = "Created")
+        val gateway = BlockingCreateGateway(session("initial", title = "Initial"), created)
+        val holder = blockingCreationHolder(gateway)
+        verify(holder)
+        awaitState(holder, "the initial Session list") {
+            it.sessionList?.sessions?.map { session -> session.id.value } == listOf("initial")
+        }
+
+        holder.onEvent(EntryUiEvent.CreateSessionClicked)
+        holder.onEvent(EntryUiEvent.CreateSessionTitleChanged("Created"))
+        holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
+        assertTrue(gateway.createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+
+        holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
+        holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
+        holder.onEvent(EntryUiEvent.CreateSessionTitleChanged("Edited while pending"))
+        holder.onEvent(EntryUiEvent.CancelCreateSessionClicked)
+        holder.onEvent(EntryUiEvent.CancelCreateSessionClicked)
+
+        val pending = requireNotNull(holder.uiState.value.sessionList)
+        assertTrue(pending.createSession?.isSubmitting == true)
+        assertEquals("Created", pending.createSession?.titleDraft)
+        assertEquals(1, gateway.createCalls)
+
+        gateway.completeCreate()
+        awaitState(holder, "the created Session") {
+            it.sessionList?.openedSession?.session?.id == created.id
+        }
+        val confirmed = requireNotNull(holder.uiState.value.sessionList)
+        assertEquals(1, gateway.createCalls)
+        assertNull(confirmed.createSession)
+        assertEquals(listOf("create", "open", "history"), gateway.operations)
+        holder.close()
+    }
+
+    // Failure-to-cancel: an explicit cancel after a confirmed failure discards the retained
+    // draft without another request, and reopening starts a fresh draft.
+    @Test
+    fun cancelling_after_a_creation_failure_discards_the_retained_draft_without_a_second_request() {
+        val gateway = FakeSessionGateway()
+        gateway.enqueueList(SessionPage(emptyList(), null))
+        gateway.enqueueCreateFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
+        val holder =
+            holder(
+                repository = FakeGatewayConnectionRepository(),
+                verifier = { _, _ ->
+                    clientManifestCapabilities()
+                },
+                gateway = gateway,
+            )
+
+        verify(holder)
+        holder.onEvent(EntryUiEvent.CreateSessionClicked)
+        holder.onEvent(EntryUiEvent.CreateSessionTitleChanged("Failed title"))
+        holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
+        assertEquals(1, gateway.createCalls)
+        assertEquals("Failed title", requireNotNull(holder.uiState.value.sessionList).createSession?.titleDraft)
+
+        holder.onEvent(EntryUiEvent.CancelCreateSessionClicked)
+
+        val cancelled = requireNotNull(holder.uiState.value.sessionList)
+        assertNull(cancelled.createSession)
+        assertEquals(1, gateway.createCalls)
+
+        holder.onEvent(EntryUiEvent.CreateSessionClicked)
+        assertEquals("", requireNotNull(holder.uiState.value.sessionList).createSession?.titleDraft)
+        assertEquals(1, gateway.createCalls)
+        holder.close()
+    }
+
+    // Post-create open failure: the confirmed creation is kept once, the surface stays
+    // explicitly recoverable, and recovering the list and reopening the same returned
+    // Session creates nothing new.
+    @Test
+    fun open_failure_after_creation_keeps_the_confirmed_result_once_and_recovers_without_a_second_create() {
+        val gateway = FakeSessionGateway()
+        val created = session("created", title = "Created")
+        gateway.enqueueList(SessionPage(emptyList(), null))
+        gateway.enqueueCreate(created)
+        gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
+        gateway.openedSession = created
+        gateway.openedHistory = SessionHistory(created.id, emptyList())
+        val holder =
+            holder(
+                repository = FakeGatewayConnectionRepository(),
+                verifier = { _, _ ->
+                    clientManifestCapabilities()
+                },
+                gateway = gateway,
+            )
+
+        verify(holder)
+        holder.onEvent(EntryUiEvent.CreateSessionClicked)
+        holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
+
+        val failedOpen = requireNotNull(holder.uiState.value.sessionList)
+        assertEquals(1, gateway.createCalls)
+        assertNull(failedOpen.createSession)
+        assertTrue(failedOpen.isStale)
+        assertTrue(failedOpen.isUnavailable)
+        assertEquals(SessionListErrorCategory.SESSION_UNAVAILABLE, failedOpen.errorCategory)
+        assertEquals(listOf("created"), failedOpen.sessions.map { it.id.value })
+
+        gateway.openFailure = null
+        gateway.enqueueList(SessionPage(listOf(created), null))
+        holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+        awaitState(holder, "the recovered Session list") { state ->
+            state.sessionList?.isUnavailable == false &&
+                state.sessionList?.sessions?.map { it.id.value } == listOf("created")
+        }
+        holder.onEvent(EntryUiEvent.SessionClicked(created.id))
+        awaitState(holder, "the reopened created Session") {
+            it.sessionList?.openedSession?.session?.id == created.id
+        }
+        assertEquals(1, gateway.createCalls)
+        holder.close()
+    }
+
+    // D07: from a notes-filtered list with a selected conversation, Create releases the
+    // selection, Cancel returns to the same query without restoring the cleared conversation,
+    // and a confirmed creation opens the returned authoritative Session even though its title
+    // does not match the filter. No second create and no Run are invented.
+    @Test
+    fun creation_from_a_filtered_list_keeps_the_query_and_opens_the_unmatched_authoritative_result() {
+        val gateway = FakeSessionGateway()
+        val notesSession = session("design-notes", title = "Design notes")
+        val other = session("other-session", title = "Other session")
+        val created = session("created-result", title = "Authoritative result")
+        gateway.enqueueList(SessionPage(listOf(notesSession, other), null))
+        gateway.enqueueCreate(created)
+        gateway.enqueueList(SessionPage(listOf(created, notesSession, other), null))
+        gateway.openedSession = session("design-notes", title = "Design notes")
+        gateway.openedHistory =
+            SessionHistory(
+                notesSession.id,
+                listOf(GatewayHistoryMessage("notes-message", "user", "Notes content")),
+            )
+        val holder =
+            holder(
+                repository = FakeGatewayConnectionRepository(),
+                verifier = { _, _ ->
+                    clientManifestCapabilities()
+                },
+                gateway = gateway,
+            )
+
+        verify(holder)
+        awaitSessions(holder, "design-notes", "other-session")
+
+        holder.onEvent(EntryUiEvent.SessionSearchQueryChanged("notes"))
+        holder.onEvent(EntryUiEvent.SessionClicked(notesSession.id))
+        awaitState(holder, "the selected notes conversation") {
+            it.sessionList?.openedSession?.session?.id == notesSession.id
+        }
+        val filtered = requireNotNull(holder.uiState.value.sessionList)
+        assertEquals("notes", filtered.searchQuery)
+        assertEquals(listOf("design-notes"), filtered.visibleSessions.map { it.id.value })
+
+        // Create releases the selected conversation and keeps the query.
+        holder.onEvent(EntryUiEvent.CreateSessionClicked)
+        val creating = requireNotNull(holder.uiState.value.sessionList)
+        assertNull(creating.openedSession)
+        assertNotNull(creating.createSession)
+        assertEquals("notes", creating.searchQuery)
+
+        // Cancel returns to the same query and does not restore the cleared conversation.
+        holder.onEvent(EntryUiEvent.CreateSessionTitleChanged("notes draft"))
+        holder.onEvent(EntryUiEvent.CancelCreateSessionClicked)
+        val cancelled = requireNotNull(holder.uiState.value.sessionList)
+        assertNull(cancelled.createSession)
+        assertNull(cancelled.openedSession)
+        assertEquals("notes", cancelled.searchQuery)
+        assertEquals(0, gateway.createCalls)
+
+        // The confirmed creation opens the returned authoritative Session although its
+        // title does not match the notes filter, and the query stays retained.
+        gateway.openedSession = created
+        gateway.openedHistory = SessionHistory(created.id, emptyList())
+        holder.onEvent(EntryUiEvent.CreateSessionClicked)
+        holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
+        awaitState(holder, "the authoritative created Session") {
+            it.sessionList?.openedSession?.session?.id == created.id
+        }
+        val confirmed = requireNotNull(holder.uiState.value.sessionList)
+        assertEquals(1, gateway.createCalls)
+        assertEquals("Authoritative result", confirmed.openedSession?.session?.title)
+        assertEquals("notes", confirmed.searchQuery)
+        holder.close()
+    }
+
     private fun holder(
         repository: FakeGatewayConnectionRepository,
         verifier: (String, String) -> GatewayCapabilities,
@@ -1324,6 +1520,9 @@ class EntryStateHolderTest {
         private val createResult = CompletableFuture<Session>()
         val createStarted = CountDownLatch(1)
         val listRequests = CopyOnWriteArrayList<SessionListRequest>()
+        val operations = CopyOnWriteArrayList<String>()
+        var createCalls = 0
+            private set
         private var created = false
 
         override fun listSessions(request: SessionListRequest): SessionPage {
@@ -1332,6 +1531,8 @@ class EntryStateHolderTest {
         }
 
         override fun createSession(title: String?): Session {
+            operations += "create"
+            synchronized(this) { createCalls += 1 }
             createStarted.countDown()
             return createResult.get(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).also {
                 created = true
@@ -1339,12 +1540,15 @@ class EntryStateHolderTest {
         }
 
         override fun openSession(sessionId: SessionId): Session {
+            operations += "open"
             check(sessionId == createdSession.id) { "Unexpected Session open: $sessionId" }
             return createdSession
         }
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
-            SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
+        override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
+            operations += "history"
+            return SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
+        }
 
         override fun renameSession(
             sessionId: SessionId,

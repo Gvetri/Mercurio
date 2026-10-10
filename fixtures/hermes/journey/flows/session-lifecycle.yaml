@@ -21,6 +21,7 @@ name: session-lifecycle
 - tapOn: "Title (optional)"
 - inputText: "Discarded Back draft"
 - hideKeyboard
+- takeScreenshot: session-lifecycle-01-back-draft-open
 - back
 - assertNotVisible: "Discarded Back draft"
 # This read is a Gateway checkpoint: the Back dismissal must not have written.
@@ -29,6 +30,7 @@ name: session-lifecycle
 - tapOn: "Title (optional)"
 - inputText: "Discarded Cancel draft"
 - hideKeyboard
+- takeScreenshot: session-lifecycle-02-cancel-draft-open
 - tapOn: "Cancel"
 - assertNotVisible: "Discarded Cancel draft"
 # This read is a Gateway checkpoint: the Cancel dismissal must not have written.
@@ -37,10 +39,12 @@ name: session-lifecycle
 - tapOn: "Title (optional)"
 - inputText: "Lifecycle Session"
 - hideKeyboard
+- takeScreenshot: session-lifecycle-03-named-create-draft
 - tapOn: "Create"
 - extendedWaitUntil:
     visible: "Lifecycle Session"
     timeout: 30000
+- takeScreenshot: session-lifecycle-04-named-result
 - tapOn: "Lifecycle Session"
 - assertVisible: "Back to Sessions"
 - assertVisible: "Message"
