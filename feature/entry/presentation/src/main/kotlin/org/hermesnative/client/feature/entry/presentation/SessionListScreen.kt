@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
 import org.hermesnative.client.feature.entry.domain.RunSubmissionState
@@ -631,6 +632,13 @@ internal fun CreateSessionDialog(
 ) {
     AlertDialog(
         onDismissRequest = { onEvent(EntryUiEvent.CancelCreateSessionClicked) },
+        // The dialog is IME-aware at this seam only: with decorFitsSystemWindows=false the
+        // dialog window is laid out under the IME, and the reported IME inset is reserved as
+        // padding below the card. The card's bounded text region scrolls instead of pushing
+        // the action row under the keyboard, so the actions stay reachable wherever the
+        // remaining space can host the dialog. The app window policy is untouched.
+        modifier = Modifier.imePadding(),
+        properties = DialogProperties(decorFitsSystemWindows = false),
         title = {
             Text(
                 text = "Create Session",
