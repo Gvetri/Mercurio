@@ -646,6 +646,22 @@ class JourneyScenarioTest {
     }
 
     @Test
+    fun pending_creation_flow_asserts_dialog_absence_after_result_open() {
+        val flow = File(repositoryRoot, "fixtures/hermes/journey/flows/pending-creation.yaml").readText()
+        val settledWindow = flow.substringAfter("takeScreenshot: pending-creation-04-result-open")
+        val settleIndex = settledWindow.indexOf("waitForAnimationToEnd")
+        val absentIndex = settledWindow.indexOf("assertNotVisible: \"Creating Session…\"")
+        val settledScreenshotIndex = settledWindow.indexOf("takeScreenshot: pending-creation-05-result-settled")
+        assertTrue("The post-result settle is missing.", settleIndex >= 0)
+        assertTrue("The dialog-absence assertion does not follow the settle.", absentIndex > settleIndex)
+        assertTrue("The settled result frame does not follow the assertion.", settledScreenshotIndex > absentIndex)
+        assertTrue(
+            "The dialog field label absence assertion is missing.",
+            settledWindow.contains("assertNotVisible: \"Title (optional)\""),
+        )
+    }
+
+    @Test
     fun pending_creation_verifier_requires_exactly_one_authoritative_create_and_no_run() {
         JourneyInvariants.verify("pending-creation", pendingCreationTelemetry())
         assertThrows(IllegalStateException::class.java) {

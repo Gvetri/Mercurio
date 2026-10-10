@@ -43,3 +43,11 @@ name: pending-creation
     timeout: 45000
 - assertVisible: "Back to Sessions"
 - takeScreenshot: pending-creation-04-result-open
+# The pending dialog must close when the authoritative result opens: settle the
+# window animation, assert the dialog text is gone, then retain the settled frame.
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertNotVisible: "Creating Session…"
+- assertNotVisible: "Title (optional)"
+- assertVisible: "Back to Sessions"
+- takeScreenshot: pending-creation-05-result-settled

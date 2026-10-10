@@ -233,7 +233,7 @@ Gateway/state holder to compensate for a window-policy defect.
 The [historical A/B report on PR #71](https://github.com/Gvetri/hermes-native-client/pull/71#issuecomment-5848540026)
 found an API 24 arm64 Rename failure after adding resize to an older shell.
 That report is a regression warning, not proof that the current shell fails.
-Changing this contract requires all 16 deterministic API 24 journeys, including
+Changing this contract requires all 17 deterministic API 24 journeys, including
 `session-lifecycle` Rename, plus real-keyboard checks on API 35. Preserve the
 existing journey flows; their keyboard-hidden streaming check is not evidence
 that the old transcript layout is fully readable with the keyboard open.
