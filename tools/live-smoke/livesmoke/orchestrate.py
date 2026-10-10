@@ -78,7 +78,6 @@ class LiveSmokeGate:
         self.record: Dict[str, Any] = {}
         self.failure: Optional[Dict[str, Any]] = None
 
-    # ------------------------------------------------------------------ env
 
     def _provider_key(self) -> str:
         value = self.env.get(PROVIDER_KEY_ENV, "")
@@ -93,7 +92,6 @@ class LiveSmokeGate:
     def _sanitized_base_env(self) -> Dict[str, str]:
         return process_environment(self.env)
 
-    # ------------------------------------------------------------- preflight
 
     def preflight(self) -> List[Dict[str, Any]]:
         checks: List[Dict[str, Any]] = []
@@ -196,7 +194,6 @@ class LiveSmokeGate:
             return None
         return {"serial": serial, "avd_name": self.inputs.avd_name}
 
-    # ------------------------------------------------------------------- run
 
     def run(self) -> Dict[str, Any]:
         validate_inputs(self.inputs)
@@ -242,7 +239,6 @@ class LiveSmokeGate:
             raise error from None
         return result
 
-    # --------------------------------------------------------------- fixture
 
     def _prepare_and_start_fixture(self, gateway_key: str) -> None:
         self.record["stage"] = "fixture"
@@ -308,7 +304,6 @@ class LiveSmokeGate:
             env=docker_env,
         )
         self.record["fixture"]["container"] = {"id": container_id, "restart_policy": "", "restart_count": 0}
-        # Start with the credential-bearing environment; name-only -e resolves it.
         self.runner.run([self.inputs.docker_bin, "start", container_id], timeout_s=120.0, env=docker_env)
         self._wait_for_gateway(gateway_key)
         state = fixture_mod.container_state(self.runner, self.inputs.docker_bin, container_id)
@@ -426,7 +421,7 @@ class LiveSmokeGate:
         with tarfile.open(archive) as handle:
             try:
                 handle.extractall(context, filter="data")
-            except TypeError:  # Python < 3.12
+            except TypeError:
                 handle.extractall(context)
         tree = self.runner.run(
             ["git", "-C", str(self.inputs.hermes_source), "rev-parse",
@@ -464,7 +459,6 @@ class LiveSmokeGate:
     def _gateway_url(self) -> str:
         return "http://127.0.0.1:%d" % self.inputs.gateway_port
 
-    # ---------------------------------------------------------------- device
 
     def _start_device_driver(self) -> Any:
         self.record["stage"] = "device"
@@ -572,7 +566,6 @@ class LiveSmokeGate:
             raise LiveSmokeError("video_recording_failed", "screen recording could not be started")
         return pid
 
-    # ----------------------------------------------------------------- turns
 
     def _run_three_turns(self, gateway_key: str) -> None:
         self.record["stage"] = "turns"
@@ -642,8 +635,6 @@ class LiveSmokeGate:
             if not state["running"]:
                 raise LiveSmokeError("fixture_exited", "the gateway container exited during a turn")
             hierarchy = driver.inspect_screen(serial)
-            # This is the server-issued identity displayed by the client after admission.
-            # The pinned Session message resource deliberately contains no Run metadata.
             match = re.search(r"Latest Run: ([A-Za-z0-9_-]+)", hierarchy)
             run_id = match.group(1) if match else None
             if run_id and run_id not in completed_ids:
@@ -679,7 +670,6 @@ class LiveSmokeGate:
         raise LiveSmokeError("turn_evidence_missing", "the gateway did not report a completed turn",
                              detail="turn=%d" % index)
 
-    # ----------------------------------------------------------------- video
 
     def _finish_video(self, screenrecord_pid: str) -> None:
         self.record["stage"] = "video"
@@ -739,11 +729,8 @@ class LiveSmokeGate:
             },
         }
 
-    # ------------------------------------------------------------- redaction
 
     def _scan_and_record_redaction(self, scratch: Path, provider_key: str, gateway_key: str) -> None:
-        # Inspect inside the container. Only counts/booleans cross this boundary;
-        # neither log contents nor credential values are copied to the host.
         scanner = """import json, os
 from pathlib import Path
 secrets = [os.environ[n].encode() for n in ('OPENCODE_GO_API_KEY', 'API_SERVER_KEY')]
@@ -767,8 +754,6 @@ print(json.dumps({'clean': clean, 'scanned_files': count}))
             fixture_scan = json.loads(scan.stdout)
         except (ValueError, TypeError):
             fixture_scan = {}
-        # The host scratch is scanned before the device pull so the pulled
-        # device bytes are counted exactly once, in the dedicated surface scan.
         local_scan = evidence_mod.redaction_scan([scratch], [provider_key])
         device_surface = self._pull_and_scan_app_storage(scratch, provider_key)
         clean = (scan.returncode == 0 and fixture_scan.get("clean") is True
@@ -832,7 +817,6 @@ print(json.dumps({'clean': clean, 'scanned_files': count}))
             "clean": scan["clean"],
         }
 
-    # -------------------------------------------------------------- finalize
 
     def _finalize(self, container_id: str, forwarder: Any, maestro: Any, scratch: Path,
                   *, failed: bool = False) -> Dict[str, Any]:

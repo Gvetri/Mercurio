@@ -22,19 +22,12 @@ plugins {
     alias(libs.plugins.roborazzi) apply false
 }
 
-// The detekt analysis is declared once: every Kotlin module applies the pinned plugin, and this
-// block supplies the strict configuration and the shared config file, so a module build script
-// cannot drift from the declared policy.
 subprojects {
     plugins.withId("io.gitlab.arturbosch.detekt") {
         extensions.configure(DetektExtension::class.java) {
             buildUponDefaultConfig = true
             config.setFrom(rootProject.file("config/detekt/detekt.yml"))
         }
-        // The plain per-module `detekt` task runs without type resolution, so it is disabled: the
-        // gate analyzes through the type-resolution tasks (`detektMain`/`detektTest`), and an
-        // unqualified `./gradlew detekt` must not run a second, weaker analysis beside the
-        // aggregate task.
         tasks.matching { task -> task.name == "detekt" }.configureEach { enabled = false }
     }
 }
@@ -335,8 +328,6 @@ tasks.register("architectureRuleTests") {
     }
 }
 
-// Set by the verification tasks below and read by `qualityGate`, which fails when one of them did
-// not execute in the invocation.
 var coverageVerified = false
 var mutationVerified = false
 var detektVerified = false
@@ -347,8 +338,6 @@ tasks.register("verifyNoMocks") {
     group = "verification"
     description = "Fails when mock frameworks or mock-based test doubles are present."
     doLast {
-        // This check reads every module build script, including this one, so each rejected framework
-        // name is assembled from fragments instead of appearing literally in the file that rejects it.
         val mockFrameworks =
             listOf("mock" + "ito", "mock" + "k", "mock" + "webserver", "easy" + "mock", "mock" + "-server")
         val forbiddenSourcePatterns =
@@ -368,8 +357,6 @@ tasks.register("verifyNoMocks") {
                 }
             }
         }
-        // A mocking framework can also enter through a dependency declaration, which no source line
-        // would show, so every module build script is scanned for the same framework names.
         val buildScripts =
             fileTree(projectDir) {
                 include("**/build.gradle.kts")
@@ -453,9 +440,6 @@ val detektModules =
         ":fixtures:hermes:runner",
     )
 
-// The gate analyzes through the type-resolution tasks: `detektMain` and `detektTest` carry the
-// compile classpath, so every enabled rule that needs binding executes instead of silently
-// skipping.
 val detektAnalysisTasks =
     detektModules.flatMap { module -> listOf("$module:detektMain", "$module:detektTest") }
 
@@ -481,8 +465,6 @@ tasks.register("detektVerify") {
             "Detekt verification requires its analysis tasks to be enabled in this invocation: " +
                 "${disabled.map { task -> task.path }}"
         }
-        // The committed baseline was burnt to zero and removed, so every reported finding must fail
-        // the build. A baseline file that returns would absorb findings again, which is an error.
         val baselines =
             file("config/detekt").listFiles().orEmpty()
                 .filter { candidate ->

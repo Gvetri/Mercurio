@@ -32,7 +32,6 @@ def api_get(path):
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, ValueError) as error:
-        # Do not print a response body or a credential-bearing request.
         raise ReleaseError("Required GitHub evidence is unavailable") from error
 
 
@@ -236,7 +235,6 @@ def main():
         print("Release evidence verified.")
         return 0
     except (ReleaseError, KeyError, TypeError, AttributeError, ValueError, OSError) as error:
-        # Input parsing errors must not expose arbitrary response or environment values.
         message = str(error) if isinstance(error, ReleaseError) else "Missing or malformed release evidence"
         print(f"Release signing refused: {message}", file=sys.stderr)
         return 1

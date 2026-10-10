@@ -18,7 +18,6 @@ issues_endpoint="repos/${GITHUB_REPOSITORY}/issues"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
 
-# Metadata only: never download or copy test logs into public issue content.
 gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" > "$temporary_directory/artifacts.json"
 gh api --paginate --slurp "${issues_endpoint}?state=all&per_page=100" > "$temporary_directory/issues.json"
 python3 - "$temporary_directory" <<'PY'
@@ -99,7 +98,6 @@ else
     issue_number="$(python3 -c 'import json,sys; n=json.load(open(sys.argv[1]))["number"]; assert type(n) is int; print(n)' "$temporary_directory/response.json")"
 fi
 
-# Read the exact target after either creation or update.
 gh api "${issues_endpoint}/${issue_number}" > "$temporary_directory/verified.json"
 python3 - "$temporary_directory" <<'PY'
 from pathlib import Path

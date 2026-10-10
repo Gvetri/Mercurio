@@ -22,7 +22,6 @@ from livesmoke.errors import LiveSmokeError
 
 APP_ID = "org.hermesnative.client"
 
-# Stable client UI labels used by the bounded flows and observations.
 CONNECTED_MARKER = "Connected to Gateway"
 SESSIONS_MARKER = "Create Session"
 EMPTY_SESSION_MARKER = "No messages in this Session."
@@ -122,7 +121,6 @@ class MaestroMcp:
         self._next_id = 0
         self._buffer = bytearray()
 
-    # -- lifecycle ---------------------------------------------------------
 
     def start(self) -> "MaestroMcp":
         if self._proc is not None:
@@ -174,7 +172,6 @@ class MaestroMcp:
             except OSError:
                 pass
 
-    # -- MCP protocol ------------------------------------------------------
 
     def initialize(self) -> Dict[str, Any]:
         result = self._request(
@@ -275,7 +272,6 @@ class MaestroMcp:
                 return None
             self._buffer.extend(chunk)
 
-    # -- tool helpers ------------------------------------------------------
 
     def list_devices(self) -> List[Dict[str, Any]]:
         result = self.call_tool("list_devices", {})

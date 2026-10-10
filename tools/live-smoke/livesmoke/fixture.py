@@ -29,9 +29,6 @@ from livesmoke.proc import CommandRunner
 BASE_IMAGE_NAME = "ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie"
 BASE_IMAGE_DIGEST = "sha256:b3c543b6c4f23a5f2df22866bd7857e5d304b67a564f4feab6ac22044dde719b"
 
-# Build-generated files: the editable-install egg-info, the provenance stamps,
-# and the README placeholder created because the upstream .dockerignore
-# excludes *.md from the build context.
 _BUILD_GENERATED_FILES = {
     ".hermes_build_sha",
     ".hermes_source_tree",

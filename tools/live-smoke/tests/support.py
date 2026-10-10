@@ -125,7 +125,7 @@ class FakeGatewayServer:
         state = self.state
 
         class Handler(http.server.BaseHTTPRequestHandler):
-            def log_message(self, *args):  # silence
+            def log_message(self, *args):
                 pass
 
             def _authorized(self):
