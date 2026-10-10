@@ -36,9 +36,11 @@ class CreateSessionDialogImeInsetTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the measured layout is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the measured layout is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session_dialog_action_row_stays_above_the_reported_ime() {
@@ -65,7 +67,6 @@ class CreateSessionDialogImeInsetTest {
         val dialog = ShadowDialog.getLatestDialog()
         val decorView = dialog.window!!.decorView
         val density = decorView.resources.displayMetrics.density
-        // The measured real-Gboard height at this geometry: 258.7 dp (679 px at 420 dpi).
         val imePx = (258.7f * density).roundToInt()
         ViewCompat.dispatchApplyWindowInsets(
             decorView,

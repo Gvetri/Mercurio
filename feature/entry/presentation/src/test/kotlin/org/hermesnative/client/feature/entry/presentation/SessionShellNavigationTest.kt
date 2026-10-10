@@ -60,9 +60,11 @@ class SessionShellNavigationTest {
         assertTrue(composeTestRule.activity.isFinishing)
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-    // is the same, and the real dialog window is exercised on a device by the journey layer.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun system_back_on_the_creation_form_cancels_creation() {
@@ -131,7 +133,8 @@ class SessionShellNavigationTest {
                             session = session("first", "First Session"),
                             messages = listOf(message("message-1", "user", "Conversation message")),
                         ),
-                    sessionMutations = mapOf(sessionId to SessionMutationUiState(rename = SessionRenameUiState("First Session"))),
+                    sessionMutations =
+                        mapOf(sessionId to SessionMutationUiState(rename = SessionRenameUiState("First Session"))),
                 ),
             ),
             events::add,
@@ -145,9 +148,11 @@ class SessionShellNavigationTest {
         assertEquals(listOf(EntryUiEvent.CancelRenameSessionClicked(sessionId)), events)
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-    // is the same, and the real dialog window is exercised on a device by the journey layer.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
@@ -199,7 +204,8 @@ class SessionShellNavigationTest {
             entryState(
                 SessionListUiState(
                     sessions = listOf(session("first", "First Session")),
-                    sessionMutations = mapOf(id to SessionMutationUiState(rename = SessionRenameUiState("First Session"))),
+                    sessionMutations =
+                        mapOf(id to SessionMutationUiState(rename = SessionRenameUiState("First Session"))),
                 ),
             ),
             {},
@@ -276,11 +282,13 @@ class SessionShellNavigationTest {
         }
 
         dispatchImeInsets(isVisible = true)
-        val refreshBottomWhileVisible = composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
+        val refreshBottomWhileVisible =
+            composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
         assertTrue(refreshBottomWhileVisible <= windowHeight - imeInset + 1f)
 
         dispatchImeInsets(isVisible = false)
-        val refreshBottomAfterHidden = composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
+        val refreshBottomAfterHidden =
+            composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
         assertTrue(
             "the controls must return to the full pane when the IME is hidden",
             refreshBottomAfterHidden - refreshBottomWhileVisible >= imeInset * 0.75f,
@@ -314,9 +322,11 @@ class SessionShellNavigationTest {
         assertEquals(rowHeightBefore, rowHeightAfter, 0.5f)
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-    // is the same, and the real dialog window is exercised on a device by the journey layer.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w891dp-h411dp")
@@ -338,8 +348,6 @@ class SessionShellNavigationTest {
             }
         }
 
-        // The dialog keeps its action row visible; long or enlarged content scrolls instead
-        // of pushing Create and Cancel out of the window.
         composeTestRule.onNodeWithText("Create").assertHasClickAction().assertIsDisplayed()
         composeTestRule.onNodeWithText("Cancel").assertHasClickAction().assertIsDisplayed()
     }

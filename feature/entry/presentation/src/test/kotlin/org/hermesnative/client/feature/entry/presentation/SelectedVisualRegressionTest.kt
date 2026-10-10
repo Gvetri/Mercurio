@@ -119,9 +119,11 @@ class SelectedVisualRegressionTest {
         capture()
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session() {
@@ -136,9 +138,11 @@ class SelectedVisualRegressionTest {
         captureScreen()
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session_empty() {
@@ -153,9 +157,11 @@ class SelectedVisualRegressionTest {
         captureScreen()
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session_failure() {
@@ -174,9 +180,11 @@ class SelectedVisualRegressionTest {
         captureScreen()
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w411dp-h891dp-night")
@@ -192,9 +200,11 @@ class SelectedVisualRegressionTest {
         captureScreen()
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp-notnight")
@@ -202,7 +212,10 @@ class SelectedVisualRegressionTest {
         setContent(
             connectedState(
                 SessionListUiState(
-                    sessions = listOf(session("release-checklist", "Release checklist", "Review the release checklist.")),
+                    sessions =
+                        listOf(
+                            session("release-checklist", "Release checklist", "Review the release checklist."),
+                        ),
                     createSession = SessionCreationUiState(titleDraft = "Release checklist"),
                 ),
             ),
@@ -211,12 +224,14 @@ class SelectedVisualRegressionTest {
         captureScreen()
     }
 
-    // The smallest deterministic constrained-height witness: at twice the font scale in a very
-    // short window, the bounded dialog text region scrolls (long draft plus the failure message)
-    // instead of pushing the Create/Cancel row out of the dialog.
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-    // the same production composition the device journeys exercise.
+    /**
+     * The smallest deterministic constrained-height witness: at twice the font scale in a very
+     * short window, the bounded dialog text region scrolls (long draft plus the failure message)
+     * instead of pushing the Create/Cancel row out of the dialog.
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w411dp-h289dp-notnight")
@@ -241,11 +256,13 @@ class SelectedVisualRegressionTest {
         captureScreen()
     }
 
-    // The justified end state of the same witness: the bounded text region scrolls to the
-    // retained failure message while the action row stays fixed and visible.
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-    // the same production composition the device journeys exercise.
+    /**
+     * The justified end state of the same witness: the bounded text region scrolls to the
+     * retained failure message while the action row stays fixed and visible.
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w411dp-h289dp-notnight")

@@ -33,9 +33,11 @@ class CreateSessionDialogRenderingTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the measured layout is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the measured layout is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session_dialog_input_renders_the_accepted_body_large_role() {
@@ -48,9 +50,11 @@ class CreateSessionDialogRenderingTest {
         assertEquals(0.5.sp, input.layoutInput.style.letterSpacing)
     }
 
-    // Robolectric's paused looper cannot settle the standard dialog window with its text field
-    // (robolectric/robolectric#8460). Only the looper mode changes here; the measured layout is
-    // the same production composition the device journeys exercise.
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the measured layout is
+     * the same production composition the device journeys exercise.
+     */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session_dialog_input_keeps_the_body_large_role_at_twice_the_font_scale() {
@@ -63,8 +67,6 @@ class CreateSessionDialogRenderingTest {
 
         val input = inputTextLayout("Release checklist")
 
-        // The role stays the accepted bodyLarge; the rendered line grows with the user's
-        // font scale instead of being fixed to a smaller or clipped size.
         assertEquals(16.sp, input.layoutInput.style.fontSize)
         assertEquals(24.sp, input.layoutInput.style.lineHeight)
         assertTrue(
@@ -94,10 +96,6 @@ class CreateSessionDialogRenderingTest {
         composeTestRule.waitForIdle()
     }
 
-    /**
-     * Reads the layout result the production text field rendered, through the platform's
-     * public text-layout semantics action.
-     */
     private fun inputTextLayout(draft: String): TextLayoutResult {
         val results = mutableListOf<TextLayoutResult>()
         composeTestRule.onNodeWithText(draft).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult]

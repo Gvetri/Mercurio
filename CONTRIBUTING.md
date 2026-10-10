@@ -52,6 +52,11 @@ If an emulator is available, also run the app instrumentation scope:
 ./gradlew :app:verifyConnectedAndroidTests
 ```
 
+## Coding guidelines
+
+The repository's coding rules — including the comments policy — and what enforces each one live in
+[Coding guidelines](docs/coding-guidelines.md).
+
 ## Branch and pull request workflow
 
 `main` is protected, so create one issue-scoped branch per change, named
