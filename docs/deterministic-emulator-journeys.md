@@ -58,6 +58,15 @@ run, so a build or device-suite failure never reaches the journey lane.
   pagination-search journey loads both server pages first and then proves the
   local title filter and clear-search behavior; the flow never expects a
   server-side search request.
+- The pending-creation journey holds the Gateway's create response for a
+  bounded, deterministic window (`hold_create_ms`; the actual create request is
+  recorded before the hold starts) and exercises the pending Dialog policy on a
+  real window: a duplicate Create tap, Back, and an outside tap while the
+  creation is pending produce no second request and no dismissal, then the one
+  held response releases. The verifier requires exactly one
+  `POST /api/sessions`, exactly one create mutation, no dismissal-driven reads,
+  and no Run traffic, Run status read, observation, or Run creation anywhere in
+  the journey.
 - The layer is secret-free: the synthetic bearer credential, the loopback
   endpoint, and the test-only TLS key pair are repository-owned test fixtures,
   never real credentials, and the TLS key pair is never used outside the

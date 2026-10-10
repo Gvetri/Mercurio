@@ -49,6 +49,7 @@ data class JourneyScenario(
     val sessions: List<JourneySession> = emptyList(),
     val runs: List<JourneyRunScript> = emptyList(),
     val failNextSessionList: Boolean = false,
+    val holdCreateMs: Int? = null,
 ) {
     init {
         require(name.matches(Regex("[a-z][a-z0-9-]*"))) {
@@ -56,6 +57,13 @@ data class JourneyScenario(
         }
         require(port in 1..65535) { "Journey scenario port must be valid." }
         require(capabilities.isNotEmpty()) { "Journey scenarios must declare capabilities." }
+        // The held creation response must be released well before the client's
+        // HTTP read timeout (OkHttp defaults to 10s), so the application
+        // observes the authoritative create result instead of a transport
+        // timeout; the upper bound leaves one second of margin.
+        require(holdCreateMs == null || holdCreateMs in 1..9000) {
+            "hold_create_ms must be between 1 and 9000 milliseconds."
+        }
     }
 }
 
@@ -132,6 +140,7 @@ object JourneyScenarioParser {
             "sessions",
             "runs",
             "fail_next_session_list",
+            "hold_create_ms",
         )
     private val allowedSessionKeys = setOf("id", "title", "preview", "pinned", "history")
     private val allowedMessageKeys = setOf("id", "role", "content", "timestamp")
@@ -194,6 +203,7 @@ object JourneyScenarioParser {
                     sessions = parseSessions(root),
                     runs = parseRuns(root),
                     failNextSessionList = optionalBoolean(root, "fail_next_session_list", default = false),
+                    holdCreateMs = optionalInt(root, "hold_create_ms"),
                 )
             } catch (error: IllegalArgumentException) {
                 throw JourneyScenarioFormatException(error.message ?: "Journey scenario is invalid.")

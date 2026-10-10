@@ -11,6 +11,8 @@ import kotlinx.serialization.json.put
 import org.hermesnative.client.fixture.PinnedFixtureDescriptor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -565,6 +567,153 @@ class JourneyScenarioTest {
         assertThrows(IllegalStateException::class.java) {
             JourneyInvariants.verify("empty-sessions", emptySessionsTelemetry(emptySessionsRequests, runCreates = true))
         }
+    }
+
+    @Test
+    fun pending_creation_scenario_parses_with_the_bounded_hold() {
+        val scenarioFile = File(scenariosDir, "pending-creation.json")
+        val scenario = JourneyScenarioParser.parse(scenarioFile, pinnedDescriptor.provenance.value)
+        assertEquals("pending-creation", scenario.name)
+        assertEquals(8000, scenario.holdCreateMs)
+    }
+
+    @Test
+    fun hold_create_millis_must_stay_positive_and_inside_the_client_read_timeout() {
+        val revision = pinnedDescriptor.provenance.value
+
+        fun scenarioWithHold(hold: String): File =
+            tempScenario(
+                """{"name":"hold-bounds","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions"],"hold_create_ms":$hold}""",
+            )
+        listOf("0", "-1", "9001").forEach { hold ->
+            val error = runCatching { JourneyScenarioParser.parse(scenarioWithHold(hold), revision) }.exceptionOrNull()
+            assertTrue("hold_create_ms=$hold should be rejected", error is JourneyScenarioFormatException)
+        }
+        val accepted = JourneyScenarioParser.parse(scenarioWithHold("9000"), revision)
+        assertEquals(9000, accepted.holdCreateMs)
+    }
+
+    @Test
+    fun held_create_response_is_recorded_before_the_bounded_release() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"held-create","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions","session_create"],"hold_create_ms":1000}""",
+            )
+        val scenario = JourneyScenarioParser.parse(file, revision)
+        val process = JourneyGatewayProcess.start(scenario.copy(port = freePort(), tls = false))
+        try {
+            val endpoint = process.endpoint
+            get(endpoint, "/api/sessions")
+            val result = java.util.concurrent.atomic.AtomicReference<HttpResponse>()
+            val start = System.nanoTime()
+            val thread = Thread { result.set(post(endpoint, "/api/sessions", """{"title":"Pending draft"}""")) }
+            thread.start()
+            // The deterministic hold: at 250ms the held response cannot have been
+            // released, and the create request must already be recorded so the
+            // scenario's hold starts after the recorded request.
+            Thread.sleep(250)
+            val duringHold = getBody(endpoint, "/__fixture/telemetry")
+            assertTrue(
+                "The create request was not recorded before the hold.",
+                duringHold.contains("\"method\":\"POST\"") && duringHold.contains("\"path\":\"/api/sessions\""),
+            )
+            assertNull("The held create response was released before the bounded hold.", result.get())
+            thread.join(5_000)
+            val elapsedMs = (System.nanoTime() - start) / 1_000_000
+            val released = result.get()
+            assertNotNull("The held create response was never released.", released)
+            assertEquals(201, released!!.status)
+            assertTrue("The held response was released after ${elapsedMs}ms, before the 1000ms hold.", elapsedMs >= 950)
+            assertTrue(released.body.contains("synthetic-created-session-1"))
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun pending_creation_flow_exercises_duplicate_back_and_outside_while_held() {
+        val flow = File(repositoryRoot, "fixtures/hermes/journey/flows/pending-creation.yaml").readText()
+        val pendingWindow =
+            flow.substringAfter("takeScreenshot: pending-creation-02-pending")
+                .substringBefore("extendedWaitUntil")
+        assertTrue("The duplicate confirm tap is missing.", pendingWindow.contains("- tapOn: \"Create\""))
+        assertTrue("The Back dismissal attempt is missing.", pendingWindow.contains("- back"))
+        assertTrue("The outside tap is missing.", pendingWindow.contains("point:"))
+        assertTrue("The still-pending assertion is missing.", pendingWindow.contains("\"Creating Session…\""))
+    }
+
+    @Test
+    fun pending_creation_verifier_requires_exactly_one_authoritative_create_and_no_run() {
+        JourneyInvariants.verify("pending-creation", pendingCreationTelemetry())
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify(
+                "pending-creation",
+                pendingCreationTelemetry(requests = pendingCreationRequests + ("POST" to "/api/sessions")),
+            )
+        }
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify(
+                "pending-creation",
+                pendingCreationTelemetry(requests = pendingCreationRequests + ("POST" to "/v1/runs")),
+            )
+        }
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("pending-creation", pendingCreationTelemetry(operations = emptyList()))
+        }
+        val dismissalRead =
+            pendingCreationRequests.toMutableList().also { it.add(1, "GET" to "/api/sessions") }
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("pending-creation", pendingCreationTelemetry(requests = dismissalRead))
+        }
+    }
+
+    private val pendingCreationRequests =
+        listOf(
+            "GET" to "/api/sessions",
+            // The single held create: the duplicate confirm, Back and outside taps
+            // while pending produced no traffic at all.
+            "POST" to "/api/sessions",
+            "GET" to "/api/sessions/synthetic-created-session-1",
+            "GET" to "/api/sessions/synthetic-created-session-1/messages",
+            "GET" to "/api/sessions",
+        )
+
+    private fun pendingCreationTelemetry(
+        requests: List<Pair<String, String>> = pendingCreationRequests,
+        operations: List<Pair<String, String>> = listOf("create" to "synthetic-created-session-1"),
+    ) = buildJsonObject {
+        put(
+            "session_mutations",
+            buildJsonArray {
+                operations.forEach { (operation, sessionId) ->
+                    add(
+                        buildJsonObject {
+                            put("operation", operation)
+                            put("session_id", sessionId)
+                        },
+                    )
+                }
+            },
+        )
+        put(
+            "requests",
+            buildJsonArray {
+                (listOf("GET" to "/v1/capabilities") + requests).forEach { (method, path) ->
+                    add(
+                        buildJsonObject {
+                            put("method", method)
+                            put("path", path)
+                        },
+                    )
+                }
+            },
+        )
+        put("run_status_requests", 0)
+        put("run_creates", buildJsonObject {})
+        put("sse_connections", buildJsonObject {})
     }
 
     private fun assertEarlyMutationRejected(sessionId: String) {

@@ -227,6 +227,11 @@ class JourneyGatewayProcess private constructor(
                     )
                 }
                 "POST" -> {
+                    // The deterministic pending window for the held-creation journey:
+                    // the request is recorded above before any hold begins, so the
+                    // hold starts strictly after the actual create request. The
+                    // response is released after the scenario's bounded duration.
+                    behavior.scenario.holdCreateMs?.let { holdMillis -> Thread.sleep(holdMillis.toLong()) }
                     val created =
                         JourneySession(
                             id = behavior.createdSessionId(),
