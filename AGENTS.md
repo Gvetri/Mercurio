@@ -1,3 +1,8 @@
+## Coding guidelines
+
+Before writing or changing any code, follow `docs/coding-guidelines.md`; it records the repository's
+coding rules and what enforces each one.
+
 ## Agent skills
 
 ### Issue tracker
