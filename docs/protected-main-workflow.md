@@ -64,9 +64,10 @@ job that requests a write scope, and it runs on the schedule alone, so no write 
 pull-request code.
 
 Failure evidence uploaded by the test and device lanes is redacted by
-`.github/scripts/redact-test-reports.py` before upload; the Android instrumentation lane publishes
-its failure artifact only after its sanitization step completes, and uploaded evidence is retained
-for 14 days.
+`.github/scripts/redact-test-reports.py` before upload; the image artifacts uploaded alongside it,
+such as the Compose lane's Roborazzi PNG comparison files and the journey screenshots, do not pass
+through that script. The Android instrumentation lane publishes its failure artifact only after
+its sanitization step completes, and uploaded evidence is retained for 14 days.
 
 A merge does not package or publish an application APK or generate a product version.
 Signing-policy tests may create minimal disposable APK fixtures; those are not application
