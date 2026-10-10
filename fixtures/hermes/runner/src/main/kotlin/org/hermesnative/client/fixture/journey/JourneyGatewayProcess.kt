@@ -202,6 +202,7 @@ private object JourneyGatewayRoutes {
         when (exchange.requestMethod) {
             "GET" -> respondSessionListPage(exchange, behavior)
             "POST" -> {
+                behavior.scenario.holdCreateMs?.let { holdMillis -> Thread.sleep(holdMillis.toLong()) }
                 val created =
                     JourneySession(
                         id = behavior.createdSessionId(),

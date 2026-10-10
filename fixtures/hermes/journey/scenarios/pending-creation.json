@@ -1,0 +1,18 @@
+{
+  "name": "pending-creation",
+  "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+  "port": 18443,
+  "tls": true,
+  "capabilities": [
+    "sessions",
+    "session_create",
+    "session",
+    "session_update",
+    "session_delete",
+    "session_messages",
+    "runs",
+    "run_status",
+    "run_events"
+  ],
+  "hold_create_ms": 8000
+}

@@ -139,6 +139,7 @@ journeys=(
     connection
     session-list-first
     empty-sessions
+    pending-creation
     session-lifecycle
     pagination-search
     active-run-isolation
