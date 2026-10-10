@@ -27,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -107,12 +108,16 @@ internal fun SessionModeContent(
                 // during Search or inline Rename, so its controls and editor stay above the keyboard.
                 modifier = modifier.imePadding(),
             )
-        SessionShellMode.CreateSession ->
-            CreateSessionContent(
+        SessionShellMode.CreateSession -> {
+            // The approved standard dialog replaces the full-surface creation form: the
+            // list stays available under the standard scrim, and the dialog is the only
+            // creation surface in both layouts.
+            fallback()
+            CreateSessionDialog(
                 state = requireNotNull(state.createSession),
                 onEvent = onEvent,
-                modifier = modifier,
             )
+        }
         SessionShellMode.SessionList -> fallback()
     }
 }
@@ -613,71 +618,80 @@ private fun EmptySessionsContent() {
     }
 }
 
+/**
+ * The approved standard Material 3 Create Session dialog: one optional title, the
+ * Untitled Session fallback, and the exact Create/Cancel actions. The dialog owns
+ * nothing but presentation; the in-memory draft and the guarded confirmation event
+ * stay in the state holder, so no dismissal path can create a Session.
+ */
 @Composable
-internal fun CreateSessionContent(
+internal fun CreateSessionDialog(
     state: SessionCreationUiState,
     onEvent: (EntryUiEvent) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .imePadding()
-                .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.Top,
-    ) {
-        OutlinedButton(
-            onClick = { onEvent(EntryUiEvent.CancelCreateSessionClicked) },
-            enabled = !state.isSubmitting,
-            modifier = Modifier.heightIn(min = 48.dp),
-        ) {
-            Text(text = "Cancel")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Create Session",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.semantics { heading() },
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = "Optionally add a title. The Session is created only after confirmation.")
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(
-            value = state.titleDraft,
-            onValueChange = { onEvent(EntryUiEvent.CreateSessionTitleChanged(it)) },
-            enabled = !state.isSubmitting,
-            label = { Text("Session title (optional)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = { onEvent(EntryUiEvent.ConfirmCreateSessionClicked) },
-            enabled = !state.isSubmitting,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) {
-            Text(text = if (state.errorCategory == null) "Confirm Create Session" else "Try again")
-        }
-        if (state.isSubmitting) {
-            Spacer(modifier = Modifier.height(16.dp))
-            CircularProgressIndicator(
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
+    AlertDialog(
+        onDismissRequest = { onEvent(EntryUiEvent.CancelCreateSessionClicked) },
+        title = {
             Text(
-                text = "Creating Session…",
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                text = "Create Session",
+                modifier = Modifier.semantics { heading() },
             )
-        }
-        state.errorCategory?.let { category ->
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = category.safeMessage,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-            )
-        }
-    }
+        },
+        text = {
+            // The content is bounded and scrollable, so enlarged text or a short window
+            // scrolls it instead of pushing the action row out of the dialog.
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = state.titleDraft,
+                    onValueChange = { onEvent(EntryUiEvent.CreateSessionTitleChanged(it)) },
+                    enabled = !state.isSubmitting,
+                    label = { Text(text = "Title (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                when {
+                    state.isSubmitting ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                            Text(
+                                text = "Creating Session…",
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        }
+                    state.errorCategory != null ->
+                        Text(
+                            text = state.errorCategory.safeMessage,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                        )
+                    else -> Text(text = "Leave blank for Untitled Session.")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onEvent(EntryUiEvent.ConfirmCreateSessionClicked) },
+                enabled = !state.isSubmitting,
+            ) {
+                Text(text = if (state.errorCategory == null) "Create" else "Try again")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { onEvent(EntryUiEvent.CancelCreateSessionClicked) },
+                enabled = !state.isSubmitting,
+            ) {
+                Text(text = "Cancel")
+            }
+        },
+    )
 }
 
 @Composable

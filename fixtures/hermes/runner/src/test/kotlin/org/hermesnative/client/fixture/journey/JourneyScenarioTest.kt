@@ -538,6 +538,9 @@ class JourneyScenarioTest {
     private val lifecycleRequests =
         listOf(
             "GET" to "/api/sessions",
+            // The two pre-submit dismissals end in real list reads with no write.
+            "GET" to "/api/sessions",
+            "GET" to "/api/sessions",
             "POST" to "/api/sessions",
             "GET" to "/api/sessions/synthetic-created-session-1",
             "GET" to "/api/sessions/synthetic-created-session-1/messages",

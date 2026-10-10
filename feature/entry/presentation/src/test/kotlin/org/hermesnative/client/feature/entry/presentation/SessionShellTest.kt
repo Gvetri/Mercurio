@@ -28,6 +28,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -77,6 +78,10 @@ class SessionShellTest {
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(2)
     }
 
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+    // is the same, and the real dialog window is exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
     fun list_pane_controls_are_disabled_while_creation_is_open() {
@@ -94,6 +99,10 @@ class SessionShellTest {
         composeTestRule.onNodeWithText("Load more Sessions").assertIsNotEnabled()
     }
 
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+    // is the same, and the real dialog window is exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
     fun gateway_removal_is_disabled_while_creation_is_open() {

@@ -9,7 +9,11 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -49,6 +53,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -634,8 +639,13 @@ class EntryScreenTest {
         assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
     }
 
+    // The standard dialog window with its text field cannot settle under Robolectric's
+    // paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
+    // mode changes here; the asserted behavior is the same, and the real dialog window is
+    // exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
-    fun creation_form_supports_optional_title_confirmation_and_cancellation() {
+    fun create_session_dialog_supports_optional_title_confirmation_and_cancellation() {
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
             HermesTheme {
@@ -656,8 +666,8 @@ class EntryScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Session title (optional)").performTextInput("Draft title")
-        composeTestRule.onNodeWithText("Confirm Create Session").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithText("Title (optional)").performTextInput("Draft title")
+        composeTestRule.onNodeWithText("Create").assertHasClickAction().performClick()
         assertEquals(
             listOf(
                 EntryUiEvent.CreateSessionTitleChanged("Draft title"),
@@ -671,6 +681,56 @@ class EntryScreenTest {
         assertEquals(listOf(EntryUiEvent.CancelCreateSessionClicked), events)
     }
 
+    // The standard dialog window with its text field cannot settle under Robolectric's
+    // paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
+    // mode changes here; the asserted behavior is the same, and the real dialog window is
+    // exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_session_dialog_is_the_standard_dialog_with_the_approved_copy() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Gateway connected",
+                            supportingText = "The Gateway contract was verified successfully.",
+                            actionLabel = "Connected",
+                            isConnected = true,
+                            sessionList =
+                                SessionListUiState(
+                                    sessions =
+                                        listOf(
+                                            SessionItemUiState(
+                                                id = SessionId("existing"),
+                                                title = "Existing Session",
+                                                preview = null,
+                                                pinned = false,
+                                            ),
+                                        ),
+                                    createSession = SessionCreationUiState(),
+                                ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        // The creation surface is a standard dialog that carries the dialog heading.
+        composeTestRule.onNode(isDialog() and hasAnyDescendant(hasText("Create Session"))).assertExists()
+        // The list entry stays available behind the dialog.
+        composeTestRule.onNode(hasText("Create Session") and hasClickAction()).assertExists()
+        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Leave blank for Untitled Session.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().assertIsEnabled()
+        composeTestRule.onNodeWithText("Create").assertHasClickAction().assertIsEnabled()
+    }
+
+    // The standard dialog window with its text field cannot settle under Robolectric's
+    // paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
+    // mode changes here; the asserted behavior is the same, and the real dialog window is
+    // exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun confirmed_creation_failure_preserves_the_draft_and_exposes_an_explicit_retry() {
         val events = mutableListOf<EntryUiEvent>()
@@ -705,6 +765,11 @@ class EntryScreenTest {
         assertEquals(listOf(EntryUiEvent.ConfirmCreateSessionClicked), events)
     }
 
+    // The standard dialog window with its text field cannot settle under Robolectric's
+    // paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
+    // mode changes here; the asserted behavior is the same, and the real dialog window is
+    // exercised on a device by the journey layer.
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun creation_pending_state_disables_confirmation_and_cancellation_with_progress() {
         composeTestRule.setContent {
@@ -731,7 +796,7 @@ class EntryScreenTest {
         }
 
         composeTestRule.onNodeWithText("Creating Session…").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm Create Session").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Create").assertIsNotEnabled()
         composeTestRule.onNodeWithText("Cancel").assertIsNotEnabled()
     }
 

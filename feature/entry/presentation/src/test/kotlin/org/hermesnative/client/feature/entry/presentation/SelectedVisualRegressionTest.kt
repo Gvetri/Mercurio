@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
@@ -14,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-notnight")
@@ -113,6 +115,10 @@ class SelectedVisualRegressionTest {
         capture()
     }
 
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+    // the same production composition the device journeys exercise.
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session() {
         setContent(
@@ -123,7 +129,82 @@ class SelectedVisualRegressionTest {
             ),
         )
 
-        capture()
+        captureScreen()
+    }
+
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+    // the same production composition the device journeys exercise.
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_session_empty() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession = SessionCreationUiState(),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+    // the same production composition the device journeys exercise.
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_session_failure() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession =
+                        SessionCreationUiState(
+                            titleDraft = "Release checklist",
+                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+    // the same production composition the device journeys exercise.
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun create_session_dark() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession = SessionCreationUiState(titleDraft = "Release checklist"),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    // Robolectric's paused looper cannot settle the standard dialog window with its text field
+    // (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+    // the same production composition the device journeys exercise.
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp-notnight")
+    fun create_session_two_pane() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    sessions = listOf(session("release-checklist", "Release checklist", "Review the release checklist.")),
+                    createSession = SessionCreationUiState(titleDraft = "Release checklist"),
+                ),
+            ),
+        )
+
+        captureScreen()
     }
 
     @Test
@@ -327,5 +408,11 @@ class SelectedVisualRegressionTest {
     private fun capture() {
         composeTestRule.waitForIdle()
         composeTestRule.onRoot().captureRoboImage()
+    }
+
+    @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
+    private fun captureScreen() {
+        composeTestRule.waitForIdle()
+        captureScreenRoboImage()
     }
 }

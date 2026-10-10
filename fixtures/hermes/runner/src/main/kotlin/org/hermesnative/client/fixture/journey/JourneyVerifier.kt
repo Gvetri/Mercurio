@@ -102,7 +102,7 @@ internal object JourneyInvariants {
         when (scenarioName) {
             "connection" -> verifyConnection(telemetry)
             "session-list-first" -> verifySessionListFirst(telemetry)
-            "empty-sessions" -> verifySessionListFirst(telemetry)
+            "empty-sessions" -> verifyEmptySessions(telemetry)
             "session-lifecycle" -> verifySessionLifecycle(telemetry)
             "pagination-search" -> verifyPaginationSearch(telemetry)
             "active-run-isolation" -> verifyActiveRunIsolation(telemetry)
@@ -172,6 +172,34 @@ internal object JourneyInvariants {
         requireConnectionAttempted(telemetry)
     }
 
+    private fun verifyEmptySessions(telemetry: JsonObject) {
+        // The journey cancels a named draft before creating without a title: the confirmed
+        // creation must be the only write, and it must follow a real list read.
+        requireConnectionAttempted(telemetry)
+        val requests =
+            telemetry.getValue("requests").jsonArray.map { request ->
+                val fields = request.jsonObject
+                fields.getValue("method").jsonPrimitive.content to fields.getValue("path").jsonPrimitive.content
+            }
+        val firstWriteIndex = requests.indexOfFirst { (method, _) -> method != "GET" }
+        check(firstWriteIndex >= 0) { "The journey did not confirm the Session creation." }
+        check(requests.take(firstWriteIndex).any { (_, path) -> path == "/api/sessions" }) {
+            "The client wrote before it had read the Session list."
+        }
+        val writes = requests.filter { (method, _) -> method != "GET" }
+        check(writes == listOf("POST" to "/api/sessions")) {
+            "The confirmed creation and its pre-submit dismissal did not write exactly one Session create: $writes"
+        }
+        val operations =
+            telemetry.getValue("session_mutations").jsonArray.map { entry ->
+                val fields = entry.jsonObject
+                fields.getValue("operation").jsonPrimitive.content to fields.getValue("session_id").jsonPrimitive.content
+            }
+        check(operations == listOf("create" to "synthetic-created-session-1")) {
+            "The confirmed creation did not record exactly one create operation: $operations"
+        }
+    }
+
     private fun verifySessionLifecycle(telemetry: JsonObject) {
         requireConnectionAttempted(telemetry)
         val requests =
@@ -234,6 +262,9 @@ internal object JourneyInvariants {
         check(
             checkpoints ==
                 listOf(
+                    "list" to 0,
+                    // The two pre-submit dismissals end in real list reads with no write.
+                    "list" to 0,
                     "list" to 0,
                     "history" to 1,
                     "list" to 1,
