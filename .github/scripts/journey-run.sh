@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Runs the deterministic Maestro journeys against the exact candidate APK on
-# the prepared emulator. Executes inside the emulator runner action.
-# The emulator layer is secret-free: only the repository-owned synthetic
-# Gateway, synthetic credential, and the checked-in test-only TLS assets.
 set -euo pipefail
 
 workspace="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
@@ -107,16 +103,12 @@ if ! adb shell test -f "$ca_device_path"; then
 fi
 
 log "Installing the exact candidate APK."
-# --no-streaming avoids the streamed-install protocol, which was observed
-# stalling against the API 24 emulator's adbd; the call is bounded anyway.
 if ! timeout 180 adb install --no-streaming -r "$apk" >/dev/null; then
     log "Failed to install the candidate APK."
     exit 1
 fi
 
 log "Installing pinned Maestro CLI ${MAESTRO_CLI_VERSION}."
-# Reuse a restored archive when the CI cache provided one, so a GitHub
-# outage cannot block the acceptance layer before any flow starts.
 if [[ ! -f maestro.zip ]]; then
     curl -fsSL -o maestro.zip "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_CLI_VERSION}/maestro.zip"
 fi
@@ -158,13 +150,6 @@ journeys=(
 for journey in "${journeys[@]}"; do
     log "Journey: $journey"
     journey_attempt=1
-    # Bounded retry: the API 24 emulator has a platform window-reporting race
-    # that intermittently leaves a freshly opened menu window out of the
-    # accessibility window list. The measured failure is in the
-    # session-lifecycle flow, the only journey that opens session action
-    # menus, so only that journey is retried, exactly once, always logged,
-    # with both attempts retained as evidence (see
-    # docs/deterministic-emulator-journeys.md).
     while :; do
     gateway_log="$evidence_dir/${journey}-gateway.log"
     java -Dfixture.repositoryRoot="$workspace" \
@@ -192,11 +177,6 @@ for journey in "${journeys[@]}"; do
         log "Journey Gateway health check failed for $journey."
         exit 1
     fi
-    # Capability readiness check before any flow starts. The probe is not
-    # recorded as application traffic. The served set is scenario-specific
-    # (the capabilities-missing-required scenario intentionally omits a
-    # required capability), so the required set is checked for every other
-    # journey and the endpoint contract is checked everywhere.
     capability_credential="$(grep -oE '"require_bearer_credential"[[:space:]]*:[[:space:]]*"[^"]*"' \
         "$scenario_dir/$journey.json" | sed -E 's/.*:[[:space:]]*"([^"]*)"$/\1/' || true)"
     capability_probe=(curl -kfsS -H "X-Journey-Probe: readiness")
@@ -215,11 +195,6 @@ for journey in "${journeys[@]}"; do
     fi
 
     maestro_log="$evidence_dir/${journey}-maestro.log"
-    # Install the pinned driver APKs directly and skip Maestro's own
-    # reinstall path: Maestro streams the driver apps through dadb, which has
-    # no read timeout and was observed hanging a journey's driver install on
-    # the API 24 emulator. The driver packages persist, so install them once
-    # per device; bound every adb call because adb install can itself stall.
     if ! timeout 60 adb shell pm path dev.mobile.maestro >/dev/null 2>&1 ||
         ! timeout 60 adb shell pm path dev.mobile.maestro.test >/dev/null 2>&1; then
         log "Installing the pinned Maestro driver APKs."

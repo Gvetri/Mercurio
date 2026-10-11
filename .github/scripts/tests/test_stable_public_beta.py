@@ -185,7 +185,6 @@ class StableBetaTest(unittest.TestCase):
         return releases
 
     def approval(self):
-        # GitHub review history has no review timestamp or run-attempt field.
         return {"state": "approved", "comment": "Release approved",
                 "user": {"id": 8773754, "login": "Gvetri", "type": "User"},
                 "environments": [{"id": 9, "name": "release"}]}
@@ -312,7 +311,7 @@ class StableBetaTest(unittest.TestCase):
 
     def test_newest_source_without_its_own_evidence_never_falls_back_to_older_smoke(self):
         self.signed_candidate()
-        self.nightly["id"] = 9999  # a later rerun ID cannot outrank a newer main source
+        self.nightly["id"] = 9999
         newest = {**self.nightly, "id": 8, "tag_name": f"nightly-7003-{self.end}",
                   "target_commitish": self.end, "assets": []}
         self.releases.append(newest)
@@ -461,7 +460,6 @@ class StableBetaTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertFalse(self.release_file.exists())
         self.declaration.write_text(json.dumps({**data, "change_notes": ["Added session list updates."]}, indent=2))
-        # The bytes differ: a source-controlled review is not interchangeable with equal fields.
         result, _ = self.command("publish")
         self.assertNotEqual(0, result.returncode)
         self.environment["GITHUB_RUN_ATTEMPT"] = "2"
@@ -472,7 +470,6 @@ class StableBetaTest(unittest.TestCase):
     def test_partial_upload_or_corrupt_readback_keeps_draft_for_manual_recovery(self):
         for flag in ("fail-upload", "corrupt-stable-download"):
             with self.subTest(flag=flag):
-                # Each subtest needs a clean provider draft and a fresh signed fixture.
                 if flag == "corrupt-stable-download":
                     self.release_file.unlink()
                     (self.provider / "assets").rename(self.provider / "discarded-assets")

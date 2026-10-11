@@ -17,9 +17,6 @@ name: pending-creation
 - extendedWaitUntil:
     visible: "No Sessions on this Gateway"
     timeout: 30000
-# The pending creation: the controlled Gateway records the actual create request and
-# holds its response for the scenario's bounded window, so the flow can exercise the
-# pending Dialog policy on a real window before the single response releases.
 - tapOn: "Create Session"
 - assertVisible: "Title (optional)"
 - tapOn: "Title (optional)"
@@ -29,22 +26,17 @@ name: pending-creation
 - tapOn: "Create"
 - assertVisible: "Creating Session…"
 - takeScreenshot: pending-creation-02-pending
-# Duplicate confirm while pending: the submitting guard must not dispatch a second create.
 - tapOn: "Create"
-# Back and outside taps while pending: dismissal is ignored until the one result arrives.
 - back
 - tapOn:
     point: "6%,40%"
 - assertVisible: "Creating Session…"
 - takeScreenshot: pending-creation-03-after-duplicate-back-outside
-# The released authoritative result: exactly one Session opens with the draft title.
 - extendedWaitUntil:
     visible: "Pending draft"
     timeout: 45000
 - assertVisible: "Back to Sessions"
 - takeScreenshot: pending-creation-04-result-open
-# The pending dialog must close when the authoritative result opens: settle the
-# window animation, assert the dialog text is gone, then retain the settled frame.
 - waitForAnimationToEnd:
     timeout: 10000
 - assertNotVisible: "Creating Session…"

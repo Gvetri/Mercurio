@@ -63,7 +63,8 @@ run, so a build or device-suite failure never reaches the journey lane.
   recorded before the hold starts) and exercises the pending Dialog policy on a
   real window: a duplicate Create tap, Back, and an outside tap while the
   creation is pending produce no second request and no dismissal, then the one
-  held response releases. The verifier requires exactly one
+  held response releases. The pending Dialog closes once the released
+  result opens the Session. The verifier requires exactly one
   `POST /api/sessions`, exactly one create mutation, no dismissal-driven reads,
   and no Run traffic, Run status read, observation, or Run creation anywhere in
   the journey.
@@ -129,6 +130,40 @@ CI runs the same steps via `.github/scripts/journey-run.sh` for every journey
 in order. The pinned Maestro archive is restored from the GitHub Actions
 cache; the pinned download runs only on a cache miss, so the layer adds no
 steady-state public-network dependency beyond CI itself.
+
+## Runner platform notes
+
+The runner installs the exact candidate APK with `adb install --no-streaming`:
+the streamed-install protocol was observed stalling against the API 24
+emulator's adbd, and the call is bounded with a timeout. The pinned Maestro
+driver APKs are extracted from the Maestro client jar and installed directly,
+once per device — the packages persist across journeys — skipping Maestro's own
+reinstall path. That path streams the driver apps through dadb, which has no
+read timeout and was observed hanging a journey's driver install on the API 24
+emulator; every adb call is bounded for the same reason, because `adb install`
+can itself stall.
+
+Before any flow starts, the runner probes `/health` directly — it is not a
+client capability — and then `/v1/capabilities` with the `X-Journey-Probe:
+readiness` header, whose traffic the fake Gateway does not record as
+application traffic. The served capability set is scenario-specific: the
+`capabilities-missing-required` scenario intentionally omits a required
+capability, so the required endpoint set is checked for every other journey
+and the endpoint contract is checked for every journey, that scenario included.
+
+The list and transcript flows scroll with small, bounded in-pane swipes that
+stop as soon as the target is visible, instead of a fixed gesture count: the
+transcript pins its newest content, so a control can scroll out of view, and an
+element swipe up from the first Session overshoots the short list viewport and
+clips the Session titles above it. A flow that needs earlier messages walks up
+to the first message first and then reads downward. In `session-lifecycle`, the
+`Refresh` reads are Gateway checkpoints asserted by the journey verifier: only
+Session creation may have written before them, and no list-menu cancellation
+may add a write.
+
+The `journeyScenarioTest` task declares the checked-in journey fixtures as
+Gradle inputs, so a scenario-only edit re-runs the scenario parse and
+validation instead of reporting up to date and never parsing it.
 
 ## Failure evidence
 

@@ -95,7 +95,6 @@ class RetentionPolicyTests(unittest.TestCase):
         result = verify_policy_semantics(self.runner, info["conf_path"], self.retained)
         self.assertTrue(result["stale_would_be_removed"])
         self.assertFalse(result["fresh_would_be_kept_but_removed"])
-        # The probe files must not survive verification.
         self.assertEqual(list(self.retained.glob(".hermes-live-smoke-*")), [])
 
     def test_policy_semantics_rejects_missing_dry_run_support(self):
