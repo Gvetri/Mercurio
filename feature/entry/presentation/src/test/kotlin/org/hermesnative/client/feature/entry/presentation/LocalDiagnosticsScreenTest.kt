@@ -158,7 +158,8 @@ class LocalDiagnosticsScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Local diagnostics").performScrollTo().assertIsEnabled().performClick()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Local diagnostics").assertIsEnabled().performClick()
 
         assertEquals(listOf<EntryUiEvent>(EntryUiEvent.OpenLocalDiagnosticsClicked), events)
     }

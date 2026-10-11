@@ -98,6 +98,9 @@ Markdown rendering contracts.
 | `empty_session_list` | Session list | Valid empty Gateway response |
 | `populated_session_list` | Session list | Pinned and unpinned server metadata |
 | `session_list_unavailable` | Session list | Stale data, unavailable state, and retry |
+| `session_list_menu_open` | Session list | Screen administration menu open over the list |
+| `session_list_row_menu_open` | Session list | Row action menu open over the list |
+| `gateway_removal_confirmation` | Session list | D-02 Gateway-removal confirmation dialog |
 | `create_session` | Session list | In-memory title draft before confirmation |
 | `create_session_empty` | Session list | Blank optional title with the Untitled Session fallback |
 | `create_session_failure` | Session list | Confirmed creation failure with the retained title and explicit retry |
@@ -142,10 +145,11 @@ token set.
 
 The Create Session surface is now the standard Material 3 `AlertDialog`: the
 `create_session*` states capture that real dialog window over the Session list (and beside
-it in the two-pane layout). The remaining confirmation modes are inline: Rename and Delete
-confirmation render as a conditional mode in the existing Compose state model and have no
-dialog overlay, so they stay covered without changing production behavior only to create a
-screenshot.
+it in the two-pane layout). The Gateway-removal confirmation
+(`gateway_removal_confirmation`) uses the same stock `AlertDialog` surface over the Session
+list. Rename and Delete confirmation stay inline: they render as a conditional mode in the
+existing Compose state model and have no dialog overlay, so they stay covered without
+changing production behavior only to create a screenshot.
 
 The matrix uses Robolectric SDK 35, native graphics mode, and synthetic in-memory values.
 The default capture viewport is `w411dp-h891dp-notnight`; the dialog variants select their
