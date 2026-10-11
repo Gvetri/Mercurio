@@ -64,7 +64,6 @@ class RenderConfigTests(unittest.TestCase):
             "port: 8642",
         ):
             self.assertIn(expected, text, "missing %r" % expected)
-        # The provider credential is never part of the fixture configuration.
         self.assertNotIn("OPENCODE_GO_API_KEY", text)
         self.assertNotRegex(text, r"sk-[A-Za-z0-9]")
 
@@ -148,12 +147,10 @@ class DockerLifecycleTests(unittest.TestCase):
         joined = " ".join(argv)
         self.assertIn("-e API_SERVER_KEY", joined)
         self.assertIn("-e OPENCODE_GO_API_KEY", joined)
-        # Secrets are passed by NAME only, never as NAME=VALUE argument pairs.
         self.assertNotIn("API_SERVER_KEY=", joined)
         self.assertNotIn("OPENCODE_GO_API_KEY=", joined)
         self.assertIn("127.0.0.1:8642:8642", joined)
         self.assertIn("hermes-live-smoke-run=ls-x", joined)
-        # Configuration is mounted read-only; no secret is ever in the mount.
         self.assertIn("/scratch/gateway-config.yaml:/opt/data/config.yaml:ro", joined)
 
     def test_daemon_error_is_not_proof_of_removal(self):
@@ -224,8 +221,6 @@ class TlsForwarderTests(unittest.TestCase):
         forwarder.start()
         self.addCleanup(forwarder.stop)
         context = ssl.create_default_context(cafile=str(TLS_ASSETS / "journey-ca.pem"))
-        # The repository test CA carries basicConstraints only; relax the
-        # Python 3.13+ strict X.509 profile for this test material.
         context.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
         with socket.create_connection(("127.0.0.1", forwarder.port), timeout=5) as raw:
             with context.wrap_socket(raw, server_hostname="localhost") as tls:
@@ -236,7 +231,6 @@ class TlsForwarderTests(unittest.TestCase):
 
     @unittest.skipUnless(OPENSSL, "openssl is required")
     def test_forwarder_is_generic_binary_relay(self):
-        # A TLS connection that speaks no HTTP must still pass through untouched.
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         runner = SubprocessRunner(base_env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")})

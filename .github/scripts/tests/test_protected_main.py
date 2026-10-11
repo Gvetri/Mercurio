@@ -31,8 +31,6 @@ HEAVY_JOBS = (
 DECLARED_CHECKS = tuple(
     line.strip() for line in REQUIRED_CHECKS.read_text().splitlines() if line.strip()
 )
-# A pull-request-scoped check runs for a ready in-repository pull request and for every
-# non-pull-request event, so a draft or a fork pull request never runs the complete gate.
 HEAVY_JOBS_RUN = (
     "${{ always() && (github.event_name != 'pull_request' || "
     "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}"
@@ -43,7 +41,7 @@ CONFORMANCE_RUN = (
 )
 
 
-JOB_END = re.compile(r"^  [a-z0-9_\\-]+:\s", re.MULTILINE)  # a key indented by exactly two spaces ends a job
+JOB_END = re.compile(r"^  [a-z0-9_\\-]+:\s", re.MULTILINE)
 
 
 def job_block(workflow, job):
@@ -136,8 +134,6 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             self.assertEqual(HEAVY_JOBS_RUN, jobs[job][1], f"{job} must run for a ready in-repository pull request")
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn('expected_state=success', aggregate)
-        # The emulator suites are label-gated on pull requests, and the Maestro run waits for a
-        # passing API 24 run, so a broken build never reaches the journey lane.
         emulator_gate = (
             "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
             "(github.event_name == 'pull_request' && !github.event.pull_request.draft && "
@@ -206,7 +202,6 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         jobs = jobs_of(self.workflow)
         with_checkout = [job for job in jobs if "actions/checkout@" in job_block(self.workflow, job)]
         self.assertEqual(sorted(set(jobs) - {"fork_guard"}), sorted(with_checkout))
-        # The declared checks, the aggregate gate, and the nightly issue lane that is not a check.
         self.assertEqual(len(DECLARED_CHECKS) + 2, len(jobs))
         self.assertIn("quality-gate", with_checkout)
         for job, block in ((job, job_block(self.workflow, job)) for job in jobs):
@@ -325,8 +320,6 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
     """The conformance check, against a local GitHub API stand-in."""
 
     def setUp(self):
-        # The pull-request view: a token that cannot push sees the default branch but not the
-        # repository's merge settings, so nothing on this path depends on them.
         self.routes = {
             "/repos/Gvetri/hermes-native-client": {"default_branch": "main"},
             "/repos/Gvetri/hermes-native-client/rules/branches/main": [

@@ -45,9 +45,6 @@ tasks.register<Test>("fixtureContractTest") {
 
 tasks.register<Test>("journeyScenarioTest") {
     configureFocusedFixtureTest("org.hermesnative.client.fixture.journey.JourneyScenarioTest")
-    // The scenario test reads the checked-in journey fixtures from disk, so
-    // they are declared as inputs; otherwise a scenario-only edit could be
-    // reported UP-TO-DATE and the changed scenario would never be parsed.
     inputs.dir(rootProject.file("fixtures/hermes/journey"))
         .withPropertyName("journeyFixtures")
         .withPathSensitivity(PathSensitivity.RELATIVE)

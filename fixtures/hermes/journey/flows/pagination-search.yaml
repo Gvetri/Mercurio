@@ -15,8 +15,6 @@ name: pagination-search
     visible: "Sessions"
     timeout: 30000
 - assertVisible: "Search Alpha One"
-# The compact Session action row makes the second row's title reachable with
-# fewer gestures; stop as soon as it is visible instead of a fixed count.
 - repeat:
     times: 4
     while:
@@ -44,8 +42,6 @@ name: pagination-search
 - tapOn: "Search Sessions"
 - inputText: "Gamma"
 - hideKeyboard
-# The filtered list keeps its own scroll position, so bring the matching row
-# back into view with small bounded swipes instead of a fixed gesture count.
 - repeat:
     times: 6
     while:

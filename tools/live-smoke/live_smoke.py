@@ -62,7 +62,6 @@ def _install_termination_handler():
     previous = signal.getsignal(signal.SIGTERM)
 
     def _handle(_signum, _frame):
-        # Once termination starts, leave the bounded teardown uninterrupted.
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         raise _SigtermInterrupt()
 

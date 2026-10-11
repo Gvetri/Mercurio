@@ -17,9 +17,6 @@ name: session-list-first
 - assertVisible: "Sessions"
 - assertVisible: "Alpha Session"
 - assertVisible: "Pinned"
-# The list owns a short viewport on this profile, so scroll inside it with
-# small bounded swipes until the second Session's title is on screen. An
-# element swipe up from the first Session overshoots and clips the title.
 - repeat:
     times: 4
     while:
