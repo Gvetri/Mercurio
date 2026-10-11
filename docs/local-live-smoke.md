@@ -115,6 +115,17 @@ the audited revision; the dependency base image and digest are recorded
 separately, and the gate verifies every source file in the image byte-for-byte
 against the pinned tree before use.
 
+The fixed SQLite library is built from the pinned tarball because Debian 13
+ships SQLite 3.46.1, which contains the upstream WAL-reset bug; the image
+mirrors the audited upstream image's runtime baseline and fails its build if
+the linked library resolves below the fixed version. Dependencies install from
+the frozen lockfile before the full source copy, so dependency layers survive
+source-only rebuilds, and the image keeps the base image's `PATH`, prepending
+only the virtual environment, so base-image tools such as `ldconfig` stay
+reachable during the build. The container runs as the same non-root uid the
+upstream image uses: the gateway refuses to run as root inside the official
+image, and the fixture must not weaken that guard.
+
 The container is created with no restart policy, credentials injected by name
 only, and the generated configuration mounted read-only. The root filesystem is
 read-only, container logs are disabled, and runtime state lives in temporary
@@ -133,7 +144,10 @@ entry. The gate rejects a run that exceeds the complete recording window.
 The screen recording contains only synthetic test text. The gate encrypts it
 to the operator-provisioned maintainer recipient, deletes the plaintext and
 the device copy, and retains only the encrypted artifact with its SHA-256 and
-redacted metadata. Expiry is enforced by the native `systemd-tmpfiles` user
+redacted metadata. Recipient binding is verified by inspecting the produced
+OpenPGP packet, because the pinned gpg version does not report `ENC_TO` on
+`--status-fd`; the packet itself is the authoritative record of the recipient
+key. Expiry is enforced by the native `systemd-tmpfiles` user
 mechanism: the gate installs a managed policy (30 days, `m:` modification-time
 semantics) and verifies it for real — the policy must be parsed, an aged probe
 must be scheduled for removal, a fresh probe must be kept, and the dedicated

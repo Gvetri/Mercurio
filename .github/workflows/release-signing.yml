@@ -134,7 +134,6 @@ jobs:
       RELEASE_VERSION_CODE: ${{ inputs.nightly_version_code }}
       RELEASE_GENERATION_ATTEMPT: ${{ inputs.generation_attempt }}
     steps:
-      # The signing tools come from the protected workflow revision, not the APK or its source tree.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}

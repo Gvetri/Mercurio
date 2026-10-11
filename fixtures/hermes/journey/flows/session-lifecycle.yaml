@@ -15,7 +15,6 @@ name: session-lifecycle
     visible: "Sessions"
     timeout: 30000
 - assertVisible: "Alpha Session"
-# Pre-submit dismissal writes nothing: Back and Cancel discard the in-memory draft.
 - tapOn: "Create Session"
 - assertVisible: "Title (optional)"
 - tapOn: "Title (optional)"
@@ -24,7 +23,6 @@ name: session-lifecycle
 - takeScreenshot: session-lifecycle-01-back-draft-open
 - back
 - assertNotVisible: "Discarded Back draft"
-# This read is a Gateway checkpoint: the Back dismissal must not have written.
 - tapOn: "Refresh"
 - tapOn: "Create Session"
 - tapOn: "Title (optional)"
@@ -33,7 +31,6 @@ name: session-lifecycle
 - takeScreenshot: session-lifecycle-02-cancel-draft-open
 - tapOn: "Cancel"
 - assertNotVisible: "Discarded Cancel draft"
-# This read is a Gateway checkpoint: the Cancel dismissal must not have written.
 - tapOn: "Refresh"
 - tapOn: "Create Session"
 - tapOn: "Title (optional)"
@@ -51,7 +48,6 @@ name: session-lifecycle
 - assertVisible: "No messages in this Session."
 - assertNotVisible: "Role: assistant"
 
-# Conversation: Back dismisses the menu, and cancelled confirmations do not write.
 - tapOn: "Session actions for Lifecycle Session"
 - assertVisible: "Pin Session"
 - back
@@ -69,7 +65,6 @@ name: session-lifecycle
     element: "Cancel Delete"
     direction: DOWN
 - tapOn: "Cancel Delete"
-# This read is a Gateway checkpoint: only Session creation may have written so far.
 - tapOn: "Refresh history"
 - tapOn: "Session actions for Lifecycle Session"
 - tapOn: "Rename Session"
@@ -109,7 +104,6 @@ name: session-lifecycle
     timeout: 30000
 - assertVisible: "Alpha Session"
 
-# List: opening or cancelling management must not open a conversation.
 - tapOn: "Session actions for Alpha Session"
 - back
 - assertNotVisible: "Pin Session"
@@ -126,7 +120,6 @@ name: session-lifecycle
     element: "Cancel Delete"
     direction: DOWN
 - tapOn: "Cancel Delete"
-# This read is a Gateway checkpoint: no list-menu cancellation may add a write.
 - tapOn: "Refresh"
 - tapOn: "Session actions for Alpha Session"
 - tapOn: "Rename Session"
@@ -146,11 +139,6 @@ name: session-lifecycle
     visible: "Session actions for Renamed Session"
     timeout: 30000
 - tapOn: "Session actions for Renamed Session"
-# The API 24 platform can leave a freshly opened menu window out of the
-# accessibility window list for the life of that open, so the drawn menu is
-# unreadable to the test driver until another window or focus event arrives.
-# Recover this measured interaction within a fixed bound by dismissing and
-# reopening the menu; the assertions below stay unchanged.
 - repeat:
     times: 3
     while:

@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!--
-      The diagnostics export exposes one app-private cache file to the app the user
-      picks in the Sharesheet. The provider is not exported and grants read access
-      per URI only, so no other app can list or read the export directory.
-    -->
     <application>
         <provider
             android:name="androidx.core.content.FileProvider"

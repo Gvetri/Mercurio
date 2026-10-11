@@ -1,27 +1,5 @@
 # syntax=docker/dockerfile:1
-# =============================================================================
-# Client-owned headless Hermes Gateway image for the exact-APK local live
-# smoke gate (see docs/local-live-smoke.md).
-#
-# Build context: the audited Hermes source tree at the exact pinned revision.
-# The revision is passed as HERMES_REVISION and stamped into the image as
-# provenance. The smoke tool verifies the source revision, the tree digest
-# and the built image identity; mutable refs (main/latest) are never accepted.
-#
-# Deliberate differences from the upstream production Dockerfile:
-#   * no s6-overlay: the disposable fixture must not be supervised and never
-#     restarts; the container exits with the gateway process;
-#   * no Node/TUI/web assets; only the gateway runtime dependencies that the
-#     frozen uv lockfile resolves for the `messaging` extra (aiohttp);
-#   * no baked configuration and no host mounts: the smoke tool injects the
-#     generated fixture config with `docker cp` before the container starts.
-# =============================================================================
 
-# ---------- Fixed SQLite ----------
-# Debian 13 ships SQLite 3.46.1, which contains the upstream WAL-reset bug.
-# The audited upstream image builds a fixed shared library from the same
-# pinned tarball; mirror that runtime baseline instead of running the smoke
-# gateway on the vulnerable system library.
 FROM debian:13.4 AS sqlite_build
 ARG SQLITE_AUTOCONF_VERSION=3530400
 ARG SQLITE_SHA256=0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c
@@ -60,8 +38,6 @@ RUN apt-get -o Acquire::Retries=3 update && \
     make -j"$(nproc)" && \
     make install
 
-# ---------- Runtime image ----------
-# Same audited base digest the upstream production image uses.
 FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie@sha256:b3c543b6c4f23a5f2df22866bd7857e5d304b67a564f4feab6ac22044dde719b
 
 ENV PYTHONUNBUFFERED=1 \
@@ -71,8 +47,6 @@ ENV PYTHONUNBUFFERED=1 \
     HERMES_WRITE_SAFE_ROOT=/opt/data \
     HERMES_DISABLE_LAZY_INSTALLS=1
 
-# Keep the base image PATH (the fixed sqlite install runs `ldconfig` from
-# /usr/sbin) and only prepend the venv.
 ENV PATH=/opt/hermes/.venv/bin:$PATH
 
 RUN apt-get -o Acquire::Retries=3 update && \
@@ -95,9 +69,6 @@ db.close()"
 
 WORKDIR /opt/hermes
 
-# Layer-cached Python dependency install from the frozen lockfile. The project
-# itself is installed after the full source copy so dependency layers survive
-# source-only rebuilds.
 COPY pyproject.toml uv.lock ./
 RUN touch README.md && \
     uv sync --frozen --no-install-project --extra messaging --no-cache
@@ -105,12 +76,6 @@ COPY . .
 RUN uv sync --frozen --extra messaging --no-cache && \
     .venv/bin/python -c "import sqlite3, sys; sys.exit('SQLite did not resolve to the fixed library') if sqlite3.sqlite_version_info < (3, 51, 3) else None"
 
-# ---------- Provenance ----------
-# Image identity is distinct from dependency/base provenance:
-#   * revision/title/description describe the audited Hermes source built here;
-#   * base.name/base.digest describe the pinned dependency base image.
-# The stamps under /opt/hermes are verified against the runtime source tree by
-# the smoke tool (see livesmoke/fixture.py verify_image_source).
 ARG HERMES_REVISION
 ARG HERMES_SOURCE_TREE=unverified
 ARG HERMES_SOURCE_VERSION=unverified
@@ -122,10 +87,6 @@ LABEL org.opencontainers.image.title="hermes-live-smoke-gateway" \
       org.opencontainers.image.base.name="ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie" \
       org.opencontainers.image.base.digest="sha256:b3c543b6c4f23a5f2df22866bd7857e5d304b67a564f4feab6ac22044dde719b"
 
-# Non-root runtime user (same uid the upstream image uses). The gateway
-# refuses to run as root inside the official image, and the fixture must not
-# weaken that guard. $HERMES_HOME lives in the writable container layer and is
-# destroyed with the container.
 ENV HOME=/opt/data
 RUN test -n "${HERMES_REVISION}" && \
     useradd --home-dir /opt/data --uid 10000 --shell /usr/sbin/nologin hermes && \
@@ -140,7 +101,4 @@ USER 10000
 
 EXPOSE 8642
 
-# Direct venv entrypoint: no s6, no supervisor, no restart. The smoke tool
-# creates the container, copies the generated config to /opt/data/config.yaml,
-# then starts it and treats any exit as fixture failure.
 CMD ["/opt/hermes/.venv/bin/hermes", "gateway", "run", "--no-supervise"]

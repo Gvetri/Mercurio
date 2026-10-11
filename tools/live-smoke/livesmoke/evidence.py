@@ -44,12 +44,9 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, TypeGuard
 SCHEMA = "hermes-live-smoke-evidence"
 SCHEMA_VERSION = 1
 
-# The audited Hermes fixture commit and its tree. The evidence must pin
-# exactly these; the in-image markers must equal them.
 EXPECTED_HERMES_REVISION = "d9833c5615b80e199a174cd67d90ab430695a972"
 EXPECTED_SOURCE_TREE = "6ad3ce36084df3b5cf6a902115bb18860e264340"
 
-# Sane upper bounds for monotonic timings (ms): a single turn and a whole run.
 MAX_TURN_MS = 30 * 60 * 1000
 MAX_RUN_MS = 6 * 60 * 60 * 1000
 
@@ -266,9 +263,6 @@ def validate_evidence(
         if not isinstance(toolsets, dict) or toolsets.get("checked") is not True \
                 or toolsets.get("enabled_count") != 0 or toolsets.get("enabled") not in ([],):
             note("nonempty_effective_toolset")
-        # The GET /v1/toolsets endpoint uses include_default_mcp_servers=False;
-        # the agent-side resolver (sorted(_get_platform_tools(_load_gateway_config(),
-        # "api_server"))) must be proven empty separately.
         resolver_checked = toolsets.get("resolver_checked") if isinstance(toolsets, dict) else None
         resolver_names = toolsets.get("resolver_enabled") if isinstance(toolsets, dict) else None
         resolver_count = toolsets.get("resolver_enabled_count") if isinstance(toolsets, dict) else None
@@ -432,8 +426,6 @@ def validate_evidence(
             or redaction.get("findings"):
         note("redaction_unverified")
     else:
-        # Every actual checked surface must be identified, including the
-        # owned application storage pulled off the AVD.
         surfaces = redaction.get("surfaces")
         if not isinstance(surfaces, dict):
             note("redaction_unverified")

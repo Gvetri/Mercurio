@@ -73,7 +73,6 @@ def sign(apk, output, certificate):
     require(encoded and password, "Signing material is unavailable")
     keystore = base64.b64decode(encoded, validate=True)
     require(keystore, "Signing material is unavailable")
-    # No GitHub token or encoded keystore reaches the signing tool's environment.
     environment["ANDROID_RELEASE_KEYSTORE_PASSWORD"] = password
     require(not output.exists(), "Refusing to overwrite a signing output")
     with tempfile.TemporaryDirectory(prefix="release-signing-", dir=os.environ["RUNNER_TEMP"]) as directory:
@@ -96,8 +95,6 @@ def sign(apk, output, certificate):
         require(signers == [expected_certificate], "APK signer does not match the pinned release identity")
         run_tool([str(tools / "zipalign"), "-c", "-P", "16", "4", str(signed)], environment)
         metadata.update(apk_sha256=digest(signed), certificate_sha256=expected_certificate)
-        # Publish a small allowlist only after signature verification. The private directory is
-        # outside the artifact path and is removed on both success and failure.
         output.mkdir(parents=True)
         try:
             shutil.copyfile(signed, output / "hermes-native-client.apk")

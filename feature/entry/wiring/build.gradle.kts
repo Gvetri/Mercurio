@@ -16,7 +16,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
-        // The exporter records UTC instants, so the module desugars java.time for minSdk 24.
         isCoreLibraryDesugaringEnabled = true
     }
 

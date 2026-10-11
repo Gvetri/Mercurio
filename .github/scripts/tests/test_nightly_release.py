@@ -189,7 +189,6 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertIn("Required validation evidence failed", result.stderr)
 
     def test_source_lookup_is_not_limited_by_unrelated_workflow_history(self):
-        # Repository-wide filtered history is capped at 1,000, even with pagination.
         self.routes[f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"] = {
             "total_count": 1001, "workflow_runs": self.runs,
         }
@@ -266,7 +265,6 @@ class NightlyPreparationTest(unittest.TestCase):
         self.tag = f"nightly-7002-{self.selected}"
         self.routes.update({
             f"{prefix}/releases": lambda: [json.loads(self.release_file.read_text())] if self.release_file.exists() else [],
-            # GitHub's by-tag endpoint returns published releases, not drafts.
             f"{prefix}/releases/1": lambda: json.loads(self.release_file.read_text()),
             f"{prefix}/git/matching-refs/tags/{self.tag}": [],
             f"{prefix}/git/ref/tags/{self.tag}": {"object": {"type": "commit", "sha": self.selected}},
@@ -306,7 +304,6 @@ class NightlyPreparationTest(unittest.TestCase):
 
     def test_draft_listing_can_omit_a_created_release_without_blocking_exact_id_readback(self):
         self.signed_publication_fixture()
-        # Observed hosted failure: creation succeeds but the release listing has no draft.
         self.routes[f"/repos/{self.repository}/releases"] = []
         result = self.publish()
         self.assertEqual(0, result.returncode, result.stderr)

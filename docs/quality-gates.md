@@ -56,7 +56,9 @@ measured when its scope was declared.
 
 The Gradle wiring is declared once as well. `buildSrc/src/main/kotlin/hermes-quality-gate.gradle.kts`
 is a convention plugin: each modified module applies `id("hermes-quality-gate")` and keeps no Kover or
-PIT block of its own. The plugin reads the module scope from `QualityPolicy` and fails on a module that
+PIT block of its own. `buildSrc` resolves the Kover and PIT plugin versions from the main build's
+version catalog and keeps both plugins on its build-logic classpath, so each version has one
+declaration. The plugin reads the module scope from `QualityPolicy` and fails on a module that
 has no declared scope, so no module can run the tools with thresholds of its own. It also gives each
 test task and the PIT test minion the `fixture.repositoryRoot` property that the fixture-driven tests
 resolve their fixtures with.
@@ -64,7 +66,8 @@ resolve their fixtures with.
 ### Coverage
 
 Kover measures the declared Kotlin/JVM production modules. Presentation is out of the covered
-scope: it is a Compose surface whose behavior is pinned by the `compose-jvm-tests` baselines, and
+scope: it is a Compose surface whose behavior is pinned by the `compose-jvm-tests` baselines —
+which render the committed synthetic state matrix, never a live Gateway — and
 the wiring module is a thin Android bridge covered by instrumentation.
 
 | Module | Line coverage | Branch coverage | Reported classes |
@@ -132,11 +135,23 @@ keeps no double check, so a new port belongs in the same change as its declarati
 detekt is pinned in `gradle/libs.versions.toml` and every Kotlin module applies it. The root build
 script declares the strict policy once: `config/detekt/detekt.yml` is layered on detekt's default
 config (`buildUponDefaultConfig`), `build.maxIssues: 0` fails the analysis on any reported finding,
-and the rules the gate relies on are enabled explicitly — `ReturnCount` (guard clauses count toward
-the limit), `ElseCaseInsteadOfExhaustiveWhen`, `CommentOverPrivateFunction`, and
-`CommentOverPrivateProperty`. The exemptions are deliberate and stated in the configuration file:
-Compose functions are PascalCase by convention, and the two test-source exemptions cover idioms
-whose reason is recorded next to them.
+and the rules the gate relies on are enabled explicitly, so a detekt upgrade cannot quietly turn one
+of them off — `ReturnCount`, `ElseCaseInsteadOfExhaustiveWhen`, `CommentOverPrivateFunction`, and
+`CommentOverPrivateProperty`. The configuration file carries no comments; its exemptions are
+deliberate, each with its reason here:
+
+- `FunctionNaming` keeps `functionPattern: '[a-zA-Z][a-zA-Z0-9]*'`, because Compose functions are
+  PascalCase by convention and the pinned rule cannot exempt annotated functions, so the pattern
+  admits both casings; the rule still reports a name that does not start with a letter or that
+  contains a non-alphanumeric character.
+- `ReturnCount` keeps `excludeGuardClauses: false`: an early `return` on a guard is still an early
+  return, so guard clauses count toward the limit.
+- `IteratorNotThrowingNoSuchElementException` excludes test sources only, because a blocking test
+  double deliberately never exhausts its stream, so its `next` is unreachable after `hasNext`
+  returns false; the iterator contract stays enforced in production sources.
+- `InjectDispatcher` excludes test sources only, because a test chooses the dispatcher it drives the
+  subject with and dispatcher injection is a production-wiring concern; the rule stays enforced in
+  production sources.
 
 `./gradlew detekt` runs the type-resolution tasks (`detektMain` and `detektTest` for every module),
 so a rule that needs binding executes instead of silently skipping. The plain, non-type-resolving
