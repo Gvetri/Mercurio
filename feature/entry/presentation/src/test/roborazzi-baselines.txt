@@ -3,6 +3,9 @@ org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.empty_session_list.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.populated_session_list.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_list_unavailable.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_list_menu_open.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_list_row_menu_open.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.gateway_removal_confirmation.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_empty.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_failure.png
