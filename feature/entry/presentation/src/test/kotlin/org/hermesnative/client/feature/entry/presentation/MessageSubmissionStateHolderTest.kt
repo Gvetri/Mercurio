@@ -414,7 +414,7 @@ class MessageSubmissionStateHolderTest {
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             gateway.blockRunCreation = false
             gateway.releaseRun.countDown()
             assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
@@ -629,7 +629,7 @@ class MessageSubmissionStateHolderTest {
             connect(holder, gateway)
             holder.onEvent(EntryUiEvent.SessionClicked(session.id))
             holder.onEvent(EntryUiEvent.ComposerTextChanged("Forget me"))
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
 
             assertNull(repository.load())
             assertFalse(holder.uiState.value.isConnected)

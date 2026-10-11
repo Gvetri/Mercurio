@@ -178,7 +178,7 @@ class RunObservationStateHolderTest {
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             assertTrue(gateway.createStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             gateway.createRelease.countDown()
 
             awaitCondition { persisted.isNotEmpty() }
@@ -217,7 +217,7 @@ class RunObservationStateHolderTest {
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             assertTrue(gateway.createStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
@@ -322,7 +322,7 @@ class RunObservationStateHolderTest {
                 it.sessionList?.openedSession?.hasUnresolvedSubmission == true
             }
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             recoveryRegistry.failSave = false
             holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))

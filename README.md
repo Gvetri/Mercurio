@@ -2,7 +2,7 @@
 
 Hermes Native Client is an independent Android application built with Kotlin and Jetpack Compose. It provides a native shell for connecting to a pre-existing, compatible Hermes Gateway.
 
-This repository does not embed a local Hermes runtime, agent execution engine, desktop web interface, Electron application, or WebView wrapper. It provides one explicit HTTPS Gateway connection flow with process-memory bearer credentials by default and an explicit opt-in to authenticated, device-local credential persistence, followed by a Gateway-derived Session list with filtering of loaded titles and previews and server-backed pagination, explicit in-memory Session creation, and read-only Session history entry with an in-memory message composer and explicit Gateway Run submission. Drafts remain memory-only per Session, Send is disabled while a submission or active Run exists, and failed submissions preserve the draft for retry.
+This repository does not embed a local Hermes runtime, agent execution engine, desktop web interface, Electron application, or WebView wrapper. It provides one explicit HTTPS Gateway connection flow that verifies the Gateway and then saves the bearer credential with authenticated, device-local persistence by default, followed by a Gateway-derived Session list with filtering of loaded titles and previews and server-backed pagination, explicit in-memory Session creation, and read-only Session history entry with an in-memory message composer and explicit Gateway Run submission. Drafts remain memory-only per Session, Send is disabled while a submission or active Run exists, and failed submissions preserve the draft for retry.
 
 ## Current baseline
 
@@ -97,7 +97,7 @@ app
 
 ## Public connection boundary
 
-The connection flow requires the user to provide one explicit profile-specific HTTPS endpoint for an existing compatible Hermes Gateway and a bearer credential. The client verifies authentication and the required capability manifest before it stores the endpoint. The credential stays in process memory unless the user explicitly selects **Save securely on this device**; opted-in credentials are authenticated-encrypted with an AndroidKeyStore key and stored in application-private, backup-excluded storage. The client will not deploy the gateway, discover profiles, or run Hermes locally.
+The connection flow requires the user to provide one explicit profile-specific HTTPS endpoint for an existing compatible Hermes Gateway and a bearer credential. The client verifies authentication and the required capability manifest before it saves the connection. After verification, the endpoint and credential are saved securely by default: they are authenticated-encrypted with an AndroidKeyStore key and stored in application-private, backup-excluded storage. A failed secure save never reports completed setup and offers an explicit retry. Removal is local to this device and never deletes remote Sessions or cancels Runs. The client will not deploy the gateway, discover profiles, or run Hermes locally.
 
 ## License
 

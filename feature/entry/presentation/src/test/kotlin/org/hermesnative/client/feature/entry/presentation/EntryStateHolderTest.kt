@@ -59,7 +59,7 @@ class EntryStateHolderTest {
     }
 
     @Test
-    fun secure_save_is_explicit_and_persists_the_credential_only_after_verification() {
+    fun secure_default_persists_the_credential_without_any_opt_in() {
         val repository = FakeGatewayConnectionRepository()
         val holder =
             holder(
@@ -72,11 +72,10 @@ class EntryStateHolderTest {
         holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
         holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("secure-token"))
-        holder.onEvent(EntryUiEvent.SaveCredentialChanged(true))
         holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
 
-        assertTrue(holder.uiState.value.saveCredential)
-        assertEquals("secure-token", repository.saved?.bearerCredential)
+        assertTrue(holder.uiState.value.isConnected)
+        assertEquals(GatewayConnection("https://gateway.example/profile", "secure-token"), repository.saved)
         holder.close()
     }
 
@@ -94,7 +93,6 @@ class EntryStateHolderTest {
         holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
         holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("working-token"))
-        holder.onEvent(EntryUiEvent.SaveCredentialChanged(true))
         holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
         holder.onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("replacement-token"))
@@ -123,7 +121,6 @@ class EntryStateHolderTest {
         holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
         holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("working-token"))
-        holder.onEvent(EntryUiEvent.SaveCredentialChanged(true))
         holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
         holder.onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("replacement-token"))
@@ -150,7 +147,6 @@ class EntryStateHolderTest {
         holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
         holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("working-token"))
-        holder.onEvent(EntryUiEvent.SaveCredentialChanged(true))
         holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
         repository.throwOnSave = true
         holder.onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
@@ -165,7 +161,7 @@ class EntryStateHolderTest {
     }
 
     @Test
-    fun a_restarted_state_prefills_an_opt_in_credential_without_defaulting_to_secure_save() {
+    fun a_restarted_state_prefills_the_saved_endpoint_and_credential_for_explicit_verification() {
         val holder =
             EntryStateHolder(
                 EntryState(
@@ -175,8 +171,9 @@ class EntryStateHolderTest {
                 ),
             )
 
+        assertEquals("https://gateway.example/profile", holder.uiState.value.endpoint)
         assertEquals("secure-token", holder.uiState.value.bearerCredential)
-        assertTrue(holder.uiState.value.saveCredential)
+        assertTrue(holder.uiState.value.connectionSetupRequested)
         holder.close()
     }
 
@@ -194,16 +191,150 @@ class EntryStateHolderTest {
         holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
         holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("secure-token"))
-        holder.onEvent(EntryUiEvent.SaveCredentialChanged(true))
         holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
 
         assertEquals(EntryErrorCategory.CREDENTIAL_STORAGE_FAILED, holder.uiState.value.errorCategory)
         assertFalse(holder.uiState.value.isConnected)
+        assertFalse(holder.uiState.value.isSaving)
         holder.close()
     }
 
     @Test
-    fun verification_enters_loading_then_connected_and_persists_only_the_endpoint() {
+    fun storage_failure_offers_try_again_with_retained_inputs_and_full_reverification() {
+        val repository = FakeGatewayConnectionRepository()
+        repository.throwOnSave = true
+        var verificationCount = 0
+        val holder =
+            holder(
+                repository = repository,
+                verifier = { _, _ ->
+                    verificationCount += 1
+                    clientManifestCapabilities()
+                },
+            )
+
+        holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+        holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
+        holder.onEvent(EntryUiEvent.BearerCredentialChanged("secure-token"))
+        holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+
+        assertEquals(EntryErrorCategory.CREDENTIAL_STORAGE_FAILED, holder.uiState.value.errorCategory)
+        assertFalse(holder.uiState.value.isConnected)
+        assertEquals("https://gateway.example/profile", holder.uiState.value.endpoint)
+        assertEquals("secure-token", holder.uiState.value.bearerCredential)
+
+        repository.throwOnSave = false
+        holder.onEvent(EntryUiEvent.TryAgainClicked)
+
+        assertEquals(2, verificationCount)
+        assertTrue(holder.uiState.value.isConnected)
+        assertEquals(
+            GatewayConnection("https://gateway.example/profile", "secure-token"),
+            repository.saved,
+        )
+        holder.close()
+    }
+
+    @Test
+    fun saving_phase_locks_inputs_until_secure_persist_finishes() {
+        val repository = FakeGatewayConnectionRepository()
+        val saveStarted = CountDownLatch(1)
+        val releaseSave = CountDownLatch(1)
+        repository.onSave = {
+            saveStarted.countDown()
+            assertTrue(releaseSave.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+        }
+        val executor = Executors.newSingleThreadExecutor()
+        val dispatcher = executor.asCoroutineDispatcher()
+        val holder =
+            holder(
+                repository = repository,
+                verifier = { _, _ ->
+                    clientManifestCapabilities()
+                },
+                dispatcher = dispatcher,
+            )
+
+        try {
+            verify(holder)
+            assertTrue(saveStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            awaitState(holder, "saving phase") { it.isSaving && !it.isVerifying }
+
+            holder.onEvent(EntryUiEvent.EndpointChanged("https://changed.example/profile"))
+            holder.onEvent(EntryUiEvent.BearerCredentialChanged("changed-token"))
+
+            assertEquals("https://gateway.example/profile", holder.uiState.value.endpoint)
+            assertEquals("memory-only-token", holder.uiState.value.bearerCredential)
+
+            releaseSave.countDown()
+            executor.submit {}.get(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            awaitState(holder, "connected") { it.isConnected && !it.isSaving }
+            assertEquals(
+                GatewayConnection("https://gateway.example/profile", "memory-only-token"),
+                repository.saved,
+            )
+        } finally {
+            releaseSave.countDown()
+            holder.close()
+            dispatcher.close()
+        }
+    }
+
+    @Test
+    fun removal_request_opens_the_confirmation_without_mutating_the_connection() {
+        val repository = FakeGatewayConnectionRepository()
+        val holder =
+            holder(
+                repository = repository,
+                verifier = { _, _ ->
+                    clientManifestCapabilities()
+                },
+            )
+        verify(holder)
+
+        holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+
+        assertTrue(holder.uiState.value.isRemoveConfirmationOpen)
+        assertTrue(holder.uiState.value.isConnected)
+        assertEquals(
+            GatewayConnection("https://gateway.example/profile", "memory-only-token"),
+            repository.saved,
+        )
+
+        holder.onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked)
+
+        assertFalse(holder.uiState.value.isRemoveConfirmationOpen)
+        assertTrue(holder.uiState.value.isConnected)
+        assertEquals(
+            GatewayConnection("https://gateway.example/profile", "memory-only-token"),
+            repository.saved,
+        )
+        holder.close()
+    }
+
+    @Test
+    fun confirming_removal_clears_the_local_connection_once() {
+        val holder =
+            holder(
+                repository = FakeGatewayConnectionRepository(),
+                verifier = { _, _ ->
+                    clientManifestCapabilities()
+                },
+            )
+        verify(holder)
+
+        holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+        holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+
+        assertFalse(holder.uiState.value.isConnected)
+        assertFalse(holder.uiState.value.isRemoveConfirmationOpen)
+        assertFalse(holder.uiState.value.isGatewayConnectionConfigured)
+        assertNull(holder.uiState.value.sessionList)
+        holder.close()
+    }
+
+    @Test
+    fun verification_enters_loading_then_connected_and_persists_the_credential_securely() {
         val repository = FakeGatewayConnectionRepository()
         val holder =
             holder(
@@ -220,7 +351,11 @@ class EntryStateHolderTest {
 
         assertTrue(holder.uiState.value.isConnected)
         assertFalse(holder.uiState.value.isVerifying)
-        assertEquals("https://gateway.example/profile", repository.saved?.endpoint)
+        assertFalse(holder.uiState.value.isSaving)
+        assertEquals(
+            GatewayConnection("https://gateway.example/profile", "memory-only-token"),
+            repository.saved,
+        )
         holder.close()
     }
 
@@ -282,7 +417,7 @@ class EntryStateHolderTest {
             verify(holder)
             assertTrue(verificationStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             releaseVerification.countDown()
             executor.submit {}.get(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
 
@@ -1246,10 +1381,12 @@ class EntryStateHolderTest {
     private class FakeGatewayConnectionRepository : GatewayConnectionRepository {
         var saved: GatewayConnection? = null
         var throwOnSave = false
+        var onSave: (() -> Unit)? = null
 
         override fun load(): GatewayConnection? = saved
 
         override fun save(connection: GatewayConnection) {
+            onSave?.invoke()
             if (throwOnSave) error("storage failure")
             saved = connection
         }

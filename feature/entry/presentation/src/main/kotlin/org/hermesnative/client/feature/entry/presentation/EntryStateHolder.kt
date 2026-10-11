@@ -100,10 +100,6 @@ sealed interface EntryUiEvent {
         val value: String,
     ) : EntryUiEvent
 
-    data class SaveCredentialChanged(
-        val value: Boolean,
-    ) : EntryUiEvent
-
     data object VerifyGatewayConnectionClicked : EntryUiEvent
 
     data object TryAgainClicked : EntryUiEvent
@@ -184,6 +180,10 @@ sealed interface EntryUiEvent {
     ) : EntryUiEvent
 
     data object RemoveGatewayConnectionClicked : EntryUiEvent
+
+    data object ConfirmRemoveGatewayConnectionClicked : EntryUiEvent
+
+    data object CancelRemoveGatewayConnectionClicked : EntryUiEvent
 
     data object RunStatusNotificationsToggleClicked : EntryUiEvent
 
@@ -405,10 +405,11 @@ data class EntryUiState(
     val isChangingCredential: Boolean = false,
     val endpoint: String = "",
     val bearerCredential: String = "",
-    val saveCredential: Boolean = false,
     val isVerifying: Boolean = false,
+    val isSaving: Boolean = false,
     val isConnected: Boolean = false,
     val errorCategory: EntryErrorCategory? = null,
+    val isRemoveConfirmationOpen: Boolean = false,
     val sessionList: SessionListUiState? = null,
     val runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
@@ -564,7 +565,6 @@ class EntryStateHolder(
             EntryUiEvent.CancelGatewayCredentialChangeClicked -> cancelCredentialRotation()
             is EntryUiEvent.EndpointChanged -> updateEndpoint(event.value)
             is EntryUiEvent.BearerCredentialChanged -> updateBearerCredential(event.value)
-            is EntryUiEvent.SaveCredentialChanged -> updateSaveCredential(event.value)
             EntryUiEvent.VerifyGatewayConnectionClicked,
             EntryUiEvent.TryAgainClicked,
             -> verifyConnection()
@@ -591,7 +591,9 @@ class EntryStateHolder(
             is EntryUiEvent.ComposerTextChanged -> updateComposerText(event.value)
             EntryUiEvent.SendMessageClicked -> retryUncertainSubmissionOrSend()
             is EntryUiEvent.RetryRunClicked -> retryRun(event.runId)
-            EntryUiEvent.RemoveGatewayConnectionClicked -> removeGatewayConnection()
+            EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
+            EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
+            EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
             EntryUiEvent.RunStatusNotificationsToggleClicked -> toggleRunStatusNotifications()
             is EntryUiEvent.RunStatusNotificationPermissionResult ->
                 applyRunStatusNotificationPermissionResult(event.granted)
@@ -678,6 +680,7 @@ class EntryStateHolder(
                     requestJobs + listOfNotNull(verificationJobToCancel, sessionJobToCancel, recoveryJobToCancel)
                 }
             }
+        _uiState.value = _uiState.value.copy(isRemoveConfirmationOpen = false)
         jobsToCancel.forEach(Job::cancel)
         observationsToClose.forEach(RunEventObservation::close)
         scope.cancel()
@@ -690,12 +693,12 @@ class EntryStateHolder(
 
     private fun showCredentialRotation() {
         val state = _uiState.value
-        if (!state.isConnected || state.isVerifying) return
+        if (!state.isConnected || state.isVerifying || state.isSaving) return
         _uiState.value =
             state.copy(
                 title = "Change Gateway credential",
                 supportingText = "Verify the replacement before it replaces the saved credential.",
-                actionLabel = "Save credential",
+                actionLabel = "Verify and save credential",
                 connectionSetupRequested = true,
                 isChangingCredential = true,
                 bearerCredential = "",
@@ -705,7 +708,7 @@ class EntryStateHolder(
 
     private fun cancelCredentialRotation() {
         val state = _uiState.value
-        if (!state.isChangingCredential || state.isVerifying) return
+        if (!state.isChangingCredential || state.isVerifying || state.isSaving) return
         _uiState.value =
             state.copy(
                 title = "Gateway connected",
@@ -718,20 +721,14 @@ class EntryStateHolder(
 
     private fun updateEndpoint(value: String) {
         val state = _uiState.value
-        if (state.isVerifying || state.isConnected) return
+        if (state.isVerifying || state.isSaving || state.isConnected) return
         _uiState.value = state.copy(endpoint = value, errorCategory = null)
     }
 
     private fun updateBearerCredential(value: String) {
         val state = _uiState.value
-        if (state.isVerifying || (state.isConnected && !state.isChangingCredential)) return
+        if (state.isVerifying || state.isSaving || (state.isConnected && !state.isChangingCredential)) return
         _uiState.value = state.copy(bearerCredential = value, errorCategory = null)
-    }
-
-    private fun updateSaveCredential(value: Boolean) {
-        val state = _uiState.value
-        if (state.isVerifying || (state.isConnected && !state.isChangingCredential)) return
-        _uiState.value = state.copy(saveCredential = value, errorCategory = null)
     }
 
     private fun verifyConnection() {
@@ -743,6 +740,7 @@ class EntryStateHolder(
                     if (
                         !state.connectionSetupRequested ||
                         state.isVerifying ||
+                        state.isSaving ||
                         (state.isConnected && !state.isChangingCredential)
                     ) {
                         null
@@ -761,7 +759,13 @@ class EntryStateHolder(
                                     val normalizedEndpoint = normalizeGatewayEndpoint(state.endpoint)
                                     val canPersist =
                                         synchronized(sessionRequestLock) {
-                                            connectionGeneration == requestConnectionGeneration
+                                            if (connectionGeneration == requestConnectionGeneration) {
+                                                _uiState.value =
+                                                    _uiState.value.copy(isVerifying = false, isSaving = true)
+                                                true
+                                            } else {
+                                                false
+                                            }
                                         }
                                     if (!canPersist) return@launch
                                     synchronized(connectionPersistenceLock) {
@@ -773,7 +777,7 @@ class EntryStateHolder(
                                         verifier.persist(
                                             endpoint = normalizedEndpoint,
                                             bearerCredential = state.bearerCredential,
-                                            saveCredential = state.saveCredential,
+                                            saveCredential = true,
                                         )
                                     }
                                     val gateway =
@@ -801,6 +805,7 @@ class EntryStateHolder(
                                                         actionLabel = "Connected",
                                                         isChangingCredential = false,
                                                         isVerifying = false,
+                                                        isSaving = false,
                                                         isConnected = true,
                                                         isGatewayConnectionConfigured = true,
                                                         errorCategory = null,
@@ -853,10 +858,27 @@ class EntryStateHolder(
                 _uiState.value =
                     _uiState.value.copy(
                         isVerifying = false,
+                        isSaving = false,
                         errorCategory = category,
                     )
             }
         }
+    }
+
+    private fun requestRemoveGatewayConnection() {
+        val state = _uiState.value
+        if (state.isVerifying || state.isSaving || state.isRemoveConfirmationOpen) return
+        if (!state.isGatewayConnectionConfigured && !state.isConnected) return
+        _uiState.value = state.copy(isRemoveConfirmationOpen = true)
+    }
+
+    private fun cancelRemoveGatewayConnection() {
+        _uiState.value = _uiState.value.copy(isRemoveConfirmationOpen = false)
+    }
+
+    private fun confirmRemoveGatewayConnection() {
+        _uiState.value = _uiState.value.copy(isRemoveConfirmationOpen = false)
+        removeGatewayConnection()
     }
 
     private fun removeGatewayConnection() {
@@ -5701,12 +5723,11 @@ private fun EntryState.toUiState(): EntryUiState =
     if (isGatewayConnectionConfigured || configuredEndpoint != null) {
         EntryUiState(
             title = "Verify your Hermes Gateway",
-            supportingText = "Enter the bearer credential to verify the saved HTTPS endpoint.",
+            supportingText = "Verify the saved HTTPS endpoint before opening Sessions.",
             actionLabel = "Verify Gateway Connection",
             connectionSetupRequested = true,
             endpoint = configuredEndpoint.orEmpty(),
             bearerCredential = configuredCredential.orEmpty(),
-            saveCredential = configuredCredential != null,
             isGatewayConnectionConfigured = true,
         )
     } else {
@@ -5720,7 +5741,7 @@ private fun EntryState.toUiState(): EntryUiState =
 private fun EntryUiState.connectionSetupState(): EntryUiState =
     copy(
         title = "Verify a Hermes Gateway",
-        supportingText = "Enter one profile-specific HTTPS endpoint and bearer credential.",
+        supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
         actionLabel = "Verify Gateway Connection",
         connectionSetupRequested = true,
         errorCategory = null,

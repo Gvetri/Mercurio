@@ -1315,7 +1315,7 @@ class RunReconciliationStateHolderTest {
                 dispatcher.runNext()
                 assertEquals(1, dispatcher.queuedCount)
 
-                if (closeHolder) holder.close() else holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+                if (closeHolder) holder.close() else holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
                 dispatcher.drain()
 
                 assertTrue(gateway.observedRunIds.isEmpty())
@@ -2133,7 +2133,7 @@ class RunReconciliationStateHolderTest {
             assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
             recoveryRegistry.blockLoads = true
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))

@@ -585,7 +585,7 @@ class RunRetryStateHolderTest {
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             gateway.releaseRun.countDown()
             assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 

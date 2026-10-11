@@ -15,12 +15,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -81,6 +82,9 @@ fun EntryScreen(
             } else {
                 ConnectionContent(state = state, onEvent = onEvent)
             }
+            if (state.isRemoveConfirmationOpen) {
+                RemoveGatewayConnectionConfirmation(onEvent = onEvent)
+            }
         }
     }
 }
@@ -119,7 +123,8 @@ private fun ConnectionContent(
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = state.supportingText,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = if (showConnectionForm) TextAlign.Start else TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -152,35 +157,70 @@ private fun GatewayConnectionForm(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     var credentialVisible by remember(state.isChangingCredential) { mutableStateOf(false) }
-    OutlinedTextField(
-        value = state.endpoint,
-        onValueChange = { onEvent(EntryUiEvent.EndpointChanged(it)) },
-        modifier = Modifier.fillMaxWidth(),
-        enabled = !state.isVerifying && !state.isChangingCredential,
-        label = { Text("Gateway HTTPS endpoint") },
-        supportingText = { Text("Example: https://gateway.example") },
-        singleLine = true,
-        keyboardOptions =
-            KeyboardOptions(
-                capitalization = KeyboardCapitalization.None,
-                autoCorrectEnabled = false,
-                keyboardType = KeyboardType.Uri,
-                imeAction = ImeAction.Next,
-            ),
-    )
+    val isPending = state.isVerifying || state.isSaving
+    if (state.isChangingCredential) {
+        Text(
+            text = "Gateway HTTPS endpoint",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = state.endpoint,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    } else {
+        val endpointError = state.errorCategory == EntryErrorCategory.INVALID_ADDRESS
+        OutlinedTextField(
+            value = state.endpoint,
+            onValueChange = { onEvent(EntryUiEvent.EndpointChanged(it)) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isPending,
+            isError = endpointError,
+            label = { Text("Gateway HTTPS endpoint") },
+            supportingText = {
+                Text(
+                    text =
+                        if (endpointError) {
+                            EntryErrorCategory.INVALID_ADDRESS.safeMessage
+                        } else {
+                            "Example: https://gateway.example"
+                        },
+                    modifier =
+                        if (endpointError) {
+                            Modifier.semantics { liveRegion = LiveRegionMode.Assertive }
+                        } else {
+                            Modifier
+                        },
+                )
+            },
+            singleLine = true,
+            keyboardOptions =
+                KeyboardOptions(
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Next,
+                ),
+        )
+    }
     Spacer(modifier = Modifier.height(12.dp))
+    val credentialError = state.errorCategory == EntryErrorCategory.AUTHENTICATION_FAILED
     OutlinedTextField(
         value = state.bearerCredential,
         onValueChange = { onEvent(EntryUiEvent.BearerCredentialChanged(it)) },
         modifier = Modifier.fillMaxWidth(),
-        enabled = !state.isVerifying,
+        enabled = !isPending,
+        isError = credentialError,
         label = { Text("Bearer credential") },
         singleLine = true,
         visualTransformation = if (credentialVisible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
             TextButton(
                 onClick = { credentialVisible = !credentialVisible },
-                enabled = !state.isVerifying,
+                enabled = !isPending,
                 modifier =
                     Modifier.semantics {
                         contentDescription = if (credentialVisible) "Hide credential" else "Show credential"
@@ -189,6 +229,17 @@ private fun GatewayConnectionForm(
                 Text(text = if (credentialVisible) "Hide" else "Show")
             }
         },
+        supportingText =
+            if (credentialError) {
+                {
+                    Text(
+                        text = EntryErrorCategory.AUTHENTICATION_FAILED.safeMessage,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                    )
+                }
+            } else {
+                null
+            },
         keyboardOptions =
             KeyboardOptions(
                 capitalization = KeyboardCapitalization.None,
@@ -197,18 +248,85 @@ private fun GatewayConnectionForm(
                 imeAction = ImeAction.Done,
             ),
     )
-    Row(
+    Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text =
+            if (state.isChangingCredential) {
+                "The current connection stays in place until the replacement is verified and saved securely."
+            } else {
+                "The credential is saved securely on this device after verification."
+            },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(
-            checked = state.saveCredential,
-            onCheckedChange = { onEvent(EntryUiEvent.SaveCredentialChanged(it)) },
-            enabled = !state.isVerifying,
-        )
-        Text(text = "Save securely on this device")
+    )
+    val endpointSlotError = !state.isChangingCredential && state.errorCategory == EntryErrorCategory.INVALID_ADDRESS
+    val standaloneError = state.errorCategory?.takeUnless { endpointSlotError || credentialError }
+    val completionLine =
+        when {
+            state.errorCategory == null -> null
+            state.isChangingCredential -> "The previous connection is unchanged."
+            state.errorCategory == EntryErrorCategory.CREDENTIAL_STORAGE_FAILED -> "Setup is not complete."
+            else -> null
+        }
+    if (state.isSaving || state.isVerifying || standaloneError != null || completionLine != null) {
+        Spacer(modifier = Modifier.height(16.dp))
+        if (state.isSaving) {
+            Text(
+                text = "Gateway verified.\nSaving credential securely…",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+        if (state.isVerifying) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = "Verifying Gateway connection"
+                        },
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Verifying Gateway connection…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+        }
+        if (standaloneError == EntryErrorCategory.CREDENTIAL_STORAGE_FAILED) {
+            Text(
+                text = "Gateway verified.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED.safeMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+            )
+        } else if (standaloneError != null) {
+            Text(
+                text = standaloneError.safeMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+            )
+        }
+        completionLine?.let { completion ->
+            if (standaloneError != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Text(
+                text = completion,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    } else {
+        Spacer(modifier = Modifier.height(16.dp))
     }
-    Spacer(modifier = Modifier.height(16.dp))
     Button(
         onClick = {
             onEvent(
@@ -219,7 +337,7 @@ private fun GatewayConnectionForm(
                 },
             )
         },
-        enabled = !state.isVerifying,
+        enabled = !isPending,
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -229,45 +347,49 @@ private fun GatewayConnectionForm(
     }
     if (state.isChangingCredential) {
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(
+        TextButton(
             onClick = { onEvent(EntryUiEvent.CancelGatewayCredentialChangeClicked) },
-            enabled = !state.isVerifying,
+            enabled = !isPending,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
             Text(text = "Cancel")
         }
-        Spacer(modifier = Modifier.height(8.dp))
     }
     if (state.isGatewayConnectionConfigured || state.isConnected) {
-        OutlinedButton(
+        Spacer(modifier = Modifier.height(24.dp))
+        TextButton(
             onClick = { onEvent(EntryUiEvent.RemoveGatewayConnectionClicked) },
-            enabled = !state.isVerifying,
+            enabled = !isPending,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
             Text(text = "Remove Gateway Connection")
         }
     }
-    if (state.isVerifying) {
-        Spacer(modifier = Modifier.height(16.dp))
-        CircularProgressIndicator(
-            modifier =
-                Modifier.semantics {
-                    contentDescription = "Verifying Gateway connection"
-                },
-        )
-        Text(
-            text = "Verifying Gateway connection…",
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        )
-    }
-    state.errorCategory?.let { category ->
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = category.safeMessage,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-        )
-    }
+}
+
+@Composable
+private fun RemoveGatewayConnectionConfirmation(onEvent: (EntryUiEvent) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) },
+        title = { Text(text = "Remove Gateway Connection?") },
+        text = {
+            Text(
+                text =
+                    "Remove the saved endpoint and credential from this device. " +
+                        "Remote Sessions and Runs are not deleted or cancelled.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked) }) {
+                Text(text = "Remove")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) }) {
+                Text(text = "Cancel")
+            }
+        },
+    )
 }
 
 @Composable
