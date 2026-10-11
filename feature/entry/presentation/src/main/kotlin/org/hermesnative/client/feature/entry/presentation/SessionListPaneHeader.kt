@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
@@ -94,7 +95,7 @@ private fun SessionPaneTitleRow(
     ) {
         Text(
             text = "Sessions",
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.semantics { heading() },
         )
         Box {
@@ -199,9 +200,15 @@ private fun SessionSearchControls(
         onValueChange = { onEvent(EntryUiEvent.SessionSearchQueryChanged(it)) },
         enabled = state.sessionMutations.isEmpty(),
         label = { Text(text = "Search Sessions") },
-        placeholder = { Text(text = "Search loaded titles and previews.") },
         singleLine = true,
         modifier = Modifier.fillMaxWidth().onFocusChanged { onSearchFocusChanged(it.isFocused) },
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = "Search loaded titles and previews.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp),
     )
     if (state.searchQuery.isNotEmpty()) {
         Spacer(modifier = Modifier.height(8.dp))

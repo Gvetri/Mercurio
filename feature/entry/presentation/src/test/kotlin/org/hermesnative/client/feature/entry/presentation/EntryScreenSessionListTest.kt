@@ -124,8 +124,8 @@ class EntryScreenSessionListTest {
         assertTrue(events.isEmpty())
         composeTestRule
             .onNodeWithText(
-                "Removes the stored Gateway connection from this device. " +
-                    "Remote Sessions and Runs are not deleted.",
+                "Remove the saved endpoint and credential from this device. " +
+                    "Remote Sessions and Runs are not deleted or cancelled.",
             )
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Remove").assertHasClickAction().performClick()
@@ -258,6 +258,59 @@ class EntryScreenSessionListTest {
         }
         composeTestRule.onNodeWithText("needle").assertIsDisplayed()
         assertEquals(listOf(EntryUiEvent.SessionSearchQueryChanged("needle")), events)
+    }
+
+    @Test
+    fun search_controls_show_the_persistent_loaded_scope_caption() {
+        val events = mutableListOf<EntryUiEvent>()
+        setConnectedListScreen(events)
+
+        composeTestRule
+            .onNodeWithText("Search loaded titles and previews.")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun session_row_action_trigger_sits_inside_the_row_at_the_trailing_edge() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Gateway connected",
+                            supportingText = "The Gateway contract was verified successfully.",
+                            actionLabel = "Connected",
+                            isConnected = true,
+                            sessionList =
+                                SessionListUiState(
+                                    sessions =
+                                        listOf(
+                                            SessionItemUiState(
+                                                id = SessionId("trigger"),
+                                                title = "Trigger Session",
+                                                preview = null,
+                                                pinned = false,
+                                            ),
+                                        ),
+                                ),
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        val rowBounds = composeTestRule.onNodeWithText("Trigger Session").fetchSemanticsNode().boundsInRoot
+        val triggerBounds =
+            composeTestRule
+                .onNodeWithContentDescription("Session actions for Trigger Session")
+                .fetchSemanticsNode()
+                .boundsInRoot
+
+        assertTrue(triggerBounds.top >= rowBounds.top)
+        assertTrue(triggerBounds.bottom <= rowBounds.bottom)
+        assertEquals(rowBounds.right, triggerBounds.right, 1f)
+        assertTrue(events.isEmpty())
     }
 
     @Test

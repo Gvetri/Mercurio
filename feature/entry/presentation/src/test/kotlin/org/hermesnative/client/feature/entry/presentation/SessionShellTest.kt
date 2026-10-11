@@ -470,7 +470,7 @@ class SessionShellTest {
 
         composeTestRule.onNodeWithTag("session-list").performScrollToIndex(2)
 
-        composeTestRule.onNodeWithText("Refresh").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Refresh").performScrollTo().assertIsDisplayed()
     }
 
     @Test

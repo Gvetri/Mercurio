@@ -100,9 +100,9 @@ internal fun SessionListPane(
                         .heightIn(max = pinnedTailMaxHeight)
                         .verticalScroll(rememberScrollState()),
             ) {
-                SessionListPaneControls(
+                RunStatusNotificationSettingsContent(
+                    state = runStatusNotifications,
                     onEvent = onEvent,
-                    runStatusNotifications = runStatusNotifications,
                 )
             }
         }
@@ -189,6 +189,7 @@ private fun LazyListScope.sessionListItems(
                     ),
                 onEvent = onEvent,
             )
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(spacing.s))
         }
         item {
@@ -196,20 +197,6 @@ private fun LazyListScope.sessionListItems(
         }
     }
     item { SessionListStatusTexts(state = state) }
-}
-
-@Composable
-private fun SessionListPaneControls(
-    onEvent: (EntryUiEvent) -> Unit,
-    runStatusNotifications: RunStatusNotificationsUiState,
-) {
-    Spacer(modifier = Modifier.height(16.dp))
-    HorizontalDivider()
-    Spacer(modifier = Modifier.height(8.dp))
-    RunStatusNotificationSettingsContent(
-        state = runStatusNotifications,
-        onEvent = onEvent,
-    )
 }
 
 @Composable

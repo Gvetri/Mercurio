@@ -17,12 +17,12 @@ internal fun RemoveGatewayConnectionConfirmation(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "Remove Gateway Connection") },
+        title = { Text(text = "Remove Gateway Connection?") },
         text = {
             Text(
                 text =
-                    "Removes the stored Gateway connection from this device. " +
-                        "Remote Sessions and Runs are not deleted.",
+                    "Remove the saved endpoint and credential from this device. " +
+                        "Remote Sessions and Runs are not deleted or cancelled.",
             )
         },
         confirmButton = {
