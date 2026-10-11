@@ -265,7 +265,9 @@ class SessionShellNavigationTest {
         )
         val imeInset = 320
         val windowHeight = composeTestRule.activity.window.decorView.height.toFloat()
-        val refreshBottomBefore = composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
+        val notificationsBottomBefore =
+            composeTestRule.onNodeWithContentDescription("Run status notifications")
+                .fetchSemanticsNode().boundsInWindow.bottom
         composeTestRule.onNodeWithText("Search Sessions").performClick()
 
         fun dispatchImeInsets(isVisible: Boolean) {
@@ -282,18 +284,20 @@ class SessionShellNavigationTest {
         }
 
         dispatchImeInsets(isVisible = true)
-        val refreshBottomWhileVisible =
-            composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
-        assertTrue(refreshBottomWhileVisible <= windowHeight - imeInset + 1f)
+        val notificationsBottomWhileVisible =
+            composeTestRule.onNodeWithContentDescription("Run status notifications")
+                .fetchSemanticsNode().boundsInWindow.bottom
+        assertTrue(notificationsBottomWhileVisible <= windowHeight - imeInset + 1f)
 
         dispatchImeInsets(isVisible = false)
-        val refreshBottomAfterHidden =
-            composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
+        val notificationsBottomAfterHidden =
+            composeTestRule.onNodeWithContentDescription("Run status notifications")
+                .fetchSemanticsNode().boundsInWindow.bottom
         assertTrue(
             "the controls must return to the full pane when the IME is hidden",
-            refreshBottomAfterHidden - refreshBottomWhileVisible >= imeInset * 0.75f,
+            notificationsBottomAfterHidden - notificationsBottomWhileVisible >= imeInset * 0.75f,
         )
-        assertEquals(refreshBottomBefore, refreshBottomAfterHidden, 1f)
+        assertEquals(notificationsBottomBefore, notificationsBottomAfterHidden, 1f)
     }
 
     @Test

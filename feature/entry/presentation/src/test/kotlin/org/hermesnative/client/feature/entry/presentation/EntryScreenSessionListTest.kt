@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import org.hermesnative.client.feature.entry.domain.SessionId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -81,8 +83,70 @@ class EntryScreenSessionListTest {
     }
 
     @Test
-    fun connected_session_list_exposes_gateway_removal() {
+    fun screen_more_menu_holds_connection_administration_without_dispatching_on_open() {
         val events = mutableListOf<EntryUiEvent>()
+        setConnectedListScreen(events)
+
+        composeTestRule.onNodeWithText("Change credential").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("More options").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithText("Change credential").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Local diagnostics").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Remove Gateway Connection").assertIsDisplayed()
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun screen_more_menu_routes_change_credential_and_local_diagnostics() {
+        val events = mutableListOf<EntryUiEvent>()
+        setConnectedListScreen(events)
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Change credential").performClick()
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Local diagnostics").performClick()
+
+        assertEquals(
+            listOf(
+                EntryUiEvent.ChangeGatewayCredentialClicked,
+                EntryUiEvent.OpenLocalDiagnosticsClicked,
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun gateway_removal_is_confirmed_before_the_existing_action_is_invoked_once() {
+        val events = mutableListOf<EntryUiEvent>()
+        setConnectedListScreen(events)
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Remove Gateway Connection").performClick()
+        assertTrue(events.isEmpty())
+        composeTestRule
+            .onNodeWithText(
+                "Remove the saved endpoint and credential from this device. " +
+                    "Remote Sessions and Runs are not deleted or cancelled.",
+            )
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Remove").assertHasClickAction().performClick()
+
+        assertEquals(listOf(EntryUiEvent.RemoveGatewayConnectionClicked), events)
+    }
+
+    @Test
+    fun gateway_removal_confirmation_cancel_changes_nothing() {
+        val events = mutableListOf<EntryUiEvent>()
+        setConnectedListScreen(events)
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Remove Gateway Connection").performClick()
+        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
+
+        assertTrue(events.isEmpty())
+        composeTestRule.onNodeWithText("Remove").assertDoesNotExist()
+    }
+
+    private fun setConnectedListScreen(events: MutableList<EntryUiEvent>) {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
@@ -98,10 +162,6 @@ class EntryScreenSessionListTest {
                 )
             }
         }
-
-        composeTestRule.onNodeWithText("Remove Gateway Connection").assertHasClickAction().performClick()
-
-        assertEquals(listOf(EntryUiEvent.RemoveGatewayConnectionClicked), events)
     }
 
     @Test
@@ -198,6 +258,59 @@ class EntryScreenSessionListTest {
         }
         composeTestRule.onNodeWithText("needle").assertIsDisplayed()
         assertEquals(listOf(EntryUiEvent.SessionSearchQueryChanged("needle")), events)
+    }
+
+    @Test
+    fun search_controls_show_the_persistent_loaded_scope_caption() {
+        val events = mutableListOf<EntryUiEvent>()
+        setConnectedListScreen(events)
+
+        composeTestRule
+            .onNodeWithText("Search loaded titles and previews.")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun session_row_action_trigger_sits_inside_the_row_at_the_trailing_edge() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Gateway connected",
+                            supportingText = "The Gateway contract was verified successfully.",
+                            actionLabel = "Connected",
+                            isConnected = true,
+                            sessionList =
+                                SessionListUiState(
+                                    sessions =
+                                        listOf(
+                                            SessionItemUiState(
+                                                id = SessionId("trigger"),
+                                                title = "Trigger Session",
+                                                preview = null,
+                                                pinned = false,
+                                            ),
+                                        ),
+                                ),
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        val rowBounds = composeTestRule.onNodeWithText("Trigger Session").fetchSemanticsNode().boundsInRoot
+        val triggerBounds =
+            composeTestRule
+                .onNodeWithContentDescription("Session actions for Trigger Session")
+                .fetchSemanticsNode()
+                .boundsInRoot
+
+        assertTrue(triggerBounds.top >= rowBounds.top)
+        assertTrue(triggerBounds.bottom <= rowBounds.bottom)
+        assertEquals(rowBounds.right, triggerBounds.right, 1f)
+        assertTrue(events.isEmpty())
     }
 
     @Test

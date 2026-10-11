@@ -2,8 +2,10 @@ package org.hermesnative.client.feature.entry.presentation
 
 import android.content.res.Configuration
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -118,6 +120,65 @@ class SelectedVisualRegressionTest {
 
         capture()
     }
+
+    /**
+     * The screen menu and the removal confirmation are popup windows: the paused
+     * looper cannot settle them (robolectric/robolectric#8460), so they use LEGACY
+     * and a screen capture, the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun session_list_menu_open() {
+        setContent(sessionListMenuState())
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+
+        captureScreen()
+    }
+
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun session_list_row_menu_open() {
+        setContent(sessionListMenuState())
+
+        composeTestRule
+            .onNodeWithContentDescription("Session actions for Release checklist")
+            .performScrollTo()
+            .performClick()
+
+        captureScreen()
+    }
+
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun gateway_removal_confirmation() {
+        setContent(sessionListMenuState())
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+        composeTestRule.onNodeWithText("Remove Gateway Connection").performClick()
+
+        captureScreen()
+    }
+
+    private fun sessionListMenuState(): EntryUiState =
+        connectedState(
+            SessionListUiState(
+                sessions =
+                    listOf(
+                        session(
+                            id = "pinned-session",
+                            title = "Release checklist",
+                            preview = "Review the release checklist.",
+                            pinned = true,
+                        ),
+                        session(
+                            id = "follow-up-session",
+                            title = "Follow-up Session",
+                            preview = "Plan the next step.",
+                        ),
+                    ),
+            ),
+        )
 
     /**
      * Robolectric's paused looper cannot settle the standard dialog window with its text field
