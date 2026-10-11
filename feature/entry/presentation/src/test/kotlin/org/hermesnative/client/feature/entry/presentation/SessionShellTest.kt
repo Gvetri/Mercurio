@@ -17,8 +17,10 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.Density
@@ -118,6 +120,7 @@ class SessionShellTest {
                 ),
         )
 
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
         composeTestRule.onNodeWithText("Remove Gateway Connection").assertIsNotEnabled()
     }
 
@@ -199,8 +202,7 @@ class SessionShellTest {
         }
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
-        sessionList.performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
     }
@@ -229,8 +231,7 @@ class SessionShellTest {
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
         sessionList.assertHeightIsAtLeast(120.dp)
-        sessionList.performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
     }
@@ -264,8 +265,7 @@ class SessionShellTest {
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
         sessionList.assertHeightIsAtLeast(120.dp)
-        sessionList.performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
     }

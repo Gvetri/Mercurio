@@ -43,3 +43,17 @@ name: empty-sessions
     visible: "Untitled Session"
     timeout: 30000
 - takeScreenshot: empty-sessions-04-unnamed-result
+# Screen menu: administration stays reachable from the list, and removal needs the
+# explicit confirmation. Cancel must leave the stored connection and list intact.
+- tapOn: "Back to Sessions"
+- tapOn: "More options"
+- assertVisible: "Change credential"
+- assertVisible: "Local diagnostics"
+- assertVisible: "Remove Gateway Connection"
+- tapOn: "Remove Gateway Connection"
+- assertVisible: "Removes the stored Gateway connection from this device. Remote Sessions and Runs are not deleted."
+- takeScreenshot: empty-sessions-05-removal-confirmation
+- tapOn: "Cancel"
+- assertVisible: "Untitled Session"
+- assertNotVisible: "Removes the stored Gateway connection from this device. Remote Sessions and Runs are not deleted."
+- takeScreenshot: empty-sessions-06-removal-cancelled

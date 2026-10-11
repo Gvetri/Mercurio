@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -25,12 +24,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -104,7 +101,6 @@ internal fun SessionListPane(
                         .verticalScroll(rememberScrollState()),
             ) {
                 SessionListPaneControls(
-                    state = state,
                     onEvent = onEvent,
                     runStatusNotifications = runStatusNotifications,
                 )
@@ -204,39 +200,12 @@ private fun LazyListScope.sessionListItems(
 
 @Composable
 private fun SessionListPaneControls(
-    state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     runStatusNotifications: RunStatusNotificationsUiState,
 ) {
-    Spacer(modifier = Modifier.height(12.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Button(
-            onClick = { onEvent(EntryUiEvent.RefreshSessionListClicked) },
-            enabled =
-                !state.isLoading &&
-                    !state.isRefreshing &&
-                    state.openingSessionId == null &&
-                    !state.hasPendingMutation &&
-                    state.createSession == null &&
-                    state.openedSession?.isRefreshing != true &&
-                    state.openedSession?.isReconciliationInProgress != true,
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-        ) {
-            Text(text = if (state.isUnavailable) "Try again" else "Refresh")
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        TextButton(
-            onClick = { onEvent(EntryUiEvent.OpenLocalDiagnosticsClicked) },
-            enabled = state.createSession == null && !state.hasPendingMutation,
-            modifier = Modifier.weight(1f, fill = false).heightIn(min = 48.dp),
-        ) {
-            Text(text = "Local diagnostics")
-        }
-    }
-
+    Spacer(modifier = Modifier.height(16.dp))
+    HorizontalDivider()
+    Spacer(modifier = Modifier.height(8.dp))
     RunStatusNotificationSettingsContent(
         state = runStatusNotifications,
         onEvent = onEvent,

@@ -2,10 +2,14 @@ package org.hermesnative.client.feature.entry.presentation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,7 +28,7 @@ internal fun SessionActionMenu(
 ) {
     var expanded by remember(session.id, enabled) { mutableStateOf(false) }
     Box {
-        TextButton(
+        IconButton(
             onClick = { expanded = true },
             enabled = enabled,
             modifier =
@@ -32,7 +36,7 @@ internal fun SessionActionMenu(
                     contentDescription = "Session actions for ${session.title}"
                 },
         ) {
-            Text(text = "Session actions")
+            Icon(imageVector = Icons.Default.MoreVert, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
@@ -55,6 +59,7 @@ internal fun SessionActionMenu(
                     onEvent(EntryUiEvent.RenameSessionClicked(session.id))
                 },
             )
+            HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Delete Session") },
                 onClick = {
