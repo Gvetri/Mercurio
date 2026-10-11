@@ -44,7 +44,7 @@ Untrusted Gateway message content is rendered by a presentation-local Markdown s
 
 ### Wiring
 
-Wiring selects concrete datasource and repository implementations and creates the presentation state holder. This is the only feature module that assembles the bootstrap data path.
+Wiring selects concrete datasource and repository implementations and creates the presentation state holder. This is the only feature module that assembles the bootstrap data path. The module enables core-library desugaring for `java.time`, because the diagnostics exporter records UTC instants and the minimum supported API level is 24.
 
 ## Architecture checks
 

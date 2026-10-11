@@ -56,6 +56,19 @@ after it passes, so a build or device-suite failure never reaches the journey la
 pull request reports both suites as `skipped`, and the aggregate requires exactly that routing; the
 label on a draft or an external-fork pull request starts nothing.
 
+On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`, or
+`maestro-journeys` does not succeed, the `create-nightly-failure-issue` job creates or updates one
+issue from run metadata only: it never downloads or copies test logs into public issue content, and
+it reads the exact issue back after the write. The lane is deliberately not a check. It is the only
+job that requests a write scope, and it runs on the schedule alone, so no write token ever reaches
+pull-request code.
+
+Failure evidence uploaded by the test and device lanes is redacted by
+`.github/scripts/redact-test-reports.py` before upload; the image artifacts uploaded alongside it,
+such as the Compose lane's Roborazzi PNG comparison files and the journey screenshots, do not pass
+through that script. The Android instrumentation lane publishes its failure artifact only after
+its sanitization step completes, and uploaded evidence is retained for 14 days.
+
 A merge does not package or publish an application APK or generate a product version.
 Signing-policy tests may create minimal disposable APK fixtures; those are not application
 builds or distribution artifacts. Full scheduled/manual validation is required before

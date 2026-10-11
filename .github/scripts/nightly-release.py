@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 
-# Reuse the signing boundary's API reader and fail-closed evidence checks.
 POLICY = runpy.run_path(str(Path(__file__).with_name("release-signing.py")))
 api_get = POLICY["api_get"]
 require = POLICY["require"]
@@ -47,7 +46,6 @@ def select_source():
         require(isinstance(head, str) and re.fullmatch(r"[0-9a-f]{40}", head)
                 and head not in visited, "Incomplete main ancestry")
         visited.add(head)
-        # GitHub caps filtered run searches at 1,000; unrelated history must not fill it.
         runs = pages(f"actions/workflows/quality-gate.yml/runs?branch=main&status=success&head_sha={head}", "workflow_runs")
         eligible = [run for run in runs if (
             run.get("head_sha") == head and run.get("head_branch") == "main"
@@ -175,7 +173,6 @@ def publish(directory, certificate):
 
     def read_release(draft, expected_id):
         require(type(expected_id) is int and expected_id > 0, "Missing release identity")
-        # Draft listings may omit a newly created record. Use the creation response's ID.
         release = api_get(f"releases/{expected_id}")
         require(release.get("id") == expected_id, "Release identity changed")
         require(release.get("tag_name") == tag and release.get("target_commitish") == sha

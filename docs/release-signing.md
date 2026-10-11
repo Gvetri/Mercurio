@@ -33,7 +33,9 @@ signing, including after a standalone approval wait. There is no override switch
 for these checks.
 
 The workflow and its caller must run from protected `refs/heads/main` in this
-repository. A reusable caller uses the same repository's workflow and passes
+repository, and the signing jobs check out that protected workflow revision
+itself, so the signing tools and scripts never come from the APK or its source
+tree. A reusable caller uses the same repository's workflow and passes
 `validation_run_id`; the Nightly caller also passes its generated `nightly_version_code`
 and `generation_attempt`. The signer verifies these against the caller's run number and
 current attempt, not a manual version choice. Do not use `secrets: inherit`.
@@ -154,7 +156,10 @@ Signing uses a private temporary directory outside the artifact output. It passe
 the password to Android tools through a narrowly scoped environment, captures
 rather than streams tool errors, removes temporary material on normal success or
 failure, and uploads only the verified APK, `SHA256SUMS`, and
-`signing-metadata.json`. Abrupt runner termination relies on disposal of the
+`signing-metadata.json`. The tooling's error paths print no response body, no
+credential-bearing request, and no arbitrary response or environment value, and
+no GitHub token or encoded keystore reaches the signing tool's environment.
+Abrupt runner termination relies on disposal of the
 GitHub-hosted runner; there is no signing cache or persistent signing runner.
 The unsigned intermediate expires after one day; signed verification artifacts
 expire after 14 days. Only the APK certificate, APK checksum, source commit,

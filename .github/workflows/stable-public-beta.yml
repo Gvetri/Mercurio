@@ -8,7 +8,6 @@ permissions:
   contents: read
   actions: read
 
-# Do not allow two milestone closures or reruns to publish the same stable version.
 concurrency:
   group: stable-public-beta-${{ github.repository }}
   cancel-in-progress: false

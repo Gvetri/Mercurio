@@ -156,7 +156,6 @@ class CleanupCommandTests(unittest.TestCase):
             with self.assertRaises(LiveSmokeError) as ctx:
                 cleanup_run(inputs, runner=runner)
             self.assertEqual(ctx.exception.code, "container_removal_unverified")
-            # The other owned container and the scratch state were still cleaned.
             self.assertIn(["docker", "rm", "-f", "c2"], runner.calls)
             self.assertFalse(inputs.scratch_dir().exists())
 

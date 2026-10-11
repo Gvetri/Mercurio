@@ -49,8 +49,6 @@ class SigtermTranslationTests(unittest.TestCase):
             _restore_termination_handler(previous)
 
     def test_the_translated_exception_is_mapped_to_run_interrupted(self):
-        # ``LiveSmokeGate.run`` maps KeyboardInterrupt to ``run_interrupted``;
-        # the translated SIGTERM exception must inherit that mapping.
         self.assertTrue(issubclass(_SigtermInterrupt, KeyboardInterrupt))
         self.assertFalse(issubclass(_SigtermInterrupt, Exception))
 

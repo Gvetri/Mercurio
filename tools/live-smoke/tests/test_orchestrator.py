@@ -61,8 +61,6 @@ class GateHarness:
             ["git", "-C", str(self.repo), "rev-parse", "HEAD^{tree}"],
             check=True, stdout=subprocess.PIPE, text=True,
         ).stdout.strip()
-        # Git is a deterministic stand-in at the provenance seam, like Docker.
-        # Its tiny synthetic tree must never be confused with real live evidence.
         self.actual_revision, self.actual_tree = self.revision, self.tree
         self.revision = "d9833c5615b80e199a174cd67d90ab430695a972"
         self.tree = "6ad3ce36084df3b5cf6a902115bb18860e264340"
@@ -317,20 +315,15 @@ class OrchestratorEndToEndTests(unittest.TestCase):
             {"host_scratch", "gateway_container_data", "device_app_storage"},
         )
         self.assertEqual(evidence["apk"]["sha256"], self.harness.apk_sha)
-        # The driver was used for exactly the bounded synthetic flows.
         flows = [flow["yaml"] for flow in self.harness.driver.flows]
-        self.assertEqual(len(flows), 5)  # connect + create session + 3 turns
+        self.assertEqual(len(flows), 5)
         self.assertEqual(len(self.harness.driver.turn_prompts), 3)
-        # No `maestro test`-style invocation anywhere.
         for call in runner.calls:
             if call["argv"] and call["argv"][0] == "maestro":
                 self.assertEqual(call["argv"][1], "--version")
-        # The retained video exists only in encrypted form.
         retained = list((self.harness.work_root / "retained-videos").glob("*.gpg"))
         self.assertEqual(len(retained), 1)
         self.assertEqual(list((self.harness.work_root / "retained-videos").glob("*.mp4")), [])
-        # The exact agent-side resolver ran in the container before any
-        # app interaction, and emitted only names/count.
         calls = runner.calls
         resolver_indexes = [
             index for index, call in enumerate(calls)
@@ -348,7 +341,6 @@ class OrchestratorEndToEndTests(unittest.TestCase):
             if call["argv"][:3] == ["adb", "-s", "emulator-5554"] and "install" in call["argv"]
         )
         self.assertLess(resolver_indexes[0], install_index)
-        # Container was removed and scratch state is gone.
         self.assertTrue(runner.has_call("docker", "rm"))
         self.assertFalse(self.harness.inputs().scratch_dir().exists())
 
@@ -359,9 +351,7 @@ class OrchestratorEndToEndTests(unittest.TestCase):
         with self.assertRaises(LiveSmokeError) as ctx:
             gate.run()
         self.assertEqual(ctx.exception.code, "nonempty_effective_toolset")
-        # Fail closed before any inference or app interaction.
         self.assertEqual(self.harness.driver.flows, [])
-        # Teardown still ran and failed evidence was written.
         self.assertTrue(runner.has_call("docker", "rm"))
         evidence_path = self.harness.inputs().evidence_dir / "ls-20261002T100000Z-abc123.json"
         self.assertTrue(evidence_path.exists())
@@ -379,7 +369,6 @@ class OrchestratorEndToEndTests(unittest.TestCase):
         with self.assertRaises(LiveSmokeError) as ctx:
             gate.run()
         self.assertEqual(ctx.exception.code, "nonempty_effective_toolset")
-        # The exact resolver proof is taken before any inference or app interaction.
         self.assertEqual(self.harness.driver.flows, [])
         self.assertTrue(runner.has_call("docker", "rm"))
 
@@ -402,7 +391,6 @@ class OrchestratorEndToEndTests(unittest.TestCase):
         with self.assertRaises(LiveSmokeError) as ctx:
             gate.run()
         self.assertEqual(ctx.exception.code, "run_interrupted")
-        # The bounded existing teardown still ran after the translated TERM.
         self.assertTrue(runner.has_call("docker", "rm"))
         self.assertTrue(runner.has_call("adb", "-s", "emulator-5554", "uninstall"))
         self.assertFalse(self.harness.inputs().scratch_dir().exists())

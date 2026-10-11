@@ -15,7 +15,6 @@ def main():
             return 1
         allow_missing = sys.argv[2] == 'capabilities-missing-required'
         for name, endpoint in required.items():
-            # Health is probed directly before this check, not a client capability.
             if name == 'health' or (allow_missing and name not in served):
                 continue
             actual = served.get(name)

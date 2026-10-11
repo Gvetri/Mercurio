@@ -29,7 +29,11 @@ import org.junit.runner.RunWith
 /**
  * On-device integration coverage for the adaptive shell: the real Android back
  * dispatcher returns from the conversation to the Session list, and the
- * conversation stays usable when the font scale increases.
+ * conversation stays usable when the font scale increases. The test renders
+ * through the debug manifest's bare `ComponentActivity` host, which declares
+ * the shell's configuration contract plus the system theme change, so a device
+ * configuration change still settling from a preceding test cannot recreate
+ * the host and destroy the composition the test has set.
  */
 @RunWith(AndroidJUnit4::class)
 class ShellIntegrationTest {
