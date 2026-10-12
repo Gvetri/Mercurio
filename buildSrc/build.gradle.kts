@@ -11,6 +11,7 @@ dependencies {
     implementation(libs.kover.gradle.plugin)
     implementation(libs.gradle.pitest.plugin)
     testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.konsist)
 }
 
 providers.gradleProperty("architecture.testBuildDir").orNull?.let { testBuildDir ->

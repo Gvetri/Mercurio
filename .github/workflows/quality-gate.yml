@@ -210,7 +210,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew architectureCheck architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon
+      - run: ./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon
       - name: Verify CI test job contracts
         run: ./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest --no-daemon
       - name: Verify fail-closed quality verification

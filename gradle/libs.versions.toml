@@ -19,6 +19,7 @@ androidxTestRunner = "1.6.2"
 espressoCore = "3.6.1"
 robolectric = "4.17"
 roborazzi = "1.60.0"
+konsist = "0.17.3"
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
@@ -55,3 +56,4 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
 roborazzi-junit-rule = { module = "io.github.takahirom.roborazzi:roborazzi-junit-rule", version.ref = "roborazzi" }
+konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
