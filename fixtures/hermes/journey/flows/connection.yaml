@@ -37,6 +37,8 @@ name: connection
 - assertVisible: "https://10.0.2.2:18443"
 - assertNotVisible: "synthetic-token"
 - takeScreenshot: connection-restart-prefill
+- hideKeyboard
+- assertVisible: "Verify Gateway Connection"
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"
