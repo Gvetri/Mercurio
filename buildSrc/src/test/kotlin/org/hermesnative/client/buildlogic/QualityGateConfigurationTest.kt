@@ -1181,6 +1181,8 @@ class QualityGateConfigurationTest {
             "domain_and_application_module_scripts_declare_no_forbidden_dependency",
             "rejects_a_domain_reference_to_an_outer_layer",
             "rejects_an_application_reference_to_a_concrete_data_implementation",
+            "rejects_a_scope_that_resolves_to_no_kotlin_source",
+            "rejects_a_module_scope_that_resolves_to_no_build_script",
             "rejects_a_fully_qualified_android_reference_in_domain",
             "rejects_an_escaped_concrete_data_reference_in_application",
             "rejects_executable_web_content_in_presentation",
