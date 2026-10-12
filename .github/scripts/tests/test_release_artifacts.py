@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import tempfile
@@ -15,7 +16,7 @@ from test_protected_main import ApiStub
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / ".github/scripts/verify-release-artifacts.py"
 SIGNING_SCRIPT = ROOT / ".github/scripts/sign-release-apk.py"
-REPOSITORY = "Gvetri/hermes-native-client"
+REPOSITORY = runpy.run_path(str(ROOT / ".github/scripts/release-signing.py"))["REPOSITORY"]
 TAG = "stable-beta-v0.1.0"
 VERSION = "0.1.0"
 VERSION_CODE = 7002

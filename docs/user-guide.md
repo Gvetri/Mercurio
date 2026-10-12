@@ -147,6 +147,9 @@ verification, a Session-list load, or a Run submission succeeded, failed, or was
 
 ## Tested revision and compatibility
 
-Hermes Native Client is validated against the repository's pinned, immutable Hermes revision. The
-exact revision, the artifact package, and the per-release compatibility statement are recorded in
+Hermes Native Client is validated against the immutable Hermes revision
+`d9833c5615b80e199a174cd67d90ab430695a972`, the repository's pinned fixture provenance. Each
+Stable Public Beta release states its own compatibility limits in its release notes, and the client
+claims no compatibility beyond that published statement. The artifact package, the published
+verification, and the per-release compatibility statement are recorded in
 [Release artifacts](release-artifacts.md).

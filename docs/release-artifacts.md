@@ -92,6 +92,12 @@ Only after the check passes is the release announced. A failure is not repaired 
 release: inspect the published release, and treat a mismatch as a release incident. The check uses
 the GitHub API and the `gh` CLI, downloads only the three declared assets, and prints no secret.
 
+The repository has no announcement automation, so this is an explicit operator gate rather than a
+workflow stage: the command above is the gate, and the required `conformance` check fails if this
+document stops naming it. The promotion workflow's own read-back verifies the same release from the
+promoting run before it publishes the prerelease; this check re-verifies the release as a user will
+receive it, which is why it runs after publication and before any announcement.
+
 ## Verification of this document's own checks
 
 The documentation that users read is itself checked, and the artifact check above has deterministic

@@ -43,10 +43,6 @@ SIGNING_METADATA_FIELDS = {
 }
 
 
-def digest(path):
-    return SIGNER["digest"](path)
-
-
 def pinned_certificate(path):
     require(path.is_file() and not path.is_symlink(), "Missing or unsafe pinned certificate")
     fingerprint = path.read_text().strip()
@@ -159,7 +155,7 @@ def verify(tag, certificate_path):
     with tempfile.TemporaryDirectory(prefix="verify-release-", dir=temporary) as directory:
         downloaded = Path(directory)
         download(tag, downloaded)
-        apk_sha256 = digest(downloaded / "hermes-native-client.apk")
+        apk_sha256 = SIGNER["digest"](downloaded / "hermes-native-client.apk")
         verify_checksum_file(downloaded, apk_sha256, notes)
         metadata = verify_signing_metadata(downloaded, source, apk_sha256, certificate)
         verify_apk(downloaded, metadata, certificate)

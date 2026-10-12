@@ -18,12 +18,15 @@ README = Path("README.md")
 USER_GUIDE = Path("docs/user-guide.md")
 RELEASE_ARTIFACTS = Path("docs/release-artifacts.md")
 PINNED_FIXTURE = Path("fixtures/hermes/pinned-fixture.properties")
+DIAGNOSTICS_SURFACE = Path(
+    "feature/entry/presentation/src/main/kotlin/org/hermesnative/client/feature/entry/presentation"
+    "/LocalDiagnosticsScreen.kt"
+)
 
-USER_FACING_DOCUMENTS = (README, USER_GUIDE, RELEASE_ARTIFACTS)
-USER_DOCUMENTS = (USER_GUIDE, RELEASE_ARTIFACTS)
-
-LINKED_DOCUMENTS = (README,)
-LINKED_DOCUMENT_DIRECTORIES = (Path("docs"),)
+LINK_CHECK_DOCUMENTS = (README,)
+LINK_CHECK_DIRECTORIES = (Path("docs"),)
+PRODUCT_SCOPE_DOCUMENTS = (README, USER_GUIDE, RELEASE_ARTIFACTS)
+OPERATOR_IDENTITY_DOCUMENTS = (USER_GUIDE, RELEASE_ARTIFACTS)
 
 ALLOWED_PUBLIC_HOSTS = frozenset(
     {
@@ -56,7 +59,7 @@ SENSITIVE_PATTERNS = (
     ),
 )
 
-USER_FACING_SENSITIVE_PATTERNS = (
+OPERATOR_IDENTITY_PATTERNS = (
     ("a local smoke or operator identity parameter", re.compile(r"\b(?:local-live-smoke|device-serial|avd-name|video-recipient)\b")),
     ("a provider credential name", re.compile(r"\bOPENCODE_GO_API_KEY\b")),
 )
@@ -102,10 +105,6 @@ REQUIRED_USER_GUIDE_STATEMENTS = (
     "no network analytics, no product telemetry, and no third-party crash reporting",
     "not persisted on the device as an offline history",
     "terminal status only",
-    "Local diagnostics",
-    "Export diagnostics",
-    "Clear diagnostics",
-    "uploaded automatically",
     "Hermes Run",
     "Session",
     "Send",
@@ -116,6 +115,13 @@ REQUIRED_USER_GUIDE_STATEMENTS = (
     "Authentication failed",
     "Required feature unavailable",
     "Gateway request failed",
+)
+
+REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS = (
+    "Local diagnostics",
+    "Export diagnostics",
+    "Clear diagnostics",
+    "uploaded automatically",
 )
 
 REQUIRED_RELEASE_ARTIFACT_STATEMENTS = (
@@ -156,9 +162,9 @@ def read(root, relative):
 def documents(root):
     """Every Markdown document a user or a contributor can follow a link into."""
     found = []
-    for relative in LINKED_DOCUMENTS:
+    for relative in LINK_CHECK_DOCUMENTS:
         found.append(root / relative)
-    for directory in LINKED_DOCUMENT_DIRECTORIES:
+    for directory in LINK_CHECK_DIRECTORIES:
         found.extend(sorted((root / directory).rglob("*.md")))
     return [path for path in found if path.is_file()]
 
@@ -236,13 +242,13 @@ def verify_safety(root):
             match = pattern.search(text)
             if match is not None:
                 violations.append(f"{relative_document} contains {description}: {match.group(0)!r}")
-    for relative in USER_DOCUMENTS:
+    for relative in OPERATOR_IDENTITY_DOCUMENTS:
         text = read(root, relative)
-        for description, pattern in USER_FACING_SENSITIVE_PATTERNS:
+        for description, pattern in OPERATOR_IDENTITY_PATTERNS:
             match = pattern.search(text)
             if match is not None:
                 violations.append(f"{relative} contains {description}: {match.group(0)!r}")
-    for relative in USER_FACING_DOCUMENTS:
+    for relative in PRODUCT_SCOPE_DOCUMENTS:
         text = read(root, relative)
         for command in OUT_OF_SCOPE_INSTRUCTIONS:
             if command in text:
@@ -279,7 +285,10 @@ def pinned_hermes_revision(root):
 def verify_scope(root):
     violations = []
     user_guide = read(root, USER_GUIDE)
-    violations.extend(verify_required_statements(user_guide, REQUIRED_USER_GUIDE_STATEMENTS, USER_GUIDE))
+    statements = list(REQUIRED_USER_GUIDE_STATEMENTS)
+    if (root / DIAGNOSTICS_SURFACE).is_file():
+        statements.extend(REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS)
+    violations.extend(verify_required_statements(user_guide, statements, USER_GUIDE))
     release_artifacts = read(root, RELEASE_ARTIFACTS)
     violations.extend(
         verify_required_statements(release_artifacts, REQUIRED_RELEASE_ARTIFACT_STATEMENTS, RELEASE_ARTIFACTS)

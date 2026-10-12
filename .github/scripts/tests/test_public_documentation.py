@@ -14,6 +14,10 @@ README = Path("README.md")
 USER_GUIDE = Path("docs/user-guide.md")
 RELEASE_ARTIFACTS = Path("docs/release-artifacts.md")
 PINNED_FIXTURE = Path("fixtures/hermes/pinned-fixture.properties")
+DIAGNOSTICS_SURFACE = Path(
+    "feature/entry/presentation/src/main/kotlin/org/hermesnative/client/feature/entry/presentation"
+    "/LocalDiagnosticsScreen.kt"
+)
 IGNORED = shutil.ignore_patterns(".git", "build", ".gradle", ".kotlin", "__pycache__")
 
 
@@ -102,6 +106,19 @@ class PublishedDocumentationTest(unittest.TestCase):
         self.replace_once(USER_GUIDE, "arm64-v8a", "arm64")
         self.assert_rejected(run_check(self.root), "must state: arm64-v8a")
 
+    def test_a_feature_outside_the_release_scope_is_not_required_in_the_guide(self):
+        text = self.document(USER_GUIDE).read_text(encoding="utf-8")
+        for statement in ("Local diagnostics", "Export diagnostics", "Clear diagnostics"):
+            text = text.replace(statement, "diagnostics")
+        self.document(USER_GUIDE).write_text(text, encoding="utf-8")
+        self.document(DIAGNOSTICS_SURFACE).unlink()
+        completed = run_check(self.root)
+        self.assertEqual(0, completed.returncode, completed.stderr)
+
+    def test_an_in_scope_local_diagnostics_surface_must_be_documented(self):
+        self.replace_once(USER_GUIDE, "Export diagnostics", "diagnostics")
+        self.assert_rejected(run_check(self.root), "must state: Export diagnostics")
+
     def test_a_stale_tested_revision_is_rejected(self):
         revision = None
         for line in self.document(PINNED_FIXTURE).read_text(encoding="utf-8").splitlines():
@@ -110,6 +127,17 @@ class PublishedDocumentationTest(unittest.TestCase):
         self.assertIsNotNone(revision)
         self.replace_once(PINNED_FIXTURE, f"hermes_revision={revision}", f"hermes_revision={'1' * 40}")
         self.assert_rejected(run_check(self.root), "must identify the tested Hermes revision")
+
+    def test_a_dropped_verification_procedure_is_rejected(self):
+        self.replace_once(
+            RELEASE_ARTIFACTS,
+            ".github/scripts/verify-release-artifacts.py",
+            ".github/scripts/verify-something-else.py",
+        )
+        self.assert_rejected(
+            run_check(self.root),
+            "must state: .github/scripts/verify-release-artifacts.py",
+        )
 
     def test_an_unlinked_published_document_is_rejected(self):
         text = self.document(README).read_text(encoding="utf-8")
