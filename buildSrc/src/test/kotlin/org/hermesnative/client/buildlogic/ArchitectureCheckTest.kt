@@ -76,6 +76,22 @@ class ArchitectureCheckTest {
     }
 
     @Test
+    fun rejects_a_scope_that_resolves_to_no_kotlin_source() {
+        withFixtureScope(
+            mapOf(fixturePath("domain", "FixtureNotes.txt") to "Not a Kotlin source."),
+        ) { scope ->
+            assertRuleRejects(domainReferenceRule, "resolved to no Kotlin source") { assertDomainAndApplicationReferences(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_module_scope_that_resolves_to_no_build_script() {
+        assertRuleRejects(moduleDependencyRule, "resolved to no module build script") {
+            assertNoForbiddenModuleDependencies(emptyList())
+        }
+    }
+
+    @Test
     fun rejects_a_domain_reference_to_an_outer_layer() {
         val violation =
             fixturePath("domain", "LayerViolation.kt") to
@@ -383,6 +399,8 @@ class ArchitectureCheckTest {
         rule: String,
         guidance: String,
     ) {
+        require(files.isNotEmpty()) { "$rule failed. The declared scope resolved to no Kotlin source." }
+
         val violations =
             files.flatMap { file ->
                 file.text.lines().mapIndexedNotNull { index, line ->
@@ -399,6 +417,8 @@ class ArchitectureCheckTest {
     }
 
     private fun assertNoForbiddenModuleDependencies(buildScripts: List<File>) {
+        require(buildScripts.isNotEmpty()) { "$moduleDependencyRule failed. The declared scope resolved to no module build script." }
+
         val violations =
             buildScripts.flatMap { buildScript ->
                 val content = buildScript.readText()
