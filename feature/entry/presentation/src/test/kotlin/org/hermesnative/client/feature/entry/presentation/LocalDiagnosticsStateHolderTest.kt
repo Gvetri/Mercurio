@@ -287,7 +287,7 @@ class LocalDiagnosticsStateHolderTest {
             holder.onEvent(EntryUiEvent.OpenLocalDiagnosticsClicked)
             assertTrue(holder.uiState.value.localDiagnostics.isOpen)
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
 
             assertFalse(holder.uiState.value.localDiagnostics.isOpen)
         } finally {
@@ -404,12 +404,15 @@ class LocalDiagnosticsStateHolderTest {
             initialState = EntryState(),
             verifyGatewayConnection = verifyGatewayConnection,
             scope = scope,
-            removeGatewayConnectionUseCase = removeGatewayConnectionUseCase,
-            localDiagnostics =
-                LocalDiagnosticsPorts(
-                    recorder = diagnostics,
-                    store = diagnostics,
-                    exporter = diagnostics,
+            dependencies =
+                EntryStateHolderDependencies(
+                    removeGatewayConnectionUseCase = removeGatewayConnectionUseCase,
+                    localDiagnostics =
+                        LocalDiagnosticsPorts(
+                            recorder = diagnostics,
+                            store = diagnostics,
+                            exporter = diagnostics,
+                        ),
                 ),
         )
 
@@ -464,10 +467,6 @@ class LocalDiagnosticsStateHolderTest {
         }
     }
 
-    /**
-     * Runs nothing until [runPending], so a test can observe a state that is still
-     * waiting for a background read.
-     */
     private class DeferredDispatcher : CoroutineDispatcher() {
         private val pending = ArrayDeque<Runnable>()
 

@@ -77,14 +77,17 @@ class ConversationKeyboardScreenTest {
         val send = composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
         val before = send.fetchSemanticsNode().boundsInWindow.bottom
         assertTrue("Send must be above the keyboard (bottom=$before)", before <= windowHeight - imeInset + 1f)
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
         composeTestRule.runOnIdle {
-            conversation.value = conversation.value.copy(messages = listOf(SessionMessageUiState("reply", "assistant", "First reply")))
+            conversation.value =
+                conversation.value.copy(
+                    messages = listOf(SessionMessageUiState("reply", "assistant", "First reply")),
+                )
         }
-        send.assertIsDisplayed()
-        val after = send.fetchSemanticsNode().boundsInWindow.bottom
+        val sendAfterReply = composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        val after = sendAfterReply.fetchSemanticsNode().boundsInWindow.bottom
         assertEquals("A reply must not move Send behind the keyboard", before, after, 1f)
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
 
         listOf(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED, MessageSendErrorCategory.UNCERTAIN).forEach { error ->
             composeTestRule.runOnIdle {
@@ -95,10 +98,10 @@ class ConversationKeyboardScreenTest {
                     )
             }
             composeTestRule.onNodeWithText(error.safeMessage).performScrollTo().assertIsDisplayed()
-            val label = if (error == MessageSendErrorCategory.UNCERTAIN) "Send" else "Try again"
+            val label = if (error == MessageSendErrorCategory.UNCERTAIN) "Refresh history to resolve" else "Try again"
             val action = composeTestRule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
             assertTrue(action.fetchSemanticsNode().boundsInWindow.bottom <= windowHeight - imeInset + 1f)
-            composeTestRule.onNodeWithText("Message").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
         }
     }
 }

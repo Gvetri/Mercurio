@@ -2,11 +2,7 @@ package org.hermesnative.client.feature.entry.presentation
 
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -15,8 +11,6 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -181,7 +175,7 @@ class SessionMessageRenderingTest {
         }
 
         assertEquals("before", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
-        composeTestRule.onNodeWithContentDescription("Copy message").performClick()
+        composeTestRule.onNodeWithText("Copy message").performClick()
         assertEquals("Safe **Markdown** text", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
     }
 
@@ -209,23 +203,21 @@ class SessionMessageRenderingTest {
         }
 
         assertTrue("Nothing may be shared before the user acts", recorded.shared.isEmpty())
-        composeTestRule.onNodeWithContentDescription("Share message").performClick()
+        composeTestRule.onNodeWithText("Share message").performClick()
         assertEquals(listOf("Safe **Markdown** text"), recorded.shared)
     }
 
     @Test
-    fun copy_and_share_are_compact_explicit_touch_targets() {
+    fun copy_and_share_are_explicit_touch_targets() {
         val recorded = RecordingActions()
         composeTestRule.setContent {
             HermesTheme {
-                Box(Modifier.width(360.dp).testTag("message-host")) {
-                    SessionMessageContent(
-                        message = SessionMessageUiState("message", "assistant", "Selected content"),
-                        retryEnabled = false,
-                        onRetry = {},
-                        actions = recorded.asMessageActions(),
-                    )
-                }
+                SessionMessageContent(
+                    message = SessionMessageUiState("message", "assistant", "Selected content"),
+                    retryEnabled = false,
+                    onRetry = {},
+                    actions = recorded.asMessageActions(),
+                )
             }
         }
         val copy =
@@ -234,10 +226,6 @@ class SessionMessageRenderingTest {
         val share =
             composeTestRule.onNode(hasText("Share message") or hasContentDescription("Share message"))
                 .assertIsDisplayed().assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        val copyBounds = copy.fetchSemanticsNode().boundsInRoot
-        val shareBounds = share.fetchSemanticsNode().boundsInRoot
-        val host = composeTestRule.onNodeWithTag("message-host").fetchSemanticsNode().boundsInRoot
-        assertTrue("Message actions must not fill the message width", shareBounds.right + copyBounds.width < host.right)
         copy.performClick()
         share.performClick()
         assertEquals(listOf("Selected content"), recorded.copied)
@@ -276,7 +264,9 @@ class SessionMessageRenderingTest {
         val content = composeTestRule.onNodeWithText("Answer").fetchSemanticsNode().boundsInRoot
         val messageId = composeTestRule.onNodeWithText("Run ID: message-run").fetchSemanticsNode().boundsInRoot
         val latestId = composeTestRule.onNodeWithText("Latest Run: latest-run").fetchSemanticsNode().boundsInRoot
-        val status = composeTestRule.onNodeWithText("Run state: ${RunPresentationState.SUCCEEDED.label}").fetchSemanticsNode().boundsInRoot
+        val status =
+            composeTestRule.onNodeWithText("Run state: ${RunPresentationState.SUCCEEDED.label}")
+                .fetchSemanticsNode().boundsInRoot
         assertTrue("Run ID $messageId must be secondary to content $content", messageId.height < content.height)
         assertTrue("Run state must be more prominent than its raw identifier", latestId.height < status.height)
     }

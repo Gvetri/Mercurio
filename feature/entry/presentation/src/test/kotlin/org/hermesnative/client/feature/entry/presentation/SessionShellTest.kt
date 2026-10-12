@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.Density
@@ -29,6 +30,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -50,7 +52,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sessions").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(1)
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
@@ -73,11 +75,17 @@ class SessionShellTest {
 
         composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Second Session").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(2)
     }
 
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
     fun list_pane_controls_are_disabled_while_creation_is_open() {
@@ -95,6 +103,12 @@ class SessionShellTest {
         composeTestRule.onNodeWithText("Load more Sessions").assertIsNotEnabled()
     }
 
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
     fun gateway_removal_is_disabled_while_creation_is_open() {
@@ -106,6 +120,7 @@ class SessionShellTest {
                 ),
         )
 
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
         composeTestRule.onNodeWithText("Remove Gateway Connection").assertIsNotEnabled()
     }
 
@@ -124,7 +139,7 @@ class SessionShellTest {
         composeTestRule
             .onNodeWithText("Select a Session from the list to view its conversation.")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Back to Sessions").assertDoesNotExist()
     }
 
     @Test
@@ -134,7 +149,8 @@ class SessionShellTest {
             sessionList =
                 SessionListUiState(
                     sessions = listOf(session("first", "First Session"), session("second", "Second Session")),
-                    openedSession = OpenSessionUiState(session = session("first", "First Session"), messages = emptyList()),
+                    openedSession =
+                        OpenSessionUiState(session = session("first", "First Session"), messages = emptyList()),
                 ),
         )
 
@@ -144,7 +160,6 @@ class SessionShellTest {
         composeTestRule
             .onNode(hasText("Second Session") and hasClickAction())
             .assertIsNotSelected()
-        // The open Session is also visible as such: exactly one row carries the marker.
         composeTestRule.onAllNodesWithText("Open").assertCountEquals(1)
         composeTestRule.onNodeWithText("Open").assertIsDisplayed()
     }
@@ -187,9 +202,7 @@ class SessionShellTest {
         }
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
-        // The wrapped warnings scroll inside the list, and the pinned control tail keeps its place.
-        sessionList.performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
     }
@@ -218,9 +231,7 @@ class SessionShellTest {
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
         sessionList.assertHeightIsAtLeast(120.dp)
-        // The wrapped warnings scroll inside the list, and the pinned control tail keeps its place.
-        sessionList.performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
     }
@@ -254,9 +265,7 @@ class SessionShellTest {
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
         sessionList.assertHeightIsAtLeast(120.dp)
-        // The wrapped warnings scroll inside the list, and the pinned control tail keeps its place.
-        sessionList.performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
     }
@@ -395,7 +404,7 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Message").assertIsDisplayed()
         composeTestRule.onNodeWithText("Send").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
@@ -413,7 +422,7 @@ class SessionShellTest {
         }
 
         composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Send").assertIsDisplayed().assertHasClickAction()
     }
 
@@ -422,7 +431,7 @@ class SessionShellTest {
         val state = mutableStateOf(conversationEntryState())
         setShellContent(state)
 
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeTestRule.onNodeWithText("Back to Sessions").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeTestRule.onNodeWithText("Send").assertHasClickAction().assertHeightIsAtLeast(48.dp)
         composeTestRule.onNodeWithText("Refresh history").assertHasClickAction().assertHeightIsAtLeast(48.dp)
 
@@ -459,10 +468,9 @@ class SessionShellTest {
     fun short_landscape_window_reaches_the_list_controls_without_rows() {
         setShellContent(sessionList = SessionListUiState())
 
-        // No rows: the pinned controls stay reachable, and the state content scrolls.
         composeTestRule.onNodeWithTag("session-list").performScrollToIndex(2)
 
-        composeTestRule.onNodeWithText("Refresh").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Refresh").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -475,8 +483,6 @@ class SessionShellTest {
             ),
         )
 
-        // The journey profile's pane shows both Session titles without a scroll, so the Session
-        // list keeps real room next to the pinned header and controls.
         composeTestRule.onNodeWithText("First Session", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Second Session", useUnmergedTree = true).assertIsDisplayed()
     }
@@ -514,6 +520,54 @@ class SessionShellTest {
         setShellContent(sessionList = SessionListUiState(sessions = listOf(session("first", "First Session"))))
 
         composeTestRule.onNodeWithText("No Session selected").assertIsDisplayed()
+    }
+
+    /**
+     * D07: creation keeps the notes-filtered list in place, and the cleared selection is not
+     * restored behind the standard dialog on either layout.
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_dialog_opens_over_the_filtered_list_without_restoring_a_selection() {
+        setShellContent(
+            sessionList =
+                SessionListUiState(
+                    sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
+                    searchQuery = "notes",
+                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
+                ),
+        )
+
+        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
+     * is the same, and the real dialog window is exercised on a device by the journey layer.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun two_pane_create_dialog_keeps_the_filtered_list_and_the_cleared_selection() {
+        setShellContent(
+            sessionList =
+                SessionListUiState(
+                    sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
+                    searchQuery = "notes",
+                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
+                ),
+        )
+
+        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("No Session selected").assertExists()
     }
 
     @Test

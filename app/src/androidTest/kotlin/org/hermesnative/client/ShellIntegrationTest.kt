@@ -8,7 +8,6 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -30,7 +29,11 @@ import org.junit.runner.RunWith
 /**
  * On-device integration coverage for the adaptive shell: the real Android back
  * dispatcher returns from the conversation to the Session list, and the
- * conversation stays usable when the font scale increases.
+ * conversation stays usable when the font scale increases. The test renders
+ * through the debug manifest's bare `ComponentActivity` host, which declares
+ * the shell's configuration contract plus the system theme change, so a device
+ * configuration change still settling from a preceding test cannot recreate
+ * the host and destroy the composition the test has set.
  */
 @RunWith(AndroidJUnit4::class)
 class ShellIntegrationTest {
@@ -53,7 +56,7 @@ class ShellIntegrationTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sessions").assertDoesNotExist()
 
         composeTestRule.runOnUiThread {
@@ -62,15 +65,13 @@ class ShellIntegrationTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Back to Sessions").assertDoesNotExist()
         assertFalse(composeTestRule.activity.isFinishing)
     }
 
     @Test
     fun conversation_controls_stay_usable_at_increased_font_scale() {
         composeTestRule.setContent {
-            // Only the font scale changes; the device's own density stays, so the dp viewport
-            // under test matches the real configuration instead of an invented one.
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 2f)) {
                 HermesTheme {
                     EntryScreen(state = conversationEntryState(), onEvent = {})
@@ -79,7 +80,7 @@ class ShellIntegrationTest {
         }
 
         composeTestRule
-            .onNodeWithContentDescription("Back to Sessions")
+            .onNodeWithText("Back to Sessions")
             .assertIsDisplayed()
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
@@ -103,7 +104,9 @@ class ShellIntegrationTest {
             ),
         )
 
-    private fun sessionListEntryState(): EntryUiState = entryState(SessionListUiState(sessions = listOf(session("first", "First Session"))))
+    private fun sessionListEntryState(): EntryUiState {
+        return entryState(SessionListUiState(sessions = listOf(session("first", "First Session"))))
+    }
 
     private fun entryState(sessionList: SessionListUiState): EntryUiState =
         EntryUiState(

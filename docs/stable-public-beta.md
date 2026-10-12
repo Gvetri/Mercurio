@@ -121,8 +121,11 @@ are **not public release assets or notes**. The redacted smoke JSON is committed
 this public repository for source review; keep it out of `gh release upload`.
 
 A failed upload, missing asset, or hash mismatch leaves an incomplete **draft**
-and refuses every retry. Inspect the exact release ID, source tag, asset inventory,
-and run/attempt before any manually reviewed recovery. Remove only a confirmed
+and refuses every retry. The published package, and the verification a release
+must pass before it is announced, are documented in
+[Stable Public Beta release artifacts](release-artifacts.md). Inspect the exact
+release ID, source tag, asset inventory, and run/attempt before any manually
+reviewed recovery. Remove only a confirmed
 *unpublished* partial draft and its orphaned tag if appropriate; never delete a
 published release to force a retry. A failed final read-back may mean publication
 succeeded: read the published release and its exact tag before attempting anything

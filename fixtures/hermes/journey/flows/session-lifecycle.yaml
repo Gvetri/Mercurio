@@ -10,26 +10,45 @@ name: session-lifecycle
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: session-lifecycle-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"
     timeout: 30000
 - assertVisible: "Alpha Session"
 - tapOn: "Create Session"
-- tapOn: "Session title (optional)"
+- assertVisible: "Title (optional)"
+- tapOn: "Title (optional)"
+- inputText: "Discarded Back draft"
+- hideKeyboard
+- takeScreenshot: session-lifecycle-01-back-draft-open
+- back
+- assertNotVisible: "Discarded Back draft"
+- tapOn: "Refresh"
+- tapOn: "Create Session"
+- tapOn: "Title (optional)"
+- inputText: "Discarded Cancel draft"
+- hideKeyboard
+- takeScreenshot: session-lifecycle-02-cancel-draft-open
+- tapOn: "Cancel"
+- assertNotVisible: "Discarded Cancel draft"
+- tapOn: "Refresh"
+- tapOn: "Create Session"
+- tapOn: "Title (optional)"
 - inputText: "Lifecycle Session"
 - hideKeyboard
-- tapOn: "Confirm Create Session"
+- takeScreenshot: session-lifecycle-03-named-create-draft
+- tapOn: "Create"
 - extendedWaitUntil:
     visible: "Lifecycle Session"
     timeout: 30000
+- takeScreenshot: session-lifecycle-04-named-result
 - tapOn: "Lifecycle Session"
 - assertVisible: "Back to Sessions"
 - assertVisible: "Message"
 - assertVisible: "No messages in this Session."
 - assertNotVisible: "Assistant"
 
-# Conversation: Back dismisses the menu, and cancelled confirmations do not write.
 - tapOn: "Session actions for Lifecycle Session"
 - assertVisible: "Pin Session"
 - back
@@ -47,7 +66,6 @@ name: session-lifecycle
     element: "Cancel Delete"
     direction: DOWN
 - tapOn: "Cancel Delete"
-# This read is a Gateway checkpoint: only Session creation may have written so far.
 - tapOn: "Refresh history"
 - tapOn: "Session actions for Lifecycle Session"
 - tapOn: "Rename Session"
@@ -87,7 +105,6 @@ name: session-lifecycle
     timeout: 30000
 - assertVisible: "Alpha Session"
 
-# List: opening or cancelling management must not open a conversation.
 - tapOn: "Session actions for Alpha Session"
 - back
 - assertNotVisible: "Pin Session"
@@ -104,7 +121,6 @@ name: session-lifecycle
     element: "Cancel Delete"
     direction: DOWN
 - tapOn: "Cancel Delete"
-# This read is a Gateway checkpoint: no list-menu cancellation may add a write.
 - tapOn: "Refresh"
 - tapOn: "Session actions for Alpha Session"
 - tapOn: "Rename Session"
@@ -124,6 +140,14 @@ name: session-lifecycle
     visible: "Session actions for Renamed Session"
     timeout: 30000
 - tapOn: "Session actions for Renamed Session"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "Pin Session"
+    commands:
+      - back
+      - tapOn: "Session actions for Renamed Session"
 - tapOn: "Pin Session"
 - extendedWaitUntil:
     visible: "Pinned"

@@ -10,6 +10,7 @@ name: active-run-isolation
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: active-run-isolation-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"
@@ -25,9 +26,6 @@ name: active-run-isolation
 - extendedWaitUntil:
     visible: "Active partial"
     timeout: 30000
-# The transcript follows a growing response by pinning its newest content, so the
-# summary's refresh control can scroll out of view above; bring it back into view
-# first.
 - scrollUntilVisible:
     element:
       text: "Refresh history"
@@ -39,8 +37,6 @@ name: active-run-isolation
     timeout: 30000
 - assertVisible: "The displayed Session history may be stale."
 - tapOn: "Back to Sessions"
-# Small bounded in-pane swipes: an element swipe up from the first Session
-# overshoots this short list viewport and clips the second title above it.
 - repeat:
     times: 4
     while:

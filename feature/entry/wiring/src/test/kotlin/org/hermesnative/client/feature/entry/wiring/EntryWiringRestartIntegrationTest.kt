@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilities
+import org.hermesnative.client.feature.entry.domain.GatewayCredentialStore
 import org.hermesnative.client.feature.entry.domain.GatewayHistoryMessage
 import org.hermesnative.client.feature.entry.domain.PendingRunSubmissionKey
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
@@ -47,6 +48,7 @@ import java.util.concurrent.TimeUnit
 class EntryWiringRestartIntegrationTest {
     private val holders = mutableListOf<EntryStateHolder>()
     private val gateways = mutableSetOf<RestartGateway>()
+    private val credentialStore = InMemoryGatewayCredentialStore()
 
     @After
     fun finishHolderWork() {
@@ -81,7 +83,6 @@ class EntryWiringRestartIntegrationTest {
                 firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitState(firstHolder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
                 assertTrue(gateway.observationStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                // Open reconciliation can display the bound Run before submission finishes saving it.
                 awaitRecoveryEntries(storage, setOf(RunRecoveryEntry(gateway.session.id, gateway.activeRun.id)))
                 assertEquals(1, storage.load().size)
                 assertTrue(otherEndpointStorage.load().isEmpty())
@@ -195,10 +196,6 @@ class EntryWiringRestartIntegrationTest {
                     it.sessionList?.openedSession?.let { opened -> !opened.isReconciliationInProgress } == true
                 }
                 assertTrue(gateway.statusRequests.contains(gateway.activeRun.id))
-                // The pinned Gateway's history carries no Run linkage, so the terminal Run
-                // resource itself settles the recovery entry and it is removed. The
-                // reconciliation flag can drop before that removal lands, so wait for the
-                // settled storage and assert the settled state instead of racing it.
                 awaitCondition { storage.load().isEmpty() }
                 assertTrue(storage.load().isEmpty())
             } finally {
@@ -224,7 +221,6 @@ class EntryWiringRestartIntegrationTest {
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             awaitState(holder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
 
-            // No storage or observer barrier precedes close. This is holder shutdown, not process death.
             holder.close()
             joinHolder(holder)
 
@@ -340,7 +336,12 @@ class EntryWiringRestartIntegrationTest {
         val knownRun = gateway.externalRun
         val submittedRun = gateway.activeRun
         storage.clearForTest()
-        storage.save(setOf(RunRecoveryEntry(gateway.session.id, knownRun.id), RunRecoveryEntry(gateway.session.id, submittedRun.id)))
+        storage.save(
+            setOf(
+                RunRecoveryEntry(gateway.session.id, knownRun.id),
+                RunRecoveryEntry(gateway.session.id, submittedRun.id),
+            ),
+        )
         gateway.statusByRun[knownRun.id] = knownRun
         gateway.statusByRun[submittedRun.id] = submittedRun
         SharedPreferencesRunSubmissionUncertaintyStore(context).remove(uncertaintyKey)
@@ -467,14 +468,18 @@ class EntryWiringRestartIntegrationTest {
     ): EntryStateHolder =
         EntryWiring.createEntryStateHolder(
             context = context,
-            capabilityDiscovery = { _, _ ->
-                GatewayCapabilities(
-                    PublicBetaGatewayCapabilityManifest.current.requiredEndpoints,
-                )
-            },
-            sessionGatewayFactory = { _, _ -> gateway },
-            runGatewayFactory = { _, _ -> gateway },
-            coroutineScope = coroutineScope,
+            overrides =
+                EntryWiringOverrides(
+                    capabilityDiscovery = { _, _ ->
+                        GatewayCapabilities(
+                            PublicBetaGatewayCapabilityManifest.current.requiredEndpoints,
+                        )
+                    },
+                    sessionGatewayFactory = { _, _ -> gateway },
+                    runGatewayFactory = { _, _ -> gateway },
+                    coroutineScope = coroutineScope,
+                    credentialStore = credentialStore,
+                ),
         ).also {
             holders += it
             gateways += gateway
@@ -544,6 +549,20 @@ class EntryWiringRestartIntegrationTest {
 
     private fun SharedPreferencesRunRecoveryStorage.clearForTest() {
         save(emptySet())
+    }
+
+    private class InMemoryGatewayCredentialStore : GatewayCredentialStore {
+        private var credential: String? = null
+
+        override fun load(): String? = credential
+
+        override fun save(credential: String) {
+            this.credential = credential
+        }
+
+        override fun clear() {
+            credential = null
+        }
     }
 
     private class RestartGateway : SessionGatewayPort, RunGatewayPort {
@@ -646,7 +665,7 @@ class EntryWiringRestartIntegrationTest {
             runRequests += sessionId to input
             if (failCreateAfterAcceptance) {
                 acceptedRunVisible = true
-                throw IllegalStateException("response lost after acceptance")
+                error("response lost after acceptance")
             }
             if (blockCreate) {
                 runStarted.countDown()
@@ -672,7 +691,9 @@ class EntryWiringRestartIntegrationTest {
             return statusByRun[runId] ?: if (terminal) activeRun.copy(status = "succeeded") else activeRun
         }
 
-        override fun observeRun(runId: RunId): RunEventObservation = BlockingObservation(observationStarted).also { observations += it }
+        override fun observeRun(runId: RunId): RunEventObservation {
+            return BlockingObservation(observationStarted).also { observations += it }
+        }
     }
 
     private class BlockingObservation(

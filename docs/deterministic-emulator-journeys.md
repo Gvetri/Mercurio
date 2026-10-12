@@ -58,6 +58,16 @@ run, so a build or device-suite failure never reaches the journey lane.
   pagination-search journey loads both server pages first and then proves the
   local title filter and clear-search behavior; the flow never expects a
   server-side search request.
+- The pending-creation journey holds the Gateway's create response for a
+  bounded, deterministic window (`hold_create_ms`; the actual create request is
+  recorded before the hold starts) and exercises the pending Dialog policy on a
+  real window: a duplicate Create tap, Back, and an outside tap while the
+  creation is pending produce no second request and no dismissal, then the one
+  held response releases. The pending Dialog closes once the released
+  result opens the Session. The verifier requires exactly one
+  `POST /api/sessions`, exactly one create mutation, no dismissal-driven reads,
+  and no Run traffic, Run status read, observation, or Run creation anywhere in
+  the journey.
 - The layer is secret-free: the synthetic bearer credential, the loopback
   endpoint, and the test-only TLS key pair are repository-owned test fixtures,
   never real credentials, and the TLS key pair is never used outside the
@@ -121,6 +131,40 @@ in order. The pinned Maestro archive is restored from the GitHub Actions
 cache; the pinned download runs only on a cache miss, so the layer adds no
 steady-state public-network dependency beyond CI itself.
 
+## Runner platform notes
+
+The runner installs the exact candidate APK with `adb install --no-streaming`:
+the streamed-install protocol was observed stalling against the API 24
+emulator's adbd, and the call is bounded with a timeout. The pinned Maestro
+driver APKs are extracted from the Maestro client jar and installed directly,
+once per device — the packages persist across journeys — skipping Maestro's own
+reinstall path. That path streams the driver apps through dadb, which has no
+read timeout and was observed hanging a journey's driver install on the API 24
+emulator; every adb call is bounded for the same reason, because `adb install`
+can itself stall.
+
+Before any flow starts, the runner probes `/health` directly — it is not a
+client capability — and then `/v1/capabilities` with the `X-Journey-Probe:
+readiness` header, whose traffic the fake Gateway does not record as
+application traffic. The served capability set is scenario-specific: the
+`capabilities-missing-required` scenario intentionally omits a required
+capability, so the required endpoint set is checked for every other journey
+and the endpoint contract is checked for every journey, that scenario included.
+
+The list and transcript flows scroll with small, bounded in-pane swipes that
+stop as soon as the target is visible, instead of a fixed gesture count: the
+transcript pins its newest content, so a control can scroll out of view, and an
+element swipe up from the first Session overshoots the short list viewport and
+clips the Session titles above it. A flow that needs earlier messages walks up
+to the first message first and then reads downward. In `session-lifecycle`, the
+`Refresh` reads are Gateway checkpoints asserted by the journey verifier: only
+Session creation may have written before them, and no list-menu cancellation
+may add a write.
+
+The `journeyScenarioTest` task declares the checked-in journey fixtures as
+Gradle inputs, so a scenario-only edit re-runs the scenario parse and
+validation instead of reporting up to date and never parsing it.
+
 ## Failure evidence
 
 When a journey fails, CI preserves non-sensitive evidence as the
@@ -139,6 +183,106 @@ evidence under `artifacts/journey-evidence` still passes through the
 repository-wide redaction script (`.github/scripts/redact-test-reports.py`)
 before it is uploaded, and the existing redaction gates continue to apply to
 the JVM and instrumentation lanes.
+
+## Bounded flake retry
+
+One failed Maestro phase is retried once by the runner, because the API 24
+emulator has a platform window-reporting race: `WindowManagerService` can
+leave a freshly opened popup window out of the accessibility window list
+until an unrelated window or focus event arrives, so a menu that is drawn
+and touchable is invisible to the test driver for the life of that open
+(documented on the nightly-failure issue with live WM, accessibility-list,
+and view dumps). The race is in the platform layer, not in the app: the
+popup window, its surface, and its content view are all healthy and visible
+at the same moment the accessibility list omits it.
+
+The retry is deliberately narrow and auditable:
+
+- exactly one retry, and only in the measured `session-lifecycle` flow — the
+  only journey that opens session action menus. Every other journey stays
+  single-shot unconditionally; a second Maestro failure in
+  `session-lifecycle` fails the suite;
+- the Gateway is restarted for the retry so attempt 1 traffic cannot leak
+  into attempt 2's telemetry verifier. The readiness and capability checks
+  then run again for the fresh Gateway and still fail the lane when they
+  fail; those checks are never themselves retried;
+- every retry is logged explicitly (`Maestro journey failed on attempt 1`)
+  and the suite still fails if the retry fails (`Maestro journey failed on
+  both attempts`);
+- both attempts are retained with an `-attempt1` suffix on attempt 1
+  evidence: `<journey>-maestro-attempt1.log`,
+  `<journey>-maestro-tests-attempt1/`,
+  `<journey>-telemetry-attempt1.json`, and
+  `<journey>-gateway-attempt1.log`. When the retry passes, the workflow
+  still redacts and uploads the journey evidence (`journey-retry-evidence`
+  artifact) because the `-attempt1` files are present;
+- limits: the retry cannot distinguish the platform race from a genuinely
+  intermittent product regression, so a flaky product failure can also pass
+  on its second attempt. Both attempts stay in the evidence and every retry
+  is logged, but no automated discrimination exists; this bounded trade-off
+  is accepted deliberately.
+
+### Flow-level recovery for the measured interaction
+
+The phase retry is the outer bound: if both attempts fail, the suite fails.
+The measured race hits one interaction — the first session-menu open after
+the list Rename is confirmed. A fresh phase attempt redraws that interaction
+only by replaying the whole journey, so the `session-lifecycle` flow also
+recovers that single interaction directly, within its own fixed bound:
+while the menu's items are not readable it dismisses the menu (`back`) and
+reopens it, at most three times, before the unchanged `Pin Session` step.
+
+- a healthy open evaluates the condition once and skips the recovery
+  entirely, so the steady-state journey is unchanged;
+- a menu that stays unreadable after the bound still fails the lane at the
+  unchanged `Pin Session` step, and recoveries are logged: the block records
+  as executed rather than the healthy `SKIPPED`, and the Maestro debug log
+  carries the per-run count;
+- the limit is the same as the phase retry's: a genuinely intermittent
+  product regression at this interaction could also be absorbed by a
+  reopen, while a persistent regression cannot; combined with the phase
+  retry, the lane needs every open of that one interaction in both attempts
+  to go unreadable before it fails, and both attempts stay in the evidence.
+
+## Keyboard window contract
+
+For [issue #72](https://github.com/Gvetri/hermes-native-client/issues/72),
+`MainActivity` explicitly requests `android:windowSoftInputMode="adjustResize"`
+in the [manifest](../app/src/main/AndroidManifest.xml). The Activity still calls
+`enableEdgeToEdge()`. Resize provides the input method editor (IME) insets that
+Compose needs; it prevents the platform from choosing to pan the entire screen
+when a bottom-anchored input receives focus. This follows
+[Android's edge-to-edge setup guidance](https://developer.android.com/develop/ui/compose/system/setup-e2e).
+
+The Compose surfaces retain their existing inset ownership. The connection
+form and conversation apply `imePadding()`; the Session list applies it while
+Search has focus or an inline Rename is open and the keyboard is visible.
+Including Rename keeps its title editor in the resized list viewport instead
+of underneath the keyboard. System-bar and cutout
+padding is consumed by the shell, so nested inset modifiers account for the
+remaining inset rather than adding it twice. The pre-API-30 visible-frame
+fallback remains limited to detecting keyboard visibility; it does not select
+an Activity window policy. Do not add a second root IME padding or change the
+Gateway/state holder to compensate for a window-policy defect.
+
+The [historical A/B report on PR #71](https://github.com/Gvetri/hermes-native-client/pull/71#issuecomment-5848540026)
+found an API 24 arm64 Rename failure after adding resize to an older shell.
+That report is a regression warning, not proof that the current shell fails.
+Changing this contract requires all 17 deterministic API 24 journeys, including
+`session-lifecycle` Rename, plus real-keyboard checks on API 35. Preserve the
+existing journey flows; their keyboard-hidden streaming check is not evidence
+that the old transcript layout is fully readable with the keyboard open.
+Keyboard-open input and Send reachability must be verified separately. The
+conversation/composer redesign belongs to #112, not this window-policy change.
+`MainActivityTest` also verifies the real Activity's adjustment mode; that
+configuration assertion does not replace a keyboard journey.
+
+Preserve keyboard show/hide, focus, explicit Send and confirmation ordering in
+connection setup, Search, Create, Rename and Message. Check short windows,
+enlarged fonts and the native phone/two-pane layouts. Synthetic-inset Compose
+tests supplement these checks; they do not prove production-window behavior.
+Do not hide the keyboard or weaken a journey assertion to accept a failing
+keyboard-open layout.
 
 ## Compatibility and change rules
 

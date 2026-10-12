@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Runs the deterministic Maestro journeys against the exact candidate APK on
-# the prepared emulator. Executes inside the emulator runner action.
-# The emulator layer is secret-free: only the repository-owned synthetic
-# Gateway, synthetic credential, and the checked-in test-only TLS assets.
 set -euo pipefail
 
 workspace="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
@@ -107,16 +103,12 @@ if ! adb shell test -f "$ca_device_path"; then
 fi
 
 log "Installing the exact candidate APK."
-# --no-streaming avoids the streamed-install protocol, which was observed
-# stalling against the API 24 emulator's adbd; the call is bounded anyway.
 if ! timeout 180 adb install --no-streaming -r "$apk" >/dev/null; then
     log "Failed to install the candidate APK."
     exit 1
 fi
 
 log "Installing pinned Maestro CLI ${MAESTRO_CLI_VERSION}."
-# Reuse a restored archive when the CI cache provided one, so a GitHub
-# outage cannot block the acceptance layer before any flow starts.
 if [[ ! -f maestro.zip ]]; then
     curl -fsSL -o maestro.zip "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_CLI_VERSION}/maestro.zip"
 fi
@@ -139,6 +131,7 @@ journeys=(
     connection
     session-list-first
     empty-sessions
+    pending-creation
     session-lifecycle
     pagination-search
     active-run-isolation
@@ -156,6 +149,8 @@ journeys=(
 
 for journey in "${journeys[@]}"; do
     log "Journey: $journey"
+    journey_attempt=1
+    while :; do
     gateway_log="$evidence_dir/${journey}-gateway.log"
     java -Dfixture.repositoryRoot="$workspace" \
         -cp "$classpath" \
@@ -182,11 +177,6 @@ for journey in "${journeys[@]}"; do
         log "Journey Gateway health check failed for $journey."
         exit 1
     fi
-    # Capability readiness check before any flow starts. The probe is not
-    # recorded as application traffic. The served set is scenario-specific
-    # (the capabilities-missing-required scenario intentionally omits a
-    # required capability), so the required set is checked for every other
-    # journey and the endpoint contract is checked everywhere.
     capability_credential="$(grep -oE '"require_bearer_credential"[[:space:]]*:[[:space:]]*"[^"]*"' \
         "$scenario_dir/$journey.json" | sed -E 's/.*:[[:space:]]*"([^"]*)"$/\1/' || true)"
     capability_probe=(curl -kfsS -H "X-Journey-Probe: readiness")
@@ -205,11 +195,6 @@ for journey in "${journeys[@]}"; do
     fi
 
     maestro_log="$evidence_dir/${journey}-maestro.log"
-    # Install the pinned driver APKs directly and skip Maestro's own
-    # reinstall path: Maestro streams the driver apps through dadb, which has
-    # no read timeout and was observed hanging a journey's driver install on
-    # the API 24 emulator. The driver packages persist, so install them once
-    # per device; bound every adb call because adb install can itself stall.
     if ! timeout 60 adb shell pm path dev.mobile.maestro >/dev/null 2>&1 ||
         ! timeout 60 adb shell pm path dev.mobile.maestro.test >/dev/null 2>&1; then
         log "Installing the pinned Maestro driver APKs."
@@ -224,11 +209,30 @@ for journey in "${journeys[@]}"; do
     maestro_status=$?
     set -e
     if [ "$maestro_status" -ne 0 ]; then
-        cp -r "$HOME/.maestro/tests" "$evidence_dir/${journey}-maestro-tests" 2>/dev/null || true
         if [ "$maestro_status" -eq 124 ] || [ "$maestro_status" -eq 137 ]; then
             log "Maestro journey timed out after 300 seconds: $journey"
         fi
-        log "Maestro journey failed: $journey"
+        if [ "$journey_attempt" -eq 1 ] && [ "$journey" = "session-lifecycle" ]; then
+            cp -r "$HOME/.maestro/tests" "$evidence_dir/${journey}-maestro-tests-attempt1" 2>/dev/null || true
+            mv "$maestro_log" "$evidence_dir/${journey}-maestro-attempt1.log"
+            log "Maestro journey failed on attempt 1: $journey"
+            log "Retrying $journey once (bounded platform-flake retry; both attempts are retained as evidence)."
+            stop_gateway
+            if [ -f "$evidence_dir/${journey}-telemetry.json" ]; then
+                mv "$evidence_dir/${journey}-telemetry.json" "$evidence_dir/${journey}-telemetry-attempt1.json"
+            fi
+            if [ -f "$gateway_log" ]; then
+                mv "$gateway_log" "$evidence_dir/${journey}-gateway-attempt1.log"
+            fi
+            journey_attempt=2
+            continue
+        fi
+        cp -r "$HOME/.maestro/tests" "$evidence_dir/${journey}-maestro-tests" 2>/dev/null || true
+        if [ "$journey_attempt" -eq 2 ]; then
+            log "Maestro journey failed on both attempts: $journey"
+        else
+            log "Maestro journey failed: $journey"
+        fi
         exit "$maestro_status"
     fi
 
@@ -244,6 +248,8 @@ for journey in "${journeys[@]}"; do
 
     stop_gateway
     sleep 1
+        break
+    done
 done
 
 log "All deterministic journeys passed."

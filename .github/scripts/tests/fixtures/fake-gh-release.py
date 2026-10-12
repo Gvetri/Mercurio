@@ -68,7 +68,6 @@ elif operation == "download":
     store = root / "nightly-assets" if tag.startswith("nightly-") and (root / "nightly-assets").exists() else root / "assets"
     for source in store.iterdir():
         shutil.copyfile(source, destination / source.name)
-    # Downloads change provider statistics, not the artifact identity.
     if store.name == "nightly-assets":
         counter = root / "nightly-downloads"
         counter.write_text(str((int(counter.read_text()) if counter.exists() else 0) + 1))

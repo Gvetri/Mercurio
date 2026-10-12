@@ -21,9 +21,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // The shell consumes system-bar and display-cutout insets itself, so the
-        // window draws edge to edge; the platform keeps handling the soft
-        // keyboard, which must not collapse the shell's scrollable content.
         enableEdgeToEdge()
         entryStateHolder = EntryWiring.createEntryStateHolder(applicationContext)
         setContent {
@@ -32,8 +29,6 @@ class MainActivity : ComponentActivity() {
                     entryStateHolder.onEvent(EntryUiEvent.RunStatusNotificationPermissionResult(granted))
                 }
             LaunchedEffect(Unit) {
-                // The state holder invokes this callback only when a runtime
-                // permission request is actually required before enabling.
                 entryStateHolder.requestRunStatusNotificationPermission = {
                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }

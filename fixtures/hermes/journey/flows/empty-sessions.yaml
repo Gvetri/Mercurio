@@ -10,6 +10,7 @@ name: empty-sessions
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: empty-sessions-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"
@@ -19,10 +20,35 @@ name: empty-sessions
     timeout: 30000
 - assertVisible: "The Gateway returned no Sessions. Create one to get started."
 - tapOn: "Create Session"
-- tapOn: "Session title (optional)"
-- inputText: "Created Journey Session"
+- assertVisible: "Title (optional)"
+- tapOn: "Title (optional)"
+- inputText: "Discarded draft"
 - hideKeyboard
-- tapOn: "Confirm Create Session"
+- takeScreenshot: empty-sessions-01-named-draft-open
+- tapOn: "Cancel"
+- assertNotVisible: "Discarded draft"
+- tapOn: "Refresh"
 - extendedWaitUntil:
-    visible: "Created Journey Session"
+    visible: "No Sessions on this Gateway"
     timeout: 30000
+- takeScreenshot: empty-sessions-02-after-cancel-empty-list
+- tapOn: "Create Session"
+- assertVisible: "Leave blank for Untitled Session."
+- takeScreenshot: empty-sessions-03-unnamed-dialog
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Untitled Session"
+    timeout: 30000
+- takeScreenshot: empty-sessions-04-unnamed-result
+- tapOn: "Back to Sessions"
+- tapOn: "More options"
+- assertVisible: "Change credential"
+- assertVisible: "Local diagnostics"
+- assertVisible: "Remove Gateway Connection"
+- tapOn: "Remove Gateway Connection"
+- assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- takeScreenshot: empty-sessions-05-removal-confirmation
+- tapOn: "Cancel"
+- assertVisible: "Untitled Session"
+- assertNotVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- takeScreenshot: empty-sessions-06-removal-cancelled

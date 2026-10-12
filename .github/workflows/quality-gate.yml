@@ -1,9 +1,6 @@
 name: quality-gate
 
 on:
-  # A draft transition re-evaluates the head, so a draft run can never stand in for the complete
-  # gate of a ready pull request, and a title edit re-verifies the squash-merge title. A label
-  # edit re-evaluates the head as well, so adding run-maestro starts the labeled emulator suites.
   pull_request:
     types:
       - opened
@@ -23,16 +20,11 @@ on:
 permissions:
   contents: read
 
-# One concurrency group per pull request, so the runs of a pull request never race: a newer run
-# replaces an obsolete one, and the required status always belongs to the current head's own run.
 concurrency:
   group: quality-gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # External forks are untrusted: this run is read-only, secret-free, and carries no repository
-  # state, and it stops here. A maintainer validates an external change by carrying it onto an
-  # in-repository branch, where the complete gate runs against a commit-verified head.
   fork_guard:
     name: fork-guard
     if: ${{ always() && github.event_name == 'pull_request' }}
@@ -48,8 +40,6 @@ jobs:
             printf '%s\n' 'In-repository pull request: the complete quality gate is required for this head.'
           fi
 
-  # A draft pull request runs this lightweight, secret-free validation instead of the complete
-  # deterministic gate, which the aggregate gate requires once the pull request is ready.
   draft_validation:
     name: draft-validation
     if: ${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}
@@ -67,9 +57,6 @@ jobs:
       - name: Validate the draft pull request
         run: ./gradlew formatCheck :app:lintDebug --no-daemon
 
-  # Every pull-request-scoped check below runs for a ready in-repository pull request, for a push to
-  # main, and for the nightly and manual runs. A draft pull request runs the lightweight validation
-  # only, and an external fork runs the read-only guard only.
   formatting:
     name: formatting
     if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
@@ -99,6 +86,22 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew :app:lintDebug --no-daemon
+
+  detekt:
+    name: detekt
+    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - run: ./gradlew detekt detektVerify --no-daemon --console=plain
 
   unit_tests:
     name: unit-tests
@@ -207,7 +210,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew architectureCheck architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon
+      - run: ./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon
       - name: Verify CI test job contracts
         run: ./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest --no-daemon
       - name: Verify fail-closed quality verification
@@ -238,8 +241,6 @@ jobs:
       - name: Verify coverage and mutation thresholds
         run: ./gradlew coverageVerify mutationVerify --no-daemon --console=plain
 
-  # The squash merge writes the pull-request title onto main, so the title and every commit that
-  # reaches the branch must be a valid Conventional Commit.
   commit_message:
     name: commit-message
     if: ${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork && !github.event.pull_request.draft }}
@@ -285,7 +286,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: compose-test-reports-${{ github.run_id }}-${{ github.run_attempt }}
-          # Screenshot tests use the committed synthetic state matrix, never a live Gateway.
           path: |
             feature/entry/presentation/build/test-results/**/*.xml
             feature/entry/presentation/build/reports/roborazzi/**/*.html
@@ -294,8 +294,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # Repository settings are part of the protected-main contract, so this run reads them back and
-  # fails when the ruleset, the merge policy, or the fork policy drifts from the declared rules.
   conformance:
     name: conformance
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
@@ -312,6 +310,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/verify-repository-conformance.py
+      - name: Verify the published documentation
+        run: python3 .github/scripts/verify-public-documentation.py
       - name: Verify signing environment protections without secret access
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -456,7 +456,6 @@ jobs:
           name: android-test-failure-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/android-test-evidence
           if-no-files-found: error
-          # Sanitized Android failure evidence is retained for 14 days.
           retention-days: 14
       - name: Report API 24 instrumentation result
         if: ${{ always() }}
@@ -493,7 +492,6 @@ jobs:
           fi
           {
             printf '## API 24 instrumentation: %s\n\n' "$result"
-            # The backticks are Markdown formatting, not shell substitutions.
             # shellcheck disable=SC2016
             printf -- '- Result: `%s`\n' "$result"
             # shellcheck disable=SC2016
@@ -573,6 +571,23 @@ jobs:
           path: artifacts/journey-evidence
           if-no-files-found: warn
           retention-days: 14
+      - name: Redact retried journey evidence
+        id: redact_retried_journey_evidence
+        if: ${{ always() && steps.journeys.outcome == 'success' && hashFiles('artifacts/journey-evidence/*-attempt1*') != '' }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/redact-test-reports.py "$GITHUB_WORKSPACE" \
+            'artifacts/journey-evidence/*.log' 'artifacts/journey-evidence/**/*.log' \
+            'artifacts/journey-evidence/*.json' 'artifacts/journey-evidence/**/*.json' \
+            'artifacts/journey-evidence/*.txt' 'artifacts/journey-evidence/**/*.txt'
+      - name: Upload retried journey evidence
+        if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-retry-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/journey-evidence
+          if-no-files-found: warn
+          retention-days: 14
       - name: Fail when journeys fail
         if: ${{ steps.journeys.outcome != 'success' }}
         run: |
@@ -611,6 +626,7 @@ jobs:
       - draft_validation
       - formatting
       - static_analysis
+      - detekt
       - unit_tests
       - fixture_descriptor
       - fixture_lifecycle
@@ -632,6 +648,7 @@ jobs:
         env:
           FORMATTING_RESULT: ${{ needs.formatting.result }}
           STATIC_ANALYSIS_RESULT: ${{ needs.static_analysis.result }}
+          DETEKT_RESULT: ${{ needs.detekt.result }}
           UNIT_TESTS_RESULT: ${{ needs.unit_tests.result }}
           FIXTURE_DESCRIPTOR_RESULT: ${{ needs.fixture_descriptor.result }}
           FIXTURE_LIFECYCLE_RESULT: ${{ needs.fixture_lifecycle.result }}
@@ -656,6 +673,7 @@ jobs:
           expected="$(awk 'NF' .github/quality-gate/required-checks.txt)"
           expected_declaration='formatting
           static_analysis
+          detekt
           unit_tests
           fixture_descriptor
           fixture_lifecycle
@@ -687,22 +705,17 @@ jobs:
             fi
           }
           if [ "$EVENT_NAME" = pull_request ]; then
-            # A pull request reaches the protected branch only when it targets it.
             if [ "$EVENT_BASE_REF" != main ]; then
               printf 'The protected-main workflow accepts pull requests that target main, but this one targets %s.\n' "$EVENT_BASE_REF" >&2
               exit 1
             fi
             require fork_guard "$FORK_GUARD_RESULT"
             if [ "$EVENT_FORK" = true ]; then
-              # An external fork never runs the complete gate, and its required status must never be
-              # green: the only merge path is an in-repository branch a maintainer validates.
               expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
               printf '%s\n' 'External-fork pull request: the complete gate did not run, so this head has no passing required status. Carry the change onto an in-repository branch, where the complete gate validates it before a maintainer merges it.' >&2
               exit 1
             elif [ "$EVENT_DRAFT" = true ]; then
-              # A draft runs the lightweight validation only; the complete gate is skipped until the
-              # pull request is ready for review.
               require draft_validation "$DRAFT_VALIDATION_RESULT"
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
               expected_state=skipped
@@ -714,6 +727,7 @@ jobs:
             for result in \
               "$FORMATTING_RESULT" \
               "$STATIC_ANALYSIS_RESULT" \
+              "$DETEKT_RESULT" \
               "$UNIT_TESTS_RESULT" \
               "$FIXTURE_DESCRIPTOR_RESULT" \
               "$FIXTURE_LIFECYCLE_RESULT" \
@@ -728,8 +742,6 @@ jobs:
                 exit 1
               fi
             done
-            # A ready pull request runs the emulator suites only with the run-maestro label, and the
-            # Maestro run itself follows a passing API 24 run, so a labeled run must report both.
             if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* ]]; then
               test "$API24_INSTRUMENTATION_RESULT" = success
               test "$MAESTRO_JOURNEYS_RESULT" = success
@@ -741,6 +753,7 @@ jobs:
             for result in \
               "$FORMATTING_RESULT" \
               "$STATIC_ANALYSIS_RESULT" \
+              "$DETEKT_RESULT" \
               "$UNIT_TESTS_RESULT" \
               "$FIXTURE_DESCRIPTOR_RESULT" \
               "$FIXTURE_LIFECYCLE_RESULT" \

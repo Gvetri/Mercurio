@@ -48,7 +48,9 @@ class SessionRenameStateHolderTest {
         assertEquals(0, gateway.renameCalls)
         assertEquals(
             "  New title  ",
-            requireNotNull(requireNotNull(holder.uiState.value.sessionList).sessionMutations[sessionId]).rename?.titleDraft,
+            requireNotNull(
+                requireNotNull(holder.uiState.value.sessionList).sessionMutations[sessionId],
+            ).rename?.titleDraft,
         )
         assertEquals(
             "Listed title",
@@ -69,7 +71,11 @@ class SessionRenameStateHolderTest {
     @Test
     fun rename_rejects_a_title_that_is_empty_after_trimming_without_calling_the_gateway() {
         val sessionId = SessionId("session-one")
-        val gateway = FakeSessionGateway(session(sessionId, "Current title", "Preview"), session(sessionId, "Confirmed", "Preview"))
+        val gateway =
+            FakeSessionGateway(
+                session(sessionId, "Current title", "Preview"),
+                session(sessionId, "Confirmed", "Preview"),
+            )
         val holder = connectedHolder(gateway)
 
         holder.onEvent(EntryUiEvent.RenameSessionClicked(sessionId))
@@ -86,7 +92,11 @@ class SessionRenameStateHolderTest {
     @Test
     fun rename_rejects_control_characters_without_calling_the_gateway() {
         val sessionId = SessionId("session-one")
-        val gateway = FakeSessionGateway(session(sessionId, "Current title", "Preview"), session(sessionId, "Confirmed", "Preview"))
+        val gateway =
+            FakeSessionGateway(
+                session(sessionId, "Current title", "Preview"),
+                session(sessionId, "Confirmed", "Preview"),
+            )
         val holder = connectedHolder(gateway)
 
         holder.onEvent(EntryUiEvent.RenameSessionClicked(sessionId))
@@ -94,7 +104,10 @@ class SessionRenameStateHolderTest {
         holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(sessionId))
 
         val state = requireNotNull(holder.uiState.value.sessionList)
-        assertEquals(SessionRenameErrorCategory.CONTROL_CHARACTER, state.sessionMutations[sessionId]?.rename?.errorCategory)
+        assertEquals(
+            SessionRenameErrorCategory.CONTROL_CHARACTER,
+            state.sessionMutations[sessionId]?.rename?.errorCategory,
+        )
         assertEquals(0, gateway.renameCalls)
         assertEquals("Current title", state.sessions.single().title)
         holder.close()
@@ -103,7 +116,11 @@ class SessionRenameStateHolderTest {
     @Test
     fun refresh_preserves_an_unsent_validation_draft_but_clears_its_validation_error() {
         val sessionId = SessionId("session-one")
-        val gateway = FakeSessionGateway(session(sessionId, "Current title", "Preview"), session(sessionId, "Confirmed", "Preview"))
+        val gateway =
+            FakeSessionGateway(
+                session(sessionId, "Current title", "Preview"),
+                session(sessionId, "Confirmed", "Preview"),
+            )
         val holder = connectedHolder(gateway)
 
         holder.onEvent(EntryUiEvent.RenameSessionClicked(sessionId))
@@ -159,7 +176,7 @@ class SessionRenameStateHolderTest {
             holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(sessionId))
             assertTrue(oldGateway.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
             awaitState(holder) { it.sessionList?.sessions?.singleOrNull()?.title == "New gateway title" }
 
@@ -203,9 +220,11 @@ class SessionRenameStateHolderTest {
             holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(sessionId))
             assertTrue(gateway.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
-            awaitState(holder) { it.sessionList?.sessionMutations?.get(sessionId)?.retryAction == SessionMutationAction.RENAME }
+            awaitState(holder) {
+                it.sessionList?.sessionMutations?.get(sessionId)?.retryAction == SessionMutationAction.RENAME
+            }
             holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(sessionId, "Edited after reconnect"))
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
             awaitState(holder) { it.sessionList?.isRefreshing == false }
@@ -214,7 +233,7 @@ class SessionRenameStateHolderTest {
                 holder.uiState.value.sessionList?.sessionMutations?.get(sessionId)?.rename?.titleDraft,
             )
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
             awaitState(holder) { it.sessionList?.isLoading == false }
             assertEquals(

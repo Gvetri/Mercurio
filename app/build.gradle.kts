@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlinAndroid)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
 }
 
 val nightlyVersionCode =
@@ -82,12 +83,8 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(project(":feature:entry:domain"))
-    // The activity-launching tests clear the saved Gateway connection through the production
-    // datasource, so its interface module must be on the androidTest compile classpath.
     androidTestImplementation(project(":feature:entry:data"))
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    // The debug-only shell host activity builds a connected UI state directly, so the
-    // on-device configuration tests can render a connected shell without a live Gateway.
     debugImplementation(project(":feature:entry:domain"))
 }
 

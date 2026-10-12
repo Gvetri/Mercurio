@@ -1,3 +1,4 @@
+import io.gitlab.arturbosch.detekt.extensions.DetektExtension
 import org.hermesnative.client.buildlogic.BoundaryDoubleVerifier
 import org.hermesnative.client.buildlogic.CoverageEvidenceVerifier
 import org.hermesnative.client.buildlogic.FixtureDescriptorValidator
@@ -17,7 +18,18 @@ plugins {
     alias(libs.plugins.kotlinJvm) apply false
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.detekt) apply false
     alias(libs.plugins.roborazzi) apply false
+}
+
+subprojects {
+    plugins.withId("io.gitlab.arturbosch.detekt") {
+        extensions.configure(DetektExtension::class.java) {
+            buildUponDefaultConfig = true
+            config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+        }
+        tasks.matching { task -> task.name == "detekt" }.configureEach { enabled = false }
+    }
 }
 
 subprojects {
@@ -25,43 +37,6 @@ subprojects {
         compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
     }
 }
-
-val architectureSourceRoots = listOf(
-    file("feature/entry/domain/src/main/kotlin"),
-    file("feature/entry/application/src/main/kotlin"),
-)
-
-val architectureModuleBuildFiles = listOf(
-    file("feature/entry/domain/build.gradle.kts"),
-    file("feature/entry/application/build.gradle.kts"),
-)
-
-val presentationSourceRoot = file("feature/entry/presentation/src/main/kotlin")
-
-/**
- * Presentation renders untrusted Gateway content, so it must never reach for executable web
- * content or for a network client on a link destination: no embedded web view, and no HTTP
- * stack that could prefetch or inspect where a link points. The patterns name qualified
- * references, so documentation prose that mentions them does not fail the check.
- */
-val presentationForbiddenReferences = listOf(
-    Regex("""android\.webkit|androidx\.webkit"""),
-    Regex("""java\.net\.|okhttp3\.|HttpURLConnection|URLConnection"""),
-)
-
-/**
- * The client hands a file to another app only through its declared, non-exported file provider and
- * a read-only grant, so an exported snapshot is never a path another app can open or modify. A
- * file-scheme reference, a write grant, or a persistable grant would widen that app-external
- * boundary, so every main Kotlin source is scanned for them. The patterns name qualified references
- * or the file scheme itself, so the check fails on prose mentions of a file scheme too.
- */
-val appExternalFileEgressForbiddenReferences = listOf(
-    Regex("""Uri\.fromFile"""),
-    Regex("""file://"""),
-    Regex("""FLAG_GRANT_WRITE_URI_PERMISSION"""),
-    Regex("""FLAG_GRANT_PERSISTABLE_URI_PERMISSION"""),
-)
 
 val architectureRuleTestSource =
     file("buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt")
@@ -75,66 +50,6 @@ val fixtureDescriptorTestSource =
 val fixtureDescriptorTestClass = "org.hermesnative.client.buildlogic.FixtureDescriptorValidatorTest"
 val fixtureDescriptorTestBuildDir = file("build/fixture-descriptor-tests/buildSrc")
 val fixtureDescriptorTestResults = fixtureDescriptorTestBuildDir.resolve("test-results/test")
-
-val forbiddenQualifiedPackages = listOf(
-    "android",
-    "androidx",
-    "com.google.gson",
-    "com.squareup.moshi",
-    "dagger",
-    "hilt",
-    "io.ktor",
-    "jakarta.inject",
-    "javax.inject",
-    "kotlinx.serialization",
-    "okhttp3",
-    "org.json",
-    "org.koin",
-    "retrofit2",
-    "java.net",
-    "org.hermesnative.client.feature.entry.data",
-    "org.hermesnative.client.feature.entry.presentation",
-    "org.hermesnative.client.feature.entry.wiring",
-)
-
-val forbiddenQualifiedReference = Regex(
-    "(?<![A-Za-z0-9_])(?:${forbiddenQualifiedPackages.joinToString(separator = "|", transform = Regex::escape)})\\.[A-Za-z_][A-Za-z0-9_.]*",
-)
-
-val forbiddenDependencyTokens = listOf(
-    "android.",
-    "androidx",
-    "androidx.",
-    "com.android.",
-    "compose",
-    "com.google.gson",
-    "com.squareup.moshi",
-    "dagger",
-    "hilt",
-    "io.ktor",
-    "gson",
-    "jakarta.inject",
-    "javax.inject",
-    "kotlinx.serialization",
-    "serialization",
-    "ktor",
-    "moshi",
-    "okhttp3",
-    "okhttp",
-    "org.json",
-    "org.koin",
-    "koin",
-    "retrofit2",
-    "retrofit",
-    "java.net",
-    "project(\":feature:entry:data\")",
-    "project(\":feature:entry:presentation\")",
-    "project(\":feature:entry:wiring\")",
-)
-
-val forbiddenNamedProjectDependency = Regex(
-    """project\s*\([^)]*\bpath\s*=\s*["']:(?:feature:entry:(?:data|presentation|wiring))["'][^)]*\)""",
-)
 
 fun requireArchitectureRuleTestSource() {
     check(architectureRuleTestSource.isFile && architectureRuleTestSource.readText().isNotBlank()) {
@@ -209,85 +124,9 @@ fun requireFixtureDescriptorTestEvidence() {
     )
 }
 
-tasks.register("architectureCheck") {
-    group = "verification"
-    description = "Checks the inward dependency rules, the untrusted-content boundary, and the app-external file boundary."
-    doLast {
-        val sourceFiles = architectureSourceRoots.flatMap { root ->
-            if (root.isDirectory) root.walkTopDown().filter { it.extension == "kt" }.toList() else emptyList()
-        }
-        check(sourceFiles.isNotEmpty()) { "Architecture check found no domain/application Kotlin sources." }
-        check(architectureModuleBuildFiles.all { it.isFile }) {
-            "Architecture check found a missing domain/application build script."
-        }
-
-        val sourceViolations = sourceFiles.flatMap { sourceFile ->
-            sourceFile.readLines().mapIndexedNotNull { index, line ->
-                if (forbiddenQualifiedReference.containsMatchIn(line.replace("`", ""))) {
-                    "${sourceFile.relativeTo(projectDir)}:${index + 1}: forbidden qualified dependency: $line"
-                } else {
-                    null
-                }
-            }
-        }
-        val dependencyViolations = architectureModuleBuildFiles.flatMap { buildFile ->
-            val content = buildFile.readText()
-            val tokenViolations = content.lines().mapIndexedNotNull { index, line ->
-                if (forbiddenDependencyTokens.any(line::contains)) {
-                    "${buildFile.relativeTo(projectDir)}:${index + 1}: forbidden module dependency: $line"
-                } else {
-                    null
-                }
-            }
-            val namedProjectViolations = forbiddenNamedProjectDependency.findAll(content).map { match ->
-                val lineNumber = content.substring(0, match.range.first).count { it == '\n' } + 1
-                "${buildFile.relativeTo(projectDir)}:$lineNumber: forbidden named project dependency: ${match.value}"
-            }
-            tokenViolations + namedProjectViolations
-        }
-        val presentationSourceFiles =
-            if (presentationSourceRoot.isDirectory) {
-                presentationSourceRoot.walkTopDown().filter { it.extension == "kt" }.toList()
-            } else {
-                emptyList()
-            }
-        check(presentationSourceFiles.isNotEmpty()) {
-            "Architecture check found no presentation Kotlin sources."
-        }
-        val presentationViolations = presentationSourceFiles.flatMap { sourceFile ->
-            sourceFile.readLines().mapIndexedNotNull { index, line ->
-                if (presentationForbiddenReferences.any { pattern -> pattern.containsMatchIn(line) }) {
-                    "${sourceFile.relativeTo(projectDir)}:${index + 1}: forbidden executable or network reference: $line"
-                } else {
-                    null
-                }
-            }
-        }
-        val fileEgressSourceFiles =
-            fileTree(projectDir) {
-                include("**/src/main/**/*.kt")
-            }.files.toList()
-        check(fileEgressSourceFiles.isNotEmpty()) {
-            "Architecture check found no main Kotlin sources for the app-external file boundary."
-        }
-        val fileEgressViolations = fileEgressSourceFiles.flatMap { sourceFile ->
-            sourceFile.readLines().mapIndexedNotNull { index, line ->
-                if (appExternalFileEgressForbiddenReferences.any { pattern -> pattern.containsMatchIn(line) }) {
-                    "${sourceFile.relativeTo(projectDir)}:${index + 1}: forbidden app-external file reference: $line"
-                } else {
-                    null
-                }
-            }
-        }
-        val violations = sourceViolations + dependencyViolations + presentationViolations + fileEgressViolations
-        check(violations.isEmpty()) { "Architecture violations:\n${violations.joinToString("\n")}" }
-    }
-}
-
 tasks.register("architectureRuleTests") {
     group = "verification"
-    description = "Runs focused failure tests for architecture enforcement."
-    dependsOn("architectureCheck")
+    description = "Runs the Konsist architecture rule suite and verifies its executed evidence."
     doLast {
         requireArchitectureRuleTestSource()
         architectureRuleTestBuildDir.deleteRecursively()
@@ -316,10 +155,9 @@ tasks.register("architectureRuleTests") {
     }
 }
 
-// Set by the verification tasks below and read by `qualityGate`, which fails when one of them did
-// not execute in the invocation.
 var coverageVerified = false
 var mutationVerified = false
+var detektVerified = false
 var mocksVerified = false
 var boundaryDoublesVerified = false
 
@@ -327,8 +165,6 @@ tasks.register("verifyNoMocks") {
     group = "verification"
     description = "Fails when mock frameworks or mock-based test doubles are present."
     doLast {
-        // This check reads every module build script, including this one, so each rejected framework
-        // name is assembled from fragments instead of appearing literally in the file that rejects it.
         val mockFrameworks =
             listOf("mock" + "ito", "mock" + "k", "mock" + "webserver", "easy" + "mock", "mock" + "-server")
         val forbiddenSourcePatterns =
@@ -348,8 +184,6 @@ tasks.register("verifyNoMocks") {
                 }
             }
         }
-        // A mocking framework can also enter through a dependency declaration, which no source line
-        // would show, so every module build script is scanned for the same framework names.
         val buildScripts =
             fileTree(projectDir) {
                 include("**/build.gradle.kts")
@@ -419,6 +253,58 @@ tasks.register("mutationVerify") {
         MutationEvidenceVerifier.requireCoveredByCoverage(mutations, coverages)
         mutations.forEach { logger.lifecycle("Mutation verified. ${it.describe()}") }
         mutationVerified = true
+    }
+}
+
+val detektModules =
+    listOf(
+        ":app",
+        ":feature:entry:domain",
+        ":feature:entry:application",
+        ":feature:entry:data",
+        ":feature:entry:presentation",
+        ":feature:entry:wiring",
+        ":fixtures:hermes:runner",
+    )
+
+val detektAnalysisTasks =
+    detektModules.flatMap { module -> listOf("$module:detektMain", "$module:detektTest") }
+
+tasks.register("detekt") {
+    group = "verification"
+    description = "Runs the type-resolution detekt analysis for every Kotlin module."
+    dependsOn(detektAnalysisTasks)
+}
+
+tasks.register("detektVerify") {
+    group = "verification"
+    description = "Verifies that the detekt analysis ran fail-closed and that no baseline can absorb findings."
+    dependsOn("detekt")
+    doLast {
+        requireTasksInInvocation(
+            label = "Detekt verification",
+            requiredTasks = detektAnalysisTasks,
+            invocationTasks = gradle.taskGraph.allTasks.map { task -> task.path }.toSet(),
+        )
+        val disabled =
+            gradle.taskGraph.allTasks.filter { task -> task.path in detektAnalysisTasks.toSet() && !task.enabled }
+        check(disabled.isEmpty()) {
+            "Detekt verification requires its analysis tasks to be enabled in this invocation: " +
+                "${disabled.map { task -> task.path }}"
+        }
+        val baselines =
+            file("config/detekt").listFiles().orEmpty()
+                .filter { candidate ->
+                    candidate.isFile && candidate.name.startsWith("baseline") && candidate.name.endsWith(".xml")
+                }
+                .map { candidate -> candidate.name }
+                .sorted()
+        check(baselines.isEmpty()) {
+            "Detekt verification found baseline files that would absorb findings: $baselines. " +
+                "A finding must be fixed, not baselined."
+        }
+        logger.lifecycle("Detekt verified: no baseline exists, so every reported finding fails the analysis.")
+        detektVerified = true
     }
 }
 
@@ -580,12 +466,13 @@ tasks.register("qualityGate") {
     description = "Runs all deterministic local quality checks for the initial public project."
     dependsOn(
         "formatCheck",
-        "architectureCheck",
         "architectureRuleTests",
         "verifyNoMocks",
         "verifyDeterministicFakes",
         "coverageVerify",
         "mutationVerify",
+        "detekt",
+        "detektVerify",
         "fixtureDescriptorTests",
         "fixtureLifecycleTests",
         "fixtureContractTests",
@@ -602,6 +489,9 @@ tasks.register("qualityGate") {
         }
         check(mutationVerified) {
             "qualityGate requires mutationVerify to execute in this invocation."
+        }
+        check(detektVerified) {
+            "qualityGate requires detektVerify to execute in this invocation."
         }
         check(mocksVerified) {
             "qualityGate requires verifyNoMocks to execute in this invocation."

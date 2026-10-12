@@ -2,6 +2,7 @@
 agp = "8.7.3"
 kotlin = "2.1.0"
 ktlint = "12.1.2"
+detekt = "1.23.8"
 kover = "0.9.10"
 pitest = "1.19.0"
 composeBom = "2024.12.01"
@@ -18,6 +19,7 @@ androidxTestRunner = "1.6.2"
 espressoCore = "3.6.1"
 robolectric = "4.17"
 roborazzi = "1.60.0"
+konsist = "0.17.3"
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
@@ -26,6 +28,7 @@ kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 
 [libraries]
@@ -53,3 +56,4 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
 roborazzi-junit-rule = { module = "io.github.takahirom.roborazzi:roborazzi-junit-rule", version.ref = "roborazzi" }
+konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }

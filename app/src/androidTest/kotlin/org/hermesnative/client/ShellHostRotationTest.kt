@@ -4,7 +4,6 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertSame
@@ -25,7 +24,7 @@ class ShellHostRotationTest {
 
     @Test
     fun open_conversation_stays_usable_after_an_orientation_change() {
-        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
         val activityBeforeRotation = composeTestRule.activity
         val widthBeforeRotation = activityBeforeRotation.resources.configuration.screenWidthDp
 
@@ -49,7 +48,7 @@ class ShellHostRotationTest {
                 "the rotation really changed the window width",
                 composeTestRule.activity.resources.configuration.screenWidthDp != widthBeforeRotation,
             )
-            composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
             composeTestRule.onNodeWithText("Message").assertIsDisplayed()
             composeTestRule.onNodeWithText("Send").assertIsDisplayed()
         } finally {

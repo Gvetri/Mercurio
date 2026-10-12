@@ -39,7 +39,7 @@ class GatewayConnectionFixtureIntegrationTest {
         val capabilities = verification.execute(" https://gateway.example/profile-a/ ", "fixture-token")
 
         assertTrue(capabilities.supports("gateway_future_endpoint"))
-        assertEquals(GatewayConnection("https://gateway.example/profile-a"), repository.saved)
+        assertEquals(GatewayConnection("https://gateway.example/profile-a", "fixture-token"), repository.saved)
     }
 
     @Test

@@ -10,6 +10,7 @@ name: explicit-retry
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: explicit-retry-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"
@@ -22,11 +23,6 @@ name: explicit-retry
 - inputText: "Retry this"
 - hideKeyboard
 - tapOn: "Send"
-# The pinned Gateway's history carries no Run linkage, so the client retries
-# only the failed Run it created itself: the Session summary exposes the
-# explicit retry once the Run settles as failed and the authoritative history
-# has replaced the temporary observed response. The retry reuses the original
-# input still held in process memory and must submit exactly one new Run.
 - extendedWaitUntil:
     visible: "Run state: Failed"
     timeout: 30000

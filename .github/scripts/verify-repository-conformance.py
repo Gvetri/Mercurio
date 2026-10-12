@@ -19,7 +19,6 @@ import urllib.request
 from pathlib import Path
 
 REQUIRED_CHECK_CONTEXT = "quality-gate"
-# The one lane that runs on the schedule alone, so its write scope never reaches pull-request code.
 NIGHTLY_LANE = "create_nightly_failure_issue"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPOSITORY_ROOT / ".github/workflows/quality-gate.yml"
@@ -139,7 +138,6 @@ def verify_ruleset():
         if status_checks.get("strict_required_status_checks_policy") is not True:
             violations.append(f"{label} must require the branch to be up to date before merging")
 
-    # An active rule is only as strong as its bypass list, so every active branch ruleset is read.
     rulesets = api_get(f"/repos/{name}/rulesets")
     if not isinstance(rulesets, list):
         raise VerificationError("The ruleset list is not a list")
@@ -259,8 +257,6 @@ def verify_workflow_declaration():
         if not write_scope.search(block):
             continue
         if job != NIGHTLY_LANE or "github.event_name == 'schedule'" not in block:
-            # A pull-request run must hold no write token, so the only write scope belongs to the job
-            # that runs on the schedule alone.
             violations.append(
                 f"The {job} job requests a write scope, which pull-request code must never hold"
             )
@@ -283,7 +279,6 @@ def main(arguments):
         violations.extend(verify_ruleset())
         violations.extend(verify_workflow_declaration())
         if "--owner" in arguments:
-            # Owner-side verification of the Actions settings, which a workflow token cannot read.
             violations.extend(verify_owner_settings())
     except VerificationError as error:
         print(f"Repository conformance failed closed: {error}", file=sys.stderr)

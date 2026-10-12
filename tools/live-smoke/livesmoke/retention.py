@@ -486,9 +486,6 @@ def encrypt_video(
             detail="rc=%d" % result.returncode,
         )
     os.chmod(str(output), 0o600)
-    # Bind the artifact to the recipient by inspecting the produced packet.
-    # (gpg does not emit ENC_TO on --status-fd for this version, so the
-    # packet itself is the authoritative record of the recipient key.)
     try:
         verification = verify_encryption(runner, output, recipient, gpg_bin=gpg_bin)
     except LiveSmokeError:
