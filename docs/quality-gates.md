@@ -28,7 +28,7 @@ must report `skipped`, and any other outcome fails the aggregate; see
 | `fixture-lifecycle` | `fixtureLifecycleTests journeyScenarioTests` | An executed fixture lifecycle or journey-scenario test fails, or the runner task did not execute |
 | `fixture-contract` | `fixtureContractTests` | A client-owned Gateway JSON or SSE contract fixture test fails |
 | `android-build` | `:app:compileDebugKotlin :app:compileReleaseKotlin` on main pushes; `:app:assembleDebug :app:assembleRelease` otherwise | A debug/release compilation fails, or a non-push application APK does not build |
-| `architecture-check` | `architectureCheck architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, mock, or boundary-double rule is violated |
+| `architecture-check` | `architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, mock, or boundary-double rule is violated |
 | `compose-jvm-tests` | `:feature:entry:presentation:verifyRoborazziBaselineManifest :feature:entry:presentation:verifyRoborazziDebug` | A pinned Compose surface drifts from its approved baseline, or the baseline manifest and the snapshots disagree |
 | `coverage-mutation` | `coverageVerify mutationVerify` | Coverage or mutation evidence is missing, empty, stale, narrowed, below a declared threshold, or outside the declared production scope |
 | `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
@@ -43,8 +43,9 @@ a check can neither be dropped from the declaration silently nor added without u
 declaration. The workflow contracts are self-tested in
 `buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/QualityGateConfigurationTest.kt`, the
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,
-and `ReportEvidenceTest`, and the fail-closed behaviour of the real tasks in
-`QualityVerificationFailClosedTest`. The documentation check is covered by
+and `ReportEvidenceTest`, the fail-closed behaviour of the real tasks in
+`QualityVerificationFailClosedTest`, and the architecture rules in `ArchitectureCheckTest`. The
+documentation check is covered by
 `.github/scripts/tests/test_public_documentation.py`, and the published-release artifact check by
 `.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. All of
 these classes run in the `architecture-check` job, so a rule only exists if a check enforces it and
@@ -132,6 +133,29 @@ The boundary list is declared, not discovered: adding a datasource or repository
 to `QualityPolicy.boundaryDoubles`, and the verification then fails until that boundary has a
 production declaration and a deterministic double in the repository. A port that is never declared
 keeps no double check, so a new port belongs in the same change as its declaration.
+
+### Architecture rules
+
+`./gradlew architectureRuleTests` runs the architecture rule suite from
+`buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt` in an isolated
+build directory, and fails unless the focused source exists, its report exists, is non-empty, and
+holds at least one executed, unskipped, passing test. The rules are Konsist checks: the layer graph
+runs through the Konsist architecture assertion, and the reference rules read the declared scopes
+through Konsist's declaration model. The declared rules are `architecture/layer-boundaries`,
+`architecture/domain-application-references`, `architecture/presentation-untrusted-content`,
+`architecture/app-external-file-boundary`, and `architecture/module-dependency-declarations`; see
+[Architecture boundaries](architecture.md) for what each one rejects.
+
+Every rule also runs against a synthetic scope that carries one deliberate violation, and the suite
+asserts that the rule names itself and reports the violation, so a rule that stopped rejecting a
+violation fails instead of passing. Konsist is pinned at `0.17.3` in `gradle/libs.versions.toml`, the
+release whose Kotlin compiler matches the build's embedded Kotlin, and `buildSrc` keeps it on the
+rule suite's test classpath. Konsist parses Kotlin sources, not Gradle Kotlin scripts, so the module
+build scripts are read directly by the one rule that owns them.
+
+`QualityGateConfigurationTest` pins the wiring: the pinned Konsist version, the test-classpath
+declaration, the entry point the `architecture-check` job runs, the five rule names, and the
+deliberate-violation evidence of every rule.
 
 ### Detekt
 

@@ -872,8 +872,8 @@ class QualityGateConfigurationTest {
             workflow.contains("\"\$COVERAGE_MUTATION_RESULT\" \\"),
         )
         assertTrue(
-            "The architecture job must run the deterministic boundary check.",
-            workflow.contains("architectureCheck architectureRuleTests verifyNoMocks verifyDeterministicFakes"),
+            "The architecture job must run the architecture rule suite and the deterministic boundary check.",
+            workflow.contains("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon"),
         )
         assertTrue(
             "The workflow must run the fail-closed quality verification tests.",
@@ -1119,6 +1119,75 @@ class QualityGateConfigurationTest {
         )
         listOf("detekt", "detektVerify").forEach { entry ->
             assertTrue("Documentation must name the $entry entry point.", documentation.contains(entry))
+        }
+    }
+
+    @Test
+    fun architecture_rules_run_as_konsist_checks_in_the_architecture_job() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val catalog = repositoryRoot.resolve("gradle/libs.versions.toml").readText()
+        val buildScript = repositoryRoot.resolve("build.gradle.kts").readText()
+        val buildSrcScript = repositoryRoot.resolve("buildSrc/build.gradle.kts").readText()
+        val ruleSuite =
+            repositoryRoot.resolve(
+                "buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt",
+            ).readText()
+
+        assertTrue(
+            "The catalog must pin the Konsist version that matches the build's embedded Kotlin.",
+            catalog.contains("konsist = \"0.17.3\"") && catalog.contains("com.lemonappdev:konsist"),
+        )
+        assertTrue(
+            "The build logic must put Konsist on the test classpath of the rule suite.",
+            buildSrcScript.contains("testImplementation(libs.konsist)"),
+        )
+        assertTrue(
+            "The architecture job must run the architecture rule suite.",
+            workflow.contains("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon"),
+        )
+        assertTrue(
+            "The architecture job must not run a duplicate hand-rolled architecture task.",
+            !workflow.contains("architectureCheck "),
+        )
+        assertTrue(
+            "The local gate must require the architecture rule suite to execute.",
+            buildScript.contains("qualityGate requires architectureRuleTests to execute in this invocation."),
+        )
+        assertTrue(
+            "The local gate must not depend on a duplicate hand-rolled architecture task.",
+            !buildScript.contains("\"architectureCheck\""),
+        )
+        assertTrue(
+            "The rule suite must express the layer graph through the Konsist architecture assertion.",
+            ruleSuite.contains("assertArchitecture"),
+        )
+        listOf("Konsist.scopeFromProject", "Konsist.scopeFromDirectories", "Konsist.scopeFromExternalDirectory").forEach { scope ->
+            assertTrue("The rule suite must resolve its scopes through $scope.", ruleSuite.contains(scope))
+        }
+        listOf(
+            "architecture/layer-boundaries",
+            "architecture/domain-application-references",
+            "architecture/presentation-untrusted-content",
+            "architecture/app-external-file-boundary",
+            "architecture/module-dependency-declarations",
+        ).forEach { rule ->
+            assertTrue("The rule suite must name the $rule rule.", ruleSuite.contains(rule))
+        }
+        listOf(
+            "layer_boundaries_hold_for_every_production_source",
+            "domain_and_application_references_stay_inside_the_declared_packages",
+            "presentation_references_avoid_executable_and_network_content",
+            "every_production_source_keeps_the_app_external_file_boundary",
+            "domain_and_application_module_scripts_declare_no_forbidden_dependency",
+            "rejects_a_domain_reference_to_an_outer_layer",
+            "rejects_an_application_reference_to_a_concrete_data_implementation",
+            "rejects_a_fully_qualified_android_reference_in_domain",
+            "rejects_an_escaped_concrete_data_reference_in_application",
+            "rejects_executable_web_content_in_presentation",
+            "rejects_a_file_uri_handed_to_another_app",
+            "rejects_a_forbidden_dependency_declaration_in_a_module_script",
+        ).forEach { test ->
+            assertTrue("The rule suite must declare the $test evidence.", ruleSuite.contains(test))
         }
     }
 
