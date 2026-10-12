@@ -32,6 +32,16 @@ class QualityGateConfigurationTest {
         }
     }
 
+    private fun runPythonSuite(relativePath: String) {
+        assumePosixWrapperSupport()
+        val process = ProcessBuilder("python3", repositoryRoot.resolve(relativePath).absolutePath)
+            .directory(repositoryRoot)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(output, 0, process.waitFor())
+    }
+
     @Test
     fun test_job_failures_preserve_gating_reporting_and_redaction() {
         assumePosixWrapperSupport()
@@ -78,6 +88,36 @@ class QualityGateConfigurationTest {
                 .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(output, 0, process.waitFor())
+    }
+
+    @Test
+    fun published_documentation_is_verified_for_links_safety_and_scope() {
+        runPythonSuite(".github/scripts/tests/test_public_documentation.py")
+    }
+
+    @Test
+    fun published_release_artifacts_are_verified_before_announcement() {
+        runPythonSuite(".github/scripts/tests/test_release_artifacts.py")
+    }
+
+    @Test
+    fun the_conformance_job_verifies_the_published_documentation() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val conformance = workflow.substringAfter("  conformance:\n").substringBefore("  api24_instrumentation:\n")
+
+        assertTrue(
+            "The conformance job must verify the published documentation.",
+            conformance.contains("run: python3 .github/scripts/verify-public-documentation.py"),
+        )
+        assertTrue("The published user guide must exist.", repositoryRoot.resolve("docs/user-guide.md").isFile)
+        assertTrue(
+            "The published release artifact document must exist.",
+            repositoryRoot.resolve("docs/release-artifacts.md").isFile,
+        )
+        assertTrue(
+            "The pre-announcement artifact check must exist.",
+            repositoryRoot.resolve(".github/scripts/verify-release-artifacts.py").isFile,
+        )
     }
 
     @Test
