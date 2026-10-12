@@ -176,7 +176,7 @@ class SessionRenameStateHolderTest {
             holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(sessionId))
             assertTrue(oldGateway.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
             awaitState(holder) { it.sessionList?.sessions?.singleOrNull()?.title == "New gateway title" }
 
@@ -220,7 +220,7 @@ class SessionRenameStateHolderTest {
             holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(sessionId))
             assertTrue(gateway.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
             awaitState(holder) {
                 it.sessionList?.sessionMutations?.get(sessionId)?.retryAction == SessionMutationAction.RENAME
@@ -233,7 +233,7 @@ class SessionRenameStateHolderTest {
                 holder.uiState.value.sessionList?.sessionMutations?.get(sessionId)?.rename?.titleDraft,
             )
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
             awaitState(holder) { it.sessionList?.isLoading == false }
             assertEquals(

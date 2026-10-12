@@ -64,7 +64,7 @@ internal fun mergeRuns(
 internal fun EntryUiState.connectionSetupState(): EntryUiState =
     copy(
         title = "Verify a Hermes Gateway",
-        supportingText = "Enter one profile-specific HTTPS endpoint and bearer credential.",
+        supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
         actionLabel = "Verify Gateway Connection",
         connectionSetupRequested = true,
         errorCategory = null,

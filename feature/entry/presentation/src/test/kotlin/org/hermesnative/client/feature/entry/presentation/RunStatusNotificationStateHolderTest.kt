@@ -218,7 +218,7 @@ class RunStatusNotificationStateHolderTest {
             connectAndOpenNotifiedSession(holder, gateway, session.id)
             assertTrue(holder.uiState.value.runStatusNotifications.enabled)
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
 
             assertTrue(holder.uiState.value.runStatusNotifications.enabled)
             assertTrue(store.enabled)

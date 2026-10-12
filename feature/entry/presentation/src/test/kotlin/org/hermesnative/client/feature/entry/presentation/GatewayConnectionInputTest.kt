@@ -206,7 +206,7 @@ class GatewayConnectionInputTest {
     private fun setupState(): EntryUiState =
         EntryUiState(
             title = "Verify a Hermes Gateway",
-            supportingText = "Enter one profile-specific HTTPS endpoint and bearer credential.",
+            supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
             actionLabel = "Verify Gateway Connection",
             connectionSetupRequested = true,
             endpoint = "https://gateway.example",

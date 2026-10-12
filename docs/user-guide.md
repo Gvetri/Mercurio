@@ -46,23 +46,22 @@ signed APK attached to the release; a locally built unsigned APK is not a distri
 
 ## Add one Gateway Connection
 
-The connection form asks for exactly two values and one choice:
+The connection form asks for exactly two values:
 
 - **Gateway HTTPS endpoint** — the profile-specific HTTPS endpoint of your Gateway. The field shows
   `https://gateway.example` as an illustration only; it is not a working address. The client rejects
   a value that is not a single HTTPS address.
 - **Bearer credential** — the bearer Gateway Credential you were given for that endpoint.
-- **Save securely on this device** — the explicit choice about credential persistence:
-  - Left unchecked (the default), the credential is kept in process memory only. It disappears when
-    the application process ends, and you enter it again on the next start. Nothing is written to
-    storage.
-  - Checked, the credential is encrypted with an AndroidKeyStore key and stored in
-    application-private storage that is excluded from Android backup. You can then reopen the
-    connection without retyping the credential, and **Change credential** replaces it.
 
 Press **Verify Gateway Connection**. The client verifies authentication and the required capability
-manifest before it stores the endpoint. While it works, it shows **Verifying Gateway connection…**;
-on success it reports **Connected** / **Gateway connected**.
+manifest first. While it works, it shows **Verifying Gateway connection…**. The credential is
+saved securely on this device after verification: it is encrypted with an AndroidKeyStore key and
+stored in application-private storage that is excluded from Android backup, so you can reopen the
+connection without retyping the credential, and **Change credential** replaces it. The client shows
+**Gateway verified.** / **Saving credential securely…** while the secure save finishes and then
+reports **Connected** / **Gateway connected**. If the secure save fails, it keeps your inputs,
+reports **Could not save the Gateway credential securely. Try again.** and offers **Try again**,
+which verifies and saves the connection again. The credential is never stored in plain text.
 
 **Remove Gateway Connection** removes the saved endpoint and credential from this device. It is a
 local removal only: the client does not delete or cancel remote Sessions and Runs.
@@ -107,9 +106,9 @@ Android settings.
 - Conversation content is not persisted on the device as an offline history. The open Session's
   content is held for display and re-read from the Gateway.
 - A Run status notification carries terminal status only; it does not carry conversation content.
-- Credentials stay in process memory unless you explicitly select **Save securely on this device**;
-  an opted-in credential is authenticated-encrypted with an AndroidKeyStore key in
-  application-private, backup-excluded storage.
+- A verified credential is authenticated-encrypted with an AndroidKeyStore key in
+  application-private, backup-excluded storage. It is never written in plain text, and
+  **Remove Gateway Connection** deletes the saved endpoint and credential from this device.
 
 ## Local diagnostics
 

@@ -18,7 +18,7 @@ private fun clientManifestCapabilities(vararg extra: Pair<String, GatewayEndpoin
 
 class VerifyGatewayConnectionTest {
     @Test
-    fun saves_only_the_trimmed_endpoint_after_all_required_capabilities_are_present() {
+    fun saves_the_trimmed_endpoint_and_verified_credential_after_all_required_capabilities_are_present() {
         val repository = FakeGatewayConnectionRepository()
         var receivedEndpoint: String? = null
         var receivedCredential: String? = null
@@ -34,7 +34,7 @@ class VerifyGatewayConnectionTest {
         assertEquals("https://gateway.example/profile", receivedEndpoint)
         assertEquals("memory-only-token", receivedCredential)
         assertEquals(10, capabilities.endpoints.size)
-        assertEquals(GatewayConnection("https://gateway.example/profile"), repository.saved)
+        assertEquals(GatewayConnection("https://gateway.example/profile", "memory-only-token"), repository.saved)
     }
 
     @Test
@@ -48,7 +48,7 @@ class VerifyGatewayConnectionTest {
 
         verifier.execute(" HTTPS://GATEWAY.EXAMPLE:0443/profile/ ", "token")
 
-        assertEquals(GatewayConnection("https://gateway.example/profile"), repository.saved)
+        assertEquals(GatewayConnection("https://gateway.example/profile", "token"), repository.saved)
     }
 
     @Test
@@ -120,7 +120,6 @@ class VerifyGatewayConnectionTest {
             verifier.execute(
                 endpoint = "https://gateway.example",
                 bearerCredential = "replacement-token",
-                saveCredential = true,
             )
         }
 
@@ -141,7 +140,6 @@ class VerifyGatewayConnectionTest {
         verifier.execute(
             endpoint = "https://gateway.example",
             bearerCredential = "replacement-token",
-            saveCredential = true,
         )
 
         assertEquals(GatewayConnection("https://gateway.example", "replacement-token"), repository.saved)
