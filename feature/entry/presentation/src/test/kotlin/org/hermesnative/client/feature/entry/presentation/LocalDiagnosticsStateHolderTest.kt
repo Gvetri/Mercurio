@@ -287,7 +287,7 @@ class LocalDiagnosticsStateHolderTest {
             holder.onEvent(EntryUiEvent.OpenLocalDiagnosticsClicked)
             assertTrue(holder.uiState.value.localDiagnostics.isOpen)
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
 
             assertFalse(holder.uiState.value.localDiagnostics.isOpen)
         } finally {

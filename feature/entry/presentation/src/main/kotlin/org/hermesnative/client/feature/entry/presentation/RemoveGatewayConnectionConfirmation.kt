@@ -11,12 +11,9 @@ import androidx.compose.runtime.Composable
  * action once. No network request, progress stage or fabricated result is added.
  */
 @Composable
-internal fun RemoveGatewayConnectionConfirmation(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
+internal fun RemoveGatewayConnectionConfirmation(onEvent: (EntryUiEvent) -> Unit) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) },
         title = { Text(text = "Remove Gateway Connection?") },
         text = {
             Text(
@@ -26,12 +23,12 @@ internal fun RemoveGatewayConnectionConfirmation(
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = { onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked) }) {
                 Text(text = "Remove")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) }) {
                 Text(text = "Cancel")
             }
         },

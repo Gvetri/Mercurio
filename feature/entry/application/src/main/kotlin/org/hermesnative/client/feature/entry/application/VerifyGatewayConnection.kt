@@ -19,14 +19,9 @@ class VerifyGatewayConnection(
     fun execute(
         endpoint: String,
         bearerCredential: String,
-        saveCredential: Boolean = false,
     ): GatewayCapabilities {
         val capabilities = verify(endpoint, bearerCredential)
-        persist(
-            endpoint = endpoint,
-            bearerCredential = bearerCredential,
-            saveCredential = saveCredential,
-        )
+        persist(endpoint = endpoint, bearerCredential = bearerCredential)
         return capabilities
     }
 
@@ -37,13 +32,12 @@ class VerifyGatewayConnection(
 
     fun persist(
         endpoint: String,
-        bearerCredential: String? = null,
-        saveCredential: Boolean = false,
+        bearerCredential: String,
     ) {
         val connection =
             GatewayConnection(
                 endpoint = normalizeGatewayEndpoint(endpoint),
-                bearerCredential = bearerCredential?.takeIf { saveCredential },
+                bearerCredential = bearerCredential,
             )
         try {
             gatewayConnectionRepository.save(connection)

@@ -237,7 +237,7 @@ class LocalDiagnosticsWiringTest {
                 clientVersion = "0.1.0",
             )
         holders += holder
-        holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+        holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
 
         assertEquals(0, buffer().recordCount())
         assertNull(storedFile())

@@ -10,6 +10,7 @@ name: capabilities-missing-required
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: capabilities-missing-required-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Required feature unavailable. This Gateway does not support the client contract."

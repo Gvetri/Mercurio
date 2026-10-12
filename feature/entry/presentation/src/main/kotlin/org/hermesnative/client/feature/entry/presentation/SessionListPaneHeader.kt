@@ -44,12 +44,10 @@ internal fun SessionListPaneHeader(
     onEvent: (EntryUiEvent) -> Unit,
     onSearchFocusChanged: (Boolean) -> Unit,
 ) {
-    var removeGatewayConfirmationOpen by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth()) {
         SessionPaneTitleRow(
             state = state,
             onEvent = onEvent,
-            onRemoveGatewayConnectionRequested = { removeGatewayConfirmationOpen = true },
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -70,22 +68,12 @@ internal fun SessionListPaneHeader(
         }
         Spacer(modifier = Modifier.height(12.dp))
     }
-    if (removeGatewayConfirmationOpen) {
-        RemoveGatewayConnectionConfirmation(
-            onConfirm = {
-                removeGatewayConfirmationOpen = false
-                onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
-            },
-            onDismiss = { removeGatewayConfirmationOpen = false },
-        )
-    }
 }
 
 @Composable
 private fun SessionPaneTitleRow(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
-    onRemoveGatewayConnectionRequested: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Row(
@@ -134,7 +122,7 @@ private fun SessionPaneTitleRow(
                     enabled = state.createSession == null,
                     onClick = {
                         menuExpanded = false
-                        onRemoveGatewayConnectionRequested()
+                        onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
                     },
                 )
             }
