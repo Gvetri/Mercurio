@@ -1,6 +1,7 @@
 package org.hermesnative.client.feature.entry.presentation
 
 import android.content.res.Configuration
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.isDialog
@@ -654,10 +655,10 @@ class SelectedVisualRegressionTest {
 
     private fun setContent(
         state: EntryUiState,
-        darkTheme: Boolean = false,
+        darkTheme: Boolean? = null,
     ) {
         composeTestRule.setContent {
-            HermesTheme(darkTheme = darkTheme) {
+            HermesTheme(darkTheme = darkTheme ?: isSystemInDarkTheme()) {
                 EntryScreen(state = state, onEvent = {})
             }
         }

@@ -14,7 +14,10 @@ name: connection
 - assertVisible: "wrong-token"
 - tapOn: "Hide credential"
 - assertNotVisible: "wrong-token"
+- assertVisible: "The credential is saved securely on this device after verification."
+- assertNotVisible: "Save securely on this device"
 - assertVisible: "Verify Gateway Connection"
+- takeScreenshot: connection-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Authentication failed. Check the Gateway credential."
@@ -29,3 +32,20 @@ name: connection
     visible: "Sessions"
     timeout: 30000
 - assertVisible: "Alpha Session"
+- launchApp
+- assertVisible: "Verify your Hermes Gateway"
+- assertVisible: "https://10.0.2.2:18443"
+- assertNotVisible: "synthetic-token"
+- takeScreenshot: connection-restart-prefill
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- takeScreenshot: connection-sessions-after-restart
+- tapOn: "More options"
+- tapOn: "Remove Gateway Connection"
+- assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- takeScreenshot: connection-remove-confirm
+- tapOn: "Cancel"
+- assertVisible: "Sessions"
+- takeScreenshot: connection-remove-cancelled
