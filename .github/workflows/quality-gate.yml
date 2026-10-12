@@ -310,6 +310,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/verify-repository-conformance.py
+      - name: Verify the published documentation
+        run: python3 .github/scripts/verify-public-documentation.py
       - name: Verify signing environment protections without secret access
         env:
           GITHUB_TOKEN: ${{ github.token }}

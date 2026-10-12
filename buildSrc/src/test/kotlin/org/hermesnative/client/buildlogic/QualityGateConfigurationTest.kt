@@ -81,6 +81,54 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun published_documentation_is_verified_for_links_safety_and_scope() {
+        assumePosixWrapperSupport()
+        val process = ProcessBuilder("python3", repositoryRoot.resolve(".github/scripts/tests/test_public_documentation.py").absolutePath)
+            .directory(repositoryRoot)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(output, 0, process.waitFor())
+    }
+
+    @Test
+    fun published_release_artifacts_are_verified_before_announcement() {
+        assumePosixWrapperSupport()
+        val process = ProcessBuilder("python3", repositoryRoot.resolve(".github/scripts/tests/test_release_artifacts.py").absolutePath)
+            .directory(repositoryRoot)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(output, 0, process.waitFor())
+    }
+
+    @Test
+    fun the_conformance_job_verifies_the_published_documentation() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val conformance = workflow.substringAfter("  conformance:\n").substringBefore("  api24_instrumentation:\n")
+        val userGuide = repositoryRoot.resolve("docs/user-guide.md")
+        val releaseArtifacts = repositoryRoot.resolve("docs/release-artifacts.md")
+        val readme = repositoryRoot.resolve("README.md").readText()
+        val artifactCheck = repositoryRoot.resolve(".github/scripts/verify-release-artifacts.py")
+
+        assertTrue(
+            "The conformance job must verify the published documentation.",
+            conformance.contains("run: python3 .github/scripts/verify-public-documentation.py"),
+        )
+        assertTrue("The published user guide must exist.", userGuide.isFile)
+        assertTrue("The published release artifact document must exist.", releaseArtifacts.isFile)
+        assertTrue("The published-release artifact check must exist.", artifactCheck.isFile)
+        assertTrue(
+            "The README must link the published user guide.",
+            readme.contains("docs/user-guide.md"),
+        )
+        assertTrue(
+            "The README must link the published release artifact document.",
+            readme.contains("docs/release-artifacts.md"),
+        )
+    }
+
+    @Test
     fun gradle_wrapper_declares_official_distribution_checksum() {
         val checksum =
             repositoryRoot.resolve("gradle/wrapper/gradle-wrapper.properties").readLines()
