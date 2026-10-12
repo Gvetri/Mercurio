@@ -40,7 +40,7 @@ class SecureGatewayCredentialStorageTest {
     }
 
     @Test
-    fun opt_in_storage_round_trips_only_ciphertext_in_no_backup_and_keystore() {
+    fun secure_default_storage_round_trips_only_ciphertext_in_no_backup_and_keystore() {
         val credential = "fixture-secret-credential"
 
         store.save(credential)
