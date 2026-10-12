@@ -358,8 +358,6 @@ class QualityVerificationFailClosedTest {
                 "-x",
                 "formatCheck",
                 "-x",
-                "architectureCheck",
-                "-x",
                 "architectureRuleTests",
                 "-x",
                 "verifyNoMocks",
