@@ -148,7 +148,10 @@ through Konsist's declaration model. The declared rules are `architecture/layer-
 
 Every rule also runs against a synthetic scope that carries one deliberate violation, and the suite
 asserts that the rule names itself and reports the violation, so a rule that stopped rejecting a
-violation fails instead of passing. Konsist is pinned at `0.17.3` in `gradle/libs.versions.toml`, the
+violation fails instead of passing. A scope that resolves to no Kotlin source, and a module scope
+that resolves to no build script, fail the rule that owns it, so a source set that moved out of the
+declared roots cannot pass by scanning nothing; the layer graph fails the same way when a declared
+layer holds no file. Konsist is pinned at `0.17.3` in `gradle/libs.versions.toml`, the
 release whose Kotlin compiler matches the build's embedded Kotlin, and `buildSrc` keeps it on the
 rule suite's test classpath. Konsist parses Kotlin sources, not Gradle Kotlin scripts, so the module
 build scripts are read directly by the one rule that owns them.
