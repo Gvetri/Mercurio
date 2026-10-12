@@ -150,6 +150,9 @@ class SelectedVisualRegressionTest {
                 }
             }
         }
+        composeTestRule
+            .onNodeWithText(EntryErrorCategory.CREDENTIAL_STORAGE_FAILED.safeMessage)
+            .performScrollTo()
         capture()
     }
 

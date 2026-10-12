@@ -488,6 +488,10 @@ class EntryStateHolder(
         )
     }
 
+    /**
+     * Releases the connection state and clears the removal confirmation so a closed holder never
+     * reports an open dialog.
+     */
     fun close() {
         mutableUiState.value = mutableUiState.value.copy(isRemoveConfirmationOpen = false)
         val released = releaseConnectionState()

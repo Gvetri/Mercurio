@@ -41,6 +41,7 @@ internal fun holder(
     verifier: (String, String) -> GatewayCapabilities,
     gateway: SessionGatewayPort? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
+    dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
 ): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
@@ -50,6 +51,7 @@ internal fun holder(
             gateway?.let { sessionGateway ->
                 { _, _ -> sessionGateway }
             },
+        dependencies = dependencies,
     )
 
 internal fun verify(holder: EntryStateHolder) {
@@ -140,6 +142,7 @@ internal class FakeGatewayConnectionRepository : GatewayConnectionRepository {
     var saved: GatewayConnection? = null
     var throwOnSave = false
     var onSave: (() -> Unit)? = null
+    var clearCount = 0
 
     override fun load(): GatewayConnection? = saved
 
@@ -147,6 +150,11 @@ internal class FakeGatewayConnectionRepository : GatewayConnectionRepository {
         onSave?.invoke()
         if (throwOnSave) error("storage failure")
         saved = connection
+    }
+
+    override fun clear() {
+        clearCount += 1
+        saved = null
     }
 }
 

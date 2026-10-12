@@ -79,7 +79,6 @@ internal fun EntryStateHolder.persistVerifiedCredential(
             verifier.persist(
                 endpoint = normalizedEndpoint,
                 bearerCredential = state.bearerCredential,
-                saveCredential = true,
             )
             true
         }

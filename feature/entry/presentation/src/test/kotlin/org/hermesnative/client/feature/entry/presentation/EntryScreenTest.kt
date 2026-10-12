@@ -91,7 +91,7 @@ class EntryScreenTest {
         val state =
             EntryUiState(
                 title = "Verify a Hermes Gateway",
-                supportingText = "Enter one profile-specific HTTPS endpoint and bearer credential.",
+                supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
                 actionLabel = "Verify Gateway Connection",
                 connectionSetupRequested = true,
             )
@@ -200,6 +200,37 @@ class EntryScreenTest {
         composeTestRule.onNodeWithText("Gateway verified.").assertIsDisplayed()
         composeTestRule.onNodeWithText("The previous connection is unchanged.").assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertIsEnabled()
+    }
+
+    @Test
+    fun remove_confirmation_dialog_opens_over_the_reconnect_form_with_the_same_actions() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Verify your Hermes Gateway",
+                            supportingText = "Verify the saved HTTPS endpoint before opening Sessions.",
+                            actionLabel = "Verify Gateway Connection",
+                            isGatewayConnectionConfigured = true,
+                            isRemoveConfirmationOpen = true,
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Remove Gateway Connection?").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Remove the saved endpoint and credential from this device. " +
+                    "Remote Sessions and Runs are not deleted or cancelled.",
+            )
+            .assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Remove").performClick()
+        assertEquals(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked, events.single())
     }
 
     @Test

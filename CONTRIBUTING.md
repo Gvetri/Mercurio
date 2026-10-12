@@ -107,7 +107,7 @@ Markdown rendering contracts.
 | `connection_remove_confirmation_dark` | Gateway connection | The same confirmation on the dark token set |
 | `connection_remove_confirmation_wide_light` | Gateway connection | The confirmation centered on the wide two-pane window |
 | `connection_remove_confirmation_wide_dark` | Gateway connection | The same wide confirmation on the dark token set |
-| `connection_storage_retry_short_ime_200_light` | Gateway connection | Short-window storage retry at 200% font scale |
+| `connection_storage_retry_short_ime_200_light` | Gateway connection | Short-window storage retry at 200% font scale, scrolled to the retained failure message |
 | `empty_session_list` | Session list | Valid empty Gateway response |
 | `populated_session_list` | Session list | Pinned and unpinned server metadata |
 | `session_list_unavailable` | Session list | Stale data, unavailable state, and retry |
@@ -168,10 +168,12 @@ only to create a screenshot.
 The matrix uses Robolectric SDK 35, native graphics mode, and synthetic in-memory values.
 Each capture declares its viewport qualifier: the default is `w411dp-h891dp-notnight`; the
 dialog variants select `w411dp-h891dp-night` for the dark capture, `w1000dp-h800dp-notnight`
-for the two-pane capture, and `w411dp-h289dp-notnight` for the constrained-height witness,
-which also sets a 2x font scale. The shell, markdown and entry contract classes select their
-light or dark token set explicitly, so each capture proves one designed window and theme
-configuration instead of the ambient system setting. All three classes exclude timestamps,
+for the two-pane capture, and `w411dp-h289dp-notnight` for the Session-dialog
+constrained-height witness or `w411dp-h480dp-notnight` for the Gateway short-window witness,
+both of which also set a 2x font scale. The shell and markdown contract classes pass an
+explicit light or dark token set, and the entry contract class passes an explicit value for
+its dark captures and otherwise resolves the declared viewport's day or night configuration,
+so each capture proves one designed window and theme configuration. All three classes exclude timestamps,
 live Gateway/provider data, credentials, animated loading states, Activity lifecycle
 behavior, and other system-dependent rendering. Behavior and semantics tests remain in their
 existing test classes.
