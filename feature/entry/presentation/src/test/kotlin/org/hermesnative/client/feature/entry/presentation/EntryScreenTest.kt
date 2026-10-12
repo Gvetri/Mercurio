@@ -213,6 +213,7 @@ class EntryScreenTest {
                             title = "Verify your Hermes Gateway",
                             supportingText = "Verify the saved HTTPS endpoint before opening Sessions.",
                             actionLabel = "Verify Gateway Connection",
+                            connectionSetupRequested = true,
                             isGatewayConnectionConfigured = true,
                             isRemoveConfirmationOpen = true,
                         ),
@@ -221,6 +222,7 @@ class EntryScreenTest {
             }
         }
 
+        composeTestRule.onNodeWithText("Gateway HTTPS endpoint").assertIsDisplayed()
         composeTestRule.onNodeWithText("Remove Gateway Connection?").assertIsDisplayed()
         composeTestRule
             .onNodeWithText(
@@ -229,6 +231,10 @@ class EntryScreenTest {
             )
             .assertIsDisplayed()
 
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        assertEquals(EntryUiEvent.CancelRemoveGatewayConnectionClicked, events.single())
+
+        events.clear()
         composeTestRule.onNodeWithText("Remove").performClick()
         assertEquals(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked, events.single())
     }
