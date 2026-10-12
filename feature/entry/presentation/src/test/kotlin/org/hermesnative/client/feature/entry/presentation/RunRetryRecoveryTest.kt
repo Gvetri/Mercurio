@@ -169,7 +169,7 @@ class RunRetryRecoveryTest {
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             assertTrue(gateway.runStarted.await(RETRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             gateway.releaseRun.countDown()
             assertTrue(gateway.runFinished.await(RETRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 

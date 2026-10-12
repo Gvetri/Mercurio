@@ -10,6 +10,7 @@ name: session-lifecycle
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: session-lifecycle-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"

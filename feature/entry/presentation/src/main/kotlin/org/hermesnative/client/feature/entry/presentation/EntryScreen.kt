@@ -67,6 +67,9 @@ fun EntryScreen(
             } else {
                 ConnectionContent(state = state, onEvent = onEvent)
             }
+            if (state.isRemoveConfirmationOpen) {
+                RemoveGatewayConnectionConfirmation(onEvent = onEvent)
+            }
         }
     }
 }
@@ -105,7 +108,8 @@ private fun ConnectionContent(
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = state.supportingText,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = if (showConnectionForm) TextAlign.Start else TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )

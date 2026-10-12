@@ -10,6 +10,7 @@ name: terminal-success
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: terminal-success-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"

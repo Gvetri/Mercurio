@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilities
+import org.hermesnative.client.feature.entry.domain.GatewayCredentialStore
 import org.hermesnative.client.feature.entry.domain.GatewayHistoryMessage
 import org.hermesnative.client.feature.entry.domain.PendingRunSubmissionKey
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
@@ -47,6 +48,7 @@ import java.util.concurrent.TimeUnit
 class EntryWiringRestartIntegrationTest {
     private val holders = mutableListOf<EntryStateHolder>()
     private val gateways = mutableSetOf<RestartGateway>()
+    private val credentialStore = InMemoryGatewayCredentialStore()
 
     @After
     fun finishHolderWork() {
@@ -476,6 +478,7 @@ class EntryWiringRestartIntegrationTest {
                     sessionGatewayFactory = { _, _ -> gateway },
                     runGatewayFactory = { _, _ -> gateway },
                     coroutineScope = coroutineScope,
+                    credentialStore = credentialStore,
                 ),
         ).also {
             holders += it
@@ -546,6 +549,20 @@ class EntryWiringRestartIntegrationTest {
 
     private fun SharedPreferencesRunRecoveryStorage.clearForTest() {
         save(emptySet())
+    }
+
+    private class InMemoryGatewayCredentialStore : GatewayCredentialStore {
+        private var credential: String? = null
+
+        override fun load(): String? = credential
+
+        override fun save(credential: String) {
+            this.credential = credential
+        }
+
+        override fun clear() {
+            credential = null
+        }
     }
 
     private class RestartGateway : SessionGatewayPort, RunGatewayPort {

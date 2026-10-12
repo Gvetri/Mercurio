@@ -94,7 +94,20 @@ Markdown rendering contracts.
 | State | Compose surface | Reason for inclusion |
 | --- | --- | --- |
 | `connection_form` | Gateway connection | Stable first-use form with synthetic inputs |
+| `connection_form_dark` | Gateway connection | The same form on the dark token set |
 | `connection_error` | Gateway connection | Recoverable authentication error |
+| `connection_error_dark` | Gateway connection | The same error on the dark token set |
+| `connection_saving_light` | Gateway connection | Verified secure-save phase with locked controls |
+| `connection_saving_dark` | Gateway connection | The same phase on the dark token set |
+| `connection_storage_retry_light` | Gateway connection | Secure-save failure with `Try again` and the completion limit |
+| `connection_storage_retry_dark` | Gateway connection | The same failure on the dark token set |
+| `connection_replacement_ready_light` | Gateway connection | Replacement form with the fixed endpoint |
+| `connection_replacement_ready_dark` | Gateway connection | The same form on the dark token set |
+| `connection_remove_confirmation_light` | Gateway connection | Standard removal confirmation over the retained Sessions surface |
+| `connection_remove_confirmation_dark` | Gateway connection | The same confirmation on the dark token set |
+| `connection_remove_confirmation_wide_light` | Gateway connection | The confirmation centered on the wide two-pane window |
+| `connection_remove_confirmation_wide_dark` | Gateway connection | The same wide confirmation on the dark token set |
+| `connection_storage_retry_short_ime_200_light` | Gateway connection | Short-window storage retry at 200% font scale, scrolled to the retained failure message |
 | `empty_session_list` | Session list | Valid empty Gateway response |
 | `populated_session_list` | Session list | Pinned and unpinned server metadata |
 | `session_list_unavailable` | Session list | Stale data, unavailable state, and retry |
@@ -146,22 +159,24 @@ token set.
 The Create Session surface is now the standard Material 3 `AlertDialog`: the
 `create_session*` states capture that real dialog window over the Session list (and beside
 it in the two-pane layout). The Gateway-removal confirmation
-(`gateway_removal_confirmation`) uses the same stock `AlertDialog` surface over the Session
-list. Rename and Delete confirmation stay inline: they render as a conditional mode in the
-existing Compose state model and have no dialog overlay, so they stay covered without
-changing production behavior only to create a screenshot.
+(`gateway_removal_confirmation`, and the `connection_remove_confirmation*` states over the
+retained Sessions surface) uses the same stock `AlertDialog` surface. Rename and Delete
+confirmation stay inline: they render as a conditional mode in the existing Compose state
+model and have no dialog overlay, so they stay covered without changing production behavior
+only to create a screenshot.
 
 The matrix uses Robolectric SDK 35, native graphics mode, and synthetic in-memory values.
-The default capture viewport is `w411dp-h891dp-notnight`; the dialog variants select their
-own window qualifiers (`w411dp-h891dp-night` for the dark capture, `w1000dp-h800dp-notnight`
-for the two-pane capture, `w411dp-h289dp-notnight` for the constrained-height witness), and
-the constrained-height witness sets a 2x font scale, so each capture proves one designed
-window/theme configuration. The shell contract and markdown contract classes use the
-viewport qualifiers above and select the light or dark token set explicitly, so each capture
-proves one designed theme instead of the ambient system setting. All three classes exclude
-timestamps, live Gateway/provider data, credentials, animated loading states, Activity
-lifecycle behavior, and other system-dependent rendering. Behavior and semantics tests
-remain in their existing test classes.
+Each capture declares its viewport qualifier: the default is `w411dp-h891dp-notnight`; the
+dialog variants select `w411dp-h891dp-night` for the dark capture, `w1000dp-h800dp-notnight`
+for the two-pane capture, and `w411dp-h289dp-notnight` for the Session-dialog
+constrained-height witness or `w411dp-h480dp-notnight` for the Gateway short-window witness,
+both of which also set a 2x font scale. The shell and markdown contract classes pass an
+explicit light or dark token set, and the entry contract class passes an explicit value for
+its dark captures and otherwise resolves the declared viewport's day or night configuration,
+so each capture proves one designed window and theme configuration. All three classes exclude timestamps,
+live Gateway/provider data, credentials, animated loading states, Activity lifecycle
+behavior, and other system-dependent rendering. Behavior and semantics tests remain in their
+existing test classes.
 
 The pull-request Compose job first runs
 `verifyRoborazziBaselineManifest`. It reports `Missing baselines` and

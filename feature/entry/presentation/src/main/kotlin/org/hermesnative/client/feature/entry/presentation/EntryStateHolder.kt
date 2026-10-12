@@ -50,15 +50,15 @@ sealed interface EntryUiEvent {
         val value: String,
     ) : Connection
 
-    data class SaveCredentialChanged(
-        val value: Boolean,
-    ) : Connection
-
     data object VerifyGatewayConnectionClicked : Connection
 
     data object TryAgainClicked : Connection
 
     data object RemoveGatewayConnectionClicked : Connection
+
+    data object ConfirmRemoveGatewayConnectionClicked : Connection
+
+    data object CancelRemoveGatewayConnectionClicked : Connection
 
     data object RunStatusNotificationsToggleClicked : Connection
 
@@ -215,10 +215,11 @@ data class EntryUiState(
     val isChangingCredential: Boolean = false,
     val endpoint: String = "",
     val bearerCredential: String = "",
-    val saveCredential: Boolean = false,
     val isVerifying: Boolean = false,
+    val isSaving: Boolean = false,
     val isConnected: Boolean = false,
     val errorCategory: EntryErrorCategory? = null,
+    val isRemoveConfirmationOpen: Boolean = false,
     val sessionList: SessionListUiState? = null,
     val runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
@@ -408,10 +409,11 @@ class EntryStateHolder(
             is EntryUiEvent.CancelGatewayCredentialChangeClicked -> cancelCredentialRotation()
             is EntryUiEvent.EndpointChanged -> updateEndpoint(event.value)
             is EntryUiEvent.BearerCredentialChanged -> updateBearerCredential(event.value)
-            is EntryUiEvent.SaveCredentialChanged -> updateSaveCredential(event.value)
             is EntryUiEvent.VerifyGatewayConnectionClicked -> verifyConnection()
             is EntryUiEvent.TryAgainClicked -> verifyConnection()
-            is EntryUiEvent.RemoveGatewayConnectionClicked -> removeGatewayConnection()
+            is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
+            is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
+            is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
             is EntryUiEvent.RunStatusNotificationsToggleClicked -> toggleRunStatusNotifications()
             is EntryUiEvent.RunStatusNotificationPermissionResult ->
                 applyRunStatusNotificationPermissionResult(event.granted)
@@ -486,7 +488,12 @@ class EntryStateHolder(
         )
     }
 
+    /**
+     * Releases the connection state and clears the removal confirmation so a closed holder never
+     * reports an open dialog.
+     */
     fun close() {
+        mutableUiState.value = mutableUiState.value.copy(isRemoveConfirmationOpen = false)
         val released = releaseConnectionState()
         released.jobs.forEach(Job::cancel)
         released.observations.forEach(RunEventObservation::close)
@@ -738,12 +745,11 @@ internal fun EntryState.toUiState(): EntryUiState =
     if (isGatewayConnectionConfigured || configuredEndpoint != null) {
         EntryUiState(
             title = "Verify your Hermes Gateway",
-            supportingText = "Enter the bearer credential to verify the saved HTTPS endpoint.",
+            supportingText = "Verify the saved HTTPS endpoint before opening Sessions.",
             actionLabel = "Verify Gateway Connection",
             connectionSetupRequested = true,
             endpoint = configuredEndpoint.orEmpty(),
             bearerCredential = configuredCredential.orEmpty(),
-            saveCredential = configuredCredential != null,
             isGatewayConnectionConfigured = true,
         )
     } else {

@@ -10,6 +10,7 @@ name: streaming
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: streaming-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"

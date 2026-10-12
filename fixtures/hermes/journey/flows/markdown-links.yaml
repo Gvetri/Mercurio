@@ -10,6 +10,7 @@ name: markdown-links
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: markdown-links-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"

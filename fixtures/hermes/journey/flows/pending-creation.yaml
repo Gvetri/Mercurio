@@ -10,6 +10,7 @@ name: pending-creation
 - tapOn: "Bearer credential"
 - inputText: "synthetic-token"
 - hideKeyboard
+- takeScreenshot: pending-creation-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
     visible: "Sessions"

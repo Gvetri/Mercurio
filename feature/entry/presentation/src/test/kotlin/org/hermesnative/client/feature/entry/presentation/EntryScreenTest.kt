@@ -4,10 +4,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -89,7 +91,7 @@ class EntryScreenTest {
         val state =
             EntryUiState(
                 title = "Verify a Hermes Gateway",
-                supportingText = "Enter one profile-specific HTTPS endpoint and bearer credential.",
+                supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
                 actionLabel = "Verify Gateway Connection",
                 connectionSetupRequested = true,
             )
@@ -102,13 +104,175 @@ class EntryScreenTest {
 
         composeTestRule.onNodeWithText("Gateway HTTPS endpoint").assertIsDisplayed()
         composeTestRule.onNodeWithText("Bearer credential").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Save securely on this device").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("The credential is saved securely on this device after verification.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Save securely on this device").assertDoesNotExist()
         composeTestRule
             .onNodeWithText("Verify Gateway Connection")
             .assertHasClickAction()
             .performClick()
 
         assertEquals(EntryUiEvent.VerifyGatewayConnectionClicked, events.single())
+    }
+
+    @Test
+    fun secure_save_progress_and_storage_failure_render_the_approved_recovery() {
+        val state =
+            mutableStateOf(
+                EntryUiState(
+                    title = "Verify a Hermes Gateway",
+                    supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
+                    actionLabel = "Verify Gateway Connection",
+                    connectionSetupRequested = true,
+                    endpoint = "https://gateway.example/profile",
+                    bearerCredential = "synthetic-token",
+                    isSaving = true,
+                ),
+            )
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state.value, onEvent = events::add)
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Gateway verified.\nSaving credential securely…")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Verify Gateway Connection").assertIsNotEnabled()
+
+        composeTestRule.runOnIdle {
+            state.value =
+                state.value.copy(
+                    isSaving = false,
+                    errorCategory = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED,
+                )
+        }
+
+        composeTestRule.onNodeWithText("Gateway verified.").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Could not save the Gateway credential securely. Try again.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Setup is not complete.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("https://gateway.example/profile").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").assertIsEnabled().performClick()
+
+        assertEquals(EntryUiEvent.TryAgainClicked, events.single())
+    }
+
+    @Test
+    fun replacement_form_shows_a_fixed_endpoint_and_the_unchanged_connection_guarantee() {
+        val state =
+            mutableStateOf(
+                EntryUiState(
+                    title = "Change Gateway credential",
+                    supportingText = "Verify the replacement before it replaces the saved credential.",
+                    actionLabel = "Verify and save credential",
+                    connectionSetupRequested = true,
+                    isChangingCredential = true,
+                    isConnected = true,
+                    endpoint = "https://gateway.example/profile",
+                ),
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state.value, onEvent = {})
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("https://gateway.example/profile")
+            .assertIsDisplayed()
+            .assert(hasSetTextAction().not())
+        composeTestRule.onNodeWithText("Example: https://gateway.example").assertDoesNotExist()
+        composeTestRule
+            .onNodeWithText(
+                "The current connection stays in place until the replacement is verified and saved securely.",
+            )
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Verify and save credential").assertHasClickAction()
+
+        composeTestRule.runOnIdle {
+            state.value = state.value.copy(errorCategory = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED)
+        }
+
+        composeTestRule.onNodeWithText("Gateway verified.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("The previous connection is unchanged.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").assertIsEnabled()
+    }
+
+    @Test
+    fun remove_confirmation_dialog_opens_over_the_reconnect_form_with_the_same_actions() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Verify your Hermes Gateway",
+                            supportingText = "Verify the saved HTTPS endpoint before opening Sessions.",
+                            actionLabel = "Verify Gateway Connection",
+                            connectionSetupRequested = true,
+                            isGatewayConnectionConfigured = true,
+                            isRemoveConfirmationOpen = true,
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Gateway HTTPS endpoint").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Remove Gateway Connection?").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Remove the saved endpoint and credential from this device. " +
+                    "Remote Sessions and Runs are not deleted or cancelled.",
+            )
+            .assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        assertEquals(EntryUiEvent.CancelRemoveGatewayConnectionClicked, events.single())
+
+        events.clear()
+        composeTestRule.onNodeWithText("Remove").performClick()
+        assertEquals(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked, events.single())
+    }
+
+    @Test
+    fun remove_confirmation_dialog_offers_cancel_and_remove_for_the_exact_connection() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Gateway connected",
+                            supportingText = "",
+                            actionLabel = "",
+                            isConnected = true,
+                            sessionList = SessionListUiState(),
+                            isRemoveConfirmationOpen = true,
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Remove Gateway Connection?").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Remove the saved endpoint and credential from this device. " +
+                    "Remote Sessions and Runs are not deleted or cancelled.",
+            )
+            .assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        assertEquals(EntryUiEvent.CancelRemoveGatewayConnectionClicked, events.single())
+
+        events.clear()
+        composeTestRule.onNodeWithText("Remove").performClick()
+        assertEquals(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked, events.single())
     }
 
     @Test

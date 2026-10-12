@@ -15,7 +15,7 @@ import org.hermesnative.client.feature.entry.domain.RunGatewayPort
 import org.hermesnative.client.feature.entry.domain.SessionGatewayPort
 
 internal fun EntryUiState.blocksVerification(): Boolean {
-    return !connectionSetupRequested || isVerifying || (isConnected && !isChangingCredential)
+    return !connectionSetupRequested || isVerifying || isSaving || (isConnected && !isChangingCredential)
 }
 
 internal fun EntryStateHolder.runVerification(
@@ -60,7 +60,12 @@ internal fun EntryStateHolder.persistVerifiedCredential(
 ): Boolean {
     val canPersist =
         synchronized(sessionRequestLock) {
-            connectionGeneration == requestConnectionGeneration
+            if (connectionGeneration == requestConnectionGeneration) {
+                mutableUiState.value = mutableUiState.value.copy(isVerifying = false, isSaving = true)
+                true
+            } else {
+                false
+            }
         }
     if (!canPersist) return false
     return synchronized(connectionPersistenceLock) {
@@ -74,7 +79,6 @@ internal fun EntryStateHolder.persistVerifiedCredential(
             verifier.persist(
                 endpoint = normalizedEndpoint,
                 bearerCredential = state.bearerCredential,
-                saveCredential = state.saveCredential,
             )
             true
         }
@@ -111,6 +115,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                     actionLabel = "Connected",
                     isChangingCredential = false,
                     isVerifying = false,
+                    isSaving = false,
                     isConnected = true,
                     isGatewayConnectionConfigured = true,
                     errorCategory = null,
@@ -139,6 +144,7 @@ internal fun EntryStateHolder.showFailure(
             mutableUiState.value =
                 mutableUiState.value.copy(
                     isVerifying = false,
+                    isSaving = false,
                     errorCategory = category,
                 )
         }

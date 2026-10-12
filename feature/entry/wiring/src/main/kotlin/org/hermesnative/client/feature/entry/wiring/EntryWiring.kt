@@ -25,7 +25,7 @@ object EntryWiring {
         clientVersion: String = androidClientVersion(context),
     ): EntryStateHolder {
         val dataSource = SharedPreferencesGatewayConnectionDataSource(context)
-        val credentialStore = AndroidKeyStoreGatewayCredentialStore(context)
+        val credentialStore = overrides.credentialStore ?: AndroidKeyStoreGatewayCredentialStore(context)
         val repository = DefaultGatewayConnectionRepository(dataSource, credentialStore)
         val recoveryEndpoint = AtomicReference(dataSource.loadEndpoint())
         val runRecoveryRegistry = buildRunRecoveryRegistry(context, recoveryEndpoint)

@@ -99,12 +99,12 @@ internal fun EntryStateHolder.showConnectionSetup() {
 
 internal fun EntryStateHolder.showCredentialRotation() {
     val state = mutableUiState.value
-    if (!state.isConnected || state.isVerifying) return
+    if (!state.isConnected || state.isVerifying || state.isSaving) return
     mutableUiState.value =
         state.copy(
             title = "Change Gateway credential",
             supportingText = "Verify the replacement before it replaces the saved credential.",
-            actionLabel = "Save credential",
+            actionLabel = "Verify and save credential",
             connectionSetupRequested = true,
             isChangingCredential = true,
             bearerCredential = "",
@@ -114,7 +114,7 @@ internal fun EntryStateHolder.showCredentialRotation() {
 
 internal fun EntryStateHolder.cancelCredentialRotation() {
     val state = mutableUiState.value
-    if (!state.isChangingCredential || state.isVerifying) return
+    if (!state.isChangingCredential || state.isVerifying || state.isSaving) return
     mutableUiState.value =
         state.copy(
             title = "Gateway connected",
@@ -127,20 +127,15 @@ internal fun EntryStateHolder.cancelCredentialRotation() {
 
 internal fun EntryStateHolder.updateEndpoint(value: String) {
     val state = mutableUiState.value
-    if (state.isVerifying || state.isConnected) return
+    if (state.isVerifying || state.isSaving || state.isConnected) return
     mutableUiState.value = state.copy(endpoint = value, errorCategory = null)
 }
 
 internal fun EntryStateHolder.updateBearerCredential(value: String) {
     val state = mutableUiState.value
-    if (state.isVerifying || (state.isConnected && !state.isChangingCredential)) return
+    val isPending = state.isVerifying || state.isSaving
+    if (isPending || (state.isConnected && !state.isChangingCredential)) return
     mutableUiState.value = state.copy(bearerCredential = value, errorCategory = null)
-}
-
-internal fun EntryStateHolder.updateSaveCredential(value: Boolean) {
-    val state = mutableUiState.value
-    if (state.isVerifying || (state.isConnected && !state.isChangingCredential)) return
-    mutableUiState.value = state.copy(saveCredential = value, errorCategory = null)
 }
 
 internal fun EntryStateHolder.verifyConnection() {

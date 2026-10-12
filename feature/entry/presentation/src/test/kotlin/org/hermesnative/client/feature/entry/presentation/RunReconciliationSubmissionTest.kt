@@ -148,7 +148,7 @@ class RunReconciliationSubmissionTest {
                 dispatcher.runNext()
                 assertEquals(1, dispatcher.queuedCount)
 
-                if (closeHolder) holder.close() else holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+                if (closeHolder) holder.close() else holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
                 dispatcher.drain()
 
                 assertTrue(gateway.observedRunIds.isEmpty())

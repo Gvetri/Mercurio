@@ -117,11 +117,35 @@ class EntryScreenSessionListTest {
     @Test
     fun gateway_removal_is_confirmed_before_the_existing_action_is_invoked_once() {
         val events = mutableListOf<EntryUiEvent>()
-        setConnectedListScreen(events)
+        val state =
+            mutableStateOf(
+                EntryUiState(
+                    title = "Gateway connected",
+                    supportingText = "The Gateway contract was verified successfully.",
+                    actionLabel = "Connected",
+                    isConnected = true,
+                    sessionList = SessionListUiState(),
+                ),
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = state.value,
+                    onEvent = { event ->
+                        events.add(event)
+                        if (event == EntryUiEvent.RemoveGatewayConnectionClicked) {
+                            state.value = state.value.copy(isRemoveConfirmationOpen = true)
+                        }
+                    },
+                )
+            }
+        }
 
         composeTestRule.onNodeWithContentDescription("More options").performClick()
         composeTestRule.onNodeWithText("Remove Gateway Connection").performClick()
-        assertTrue(events.isEmpty())
+
+        assertEquals(listOf(EntryUiEvent.RemoveGatewayConnectionClicked), events)
+        assertTrue(events.none { it == EntryUiEvent.ConfirmRemoveGatewayConnectionClicked })
         composeTestRule
             .onNodeWithText(
                 "Remove the saved endpoint and credential from this device. " +
@@ -130,19 +154,46 @@ class EntryScreenSessionListTest {
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Remove").assertHasClickAction().performClick()
 
-        assertEquals(listOf(EntryUiEvent.RemoveGatewayConnectionClicked), events)
+        assertEquals(
+            listOf(
+                EntryUiEvent.RemoveGatewayConnectionClicked,
+                EntryUiEvent.ConfirmRemoveGatewayConnectionClicked,
+            ),
+            events,
+        )
     }
 
     @Test
     fun gateway_removal_confirmation_cancel_changes_nothing() {
         val events = mutableListOf<EntryUiEvent>()
-        setConnectedListScreen(events)
+        val state =
+            mutableStateOf(
+                EntryUiState(
+                    title = "Gateway connected",
+                    supportingText = "The Gateway contract was verified successfully.",
+                    actionLabel = "Connected",
+                    isConnected = true,
+                    sessionList = SessionListUiState(),
+                    isRemoveConfirmationOpen = true,
+                ),
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = state.value,
+                    onEvent = { event ->
+                        events.add(event)
+                        if (event == EntryUiEvent.CancelRemoveGatewayConnectionClicked) {
+                            state.value = state.value.copy(isRemoveConfirmationOpen = false)
+                        }
+                    },
+                )
+            }
+        }
 
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.onNodeWithText("Remove Gateway Connection").performClick()
         composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
 
-        assertTrue(events.isEmpty())
+        assertEquals(listOf(EntryUiEvent.CancelRemoveGatewayConnectionClicked), events)
         composeTestRule.onNodeWithText("Remove").assertDoesNotExist()
     }
 
