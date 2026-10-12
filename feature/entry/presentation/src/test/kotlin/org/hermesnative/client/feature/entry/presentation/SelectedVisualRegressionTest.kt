@@ -1,13 +1,19 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import android.content.res.Configuration
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
@@ -16,8 +22,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-notnight")
@@ -199,6 +207,68 @@ class SelectedVisualRegressionTest {
         capture()
     }
 
+    /**
+     * The screen menu and the removal confirmation are popup windows: the paused
+     * looper cannot settle them (robolectric/robolectric#8460), so they use LEGACY
+     * and a screen capture, the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun session_list_menu_open() {
+        setContent(sessionListMenuState())
+
+        composeTestRule.onNodeWithContentDescription("More options").performClick()
+
+        captureScreen()
+    }
+
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun session_list_row_menu_open() {
+        setContent(sessionListMenuState())
+
+        composeTestRule
+            .onNodeWithContentDescription("Session actions for Release checklist")
+            .performScrollTo()
+            .performClick()
+
+        captureScreen()
+    }
+
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun gateway_removal_confirmation() {
+        setContent(sessionListMenuState().copy(isRemoveConfirmationOpen = true))
+
+        captureScreen()
+    }
+
+    private fun sessionListMenuState(): EntryUiState =
+        connectedState(
+            SessionListUiState(
+                sessions =
+                    listOf(
+                        session(
+                            id = "pinned-session",
+                            title = "Release checklist",
+                            preview = "Review the release checklist.",
+                            pinned = true,
+                        ),
+                        session(
+                            id = "follow-up-session",
+                            title = "Follow-up Session",
+                            preview = "Plan the next step.",
+                        ),
+                    ),
+            ),
+        )
+
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     fun create_session() {
         setContent(
@@ -209,7 +279,159 @@ class SelectedVisualRegressionTest {
             ),
         )
 
-        capture()
+        captureScreen()
+    }
+
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_session_empty() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession = SessionCreationUiState(),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun create_session_failure() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession =
+                        SessionCreationUiState(
+                            titleDraft = "Release checklist",
+                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun create_session_dark() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession = SessionCreationUiState(titleDraft = "Release checklist"),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    /**
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp-notnight")
+    fun create_session_two_pane() {
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    sessions =
+                        listOf(
+                            session("release-checklist", "Release checklist", "Review the release checklist."),
+                        ),
+                    createSession = SessionCreationUiState(titleDraft = "Release checklist"),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    /**
+     * The smallest deterministic constrained-height witness: at twice the font scale in a very
+     * short window, the bounded dialog text region scrolls (long draft plus the failure message)
+     * instead of pushing the Create/Cancel row out of the dialog.
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w411dp-h289dp-notnight")
+    fun create_session_short_window_long_error() {
+        val application = RuntimeEnvironment.getApplication()
+        val configuration = Configuration(application.resources.configuration)
+        configuration.fontScale = 2f
+        application.resources.updateConfiguration(configuration, application.resources.displayMetrics)
+
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession =
+                        SessionCreationUiState(
+                            titleDraft = "A deliberately long draft title that the input must keep reachable",
+                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ),
+                ),
+            ),
+        )
+
+        captureScreen()
+    }
+
+    /**
+     * The justified end state of the same witness: the bounded text region scrolls to the
+     * retained failure message while the action row stays fixed and visible.
+     * Robolectric's paused looper cannot settle the standard dialog window with its text field
+     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
+     * the same production composition the device journeys exercise.
+     */
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    @Config(qualifiers = "w411dp-h289dp-notnight")
+    fun create_session_short_window_long_error_scrolled() {
+        val application = RuntimeEnvironment.getApplication()
+        val configuration = Configuration(application.resources.configuration)
+        configuration.fontScale = 2f
+        application.resources.updateConfiguration(configuration, application.resources.displayMetrics)
+
+        setContent(
+            connectedState(
+                SessionListUiState(
+                    createSession =
+                        SessionCreationUiState(
+                            titleDraft = "A deliberately long draft title that the input must keep reachable",
+                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ),
+                ),
+            ),
+        )
+
+        composeTestRule
+            .onNodeWithText(SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+            .performScrollTo()
+        captureScreen()
     }
 
     @Test
@@ -470,5 +692,11 @@ class SelectedVisualRegressionTest {
     private fun captureDialog() {
         composeTestRule.waitForIdle()
         composeTestRule.onNode(isDialog()).captureRoboImage()
+    }
+
+    @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
+    private fun captureScreen() {
+        composeTestRule.waitForIdle()
+        captureScreenRoboImage()
     }
 }

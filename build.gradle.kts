@@ -1,3 +1,4 @@
+import io.gitlab.arturbosch.detekt.extensions.DetektExtension
 import org.hermesnative.client.buildlogic.BoundaryDoubleVerifier
 import org.hermesnative.client.buildlogic.CoverageEvidenceVerifier
 import org.hermesnative.client.buildlogic.FixtureDescriptorValidator
@@ -17,7 +18,18 @@ plugins {
     alias(libs.plugins.kotlinJvm) apply false
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.detekt) apply false
     alias(libs.plugins.roborazzi) apply false
+}
+
+subprojects {
+    plugins.withId("io.gitlab.arturbosch.detekt") {
+        extensions.configure(DetektExtension::class.java) {
+            buildUponDefaultConfig = true
+            config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+        }
+        tasks.matching { task -> task.name == "detekt" }.configureEach { enabled = false }
+    }
 }
 
 subprojects {
@@ -316,10 +328,9 @@ tasks.register("architectureRuleTests") {
     }
 }
 
-// Set by the verification tasks below and read by `qualityGate`, which fails when one of them did
-// not execute in the invocation.
 var coverageVerified = false
 var mutationVerified = false
+var detektVerified = false
 var mocksVerified = false
 var boundaryDoublesVerified = false
 
@@ -327,8 +338,6 @@ tasks.register("verifyNoMocks") {
     group = "verification"
     description = "Fails when mock frameworks or mock-based test doubles are present."
     doLast {
-        // This check reads every module build script, including this one, so each rejected framework
-        // name is assembled from fragments instead of appearing literally in the file that rejects it.
         val mockFrameworks =
             listOf("mock" + "ito", "mock" + "k", "mock" + "webserver", "easy" + "mock", "mock" + "-server")
         val forbiddenSourcePatterns =
@@ -348,8 +357,6 @@ tasks.register("verifyNoMocks") {
                 }
             }
         }
-        // A mocking framework can also enter through a dependency declaration, which no source line
-        // would show, so every module build script is scanned for the same framework names.
         val buildScripts =
             fileTree(projectDir) {
                 include("**/build.gradle.kts")
@@ -419,6 +426,58 @@ tasks.register("mutationVerify") {
         MutationEvidenceVerifier.requireCoveredByCoverage(mutations, coverages)
         mutations.forEach { logger.lifecycle("Mutation verified. ${it.describe()}") }
         mutationVerified = true
+    }
+}
+
+val detektModules =
+    listOf(
+        ":app",
+        ":feature:entry:domain",
+        ":feature:entry:application",
+        ":feature:entry:data",
+        ":feature:entry:presentation",
+        ":feature:entry:wiring",
+        ":fixtures:hermes:runner",
+    )
+
+val detektAnalysisTasks =
+    detektModules.flatMap { module -> listOf("$module:detektMain", "$module:detektTest") }
+
+tasks.register("detekt") {
+    group = "verification"
+    description = "Runs the type-resolution detekt analysis for every Kotlin module."
+    dependsOn(detektAnalysisTasks)
+}
+
+tasks.register("detektVerify") {
+    group = "verification"
+    description = "Verifies that the detekt analysis ran fail-closed and that no baseline can absorb findings."
+    dependsOn("detekt")
+    doLast {
+        requireTasksInInvocation(
+            label = "Detekt verification",
+            requiredTasks = detektAnalysisTasks,
+            invocationTasks = gradle.taskGraph.allTasks.map { task -> task.path }.toSet(),
+        )
+        val disabled =
+            gradle.taskGraph.allTasks.filter { task -> task.path in detektAnalysisTasks.toSet() && !task.enabled }
+        check(disabled.isEmpty()) {
+            "Detekt verification requires its analysis tasks to be enabled in this invocation: " +
+                "${disabled.map { task -> task.path }}"
+        }
+        val baselines =
+            file("config/detekt").listFiles().orEmpty()
+                .filter { candidate ->
+                    candidate.isFile && candidate.name.startsWith("baseline") && candidate.name.endsWith(".xml")
+                }
+                .map { candidate -> candidate.name }
+                .sorted()
+        check(baselines.isEmpty()) {
+            "Detekt verification found baseline files that would absorb findings: $baselines. " +
+                "A finding must be fixed, not baselined."
+        }
+        logger.lifecycle("Detekt verified: no baseline exists, so every reported finding fails the analysis.")
+        detektVerified = true
     }
 }
 
@@ -586,6 +645,8 @@ tasks.register("qualityGate") {
         "verifyDeterministicFakes",
         "coverageVerify",
         "mutationVerify",
+        "detekt",
+        "detektVerify",
         "fixtureDescriptorTests",
         "fixtureLifecycleTests",
         "fixtureContractTests",
@@ -602,6 +663,9 @@ tasks.register("qualityGate") {
         }
         check(mutationVerified) {
             "qualityGate requires mutationVerify to execute in this invocation."
+        }
+        check(detektVerified) {
+            "qualityGate requires detektVerify to execute in this invocation."
         }
         check(mocksVerified) {
             "qualityGate requires verifyNoMocks to execute in this invocation."

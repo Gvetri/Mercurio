@@ -22,6 +22,7 @@ must report `skipped`, and any other outcome fails the aggregate; see
 | --- | --- | --- |
 | `formatting` | `formatCheck` | A Kotlin file is not formatted |
 | `static-analysis` | `:app:lintDebug` | Android lint reports an error |
+| `detekt` | `detekt detektVerify` | detekt reports a finding, a baseline file could absorb it, or the analysis tasks did not execute |
 | `unit-tests` | `verifyRequiredUnitTests` | A declared unit-test scope is missing, empty, has zero executed tests, or contains a skipped test |
 | `fixture-descriptor` | `fixtureDescriptorTests verifyFixtureDescriptor` | The pinned fixture provenance or its descriptor contract changed |
 | `fixture-lifecycle` | `fixtureLifecycleTests journeyScenarioTests` | An executed fixture lifecycle or journey-scenario test fails, or the runner task did not execute |
@@ -30,7 +31,7 @@ must report `skipped`, and any other outcome fails the aggregate; see
 | `architecture-check` | `architectureCheck architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, mock, or boundary-double rule is violated |
 | `compose-jvm-tests` | `:feature:entry:presentation:verifyRoborazziBaselineManifest :feature:entry:presentation:verifyRoborazziDebug` | A pinned Compose surface drifts from its approved baseline, or the baseline manifest and the snapshots disagree |
 | `coverage-mutation` | `coverageVerify mutationVerify` | Coverage or mutation evidence is missing, empty, stale, narrowed, below a declared threshold, or outside the declared production scope |
-| `conformance` | `.github/scripts/verify-repository-conformance.py` and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
+| `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
 | `commit-message` | `.github/scripts/verify-conventional-commits.py` | The squash-merge title or a commit of the pull request is not a Conventional Commit, or the API answer is unavailable, empty, or truncated |
 | `draft-validation` | `formatCheck :app:lintDebug` | The head of a draft pull request is unformatted or fails Android lint |
 | `fork-guard` | `.github/workflows/quality-gate.yml` | Never on its own: it reports the handling of an external-fork pull request, and the aggregate requires it for every pull request, then fails closed for an external fork |
@@ -43,8 +44,11 @@ declaration. The workflow contracts are self-tested in
 `buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/QualityGateConfigurationTest.kt`, the
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,
 and `ReportEvidenceTest`, and the fail-closed behaviour of the real tasks in
-`QualityVerificationFailClosedTest`. All of these classes run in the `architecture-check` job, so a
-rule only exists if a check enforces it and CI executes that check.
+`QualityVerificationFailClosedTest`. The documentation check is covered by
+`.github/scripts/tests/test_public_documentation.py`, and the published-release artifact check by
+`.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. All of
+these classes run in the `architecture-check` job, so a rule only exists if a check enforces it and
+CI executes that check.
 
 ## Declared scopes and thresholds
 
@@ -55,7 +59,9 @@ measured when its scope was declared.
 
 The Gradle wiring is declared once as well. `buildSrc/src/main/kotlin/hermes-quality-gate.gradle.kts`
 is a convention plugin: each modified module applies `id("hermes-quality-gate")` and keeps no Kover or
-PIT block of its own. The plugin reads the module scope from `QualityPolicy` and fails on a module that
+PIT block of its own. `buildSrc` resolves the Kover and PIT plugin versions from the main build's
+version catalog and keeps both plugins on its build-logic classpath, so each version has one
+declaration. The plugin reads the module scope from `QualityPolicy` and fails on a module that
 has no declared scope, so no module can run the tools with thresholds of its own. It also gives each
 test task and the PIT test minion the `fixture.repositoryRoot` property that the fixture-driven tests
 resolve their fixtures with.
@@ -63,7 +69,8 @@ resolve their fixtures with.
 ### Coverage
 
 Kover measures the declared Kotlin/JVM production modules. Presentation is out of the covered
-scope: it is a Compose surface whose behavior is pinned by the `compose-jvm-tests` baselines, and
+scope: it is a Compose surface whose behavior is pinned by the `compose-jvm-tests` baselines —
+which render the committed synthetic state matrix, never a live Gateway — and
 the wiring module is a thin Android bridge covered by instrumentation.
 
 | Module | Line coverage | Branch coverage | Reported classes |
@@ -125,6 +132,49 @@ The boundary list is declared, not discovered: adding a datasource or repository
 to `QualityPolicy.boundaryDoubles`, and the verification then fails until that boundary has a
 production declaration and a deterministic double in the repository. A port that is never declared
 keeps no double check, so a new port belongs in the same change as its declaration.
+
+### Detekt
+
+detekt is pinned in `gradle/libs.versions.toml` and every Kotlin module applies it. The root build
+script declares the strict policy once: `config/detekt/detekt.yml` is layered on detekt's default
+config (`buildUponDefaultConfig`), `build.maxIssues: 0` fails the analysis on any reported finding,
+and the rules the gate relies on are enabled explicitly, so a detekt upgrade cannot quietly turn one
+of them off — `ReturnCount`, `ElseCaseInsteadOfExhaustiveWhen`, `CommentOverPrivateFunction`, and
+`CommentOverPrivateProperty`. The configuration file carries no comments; its exemptions are
+deliberate, each with its reason here:
+
+- `FunctionNaming` keeps `functionPattern: '[a-zA-Z][a-zA-Z0-9]*'`, because Compose functions are
+  PascalCase by convention and the pinned rule cannot exempt annotated functions, so the pattern
+  admits both casings; the rule still reports a name that does not start with a letter or that
+  contains a non-alphanumeric character.
+- `ReturnCount` keeps `excludeGuardClauses: false`: an early `return` on a guard is still an early
+  return, so guard clauses count toward the limit.
+- `IteratorNotThrowingNoSuchElementException` excludes test sources only, because a blocking test
+  double deliberately never exhausts its stream, so its `next` is unreachable after `hasNext`
+  returns false; the iterator contract stays enforced in production sources.
+- `InjectDispatcher` excludes test sources only, because a test chooses the dispatcher it drives the
+  subject with and dispatcher injection is a production-wiring concern; the rule stays enforced in
+  production sources.
+
+`./gradlew detekt` runs the type-resolution tasks (`detektMain` and `detektTest` for every module),
+so a rule that needs binding executes instead of silently skipping. The plain, non-type-resolving
+per-module tasks exist but stay disabled, and the aggregate never runs them.
+
+`./gradlew detektVerify` verifies the evidence:
+
+- the analysis tasks must execute and be enabled in this invocation, so a run that skips or disables
+  them cannot claim a verified analysis;
+- no baseline file may exist under `config/detekt` — the committed `baseline.xml` and the
+  source-set-specific `baseline-*.xml` files are gone, so a finding can never be absorbed silently
+  again.
+
+A finding must be fixed, not baselined: there is no committed baseline, and `maxIssues: 0` fails the
+build on every reported finding.
+
+The detekt contracts are self-tested as well: `QualityGateConfigurationTest` pins the workflow job,
+the declaration, and the configuration, and `QualityVerificationFailClosedTest` runs the real tasks
+against a deliberate violation of each of the four rules, a clean tree, a committed baseline file,
+and a skipped detekt verification.
 
 ## Changing a declared value
 

@@ -1,0 +1,45 @@
+appId: org.hermesnative.client
+name: pending-creation
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "No Sessions on this Gateway"
+    timeout: 30000
+- tapOn: "Create Session"
+- assertVisible: "Title (optional)"
+- tapOn: "Title (optional)"
+- inputText: "Pending draft"
+- hideKeyboard
+- takeScreenshot: pending-creation-01-draft
+- tapOn: "Create"
+- assertVisible: "Creating Session…"
+- takeScreenshot: pending-creation-02-pending
+- tapOn: "Create"
+- back
+- tapOn:
+    point: "6%,40%"
+- assertVisible: "Creating Session…"
+- takeScreenshot: pending-creation-03-after-duplicate-back-outside
+- extendedWaitUntil:
+    visible: "Pending draft"
+    timeout: 45000
+- assertVisible: "Back to Sessions"
+- takeScreenshot: pending-creation-04-result-open
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertNotVisible: "Creating Session…"
+- assertNotVisible: "Title (optional)"
+- assertVisible: "Back to Sessions"
+- takeScreenshot: pending-creation-05-result-settled

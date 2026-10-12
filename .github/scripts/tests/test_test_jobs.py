@@ -367,10 +367,10 @@ class TestJobs(unittest.TestCase):
             self.assertIn("All deterministic journeys passed.", result.stdout)
             self.assertEqual("2", (count_dir / "session-lifecycle").read_text().strip())
             self.assertEqual("1", (count_dir / "connection").read_text().strip())
-            self.assertEqual(17, sum(int((count_dir / name).read_text().strip()) for name in sorted(p.name for p in count_dir.iterdir())))
+            self.assertEqual(18, sum(int((count_dir / name).read_text().strip()) for name in sorted(p.name for p in count_dir.iterdir())))
             curl_calls = (workspace / "curl.calls").read_text().splitlines()
-            self.assertEqual(17, len([call for call in curl_calls if "/health" in call]))
-            self.assertEqual(17, len([call for call in curl_calls if "/v1/capabilities" in call]))
+            self.assertEqual(18, len([call for call in curl_calls if "/health" in call]))
+            self.assertEqual(18, len([call for call in curl_calls if "/v1/capabilities" in call]))
             evidence_dir = workspace / "artifacts/journey-evidence"
             self.assertIn("Element not found: Pin Session", (evidence_dir / "session-lifecycle-maestro-attempt1.log").read_text())
             self.assertIn("COMPLETED", (evidence_dir / "session-lifecycle-maestro.log").read_text())
@@ -398,8 +398,8 @@ class TestJobs(unittest.TestCase):
             self.assertEqual("2", (count_dir / "session-lifecycle").read_text().strip())
             self.assertFalse((count_dir / "pagination-search").exists())
             curl_calls = (workspace / "curl.calls").read_text().splitlines()
-            self.assertEqual(5, len([call for call in curl_calls if "/health" in call]))
-            self.assertEqual(5, len([call for call in curl_calls if "/v1/capabilities" in call]))
+            self.assertEqual(6, len([call for call in curl_calls if "/health" in call]))
+            self.assertEqual(6, len([call for call in curl_calls if "/v1/capabilities" in call]))
             evidence_dir = workspace / "artifacts/journey-evidence"
             self.assertIn("Element not found: Pin Session", (evidence_dir / "session-lifecycle-maestro-attempt1.log").read_text())
             self.assertIn("Element not found: Pin Session", (evidence_dir / "session-lifecycle-maestro.log").read_text())
@@ -597,14 +597,13 @@ redact_file "$runner_output" || status=$?
         )[1].split("        run: |\n", 1)[1]
         script = textwrap.dedent(block)
         required = [
-            "FORMATTING", "STATIC_ANALYSIS", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
             "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST",
             "CONFORMANCE", "COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD",
             "API24_INSTRUMENTATION", "MAESTRO_JOURNEYS",
         ]
         for event in ("pull_request", "push", "schedule", "workflow_dispatch"):
-            # The outcome the aggregate accepts for each declared check on this event.
             expected = {job: "success" for job in required}
             if event == "pull_request":
                 expected["API24_INSTRUMENTATION"] = "skipped"
@@ -627,7 +626,6 @@ redact_file "$runner_output" || status=$?
             for job in required:
                 for outcome in ("success", "failure", "cancelled", "skipped", ""):
                     if outcome == expected[job]:
-                        # The outcome this event accepts is the accepted one, not a drift.
                         continue
                     with self.subTest(event=event, job=job, outcome=outcome):
                         failed_env = {**env, f"{job}_RESULT": outcome}
@@ -641,7 +639,7 @@ redact_file "$runner_output" || status=$?
         )[1].split("        run: |\n", 1)[1]
         script = textwrap.dedent(block)
         required = [
-            "FORMATTING", "STATIC_ANALYSIS", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
             "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
         ]
@@ -673,7 +671,6 @@ redact_file "$runner_output" || status=$?
                 result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
                                         capture_output=True, text=True, timeout=10)
                 if name == "external fork":
-                    # A head that never ran the complete gate must not hold a passing status.
                     self.assertNotEqual(0, result.returncode)
                     self.assertIn("the complete gate did not run", result.stderr)
                 else:
@@ -709,7 +706,7 @@ redact_file "$runner_output" || status=$?
         )[1].split("        run: |\n", 1)[1]
         script = textwrap.dedent(block)
         core = [
-            "FORMATTING", "STATIC_ANALYSIS", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
             "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
         ]
@@ -731,8 +728,6 @@ redact_file "$runner_output" || status=$?
             return subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
                                   capture_output=True, text=True, timeout=10)
 
-        # A labeled ready pull request passes only when both emulator suites succeeded; the Maestro
-        # run follows the API 24 run, so a skipped, failed, or cancelled suite fails the aggregate.
         for labels in ('["run-maestro"]', '["ready-for-agent","run-maestro"]'):
             with self.subTest(labels=labels):
                 labeled = {**base, "EVENT_LABELS": labels}
@@ -741,8 +736,6 @@ redact_file "$runner_output" || status=$?
                     for outcome in ("skipped", "failure", "cancelled", ""):
                         with self.subTest(labels=labels, job=job, outcome=outcome):
                             self.assertNotEqual(0, run({**labeled, job: outcome}).returncode)
-        # A label on a draft starts nothing, a lookalike label never matches, and an unlabeled ready
-        # pull request keeps both suites skipped.
         draft = {**base, "EVENT_LABELS": '["run-maestro"]', "EVENT_DRAFT": "true",
                  "COMMIT_MESSAGE_RESULT": "skipped",
                  "API24_INSTRUMENTATION_RESULT": "skipped", "MAESTRO_JOURNEYS_RESULT": "skipped",

@@ -52,6 +52,11 @@ If an emulator is available, also run the app instrumentation scope:
 ./gradlew :app:verifyConnectedAndroidTests
 ```
 
+## Coding guidelines
+
+The repository's coding rules — including the comments policy — and what enforces each one live in
+[Coding guidelines](docs/coding-guidelines.md).
+
 ## Branch and pull request workflow
 
 `main` is protected, so create one issue-scoped branch per change, named
@@ -106,7 +111,16 @@ Markdown rendering contracts.
 | `empty_session_list` | Session list | Valid empty Gateway response |
 | `populated_session_list` | Session list | Pinned and unpinned server metadata |
 | `session_list_unavailable` | Session list | Stale data, unavailable state, and retry |
+| `session_list_menu_open` | Session list | Screen administration menu open over the list |
+| `session_list_row_menu_open` | Session list | Row action menu open over the list |
+| `gateway_removal_confirmation` | Session list | D-02 Gateway-removal confirmation dialog |
 | `create_session` | Session list | In-memory title draft before confirmation |
+| `create_session_empty` | Session list | Blank optional title with the Untitled Session fallback |
+| `create_session_failure` | Session list | Confirmed creation failure with the retained title and explicit retry |
+| `create_session_dark` | Session list | The same dialog on the dark token set |
+| `create_session_two_pane` | Session list | The dialog beside the populated list in the two-pane layout |
+| `create_session_short_window_long_error` | Session list | Constrained-height witness at twice the font scale (long draft, actions reachable) |
+| `create_session_short_window_long_error_scrolled` | Session list | The same witness scrolled to the retained failure message |
 | `rename_session_confirmation` | Session list | Inline modal-equivalent rename confirmation mode |
 | `delete_session_confirmation` | Session list | Inline modal-equivalent delete confirmation mode |
 | `empty_session_detail` | Session detail | New Session with no history |
@@ -142,18 +156,25 @@ token set.
 | `markdown_long_content_light` | `w411dp-h891dp-notnight` | Long multi-block response that scrolls natively instead of truncating |
 | `markdown_long_content_dark` | `w411dp-h891dp-night` | The same state on the dark token set |
 
-The Session rename and delete confirmation modes are inline modal-equivalent
-modes in the existing Compose state model. The Gateway removal confirmation is
-a standard `AlertDialog` captured over the retained Sessions surface. Neither
-changes production behavior only to create a screenshot.
+The Create Session surface is now the standard Material 3 `AlertDialog`: the
+`create_session*` states capture that real dialog window over the Session list (and beside
+it in the two-pane layout). The Gateway-removal confirmation
+(`gateway_removal_confirmation`, and the `connection_remove_confirmation*` states over the
+retained Sessions surface) uses the same stock `AlertDialog` surface. Rename and Delete
+confirmation stay inline: they render as a conditional mode in the existing Compose state
+model and have no dialog overlay, so they stay covered without changing production behavior
+only to create a screenshot.
 
-The matrix uses Robolectric SDK 35, native graphics mode, and synthetic
-in-memory values. Each capture declares its viewport qualifier; the dark, wide,
-and short-window captures select their token set explicitly, so each capture
-proves one designed theme instead of the ambient system setting. All three
-classes exclude timestamps, live Gateway/provider data, credentials, animated
-loading states, Activity lifecycle behavior, and other system-dependent
-rendering. Behavior and semantics tests remain in their existing test classes.
+The matrix uses Robolectric SDK 35, native graphics mode, and synthetic in-memory values.
+Each capture declares its viewport qualifier: the default is `w411dp-h891dp-notnight`; the
+dialog variants select `w411dp-h891dp-night` for the dark capture, `w1000dp-h800dp-notnight`
+for the two-pane capture, and `w411dp-h289dp-notnight` for the constrained-height witness,
+which also sets a 2x font scale. The shell, markdown and entry contract classes select their
+light or dark token set explicitly, so each capture proves one designed window and theme
+configuration instead of the ambient system setting. All three classes exclude timestamps,
+live Gateway/provider data, credentials, animated loading states, Activity lifecycle
+behavior, and other system-dependent rendering. Behavior and semantics tests remain in their
+existing test classes.
 
 The pull-request Compose job first runs
 `verifyRoborazziBaselineManifest`. It reports `Missing baselines` and

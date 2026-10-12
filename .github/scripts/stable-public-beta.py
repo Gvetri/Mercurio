@@ -33,7 +33,6 @@ def sha(value):
 
 
 def safe_text(value):
-    # Public notes never interpolate raw evidence, commits, paths, markup, or URLs.
     require(isinstance(value, str) and TEXT.fullmatch(value) and value.strip() == value,
             "Compatibility and change notes must be reviewed single-line public text")
     return value
@@ -53,8 +52,6 @@ def event_context():
             and os.environ.get("GITHUB_REF") == "refs/heads/main"
             and os.environ.get("GITHUB_REF_PROTECTED") == "true"
             and os.environ.get("GITHUB_EVENT_NAME") == "milestone", "Untrusted Stable Public Beta context")
-    # Review history is run-scoped, not attempt-scoped. A new closure creates a
-    # new run and environment approval; reruns must not reuse a previous approval.
     require(os.environ.get("GITHUB_RUN_ATTEMPT") == "1",
             "Promotion reruns require a new milestone closure and human approval")
     head = sha(os.environ.get("GITHUB_SHA"))
@@ -370,7 +367,6 @@ def publish(declaration_path, smoke_path, certificate):
         body = publication_body(declaration, version, source, metadata, file_hash(smoke_path))
         notes = Path(temporary) / "notes.md"
         notes.write_text(body)
-        # Nothing may write until the complete read-only preflight and this run's fresh approval pass.
         NIGHTLY["gh_release"](["create", tag, "--target", source, "--title", title,
                                "--draft", "--prerelease", "--latest=false", "--notes-file", str(notes)])
         release = read_release(tag, source, title, body, True)
@@ -391,7 +387,6 @@ def publish(declaration_path, smoke_path, certificate):
         require({entry.name for entry in downloaded.iterdir()} == set(NIGHTLY["ASSETS"])
                 and all(file_hash(downloaded / name) == file_hash(staging / name) for name in NIGHTLY["ASSETS"]),
                 "Uploaded stable asset checksum mismatch")
-        # The downloaded APK is verified again, not just its accompanying JSON and size.
         validation = POLICY["verify_validation_run"](metadata["validation_run_id"])
         verify_assets(downloaded, release, certificate, validation, metadata["version_code"],
                       metadata["signing_run_id"], metadata["signing_run_attempt"])

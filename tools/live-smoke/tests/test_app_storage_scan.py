@@ -83,7 +83,6 @@ class AppStorageScanTests(unittest.TestCase):
             self.assertTrue(surface["scanned"])
             self.assertGreaterEqual(surface["files"], 1)
             self.assertTrue(gate.record["redaction"]["clean"])
-            # The pull is addressed by path only: no credential value in argv.
             for call in runner.calls:
                 self.assertNotIn(PROVIDER_KEY, " ".join(call))
 

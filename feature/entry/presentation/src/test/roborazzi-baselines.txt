@@ -1,4 +1,3 @@
-# Relative paths for the approved visual states.
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.connection_form.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.connection_form_dark.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.connection_error.png
@@ -17,7 +16,16 @@ org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.empty_session_list.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.populated_session_list.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_list_unavailable.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_list_menu_open.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_list_row_menu_open.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.gateway_removal_confirmation.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_empty.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_failure.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_dark.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_two_pane.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_short_window_long_error.png
+org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.create_session_short_window_long_error_scrolled.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.rename_session_confirmation.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.delete_session_confirmation.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.empty_session_detail.png
@@ -25,14 +33,10 @@ org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_detail_overflowing_transcript.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_detail_active_run.png
 org.hermesnative.client.feature.entry.presentation.SelectedVisualRegressionTest.session_detail_error.png
-# Shell contract: one Session/conversation state in intentional light/dark
-# themes and phone single-pane/two-pane window contracts.
 org.hermesnative.client.feature.entry.presentation.SelectedShellVisualRegressionTest.phone_single_pane_light.png
 org.hermesnative.client.feature.entry.presentation.SelectedShellVisualRegressionTest.phone_single_pane_dark.png
 org.hermesnative.client.feature.entry.presentation.SelectedShellVisualRegressionTest.two_pane_light.png
 org.hermesnative.client.feature.entry.presentation.SelectedShellVisualRegressionTest.two_pane_dark.png
-# Markdown contract: fenced code blocks and long content in intentional
-# light/dark themes on the phone viewport.
 org.hermesnative.client.feature.entry.presentation.SelectedMarkdownVisualRegressionTest.markdown_code_block_light.png
 org.hermesnative.client.feature.entry.presentation.SelectedMarkdownVisualRegressionTest.markdown_code_block_dark.png
 org.hermesnative.client.feature.entry.presentation.SelectedMarkdownVisualRegressionTest.markdown_long_content_light.png

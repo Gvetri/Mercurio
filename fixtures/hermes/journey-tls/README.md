@@ -15,6 +15,9 @@ Both files are synthetic test material:
 - The private key and keystore password (`journey-fixture`) are test-only and
   must never protect production traffic.
 - No production client, Gateway, or provider ever trusts this CA.
+- The CA carries `basicConstraints` only (`BC:c`), so a client enforcing the
+  strict X.509 verification profile (Python 3.13+) must relax it for this test
+  material.
 - Rotating or regenerating these assets changes the journey trust boundary
   and requires re-running the journey suite plus compatibility review.
 

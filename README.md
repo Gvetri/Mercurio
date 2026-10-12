@@ -4,6 +4,10 @@ Hermes Native Client is an independent Android application built with Kotlin and
 
 This repository does not embed a local Hermes runtime, agent execution engine, desktop web interface, Electron application, or WebView wrapper. It provides one explicit HTTPS Gateway connection flow that verifies the Gateway and then saves the bearer credential with authenticated, device-local persistence by default, followed by a Gateway-derived Session list with filtering of loaded titles and previews and server-backed pagination, explicit in-memory Session creation, and read-only Session history entry with an in-memory message composer and explicit Gateway Run submission. Drafts remain memory-only per Session, Send is disabled while a submission or active Run exists, and failed submissions preserve the draft for retry.
 
+## Install and use
+
+The [user guide](docs/user-guide.md) documents the Android 8.0 or later baseline, how to download and install a signed APK from a Stable Public Beta prerelease, the Gateway prerequisites, adding one Gateway Connection, the supported Session and Run flow, the privacy boundary, Local diagnostics, and the recovery step for every failure the client reports. [Stable Public Beta release artifacts](docs/release-artifacts.md) records the published artifact package, the tested Hermes revision, and the verification a release passes before it is announced. A Nightly is a development snapshot, not a stable release; the user guide states the difference, and the process documents are [Development Nightly releases](docs/nightly-releases.md) and [the milestone-based Stable Public Beta process](docs/stable-public-beta.md).
+
 ## Current baseline
 
 - Android phones and tablets.

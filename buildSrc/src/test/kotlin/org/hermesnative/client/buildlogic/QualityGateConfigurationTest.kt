@@ -32,6 +32,16 @@ class QualityGateConfigurationTest {
         }
     }
 
+    private fun runPythonSuite(relativePath: String) {
+        assumePosixWrapperSupport()
+        val process = ProcessBuilder("python3", repositoryRoot.resolve(relativePath).absolutePath)
+            .directory(repositoryRoot)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(output, 0, process.waitFor())
+    }
+
     @Test
     fun test_job_failures_preserve_gating_reporting_and_redaction() {
         assumePosixWrapperSupport()
@@ -78,6 +88,36 @@ class QualityGateConfigurationTest {
                 .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(output, 0, process.waitFor())
+    }
+
+    @Test
+    fun published_documentation_is_verified_for_links_safety_and_scope() {
+        runPythonSuite(".github/scripts/tests/test_public_documentation.py")
+    }
+
+    @Test
+    fun published_release_artifacts_are_verified_before_announcement() {
+        runPythonSuite(".github/scripts/tests/test_release_artifacts.py")
+    }
+
+    @Test
+    fun the_conformance_job_verifies_the_published_documentation() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val conformance = workflow.substringAfter("  conformance:\n").substringBefore("  api24_instrumentation:\n")
+
+        assertTrue(
+            "The conformance job must verify the published documentation.",
+            conformance.contains("run: python3 .github/scripts/verify-public-documentation.py"),
+        )
+        assertTrue("The published user guide must exist.", repositoryRoot.resolve("docs/user-guide.md").isFile)
+        assertTrue(
+            "The published release artifact document must exist.",
+            repositoryRoot.resolve("docs/release-artifacts.md").isFile,
+        )
+        assertTrue(
+            "The pre-announcement artifact check must exist.",
+            repositoryRoot.resolve(".github/scripts/verify-release-artifacts.py").isFile,
+        )
     }
 
     @Test
@@ -991,6 +1031,98 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun detekt_analyzes_every_module_with_type_resolution_and_fails_directly() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val requiredChecks = repositoryRoot.resolve(".github/quality-gate/required-checks.txt").readLines()
+        val buildScript = repositoryRoot.resolve("build.gradle.kts").readText()
+        val settings = repositoryRoot.resolve("settings.gradle.kts").readText()
+        val catalog = repositoryRoot.resolve("gradle/libs.versions.toml").readText()
+        val configuration = repositoryRoot.resolve("config/detekt/detekt.yml").readText()
+        val baseline = repositoryRoot.resolve("config/detekt/baseline.xml")
+        val ledger = repositoryRoot.resolve("config/detekt/baseline-ledger.txt")
+        val documentation = repositoryRoot.resolve("docs/quality-gates.md").readText()
+        val detektJob = workflow.substringAfter("  detekt:\n").substringBefore("  unit_tests:\n")
+
+        assertTrue("The workflow must define a detekt job.", workflow.contains("  detekt:\n    name: detekt\n"))
+        assertTrue(
+            "The detekt job must run for a ready in-repository pull request and every non-pull-request run.",
+            detektJob.contains(
+                "    if: \${{ always() && (github.event_name != 'pull_request' || " +
+                    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}",
+            ),
+        )
+        assertTrue(
+            "The detekt job must run the aggregate analysis and its verification.",
+            detektJob.contains("./gradlew detekt detektVerify --no-daemon --console=plain"),
+        )
+        assertTrue(
+            "The detekt job must not fetch a base reference: the baseline ratchet is gone.",
+            !detektJob.contains("git fetch"),
+        )
+        assertTrue(
+            "The detekt job must pin setup-java to the repository-approved commit.",
+            detektJob.contains("actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3"),
+        )
+        assertTrue(
+            "The detekt job must pin setup-gradle to the repository-approved commit.",
+            detektJob.contains("gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a"),
+        )
+        assertTrue("The aggregate declaration must include detekt.", requiredChecks.contains("detekt"))
+        assertTrue("The aggregate gate must require the detekt job.", workflow.contains("      - detekt\n"))
+        assertTrue(
+            "The aggregate gate must receive the detekt result.",
+            workflow.contains("DETEKT_RESULT: \${{ needs.detekt.result }}"),
+        )
+        assertTrue(
+            "The aggregate gate must fail on a non-successful detekt result.",
+            workflow.contains("\"\$DETEKT_RESULT\" \\"),
+        )
+        listOf("detekt", "detektVerify").forEach { task ->
+            assertTrue("The local gate must depend on $task.", buildScript.contains("\"$task\","))
+        }
+        assertTrue(
+            "The local gate must require detekt verification to execute.",
+            buildScript.contains("qualityGate requires detektVerify to execute in this invocation."),
+        )
+        assertTrue(
+            "The gate must analyze through the type-resolution tasks.",
+            buildScript.contains(":detektMain") && buildScript.contains(":detektTest"),
+        )
+        assertTrue(
+            "The catalog must pin the detekt plugin.",
+            catalog.contains("detekt = \"1.23.8\"") && catalog.contains("io.gitlab.arturbosch.detekt"),
+        )
+        Regex("include\\(\"([^\"]+)\"\\)").findAll(settings).map { match -> match.groupValues[1] }.toList().forEach { module ->
+            val moduleScript = repositoryRoot.resolve("${module.removePrefix(":").replace(':', '/')}/build.gradle.kts").readText()
+            assertTrue("Every Kotlin module must apply the pinned detekt plugin: $module", moduleScript.contains("libs.plugins.detekt"))
+        }
+        listOf(
+            "build:",
+            "maxIssues: 0",
+            "ReturnCount:",
+            "excludeGuardClauses: false",
+            "ElseCaseInsteadOfExhaustiveWhen:",
+            "CommentOverPrivateFunction:",
+            "CommentOverPrivateProperty:",
+        ).forEach { declaration ->
+            assertTrue("The detekt configuration must declare $declaration.", configuration.contains(declaration))
+        }
+        assertTrue("The burnt-down baseline must not be part of the repository.", !baseline.exists())
+        assertTrue("The baseline ledger must not be part of the repository.", !ledger.exists())
+        assertTrue(
+            "The build logic must not wire a baseline into the analysis.",
+            !buildScript.contains("baseline = rootProject.file"),
+        )
+        assertTrue(
+            "The verification must reject a baseline that would absorb findings.",
+            buildScript.contains("found baseline files that would absorb findings"),
+        )
+        listOf("detekt", "detektVerify").forEach { entry ->
+            assertTrue("Documentation must name the $entry entry point.", documentation.contains(entry))
+        }
+    }
+
+    @Test
     fun checkout_steps_are_immutable_and_disable_persisted_credentials() {
         val lines = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readLines()
         val checkoutStepIndices = lines.indices.filter { index ->
@@ -998,7 +1130,7 @@ class QualityGateConfigurationTest {
         }
         val immutableReference = Regex("[0-9a-fA-F]{40}")
 
-        assertEquals("The workflow must keep all seventeen checkout steps explicit.", 17, checkoutStepIndices.size)
+        assertEquals("The workflow must keep all eighteen checkout steps explicit.", 18, checkoutStepIndices.size)
         checkoutStepIndices.forEach { index ->
             val reference = lines[index].trim().substringAfter("actions/checkout@")
             assertTrue(

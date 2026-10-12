@@ -1,0 +1,30 @@
+build:
+  maxIssues: 0
+
+naming:
+  FunctionNaming:
+    active: true
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+style:
+  ReturnCount:
+    active: true
+    excludeGuardClauses: false
+
+potential-bugs:
+  ElseCaseInsteadOfExhaustiveWhen:
+    active: true
+  IteratorNotThrowingNoSuchElementException:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**']
+
+coroutines:
+  InjectDispatcher:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**']
+
+comments:
+  CommentOverPrivateFunction:
+    active: true
+  CommentOverPrivateProperty:
+    active: true
