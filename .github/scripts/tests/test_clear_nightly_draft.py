@@ -22,7 +22,18 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.release = {
             "id": 71, "tag_name": TAG, "target_commitish": SOURCE,
             "draft": True, "published_at": None, "prerelease": True, "name": "Nightly",
-            "assets": [{"id": 10, "name": "hermes-native-client.apk", "state": "uploaded"}],
+            "body": (
+                "Development snapshot for testing. It may contain regressions and is not a stable-support promise.\n\n"
+                "This is a **Nightly** prerelease, not a Stable Public Beta release.\n\n"
+                f"- Source commit: `{SOURCE}`\n- Android version code: `7002`\n"
+                f"- Android version name: `nightly-7002-{SOURCE[:12]}`\n- Device architecture: ARM64\n"
+                f"- APK SHA-256: `{'b' * 64}`\n"
+                f"- Signing certificate SHA-256: `{(ROOT / '.github/release-certificate.sha256').read_text().strip()}`\n"
+                "- Deterministic validation: https://github.com/Gvetri/hermes-native-client/actions/runs/123 (attempt 1)\n"
+            ),
+            "assets": [{"id": 10, "name": "hermes-native-client.apk", "state": "uploaded",
+                        "uploader": {"login": "github-actions[bot]", "id": 41898282},
+                        "digest": "sha256:" + "b" * 64}],
         }
         self.tag = {"ref": f"refs/tags/{TAG}", "object": {"type": "commit", "sha": SOURCE}}
         self.routes = {
@@ -86,6 +97,49 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertGreaterEqual(self.api.requests.count(self.release_path), 2)
         self.assertEqual(unrelated, self.routes[f"{PREFIX}/releases/72"])
         self.assertEqual([], self.api.posts)
+
+    def test_refuses_foreign_uploader_without_deletion(self):
+        self.enable_deletion()
+        self.release["assets"][0]["uploader"] = {"login": "someone", "id": 123}
+        self.assert_refusal("Asset uploader")
+
+    def test_refuses_missing_or_unreadable_uploader_without_deletion(self):
+        self.enable_deletion()
+        asset = self.release["assets"][0]
+        for uploader in (None, {}, "github-actions[bot]", {"login": "github-actions[bot]"},
+                         {"login": "github-actions[bot]", "id": 123}):
+            with self.subTest(uploader=uploader):
+                asset["uploader"] = uploader
+                self.assert_refusal("Asset uploader")
+                self.api.requests.clear()
+        del asset["uploader"]
+        self.assert_refusal("Asset uploader")
+
+    def test_refuses_apk_digest_disagreeing_with_notes_without_deletion(self):
+        self.enable_deletion()
+        self.release["assets"][0]["digest"] = "sha256:" + "c" * 64
+        self.assert_refusal("APK digest")
+
+    def test_refuses_missing_or_malformed_notes_without_deletion(self):
+        self.enable_deletion()
+        for body in (None, "", "operator notes", self.release["body"].replace("b" * 64, "not-a-digest")):
+            with self.subTest(body=body):
+                self.release["body"] = body
+                self.assert_refusal("Publisher notes")
+                self.api.requests.clear()
+        del self.release["body"]
+        self.assert_refusal("Publisher notes")
+
+    def test_refuses_notes_contradicting_identity_without_deletion(self):
+        self.enable_deletion()
+        body = self.release["body"]
+        for original, changed in ((SOURCE, "d" * 40), ("`7002`", "`8001`"),
+                                  ("nightly-7002-", "nightly-8001-"),
+                                  ((ROOT / ".github/release-certificate.sha256").read_text().strip(), "e" * 64)):
+            with self.subTest(original=original):
+                self.release["body"] = body.replace(original, changed)
+                self.assert_refusal("Publisher notes")
+                self.api.requests.clear()
 
     def test_refuses_workflow_execution_without_remote_access(self):
         self.environment["GITHUB_ACTIONS"] = "true"

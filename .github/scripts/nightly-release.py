@@ -132,8 +132,11 @@ def report_validation():
         "unit_tests": "unit-tests", "compose_test": "compose-jvm-tests",
         "api24_instrumentation": "api24-instrumentation", "maestro_journeys": "maestro-journeys",
     }
+    required = (POLICY["ROOT"] / ".github/quality-gate/required-checks.txt").read_text().split()
+    names = {**{key: key.replace("_", "-") for key in required}, **stages}
     results = {}
-    for key, name in stages.items():
+    additional = []
+    for key, name in names.items():
         matching = [job for job in jobs if job.get("name") == name]
         require(len(matching) == 1, f"Missing or duplicate validation stage: {name}")
         job = matching[0]
@@ -144,10 +147,16 @@ def report_validation():
                 },
                 f"Invalid terminal validation stage: {name}")
         conclusion = job["conclusion"]
-        results[key] = conclusion if conclusion in {"success", "skipped", "cancelled"} else "failure"
+        if key in stages:
+            results[key] = conclusion if conclusion in {"success", "skipped", "cancelled"} else "failure"
+        elif conclusion != "success" and not (
+            key in {"fork_guard", "draft_validation", "commit_message"} and conclusion == "skipped"
+        ):
+            additional.append(name)
     environment = {
         **os.environ, "GITHUB_RUN_ID": str(run_id), "GITHUB_RUN_ATTEMPT": str(attempt),
         "GITHUB_SHA": sha, "TEST_JOB_RESULTS": json.dumps(results),
+        "ADDITIONAL_FAILED_STAGES": json.dumps(additional),
         "GH_TOKEN": os.environ["GITHUB_TOKEN"],
     }
     result = subprocess.run(

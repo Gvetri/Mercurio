@@ -59,7 +59,10 @@ release-write permission.
 The issue is labelled `ready-for-agent` and identifies the **validation** run,
 attempt and commit, not the parent Nightly run. Its four stage results come from
 that exact attempt's jobs: `unit-tests`, `compose-jvm-tests`,
-`api24-instrumentation`, and `maestro-journeys`. The `nightly-run` marker deduplicates
+`api24-instrumentation`, and `maestro-journeys`. Other failed required jobs, such as
+`formatting`, appear in a separate section, from the same exact run and attempt.
+The expected skips of `fork-guard`, `draft-validation`, and `commit-message` are
+not failures on this main validation. The `nightly-run` marker deduplicates
 by validation run ID; reporting another attempt updates and reopens the same issue.
 Only available, unexpired diagnostic artifacts for that attempt are linked. With
 none, the issue says: “Not uploaded. Inspect the failed job logs in the workflow
@@ -68,8 +71,10 @@ run.” Missing evidence is never invented.
 A hand-started quality gate that the Nightly did not start does **not** enter this
 reporting path. The quality gate's independent nightly schedule keeps its existing
 schedule-only failure-issue automation unchanged. The Nightly does not retry or
-repair a failed validation. A green validation cannot produce an issue; the existing
-reporter also refuses when all four test stages succeeded. Stage conclusions of
+repair a failed validation. A green validation cannot produce an issue. The reporter
+refuses when all four test stages succeeded and no additional required stage failed;
+a non-test failure alone can now produce an issue without changing any test result.
+The additional failed-stage input is supplied only by the Nightly caller. Stage conclusions of
 `failure`, `timed_out`, `startup_failure`, `action_required`, `neutral`, and `stale`
 are normalized to `failure`; `success`, `skipped`, and `cancelled` retain their values.
 Missing, duplicate, nonterminal, wrong-source, or malformed stage results, and any
@@ -198,9 +203,19 @@ ambiguous tag ownership, and changed state. A draft is provably incomplete only
 when its full asset inventory is a **strict subset** of the publisher's declared
 `hermes-native-client.apk`, `SHA256SUMS`, and `signing-metadata.json` allowlist.
 An asset outside that set is interpreted as **foreign state**, not something the
-publisher created, and requires human inspection. Duplicate names, inconsistent
-inventories, annotated tags, and complete-looking drafts also require inspection;
-the command does not infer ownership from asset bytes or repair a partial publication.
+publisher created, and requires human inspection. Every retained asset must identify
+`github-actions[bot]` (id `41898282`) as its uploader; a different, missing, or
+unreadable uploader is refused before deletion. The draft must carry the publisher's
+structured notes matching the supplied source and tag-derived version code and name,
+with a valid APK SHA-256, the pinned certificate SHA-256, and validation identity.
+Missing, malformed, or contradictory notes are refused. A retained APK must have
+a recorded `sha256:` digest matching the notes; a missing or mismatched digest is refused.
+
+Duplicate names, inconsistent inventories, annotated tags, and complete-looking
+drafts also require inspection. These checks cannot distinguish uploads under the
+same bot identity: a byte-identical re-upload under the publisher's own identity
+is not detectable. A partially published release remains an inspection task;
+the command does not repair it.
 
 The command prints JSON `before` and `after` API observations to stdout, including
 retained assets and tag state. It never calls an individual asset deletion endpoint,
@@ -291,8 +306,8 @@ state, stale evidence, issue read-back, idempotent updates, and unchanged remote
 release state after refusal. They do not claim a real GitHub release was signed or
 published. The same synthetic API seam and a deterministic `gh` issue store execute
 the existing shell reporter, proving validation identity, four stage results,
-artifact presence/absence, one issue with update-on-rerun, and refusal of green or
-malformed evidence. These tests remain in `test_nightly_release.py`, already invoked
+additional failed required jobs, artifact presence/absence, one issue with update-on-rerun,
+and refusal of green or malformed evidence. These tests remain in `test_nightly_release.py`, already invoked
 by `QualityGateConfigurationTest`.
 
 Live evidence for validation-failure reporting remains unmet: after this change is

@@ -307,6 +307,25 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertIn("`maestro-journeys`: `failure`", json.loads((root / "issue.json").read_text())["body"])
         self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
 
+    def test_formatting_failure_files_one_issue_without_changing_test_results(self):
+        self.selected_run["conclusion"] = "failure"
+        for identity, job in enumerate(self.jobs, 1):
+            job["id"] = identity
+            if job["name"] == "formatting":
+                job["conclusion"] = "failure"
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        result = self.report_validation(values)
+        self.assertEqual(0, result.returncode, result.stderr)
+        root = Path(self.directory.name)
+        issue = json.loads((root / "issue.json").read_text())
+        self.assertIn("## Additional failed required jobs\n\n- `formatting`", issue["body"])
+        self.assertIn("## Required test jobs\n\n- `unit-tests`: `success`\n"
+                      "- `compose-jvm-tests`: `success`\n- `api24-instrumentation`: `success`\n"
+                      "- `maestro-journeys`: `success`\n", issue["body"])
+        self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
+
     def test_green_validation_and_all_success_stages_cannot_create_an_issue(self):
         values = {"failed_validation_run_id": "123", "failed_validation_run_attempt": "1",
                   "failed_validation_sha": self.selected}

@@ -49,7 +49,13 @@ job_names = {
 if set(results) != set(job_names) or any(value not in {"success", "failure", "cancelled", "skipped"} for value in results.values()):
     raise SystemExit("Expected a terminal result for each required test job.")
 failed = [job for job in job_names if results[job] != "success"]
-if not failed:
+additional = json.loads(os.environ.get("ADDITIONAL_FAILED_STAGES", "[]"))
+if not isinstance(additional, list) or any(
+    not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", name) or name in job_names.values()
+    for name in additional
+) or len(additional) != len(set(additional)):
+    raise SystemExit("Invalid additional failed required stages.")
+if not failed and not additional:
     raise SystemExit("The nightly issue script cannot publish a successful test run.")
 run_url = f"{server}/{repository}/actions/runs/{run}"
 marker = f"<!-- nightly-run:{run} -->"
@@ -59,6 +65,9 @@ lines = [marker, "", "# Nightly test failure", "",
          "## Required test jobs", ""]
 for job, name in job_names.items():
     lines.append(f"- `{name}`: `{results[job]}`")
+if additional:
+    lines.extend(["", "## Additional failed required jobs", ""])
+    lines.extend(f"- `{name}`" for name in additional)
 lines.extend(["", "## Available diagnostic reports", ""])
 expected_names = {
     f"jvm-test-reports-{run}-{attempt}",
@@ -75,7 +84,7 @@ for artifact in artifacts:
 if not artifacts:
     lines.append("- Not uploaded. Inspect the failed job logs in the workflow run.")
 lines.extend(["", "Inspect the first failing command in each failed job. A dependency download failure still blocks the quality gate."])
-payload = {"title": f"Nightly test failure: {', '.join(job_names[job] for job in failed)} (run {run})",
+payload = {"title": f"Nightly test failure: {', '.join([job_names[job] for job in failed] + additional)} (run {run})",
            "body": "\n".join(lines) + "\n", "labels": ["ready-for-agent"]}
 issues = [issue for page in json.loads((root / "issues.json").read_text()) for issue in page
           if issue.get("pull_request") is None and marker in (issue.get("body") or "")]

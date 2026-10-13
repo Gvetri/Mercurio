@@ -72,6 +72,32 @@ def clear(identity, tag, source):
         require(len(names) == len(set(names)) and set(names) <= set(NIGHTLY["ASSETS"]),
                 "Foreign or duplicate assets require inspection")
         require(set(names) < set(NIGHTLY["ASSETS"]), "Complete-looking draft requires inspection")
+        code = NIGHTLY["TAG"].fullmatch(tag)[1]
+        certificate = (NIGHTLY["POLICY"]["ROOT"] / ".github/release-certificate.sha256").read_text().strip()
+        prefix = (
+            "Development snapshot for testing. It may contain regressions and is not a stable-support promise.\n\n"
+            "This is a **Nightly** prerelease, not a Stable Public Beta release.\n\n"
+            f"- Source commit: `{source}`\n- Android version code: `{code}`\n"
+            f"- Android version name: `nightly-{code}-{source[:12]}`\n- Device architecture: ARM64\n"
+        )
+        body = release.get("body")
+        notes = re.fullmatch(
+            re.escape(prefix) + r"- APK SHA-256: `([0-9a-f]{64})`\n"
+            + re.escape(f"- Signing certificate SHA-256: `{certificate}`\n"
+                        f"- Deterministic validation: https://github.com/{NIGHTLY['REPOSITORY']}/actions/runs/")
+            + r"[1-9][0-9]* \(attempt [1-9][0-9]*\)\n",
+            body if isinstance(body, str) else "",
+        )
+        require(re.fullmatch(r"[0-9a-f]{64}", certificate) and notes is not None,
+                "Publisher notes are missing, malformed, or contradict the Nightly identity")
+        for asset in assets:
+            uploader = asset.get("uploader")
+            require(isinstance(uploader, dict) and uploader.get("login") == "github-actions[bot]"
+                    and type(uploader.get("id")) is int and uploader["id"] == 41898282,
+                    "Asset uploader is missing, unreadable, or not the release bot")
+            if asset["name"] == "hermes-native-client.apk":
+                require(asset.get("digest") == f"sha256:{notes[1]}",
+                        "APK digest is missing or disagrees with publisher notes")
         reference = before["tag"]
         if reference is not None:
             require(reference.get("ref") == f"refs/tags/{tag}", "Tag reference mismatch")
