@@ -209,6 +209,7 @@ internal fun EntryStateHolder.recordSubmissionDraft(
         )
     pendingRunDrafts[sessionId] = draft
     sessionDrafts[sessionId] = input
+    sessionDraftStore.write(sessionDraftKey(sessionId), input)
 }
 
 internal fun EntryStateHolder.claimAndStartRunJob(submission: PreparedRunSubmission) {

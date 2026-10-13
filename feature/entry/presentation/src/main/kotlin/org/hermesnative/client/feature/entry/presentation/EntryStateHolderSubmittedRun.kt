@@ -162,6 +162,7 @@ internal fun EntryStateHolder.recordSubmittedRunState(application: SubmittedRunA
     ) {
         sessionSendErrors.remove(application.sessionId)
         sessionDrafts.remove(application.sessionId)
+        sessionDraftStore.remove(sessionDraftKey(application.sessionId))
     } else {
         sessionSendErrors.remove(application.sessionId)
     }

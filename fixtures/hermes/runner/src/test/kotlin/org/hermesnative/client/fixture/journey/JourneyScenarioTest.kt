@@ -90,6 +90,21 @@ class JourneyScenarioTest {
     }
 
     @Test
+    fun refused_run_creation_with_scripted_outcome_is_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """
+                {"name":"invalid-refused-run","hermes_revision":"$revision","port":18443,"tls":false,"capabilities":["sessions"],
+                 "sessions":[{"id":"s1","title":"S","preview":null,"pinned":false}],
+                 "runs":[{"run_id":"r1","session_id":"s1","refuse_create":true,"observation":[{"type":"run.completed"}]}]}
+                """.trimIndent(),
+            )
+        val error = runCatching { JourneyScenarioParser.parse(file, revision) }.exceptionOrNull()
+        assertTrue(error is JourneyScenarioFormatException)
+    }
+
+    @Test
     fun duplicate_provenance_keys_are_rejected() {
         val file = File.createTempFile("journey-scenario", ".json")
         try {

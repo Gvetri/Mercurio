@@ -1,6 +1,7 @@
 package org.hermesnative.client.feature.entry.presentation
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -177,7 +178,7 @@ class SessionHistoryScreenTest {
     }
 
     @Test
-    fun unresolved_submission_shows_uncertainty_without_a_synthetic_latest_run_and_disables_send() {
+    fun unresolved_submission_shows_uncertainty_without_a_synthetic_latest_run_and_keeps_send_available() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
@@ -224,7 +225,8 @@ class SessionHistoryScreenTest {
         composeTestRule
             .onNodeWithText(SessionHistoryErrorCategory.RECONCILIATION_FAILED.safeMessage)
             .assertExists()
-        composeTestRule.onNodeWithText("Refresh history to resolve").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Refresh history to resolve").assertIsEnabled()
+        composeTestRule.onNodeWithText("Discard unsent record").assertHasClickAction()
         composeTestRule.onNodeWithText("Refresh history").assertIsEnabled()
     }
 

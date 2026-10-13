@@ -137,6 +137,7 @@ object QualityPolicy {
         BoundaryDoubleRequirement("RunRecoveryStorage", "datasource"),
         BoundaryDoubleRequirement("RunSubmissionUncertaintyStore", "repository"),
         BoundaryDoubleRequirement("RunSubmissionUncertaintyStorage", "datasource"),
+        BoundaryDoubleRequirement("SessionDraftStore", "repository"),
     )
 
     /**

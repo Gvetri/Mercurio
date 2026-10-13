@@ -150,6 +150,31 @@ class MessageComposerScreenTest {
         composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
     }
 
+    @Test
+    fun unresolved_failed_send_keeps_the_resolve_action_pressable_and_offers_discard() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        connectedState(
+                            composerText = FAILED_SEND_COMPOSER_DRAFT,
+                            sendErrorCategory = MessageSendErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ).withUnresolvedSubmission(),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Refresh history to resolve").assertIsEnabled()
+        composeTestRule.onNodeWithText("Discard unsent record").assertHasClickAction().performClick()
+
+        assertEquals(
+            listOf(EntryUiEvent.DiscardUnresolvedSendClicked),
+            events,
+        )
+    }
+
     private fun connectedState(
         composerText: String = "",
         latestRun: Run? = null,
@@ -173,7 +198,18 @@ class MessageComposerScreenTest {
                             latestRunState = latestRunState,
                             latestRunRetryAvailable = latestRunRetryAvailable,
                             sendErrorCategory = sendErrorCategory,
+                            hasUnresolvedSubmission = false,
                         ),
                 ),
         )
+
+    private fun EntryUiState.withUnresolvedSubmission(): EntryUiState =
+        copy(
+            sessionList =
+                sessionList?.let { list ->
+                    list.copy(openedSession = list.openedSession?.copy(hasUnresolvedSubmission = true))
+                },
+        )
 }
+
+private const val FAILED_SEND_COMPOSER_DRAFT = "Keep this unresolved draft"
