@@ -9,6 +9,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -81,8 +83,10 @@ class SessionHistoryRetryScreenTest {
             }
         }
 
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
-        composeTestRule.onAllNodesWithText("Timestamp:", substring = true).assertCountEquals(3)
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        composeTestRule.onAllNodesWithText("Timestamp:", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(3)
+        composeTestRule.onAllNodesWithText("Timestamp:", substring = true).onLast().assertIsDisplayed()
         composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
         composeTestRule.onNodeWithText("Run ID: run-failed").assertIsDisplayed()
         composeTestRule.onNodeWithText("Run status: Failed").assertIsDisplayed()

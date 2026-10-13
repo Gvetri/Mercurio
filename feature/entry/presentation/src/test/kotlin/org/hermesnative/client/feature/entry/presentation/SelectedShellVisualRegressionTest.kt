@@ -1,9 +1,14 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
+import org.hermesnative.client.feature.entry.domain.Run
+import org.hermesnative.client.feature.entry.domain.RunId
+import org.hermesnative.client.feature.entry.domain.RunPresentationState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,6 +62,8 @@ class SelectedShellVisualRegressionTest {
             }
         }
         composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Latest Run: run-A1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Run state: Succeeded").assertIsDisplayed()
         composeTestRule.onRoot().captureRoboImage()
     }
 
@@ -98,6 +105,8 @@ class SelectedShellVisualRegressionTest {
                                     ),
                                 ),
                             composerText = "Summarize the next step",
+                            latestRun = Run(RunId("run-A1"), releaseChecklistSession().id, "succeeded"),
+                            latestRunState = RunPresentationState.SUCCEEDED,
                         ),
                 ),
         )

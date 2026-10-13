@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,19 +15,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -54,49 +56,33 @@ internal fun SessionDetailContent(
     val state = detail.content
     val displayedMessages = state.messages + listOfNotNull(state.activeResponse)
     val canSubmit = submissionCanSubmit(detail)
-    val retryEnabled = detail.retryEnabled(canSubmit)
-    val paneScrollState = rememberScrollState()
     val transcriptListState = rememberLazyListState()
+    var trailingContentHeight by remember(state.session.id, displayedMessages.lastOrNull()?.id) { mutableIntStateOf(0) }
+    val textLineHeight = with(LocalDensity.current) { MaterialTheme.typography.bodyLarge.lineHeight.roundToPx() }
+    val viewportHeight by remember { derivedStateOf { transcriptListState.layoutInfo.viewportSize.height } }
+    val hiddenTail = (trailingContentHeight + textLineHeight - viewportHeight).coerceIn(0, trailingContentHeight)
     TranscriptScrollEffects(
         detail = detail,
         displayedMessages = displayedMessages,
         listState = transcriptListState,
+        hiddenTail = hiddenTail,
     )
     Column(
-        modifier =
-            if (displayedMessages.isEmpty()) {
-                modifier.fillMaxSize().verticalScroll(paneScrollState)
-            } else {
-                modifier.fillMaxSize()
-            },
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Top,
     ) {
         SessionDetailToolbar(detail = detail, onEvent = onEvent)
-        Spacer(modifier = Modifier.height(16.dp))
-        if (displayedMessages.isEmpty()) {
-            SessionDetailHeader(state = state)
-            Spacer(modifier = Modifier.height(12.dp))
-            SessionDetailSummary(
-                detail = detail,
-                retryEnabled = retryEnabled,
-                onEvent = onEvent,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "No messages in this Session.")
-        } else {
-            SessionDetailTranscript(
-                detail = detail,
-                retryEnabled = retryEnabled,
-                displayedMessages = displayedMessages,
-                listState = transcriptListState,
-                onEvent = onEvent,
-            )
-        }
+        SessionDetailTranscript(
+            detail = detail,
+            displayedMessages = displayedMessages,
+            listState = transcriptListState,
+            onEvent = onEvent,
+            onTrailingContentHeightChanged = { trailingContentHeight = it },
+        )
         SessionDetailComposerTail(
             state = state,
             mutation = detail.mutation,
             canSubmit = canSubmit,
-            displayedMessages = displayedMessages,
             onEvent = onEvent,
         )
     }
@@ -113,7 +99,7 @@ private fun SessionDetailToolbar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        OutlinedButton(
+        TextButton(
             onClick = { onEvent(EntryUiEvent.ReturnToSessionListClicked) },
             modifier = Modifier.heightIn(min = 48.dp),
         ) {
@@ -141,14 +127,16 @@ private fun submissionCanSubmit(detail: SessionDetailState): Boolean =
 @Composable
 private fun ColumnScope.SessionDetailTranscript(
     detail: SessionDetailState,
-    retryEnabled: Boolean,
     displayedMessages: List<SessionMessageUiState>,
     listState: LazyListState,
     onEvent: (EntryUiEvent) -> Unit,
+    onTrailingContentHeightChanged: (Int) -> Unit,
 ) {
+    val retryEnabled = detail.retryEnabled(submissionCanSubmit(detail))
     LazyColumn(
         state = listState,
         modifier = Modifier.weight(1f).fillMaxWidth(),
+        contentPadding = PaddingValues(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
@@ -160,16 +148,24 @@ private fun ColumnScope.SessionDetailTranscript(
                 onEvent = onEvent,
             )
             Spacer(modifier = Modifier.height(8.dp))
+            if (displayedMessages.isEmpty()) {
+                Text(text = "No messages in this Session.")
+            }
         }
         items(
             items = displayedMessages,
             key = { message -> message.id },
         ) { message ->
-            SessionMessageContent(
-                message = message,
-                retryEnabled = retryEnabled,
-                onRetry = { runId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
-            )
+            key(detail.content.session.id) {
+                SessionMessageContent(
+                    message = message,
+                    retryEnabled = retryEnabled,
+                    onRetry = { runId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
+                    onTrailingContentHeightChanged = {
+                        if (message.id == displayedMessages.last().id) onTrailingContentHeightChanged(it)
+                    },
+                )
+            }
         }
     }
 }
@@ -179,19 +175,20 @@ private fun TranscriptScrollEffects(
     detail: SessionDetailState,
     displayedMessages: List<SessionMessageUiState>,
     listState: LazyListState,
+    hiddenTail: Int,
 ) {
     val sessionId = detail.content.session.id
     val newestMessageItemIndex = displayedMessages.size
-    val followNewestMessages = rememberTranscriptFollow(listState)
+    val followNewestMessages = rememberTranscriptFollow(listState, hiddenTail)
     var transcriptPositionPending by remember(sessionId) { mutableStateOf(true) }
     val streamedResponseContent = detail.content.activeResponse?.content
-    LaunchedEffect(sessionId, newestMessageItemIndex, streamedResponseContent) {
+    LaunchedEffect(sessionId, newestMessageItemIndex, streamedResponseContent, hiddenTail) {
         if (newestMessageItemIndex == 0) return@LaunchedEffect
         if (transcriptPositionPending) {
-            listState.pinNewestItemEnd(newestMessageItemIndex)
+            listState.pinNewestItemEnd(newestMessageItemIndex, hiddenTail)
             transcriptPositionPending = false
         } else if (followNewestMessages) {
-            listState.pinNewestItemEnd(newestMessageItemIndex)
+            listState.pinNewestItemEnd(newestMessageItemIndex, hiddenTail)
         }
     }
     val showMutationContext =
@@ -203,25 +200,32 @@ private fun TranscriptScrollEffects(
     }
 }
 
-private suspend fun LazyListState.pinNewestItemEnd(index: Int) {
+private suspend fun LazyListState.pinNewestItemEnd(
+    index: Int,
+    hiddenTail: Int,
+) {
     if (layoutInfo.visibleItemsInfo.none { item -> item.index == index }) {
         scrollToItem(index)
     }
-    val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+    val viewportHeight = layoutInfo.viewportEndOffset
     val itemSize = layoutInfo.visibleItemsInfo.firstOrNull { item -> item.index == index }?.size ?: return
-    scrollToItem(index, (itemSize - viewportHeight).coerceAtLeast(0))
+    scrollToItem(index, (itemSize - viewportHeight - hiddenTail).coerceAtLeast(0))
 }
 
 /**
  * Whether the transcript should follow its newest content. The follow stays on while the
  * newest content's end is visible, turns off when the reader scrolls it out of view, and
  * returns once the transcript shows the newest content again, so a reader who scrolled up
- * is not pulled away from what they are reading.
+ * is not pulled away from what they are reading. [hiddenTail] excludes only the trailing
+ * metadata that would otherwise hide the newest text line in a short viewport.
  */
 @Composable
-internal fun rememberTranscriptFollow(listState: LazyListState): Boolean {
+internal fun rememberTranscriptFollow(
+    listState: LazyListState,
+    hiddenTail: Int,
+): Boolean {
     val follow by
-        remember(listState) {
+        remember(listState, hiddenTail) {
             derivedStateOf {
                 val layoutInfo = listState.layoutInfo
                 val newestItem = layoutInfo.visibleItemsInfo.lastOrNull()
@@ -229,7 +233,7 @@ internal fun rememberTranscriptFollow(listState: LazyListState): Boolean {
                     (
                         newestItem != null &&
                             newestItem.index == layoutInfo.totalItemsCount - 1 &&
-                            newestItem.offset.toLong() + newestItem.size.toLong() <=
+                            newestItem.offset.toLong() + newestItem.size.toLong() - hiddenTail <=
                             layoutInfo.viewportEndOffset.toLong()
                     )
             }

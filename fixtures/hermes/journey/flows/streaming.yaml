@@ -19,10 +19,43 @@ name: streaming
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
+- assertVisible: "No messages in this Session."
+- takeScreenshot: "empty-conversation"
 - tapOn: "Message"
 - inputText: "Stream this"
-- hideKeyboard
-- tapOn: "Send"
+- runFlow:
+    when:
+      notVisible:
+        text: "Send"
+        childOf:
+          id: "conversation-send"
+    commands:
+      - swipe:
+          from:
+            text: "Stream this"
+          direction: UP
+          duration: 400
+- assertVisible:
+    text: "Send"
+    childOf:
+      id: "conversation-send"
+- takeScreenshot: "keyboard-ready-to-send"
+- tapOn:
+    text: "Send"
+    childOf:
+      id: "conversation-send"
 - extendedWaitUntil:
     visible: "Streaming partial text"
     timeout: 30000
+- assertVisible:
+    text: "Send"
+    childOf:
+      id: "conversation-send"
+- takeScreenshot: "keyboard-first-reply"
+- hideKeyboard
+- assertVisible: "Assistant"
+- assertVisible: "Message"
+- assertVisible:
+    text: "Send"
+    childOf:
+      id: "conversation-send"
