@@ -72,13 +72,13 @@ class SessionHistoryScreenTest {
         }
 
         composeTestRule.onNodeWithText("Run this").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Role: user").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("User").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Run result: Done").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Run status: Completed").performScrollTo().assertIsDisplayed()
         composeTestRule.onNode(hasText("Timestamp:", substring = true)).performScrollTo().assertIsDisplayed()
         composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
         composeTestRule.onNodeWithText("Answer").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Role: assistant").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Assistant").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Message").assertIsDisplayed().assertIsEnabled()
         composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
         composeTestRule.onNodeWithText("Refresh history").performScrollTo().assertIsDisplayed().assertIsEnabled()

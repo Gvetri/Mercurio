@@ -47,7 +47,7 @@ name: session-lifecycle
 - assertVisible: "Back to Sessions"
 - assertVisible: "Message"
 - assertVisible: "No messages in this Session."
-- assertNotVisible: "Role: assistant"
+- assertNotVisible: "Assistant"
 
 - tapOn: "Session actions for Lifecycle Session"
 - assertVisible: "Pin Session"

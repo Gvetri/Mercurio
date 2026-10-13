@@ -1,21 +1,29 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.dp
 import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /**
  * Pins the transcript follow behavior for a message taller than the pane: an opened Session
@@ -32,6 +40,86 @@ import org.robolectric.annotation.Config
 class SessionTranscriptFollowTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun short_viewport_follows_the_newest_streamed_text_not_only_its_metadata() {
+        val state = mutableStateOf(streamingState(messages = emptyList()))
+        composeTestRule.setContent {
+            HermesTheme {
+                Box(Modifier.height(240.dp)) {
+                    EntryScreen(state = state.value, onEvent = {})
+                }
+            }
+        }
+        composeTestRule.runOnIdle {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(48)))
+        }
+        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Paragraph 1").assertIsNotDisplayed()
+        composeTestRule.runOnIdle {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(60)))
+        }
+        composeTestRule.onNodeWithText("Paragraph 60").assertIsDisplayed()
+        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
+            swipeDown(startY = top + 4f, endY = bottom - 4f, durationMillis = 200)
+        }
+        composeTestRule.onNodeWithText("Paragraph 60").assertIsNotDisplayed()
+        composeTestRule.runOnIdle {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(72)))
+        }
+        composeTestRule.onNodeWithText("Paragraph 72").assertIsNotDisplayed()
+        composeTestRule.onNodeWithText("Paragraph 72").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Streaming response…").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
+            swipeUp(startY = bottom - 4f, endY = top + 4f, durationMillis = 200)
+        }
+        composeTestRule.runOnIdle {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(84)))
+        }
+        composeTestRule.onNodeWithText("Paragraph 84").assertIsDisplayed()
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun shortest_keyboard_viewport_keeps_a_complete_newest_text_line_readable() {
+        composeTestRule.setContent {
+            HermesTheme {
+                Box(Modifier.height(176.dp)) {
+                    EntryScreen(
+                        state = streamingState(activeResponse = streamedResponse(transcriptBody(48))),
+                        onEvent = {},
+                    )
+                }
+            }
+        }
+        val newestLine = composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
+        val bounds = newestLine.getUnclippedBoundsInRoot()
+        val lineHeight = with(composeTestRule.density) { (bounds.bottom - bounds.top).toPx() }
+        assertEquals(lineHeight, newestLine.fetchSemanticsNode().boundsInRoot.height, 1f)
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun a_short_viewport_keeps_the_safe_failure_visible_when_there_is_no_exportable_body() {
+        val failed =
+            SessionMessageUiState(
+                id = "failed-message",
+                role = "assistant",
+                content = null,
+                runId = RunId("failed-run"),
+                runState = RunPresentationState.FAILED,
+                failureSafeMessage = "The message was not sent.",
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                Box(Modifier.height(176.dp)) {
+                    EntryScreen(state = streamingState(messages = listOf(failed)), onEvent = {})
+                }
+            }
+        }
+        composeTestRule.onNodeWithText("The message was not sent.").assertIsDisplayed()
+    }
 
     @Test
     fun opened_session_shows_the_newest_content_of_a_transcript_taller_than_the_pane() {
