@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 from signing_fixture import make_signing_fixture
-from test_protected_main import ApiStub
+from github_api_fixture import GitHubApiFixture
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / ".github/scripts/verify-release-artifacts.py"
@@ -66,7 +66,7 @@ class PublishedReleaseArtifactsTest(unittest.TestCase):
         self.release = self.published_release()
 
         self.routes = {f"/repos/{REPOSITORY}/releases/tags/{TAG}": self.release}
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
 

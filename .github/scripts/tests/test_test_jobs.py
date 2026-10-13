@@ -749,5 +749,75 @@ redact_file "$runner_output" || status=$?
         self.assertEqual(0, run(unlabeled).returncode)
 
 
+class IssueAdapterContractTest(unittest.TestCase):
+    def test_issue_stores_are_isolated_and_keep_stable_identities(self):
+        from fixtures.issue_store import IssueStore
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = IssueStore(root / "first.json", "example/client", 17)
+            second = IssueStore(root / "second.json", "example/client", 17)
+            created = first.create({"title": "First", "labels": ["ready-for-agent"]})
+            self.assertEqual("open", created["state"])
+            self.assertEqual([], second.list())
+            second.create({"title": "Second", "state": "closed"})
+            first.patch({"number": 99, "html_url": "https://example.invalid", "labels": []})
+            reloaded = IssueStore(root / "first.json", "example/client", 17).get()
+            self.assertEqual(17, reloaded["number"])
+            self.assertEqual("https://github.com/example/client/issues/17", reloaded["html_url"])
+            self.assertEqual([], reloaded["labels"])
+            self.assertEqual("Second", second.get()["title"])
+            self.assertEqual("closed", second.get()["state"])
+            with self.assertRaises(AssertionError):
+                first.create({"title": "Duplicate"})
+            self.assertEqual(reloaded, first.get())
+
+    def test_copied_adapters_preserve_fields_and_state_until_explicitly_reopened(self):
+        fixtures = ROOT / ".github/scripts/tests/fixtures"
+        for adapter, number in (("nightly-report", 17), ("validation-issue", 60)):
+            with self.subTest(adapter=adapter), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                binary = root / "bin"
+                binary.mkdir()
+                executable = binary / "gh"
+                executable.write_bytes((fixtures / f"fake-gh-{adapter}.py").read_bytes())
+                executable.chmod(0o755)
+                store_module = fixtures / "issue_store.py"
+                (binary / store_module.name).write_bytes(store_module.read_bytes())
+                environment = {**os.environ, "HOME": directory,
+                               "PATH": str(binary) + os.pathsep + os.environ["PATH"]}
+                environment.pop("PYTHONPATH", None)
+                endpoint = "repos/Gvetri/hermes-native-client/issues"
+
+                def invoke(arguments, payload=None):
+                    command = ["gh", "api", *arguments]
+                    text = None
+                    if payload is not None:
+                        text = json.dumps(payload)
+                        if adapter == "validation-issue":
+                            input_path = root / "payload.json"
+                            input_path.write_text(text)
+                            command.extend(["--input", str(input_path)])
+                            text = None
+                    result = subprocess.run(command, cwd=root, env=environment, input=text,
+                                            capture_output=True, text=True, timeout=10)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    return json.loads(result.stdout)
+
+                self.assertEqual([[]], invoke(["--paginate", "--slurp", endpoint + "?state=all&per_page=100"]))
+                created = invoke(["--method", "POST", endpoint], {
+                    "title": "Original", "body": "run marker", "labels": ["ready-for-agent"],
+                    "state": "closed", "extra": {"retained": True},
+                })
+                self.assertEqual("closed", created["state"])
+                self.assertEqual(number, created["number"])
+                updated = invoke(["--method", "PATCH", f"{endpoint}/{number}"], {"title": "Updated"})
+                self.assertEqual({**created, "title": "Updated"}, updated)
+                self.assertEqual(updated, invoke([f"{endpoint}/{number}"]))
+                reopened = invoke(["--method", "PATCH", f"{endpoint}/{number}"], {"state": "open"})
+                self.assertEqual({**updated, "state": "open"}, reopened)
+                self.assertEqual([[reopened]], invoke(["--paginate", "--slurp", endpoint + "?state=all&per_page=100"]))
+
+
 if __name__ == "__main__":
     unittest.main()

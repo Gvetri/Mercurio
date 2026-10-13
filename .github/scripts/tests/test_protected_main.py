@@ -6,9 +6,10 @@ import shutil
 from pathlib import Path
 import subprocess
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import urllib.error
+import urllib.request
+from github_api_fixture import GitHubApiFixture
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/quality-gate.yml"
@@ -268,7 +269,7 @@ class TestVerifyConventionalCommits(unittest.TestCase):
     def setUp(self):
         self.routes = {}
         self.event = {"pull_request": {"number": 25, "title": "feat: protect main"}}
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
 
@@ -405,7 +406,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
                 "delete_branch_on_merge": True,
             },
         }
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
 
@@ -561,90 +562,87 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertIn("failed closed", completed.stderr)
 
 
-class ApiStub:
-    """A local stand-in for the GitHub REST API."""
+class GitHubApiFixtureTest(unittest.TestCase):
+    def setUp(self):
+        self.routes = {}
+        self.api = GitHubApiFixture(self.routes)
+        self.api.start()
+        self.addCleanup(self.api.stop)
 
-    def __init__(self, routes):
-        self.routes = routes
-        self.requests = []
-        self.posts = []
-        self.deletes = []
-        self.server = None
-        self.thread = None
+    def request(self, path, method="GET", payload=None):
+        data = json.dumps(payload).encode() if payload is not None else None
+        request = urllib.request.Request(self.api.url + path, data=data, method=method)
+        try:
+            return urllib.request.urlopen(request, timeout=5)
+        except urllib.error.HTTPError as response:
+            return response
 
-    def start(self):
-        routes = self.routes
-        requests = self.requests
-        posts = self.posts
-        deletes = self.deletes
+    def test_get_routes_keep_exact_query_precedence_and_original_dictionary(self):
+        self.routes.update({"/issues": lambda: {"fallback": True},
+                            "/issues?page=2": {"exact": True}})
+        self.api.routes = {"/issues": {"replacement": True}}
+        for path, expected in (("/issues?page=2", {"exact": True}),
+                               ("/issues?page=3", {"fallback": True})):
+            with self.request(path) as response:
+                self.assertEqual(200, response.status)
+                self.assertEqual("application/json", response.headers["Content-Type"])
+                body = response.read()
+                self.assertEqual(str(len(body)), response.headers["Content-Length"])
+                self.assertEqual(expected, json.loads(body))
+        self.assertEqual(["/issues?page=2", "/issues?page=3"], self.api.requests)
 
-        class Handler(BaseHTTPRequestHandler):
-            def do_DELETE(self):
-                deletes.append(self.path)
-                route = routes.get(("DELETE", self.path))
-                status = route() if callable(route) else route
-                self.send_response(status if status is not None else 404)
-                self.end_headers()
+    def test_get_status_tuples_and_missing_routes_preserve_http_errors(self):
+        self.routes["/denied"] = lambda: (403, {"message": "Denied"})
+        for path, status, expected in (("/denied", 403, {"message": "Denied"}),
+                                       ("/missing?raw=true", 404, {"message": "Not Found"})):
+            with self.request(path) as response:
+                self.assertEqual(status, response.status)
+                self.assertEqual("application/json", response.headers["Content-Type"])
+                self.assertEqual(expected, json.load(response))
+        self.assertEqual(["/denied", "/missing?raw=true"], self.api.requests)
 
-            def do_POST(self):
-                self.write_response("POST")
+    def test_mutations_record_method_path_and_payload_even_for_missing_routes(self):
+        self.routes[("POST", "/issues?raw=true")] = lambda payload: (201, payload)
+        issue = {"state": "open"}
 
-            def do_PATCH(self):
-                self.write_response("PATCH")
+        def update(payload):
+            issue.update(payload)
+            return 200, issue
 
-            def write_response(self, method):
-                payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-                if method == "POST":
-                    posts.append((self.path, payload))
-                route = routes.get((method, self.path))
-                result = route(payload) if callable(route) else route
-                status, response = result if isinstance(result, tuple) else (result or 404, None)
-                body = json.dumps(response).encode() if response is not None else b""
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+        self.routes[("PATCH", "/issues/9")] = update
+        self.routes[("POST", "/dispatch")] = 204
+        self.routes[("DELETE", "/issues/9")] = lambda: 204
+        cases = (
+            ("POST", "/issues?raw=true", {"title": "Created"}, 201, {"title": "Created"}),
+            ("PATCH", "/issues/9", {"state": "closed"}, 200, {"state": "closed"}),
+            ("POST", "/dispatch", {"ref": "main"}, 204, None),
+            ("PATCH", "/missing?raw=true", {"state": "open"}, 404, None),
+            ("DELETE", "/issues/9", None, 204, None),
+            ("DELETE", "/missing?raw=true", None, 404, None),
+        )
+        for method, path, payload, status, expected in cases:
+            with self.request(path, method, payload) as response:
+                self.assertEqual(status, response.status)
+                body = response.read()
+                self.assertEqual(json.dumps(expected).encode() if expected is not None else b"", body)
+                if method != "DELETE":
+                    self.assertEqual("application/json", response.headers["Content-Type"])
+                    self.assertEqual(str(len(body)), response.headers["Content-Length"])
+        self.assertEqual([("/issues?raw=true", {"title": "Created"}),
+                          ("/dispatch", {"ref": "main"})], self.api.posts)
+        self.assertEqual({"state": "closed"}, issue)
+        self.assertEqual([("/issues/9", {"state": "closed"}),
+                          ("/missing?raw=true", {"state": "open"})], self.api.patches)
+        self.assertEqual(["/issues/9", "/missing?raw=true"], self.api.deletes)
+        self.assertEqual([], self.api.requests)
 
-            def do_GET(self):
-                requests.append(self.path)
-                request_path = self.path if self.path in routes else self.path.split("?", 1)[0]
-                if request_path not in routes:
-                    self.send_response(404)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(b'{"message":"Not Found"}')
-                    return
-                payload = routes[request_path]
-                if callable(payload):
-                    payload = payload()
-                status = 200
-                if isinstance(payload, tuple):
-                    status, payload = payload
-                body = json.dumps(payload).encode()
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-            def log_message(self, format, *args):
-                return
-
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-    @property
-    def url(self):
-        return f"http://127.0.0.1:{self.server.server_address[1]}"
-
-    def stop(self):
-        if self.server is not None:
-            self.server.shutdown()
-            self.server.server_close()
-            self.thread.join(timeout=5)
-            self.server = None
+    def test_stop_is_idempotent_and_joins_the_server_thread(self):
+        thread = self.api.thread
+        self.assertTrue(thread.is_alive())
+        self.api.stop()
+        self.assertFalse(thread.is_alive())
+        self.assertIsNone(self.api.server)
+        self.api.stop()
 
 
 if __name__ == "__main__":

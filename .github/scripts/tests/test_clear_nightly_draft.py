@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import unittest
 
-from test_protected_main import ApiStub
+from github_api_fixture import GitHubApiFixture
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / ".github/scripts/clear-nightly-draft.py"
@@ -42,7 +42,7 @@ class ClearNightlyDraftTest(unittest.TestCase):
             f"{PREFIX}/releases": lambda: [self.release] if self.release_path in self.routes else [],
             f"{self.release_path}/assets": self.release["assets"],
         }
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
         self.environment = {
@@ -69,6 +69,7 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(2, self.api.requests.count(self.release_path))
         self.assertEqual([], self.api.posts)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.patches)
         return result
 
     def enable_deletion(self):
@@ -148,6 +149,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertIn("Local recovery only", result.stderr)
         self.assertEqual([], self.api.requests)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
 
     def test_refuses_inconsistent_named_tag_source_before_remote_access(self):
         result = self.run_command("--release-id", "71", "--tag", TAG, "--source-sha", "b" * 40)
@@ -169,6 +172,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(["before", "after"], [item["phase"] for item in evidence])
         self.assertTrue(all(item["tag"] == {"state": "unknown"} for item in evidence))
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
         self.assertIn(self.release_path, self.routes)
 
     def test_unavailable_evidence_is_printed_as_unknown_before_and_after_without_writes(self):
@@ -180,6 +185,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(["before", "after"], [item["phase"] for item in evidence])
         self.assertTrue(all(item["release"] == {"state": "unknown"} for item in evidence))
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
 
     def test_refuses_unknown_publication_state_with_unchanged_before_after_evidence(self):
         del self.release["published_at"]
@@ -197,6 +204,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("Recovery state changed", result.stderr)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
         self.assertFalse(json.loads(result.stdout.splitlines()[-1])["release"]["draft"])
 
     def test_new_tag_owner_after_draft_deletion_prevents_tag_deletion(self):
@@ -334,6 +343,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
                 self.assertIn("Invalid", result.stderr)
         self.assertEqual([], self.api.requests)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
 
 
 if __name__ == "__main__":

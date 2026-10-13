@@ -9,7 +9,8 @@ import unittest
 from urllib.parse import parse_qs, urlsplit
 import zipfile
 
-from test_protected_main import ApiStub, job_block, job_key
+from github_api_fixture import GitHubApiFixture
+from test_protected_main import job_block, job_key
 from test_release_signing import REQUIRED_JOBS
 from signing_fixture import make_signing_fixture
 
@@ -149,7 +150,7 @@ class NightlyPreparationTest(unittest.TestCase):
             f"{prefix}/compare/{self.selected}...main": {"status": "ahead", "merge_base_commit": {"sha": self.selected}},
             f"{prefix}/releases": self.releases,
         }
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
         self.environment = {
@@ -202,6 +203,7 @@ class NightlyPreparationTest(unittest.TestCase):
         binary = root / "issue-bin"
         binary.mkdir(exist_ok=True)
         shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-validation-issue.py", binary / "gh")
+        shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/issue_store.py", binary / "issue_store.py")
         (binary / "gh").chmod(0o755)
         environment = {
             **self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],
@@ -243,9 +245,13 @@ class NightlyPreparationTest(unittest.TestCase):
             "total_count": len(self.jobs), "jobs": self.jobs,
         }
         values["failed_validation_run_attempt"] = "2"
+        issue["state"] = "closed"
+        (root / "issue.json").write_text(json.dumps(issue))
         result = self.report_validation(values)
         self.assertEqual(0, result.returncode, result.stderr)
         issue = json.loads((root / "issue.json").read_text())
+        self.assertEqual("open", issue["state"])
+        self.assertEqual(60, issue["number"])
         self.assertIn("Attempt: `2`", issue["body"])
         self.assertIn("Not uploaded. Inspect the failed job logs in the workflow run.", issue["body"])
         self.assertNotIn("/artifacts/99", issue["body"])
@@ -412,6 +418,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual("false", values["publish"])
         self.assertNotIn("version_code", values)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
         self.releases[0]["draft"] = True
         result, values = self.prepare()
         self.assertNotEqual(0, result.returncode)
@@ -521,6 +529,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Invalid main tip", result.stderr)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_dispatch_failure_is_not_publication_recovery(self):
         self.routes[("POST", f"/repos/{self.repository}/actions/workflows/quality-gate.yml/dispatches")] = 403
@@ -580,6 +590,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Truncated Nightly history", result.stderr)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
         self.releases.extend([
             {"id": identity, "tag_name": f"nightly-{code}-{self.selected}"}
             for identity, code in ((1, 6001), (2, 6002))
@@ -588,6 +600,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Multiple Nightlies", result.stderr)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_duplicate_check_reads_all_release_pages_before_dispatch(self):
         endpoint = f"/repos/{self.repository}/releases"
@@ -602,6 +616,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("false", values["publish"])
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def signed_publication_fixture(self):
         root = Path(self.directory.name)
@@ -659,6 +675,7 @@ class NightlyPreparationTest(unittest.TestCase):
         binary = root / "report-bin"
         binary.mkdir(exist_ok=True)
         shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-nightly-report.py", binary / "gh")
+        shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/issue_store.py", binary / "issue_store.py")
         (binary / "gh").chmod(0o755)
         self.report_environment = {
             **self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],
