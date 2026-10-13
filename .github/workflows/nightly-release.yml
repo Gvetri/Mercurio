@@ -83,6 +83,35 @@ jobs:
           path: signed
           merge-multiple: true
       - name: Verify, stage, read back, and publish the Nightly prerelease
+        id: publication
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NIGHTLY_FAILURE_OBSERVATION: ${{ runner.temp }}/publication-state.json
         run: python3 .github/scripts/nightly-release.py publish signed .github/release-certificate.sha256
+      - name: Preserve publication read-back for the read-only reporter
+        if: ${{ always() && steps.publication.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nightly-publication-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publication-state.json
+          if-no-files-found: error
+          retention-days: 14
+
+  report_release_failure:
+    needs: [sign, publish]
+    if: ${{ always() && (needs.sign.result == 'failure' || needs.publish.result == 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: File or update the observed Nightly release failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/create-nightly-release-failure-issue.py
