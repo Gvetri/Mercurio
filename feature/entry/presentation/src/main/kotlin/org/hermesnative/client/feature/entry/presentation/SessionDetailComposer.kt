@@ -16,11 +16,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,13 +33,27 @@ internal fun SessionDetailComposerTail(
     state: OpenSessionUiState,
     mutation: SessionMutationUiState?,
     canSubmit: Boolean,
-    displayedMessages: List<SessionMessageUiState>,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val tailScrollState = rememberScrollState()
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val tailMaxHeight = paneTailMaxHeight(maxHeight)
-        Column(modifier = composerTailModifier(displayedMessages.isEmpty(), tailMaxHeight, tailScrollState)) {
+        Column(modifier = composerTailModifier(tailMaxHeight, tailScrollState)) {
+            if (state.isSending) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Sending message…",
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+            state.sendErrorCategory?.let { category ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = category.safeMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             val composerEnabled = !state.isRefreshing && mutation?.pendingAction == null
             val sendEnabled =
@@ -67,40 +83,20 @@ internal fun SessionDetailComposerTail(
             )
             Spacer(modifier = Modifier.height(8.dp))
             ComposerSendButton(state = state, sendEnabled = sendEnabled, onEvent = onEvent)
-            if (state.isSending) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Sending message…",
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-            state.sendErrorCategory?.let { category ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = category.safeMessage,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-                )
-            }
         }
     }
 }
 
 private fun composerTailModifier(
-    empty: Boolean,
     tailMaxHeight: Dp,
     scrollState: ScrollState,
 ): Modifier =
-    Modifier.testTag("conversation-composer-tail").then(
-        if (empty) {
-            Modifier
-        } else {
-            Modifier.fillMaxWidth()
-                .heightIn(max = tailMaxHeight)
-                .verticalScroll(scrollState)
-        },
-    )
+    Modifier.testTag("conversation-composer-tail")
+        .fillMaxWidth()
+        .heightIn(max = tailMaxHeight)
+        .verticalScroll(scrollState)
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ComposerSendButton(
     state: OpenSessionUiState,
@@ -110,7 +106,9 @@ private fun ComposerSendButton(
     Button(
         onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
         enabled = sendEnabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        modifier =
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("conversation-send").semantics { testTagsAsResourceId = true },
     ) {
         Text(
             text =
