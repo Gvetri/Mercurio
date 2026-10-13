@@ -54,6 +54,11 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun nightly_watchdog_reports_starvation_without_changing_releases() {
+        runPythonSuite(".github/scripts/tests/test_nightly_watchdog.py")
+    }
+
+    @Test
     fun nightly_release_validates_main_tip_and_publishes_verified_metadata() {
         assumePosixWrapperSupport()
         val process = ProcessBuilder("python3", repositoryRoot.resolve(".github/scripts/tests/test_nightly_release.py").absolutePath)

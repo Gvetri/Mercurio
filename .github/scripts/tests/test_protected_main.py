@@ -512,15 +512,24 @@ class ApiStub:
                 self.end_headers()
 
             def do_POST(self):
+                self.write_response("POST")
+
+            def do_PATCH(self):
+                self.write_response("PATCH")
+
+            def write_response(self, method):
                 payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-                posts.append((self.path, payload))
-                route = routes.get(("POST", self.path))
-                if route is None:
-                    self.send_response(404)
-                else:
-                    status = route(payload) if callable(route) else route
-                    self.send_response(status)
+                if method == "POST":
+                    posts.append((self.path, payload))
+                route = routes.get((method, self.path))
+                result = route(payload) if callable(route) else route
+                status, response = result if isinstance(result, tuple) else (result or 404, None)
+                body = json.dumps(response).encode() if response is not None else b""
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
+                self.wfile.write(body)
 
             def do_GET(self):
                 requests.append(self.path)

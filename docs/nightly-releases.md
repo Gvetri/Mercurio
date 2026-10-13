@@ -215,6 +215,41 @@ and stops without retry or rollback. Inspect it rather than guessing a second cl
 The workflow uses only `GITHUB_TOKEN`; permission or protected-tag failures stop it,
 not a fallback to an administrator credential.
 
+## Read-only Nightly watchdog
+
+The separate [Nightly watchdog workflow](../.github/workflows/nightly-watchdog.yml)
+runs daily at **12:17 UTC** and on a hand start on protected `main`. It is not a
+required check and does not change the quality gate or Nightly schedule. GitHub
+may delay either schedule; the watchdog evaluates the evidence it actually reads,
+not an assumed ordering of scheduled runs.
+
+It walks `main` first-parent ancestry, newest first, accepting only a completed,
+successful `quality-gate.yml` run from a schedule or hand start in this repository.
+It reuses the signer's full source/attempt/job verification, including both device
+stages. This is an observation-only ancestry walk; the publisher still validates
+and releases its captured current tip, never an older fallback.
+
+Every successful observation prints JSON with the newest fully validated source,
+validation run and attempt, captured `main` SHA, number of first-parent commits
+between them, the published Nightly tag for that source or `null`, and the newest
+Nightly publication timestamp or `null` if none exists. Drafts are not publications;
+the read-only token may not see them. Missing or contradictory evidence fails the
+watchdog without turning a test failure into a starvation issue.
+
+Only when that validated source has **no published Nightly**, the watchdog files or
+updates one `ready-for-agent` issue containing those same facts. A stable
+`<!-- nightly-watchdog -->` body marker identifies it across observations and
+sources; a closed alarm is reopened if starvation is seen again. Runs are serialized
+and the issue is read back after every write. Duplicate markers fail closed rather
+than producing another issue. When the source has a Nightly, the watchdog stays
+silent as an alarm: it prints the observation but neither creates nor updates an
+issue, even if newer unvalidated commits exist. It does not automatically close
+an earlier issue.
+
+The token has only `contents: read`, `actions: read`, and `issues: write`.
+The watchdog publishes nothing, repairs nothing, retries nothing, dispatches no
+validation, and cannot write repository contents or releases.
+
 ## Download verification
 
 The release notes include the source SHA, embedded version code and name, APK
@@ -262,6 +297,7 @@ commit and issue URL; no live failing night's issue was produced during local te
 ```text
 python3 .github/scripts/tests/test_nightly_release.py
 python3 .github/scripts/tests/test_clear_nightly_draft.py -v
+python3 .github/scripts/tests/test_nightly_watchdog.py
 python3 -m unittest discover -s .github/scripts/tests -p 'test_*sign*.py'
 ./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
 ```
