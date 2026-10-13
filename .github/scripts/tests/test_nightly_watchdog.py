@@ -87,6 +87,9 @@ class NightlyWatchdogTest(unittest.TestCase):
         self.assertEqual(0, json.loads(result.stdout)["main_first_parent_commits_ahead"])
         self.assertEqual(before, json.dumps(self.issues))
         self.assertEqual(["POST"], [method for method, _ in self.writes])
+        self.assertEqual(1, len(self.api.posts))
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_no_published_nightly_and_drafts_are_reported_as_none(self):
         self.releases[0].update(draft=True, published_at=None)
@@ -106,6 +109,9 @@ class NightlyWatchdogTest(unittest.TestCase):
                 self.assertNotEqual(0, result.returncode)
                 self.assertIn("No fully validated", result.stderr)
                 self.assertEqual([], self.writes)
+                self.assertEqual([], self.api.posts)
+                self.assertEqual([], self.api.patches)
+                self.assertEqual([], self.api.deletes)
                 self.workflow_run[field] = original
 
     def test_skipped_device_evidence_fails_closed_without_an_alarm(self):
@@ -114,6 +120,9 @@ class NightlyWatchdogTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Required validation evidence failed", result.stderr)
         self.assertEqual([], self.writes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_paginated_runs_use_ancestry_not_older_rerun_completion(self):
         push_runs = [{**self.workflow_run, "id": number, "event": "push"} for number in range(1000, 1100)]
@@ -136,6 +145,9 @@ class NightlyWatchdogTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Duplicate Nightly history", result.stderr)
         self.assertEqual([], self.writes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_wrong_commit_and_ancestry_cycle_fail_without_writing(self):
         commit = self.routes[f"{PREFIX}/commits/{self.head}"]
@@ -144,6 +156,9 @@ class NightlyWatchdogTest(unittest.TestCase):
         commit.update(sha=self.head, parents=[{"sha": self.head}])
         self.assertNotEqual(0, self.check().returncode)
         self.assertEqual([], self.writes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_issue_read_back_must_confirm_body_and_agent_label(self):
         self.routes[f"{PREFIX}/issues/9"] = lambda: {**self.issues[0], "labels": []}
@@ -158,6 +173,9 @@ class NightlyWatchdogTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Multiple watchdog issues", result.stderr)
         self.assertEqual([], self.writes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_released_source_reports_facts_without_filing_an_alarm(self):
         self.releases[0].update(tag_name=f"nightly-7001-{SOURCE}", target_commitish=SOURCE)
@@ -173,6 +191,8 @@ class NightlyWatchdogTest(unittest.TestCase):
         self.assertEqual([], self.issues)
         self.assertEqual([], self.writes)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
         self.assertFalse(any("/issues" in path for path in self.api.requests))
 
     def test_starved_source_reports_facts_and_files_one_agent_issue(self):
