@@ -24,11 +24,10 @@ name: live-streaming
 - hideKeyboard
 - tapOn: "Send"
 - extendedWaitUntil:
-    visible: "Receipt confirmed"
+    visible: "Receipt confirmed Igris here, ready."
     timeout: 30000
 - extendedWaitUntil:
     visible: "Run state: Succeeded"
     timeout: 30000
-- assertVisible: "Receipt confirmed Igris here, ready."
 - assertNotVisible: "Stream interrupted"
 - takeScreenshot: "live-streaming-succeeded"
