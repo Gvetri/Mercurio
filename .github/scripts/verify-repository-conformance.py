@@ -244,11 +244,16 @@ def verify_workflow_declaration():
         )
     for match in re.finditer(r"^\s*secrets\.[A-Za-z0-9_]+", text, flags=re.MULTILINE):
         violations.append(f"The workflow must not consume a secret value, but declares '{match.group(0).strip()}'")
-    if "group: quality-gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}" not in text:
+    concurrency = text.split("\nconcurrency:\n", 1)[-1].split("\njobs:\n", 1)[0]
+    expected_group = (
+        "  group: quality-gate-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' "
+        "&& format('dispatch-{0}', github.run_id) || github.event.pull_request.number || github.ref }}"
+    )
+    if expected_group not in concurrency.splitlines():
         violations.append(
-            "The concurrency group must be pinned to the pull request, so a new commit cancels an obsolete run"
+            "The concurrency group must isolate dispatched run ids and supersede runs per pull request or ref"
         )
-    if "cancel-in-progress: true" not in text:
+    if "  cancel-in-progress: true" not in concurrency.splitlines():
         violations.append("The workflow must cancel an obsolete run")
     if "permissions:\n  contents: read\n" not in text:
         violations.append("The workflow must hold the read-only contents scope for every job")
