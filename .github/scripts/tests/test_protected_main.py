@@ -493,6 +493,7 @@ class ApiStub:
         self.routes = routes
         self.requests = []
         self.posts = []
+        self.deletes = []
         self.server = None
         self.thread = None
 
@@ -500,8 +501,16 @@ class ApiStub:
         routes = self.routes
         requests = self.requests
         posts = self.posts
+        deletes = self.deletes
 
         class Handler(BaseHTTPRequestHandler):
+            def do_DELETE(self):
+                deletes.append(self.path)
+                route = routes.get(("DELETE", self.path))
+                status = route() if callable(route) else route
+                self.send_response(status if status is not None else 404)
+                self.end_headers()
+
             def do_POST(self):
                 payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 posts.append((self.path, payload))
@@ -525,8 +534,11 @@ class ApiStub:
                 payload = routes[request_path]
                 if callable(payload):
                     payload = payload()
+                status = 200
+                if isinstance(payload, tuple):
+                    status, payload = payload
                 body = json.dumps(payload).encode()
-                self.send_response(200)
+                self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()

@@ -91,6 +91,11 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun nightly_draft_recovery_is_local_guarded_and_reads_back_state() {
+        runPythonSuite(".github/scripts/tests/test_clear_nightly_draft.py")
+    }
+
+    @Test
     fun published_documentation_is_verified_for_links_safety_and_scope() {
         runPythonSuite(".github/scripts/tests/test_public_documentation.py")
     }

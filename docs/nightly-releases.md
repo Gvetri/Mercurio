@@ -143,6 +143,48 @@ not guessed cleanup. After deliberate recovery, start a **new full Nightly run**
 with a new version; never retry only signing or publication. This is an explicit
 agent action, never a workflow step or automatic repair.
 
+The supported command is [clear-nightly-draft.py](../.github/scripts/clear-nightly-draft.py),
+run locally from the repository root after inspecting the failure issue. Supply its
+exact values, not a tag discovered by guessing or by selecting the latest release:
+
+```sh
+python3 .github/scripts/clear-nightly-draft.py \
+  --release-id "$RELEASE_ID" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA"
+```
+
+Use a `GITHUB_TOKEN` authorized to read drafts and delete releases/tags in this
+repository. It uses the same `GITHUB_API_URL` handling as the release scripts.
+It refuses a GitHub Actions environment. Wait for the failed publisher to finish
+and ensure no person or other agent is editing this release: GitHub does not offer
+an atomic transaction spanning release and tag deletion. Fresh checks narrow that
+race but cannot lock out a concurrent external writer.
+
+The id, full lowercase source SHA, Nightly tag, API release identity, and any
+existing lightweight tag's commit must agree. Recovery refuses published or
+non-draft releases, a missing/invisible draft, non-Nightly state, unknown evidence,
+ambiguous tag ownership, and changed state. A draft is provably incomplete only
+when its full asset inventory is a **strict subset** of the publisher's declared
+`hermes-native-client.apk`, `SHA256SUMS`, and `signing-metadata.json` allowlist.
+An asset outside that set is interpreted as **foreign state**, not something the
+publisher created, and requires human inspection. Duplicate names, inconsistent
+inventories, annotated tags, and complete-looking drafts also require inspection;
+the command does not infer ownership from asset bytes or repair a partial publication.
+
+The command prints JSON `before` and `after` API observations to stdout, including
+retained assets and tag state. It never calls an individual asset deletion endpoint,
+uploads, overwrites, retries, or publishes anything. Removing the allowed draft
+also removes its attached incomplete uploads as part of GitHub's release deletion;
+it does not separately edit or delete an asset. It deletes only the exact tag, if
+present, after reading back the draft's absence and proving the tag is orphaned and
+unchanged. A missing draft never authorizes standalone orphan-tag cleanup.
+
+Exit `0` means both targets read back absent. Exit `1` reports a refusal or failed
+operation on stderr; malformed CLI usage exits `2`. Invalid arguments or workflow
+execution are rejected before any API access. For valid identities, refusals also
+read state before and after without mutation; an unavailable read is printed as
+unknown, never absence. If deletion fails midway, the command prints retained state
+and stops without retry or rollback. Inspect it rather than guessing a second cleanup.
+
 The workflow uses only `GITHUB_TOKEN`; permission or protected-tag failures stop it,
 not a fallback to an administrator credential.
 
@@ -184,6 +226,7 @@ published.
 
 ```text
 python3 .github/scripts/tests/test_nightly_release.py
+python3 .github/scripts/tests/test_clear_nightly_draft.py -v
 python3 -m unittest discover -s .github/scripts/tests -p 'test_*sign*.py'
 ./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
 ```
