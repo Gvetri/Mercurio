@@ -1,18 +1,28 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunId
@@ -30,7 +40,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The renderer inside the authoritative Session history and the streamed response, plus
- * the message-level Copy and Share actions that only an explicit user selection runs.
+ * the message-level three-dot menu whose Copy and Share actions only an explicit user
+ * selection runs.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -43,7 +54,7 @@ class SessionMessageRenderingTest {
     fun authoritative_roles_form_a_readable_hierarchy_without_diagnostic_prefixes() {
         composeTestRule.setContent {
             HermesTheme {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     listOf("user", "assistant", "tool", "gateway-special", null, "").forEachIndexed { index, role ->
                         SessionMessageContent(
                             message = SessionMessageUiState("message-$index", role, "Message body $index"),
@@ -54,16 +65,17 @@ class SessionMessageRenderingTest {
                 }
             }
         }
-        composeTestRule.onNodeWithText("User").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Assistant").assertIsDisplayed()
-        composeTestRule.onNodeWithText("tool").assertExists()
-        composeTestRule.onNodeWithText("gateway-special").assertExists()
+        composeTestRule.onNodeWithText("User").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Assistant").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("tool").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText("gateway-special").performScrollTo().assertExists()
+        composeTestRule.onAllNodesWithText("Role unavailable").assertCountEquals(2)
         composeTestRule.onAllNodesWithText("Role:", substring = true).assertCountEquals(0)
         composeTestRule.onAllNodesWithText("User").assertCountEquals(1)
         composeTestRule.onAllNodesWithText("Assistant").assertCountEquals(1)
-        val user = composeTestRule.onNodeWithText("Message body 0").fetchSemanticsNode().boundsInRoot
-        val assistant = composeTestRule.onNodeWithText("Message body 1").fetchSemanticsNode().boundsInRoot
-        assertTrue("User content must be visually distinct from the assistant response", user.left > assistant.left)
+        val header = composeTestRule.onNodeWithText("User").fetchSemanticsNode().boundsInRoot
+        val body = composeTestRule.onNodeWithText("Message body 0").fetchSemanticsNode().boundsInRoot
+        assertTrue("The role header must lead the message it owns", header.bottom <= body.top)
     }
 
     @Test
@@ -141,9 +153,34 @@ class SessionMessageRenderingTest {
     }
 
     @Test
+    fun every_message_card_exposes_a_visible_three_dot_actions_trigger() {
+        composeTestRule.setContent {
+            HermesTheme {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    listOf(
+                        SessionMessageUiState("message-a", "user", "First body"),
+                        SessionMessageUiState("message-b", "assistant", "Second body"),
+                        SessionMessageUiState("message-c", "tool", "Third body"),
+                    ).forEach { message ->
+                        SessionMessageContent(message = message, retryEnabled = false, onRetry = {})
+                    }
+                }
+            }
+        }
+        listOf("message-a", "message-b", "message-c").forEach { messageId ->
+            composeTestRule
+                .onNodeWithContentDescription("Message actions for $messageId")
+                .performScrollTo()
+                .assertIsDisplayed()
+                .assertHasClickAction()
+                .assertHeightIsAtLeast(48.dp)
+        }
+    }
+
+    @Test
     fun the_copy_action_carries_only_the_selected_message_content_and_needs_a_user_action() {
         val clipboard = clipboardManager()
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("before", "before"))
+        clipboard.setPrimaryClip(ClipData.newPlainText("before", "before"))
 
         composeTestRule.setContent {
             HermesTheme {
@@ -175,7 +212,13 @@ class SessionMessageRenderingTest {
         }
 
         assertEquals("before", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
-        composeTestRule.onNodeWithText("Copy message").performClick()
+        openMessageMenu("message-1")
+        assertEquals(
+            "Opening the menu must not copy anything",
+            "before",
+            clipboard.primaryClip?.getItemAt(0)?.text?.toString(),
+        )
+        composeTestRule.onNodeWithText("Copy message").assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals("Safe **Markdown** text", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
     }
 
@@ -203,33 +246,138 @@ class SessionMessageRenderingTest {
         }
 
         assertTrue("Nothing may be shared before the user acts", recorded.shared.isEmpty())
-        composeTestRule.onNodeWithText("Share message").performClick()
+        openMessageMenu("message-1")
+        assertTrue("Opening the menu must not share anything", recorded.shared.isEmpty())
+        composeTestRule.onNodeWithText("Share message").assertIsDisplayed().assertIsEnabled().performClick()
         assertEquals(listOf("Safe **Markdown** text"), recorded.shared)
     }
 
+    /**
+     * Opening the menu is a pure state change: no copy or share runs until an item is
+     * selected. Robolectric does not dispatch the popup's system-back or outside dismissal
+     * (the same paused-window limitation family as robolectric/robolectric#8460), so the
+     * dismissal path is exercised on a device by the markdown-links journey, which
+     * re-asserts the closed menu after Back.
+     */
     @Test
-    fun copy_and_share_are_explicit_touch_targets() {
+    fun opening_the_message_menu_runs_no_copy_or_share() {
         val recorded = RecordingActions()
         composeTestRule.setContent {
             HermesTheme {
                 SessionMessageContent(
-                    message = SessionMessageUiState("message", "assistant", "Selected content"),
+                    message = SessionMessageUiState("message-1", "assistant", "Selected content"),
                     retryEnabled = false,
                     onRetry = {},
                     actions = recorded.asMessageActions(),
                 )
             }
         }
-        val copy =
-            composeTestRule.onNode(hasText("Copy message") or hasContentDescription("Copy message"))
-                .assertIsDisplayed().assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        val share =
-            composeTestRule.onNode(hasText("Share message") or hasContentDescription("Share message"))
-                .assertIsDisplayed().assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        copy.performClick()
-        share.performClick()
-        assertEquals(listOf("Selected content"), recorded.copied)
-        assertEquals(listOf("Selected content"), recorded.shared)
+
+        openMessageMenu("message-1")
+        composeTestRule.onNodeWithText("Copy message").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Share message").assertIsDisplayed()
+        assertTrue("Opening the menu must run no action", recorded.copied.isEmpty() && recorded.shared.isEmpty())
+    }
+
+    @Test
+    fun a_message_without_content_offers_disabled_copy_and_share_items_without_callbacks() {
+        val recorded = RecordingActions()
+        composeTestRule.setContent {
+            HermesTheme {
+                SessionMessageContent(
+                    message = SessionMessageUiState("message-empty", "assistant", null),
+                    retryEnabled = false,
+                    onRetry = {},
+                    actions = recorded.asMessageActions(),
+                )
+            }
+        }
+
+        openMessageMenu("message-empty")
+        composeTestRule.onNodeWithText("Copy message").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Share message").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Copy message").performTouchInput { click(center) }
+        composeTestRule.onNodeWithText("Share message").performTouchInput { click(center) }
+        composeTestRule.waitForIdle()
+        assertTrue("Disabled items must run no callback", recorded.copied.isEmpty() && recorded.shared.isEmpty())
+    }
+
+    @Test
+    fun a_failed_message_offers_disabled_menu_items_without_a_synthetic_payload() {
+        val recorded = RecordingActions()
+        composeTestRule.setContent {
+            HermesTheme {
+                SessionMessageContent(
+                    message =
+                        SessionMessageUiState(
+                            id = "message-failed",
+                            role = "assistant",
+                            content = "Unsafe **Markdown** text",
+                            failureSafeMessage = "The message was not sent.",
+                        ),
+                    retryEnabled = false,
+                    onRetry = {},
+                    actions = recorded.asMessageActions(),
+                )
+            }
+        }
+
+        openMessageMenu("message-failed")
+        composeTestRule.onNodeWithText("Copy message").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Share message").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Copy message").performTouchInput { click(center) }
+        composeTestRule.waitForIdle()
+        assertTrue("A failed message must not export its content", recorded.copied.isEmpty() && recorded.shared.isEmpty())
+    }
+
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun two_pane_message_menu_copy_carries_the_exact_selected_payload() {
+        val clipboard = clipboardManager()
+        clipboard.setPrimaryClip(ClipData.newPlainText("before", "before"))
+
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = twoPaneConversationState(messageId = "message-1", content = "Safe **Markdown** text"),
+                    onEvent = {},
+                )
+            }
+        }
+
+        assertEquals("before", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        openMessageMenu("message-1")
+        composeTestRule.onNodeWithText("Copy message").assertIsDisplayed().performClick()
+        assertEquals("Safe **Markdown** text", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+    }
+
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun a_changed_selection_dismisses_the_message_menu_without_copying_or_sharing() {
+        val clipboard = clipboardManager()
+        clipboard.setPrimaryClip(ClipData.newPlainText("before", "before"))
+        val state = mutableStateOf(twoPaneConversationState(messageId = "message-alpha", content = "Alpha payload"))
+
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state.value, onEvent = {})
+            }
+        }
+
+        openMessageMenu("message-alpha")
+        composeTestRule.onNodeWithText("Copy message").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            state.value = twoPaneConversationState(messageId = "message-beta", content = "Beta payload")
+        }
+        composeTestRule.onNodeWithText("Copy message").assertDoesNotExist()
+        assertEquals(
+            "A changed selection must not copy or share anything",
+            "before",
+            clipboard.primaryClip?.getItemAt(0)?.text?.toString(),
+        )
+        openMessageMenu("message-beta")
+        composeTestRule.onNodeWithText("Copy message").assertIsDisplayed().performClick()
+        assertEquals("Beta payload", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
     }
 
     @Test
@@ -269,6 +417,30 @@ class SessionMessageRenderingTest {
                 .fetchSemanticsNode().boundsInRoot
         assertTrue("Run ID $messageId must be secondary to content $content", messageId.height < content.height)
         assertTrue("Run state must be more prominent than its raw identifier", latestId.height < status.height)
+    }
+
+    private fun twoPaneConversationState(
+        messageId: String,
+        content: String,
+    ): EntryUiState =
+        entryState(
+            SessionListUiState(
+                sessions = listOf(session("first", "First Session"), session("second", "Second Session")),
+                openedSession =
+                    OpenSessionUiState(
+                        session = session("first", "First Session"),
+                        messages = listOf(message(messageId, "assistant", content)),
+                    ),
+            ),
+        )
+
+    private fun openMessageMenu(messageId: String) {
+        composeTestRule
+            .onNodeWithContentDescription("Message actions for $messageId")
+            .apply { if (!isDisplayed()) performScrollTo() }
+            .assertIsDisplayed()
+            .performClick()
+        composeTestRule.waitForIdle()
     }
 
     private fun clipboardManager(): ClipboardManager =

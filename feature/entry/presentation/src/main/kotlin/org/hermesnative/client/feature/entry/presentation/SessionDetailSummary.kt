@@ -1,14 +1,16 @@
 package org.hermesnative.client.feature.entry.presentation
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -16,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -161,38 +164,30 @@ internal fun SessionMessageContent(
     actions: MessageActions = rememberMessageActions(),
 ) {
     val spacing = LocalHermesDesignTokens.current.spacing
-    val isUser = message.role == "user"
-    Surface(
-        modifier =
-            Modifier.fillMaxWidth().padding(
-                start = if (isUser) spacing.xl else 0.dp,
-                top = spacing.xs,
-                bottom = spacing.xs,
-            ),
-        color = if (isUser) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column(modifier = Modifier.padding(spacing.m)) {
-            message.role?.takeIf(String::isNotBlank)?.let { role ->
-                Text(
-                    text =
-                        when (role) {
-                            "user" -> "User"
-                            "assistant" -> "Assistant"
-                            else -> role
-                        },
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.semantics { heading() },
-                )
-                Spacer(modifier = Modifier.height(spacing.s))
+    val roleLabel =
+        message.role?.takeIf(String::isNotBlank)?.let { role ->
+            when (role) {
+                "user" -> "User"
+                "assistant" -> "Assistant"
+                else -> role
             }
-            message.content
-                ?.takeIf { message.failureSafeMessage == null && it.isNotBlank() }
-                ?.let { content ->
-                    MarkdownContent(markdown = content, actions = actions)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    MessageActionControls(content = content, actions = actions)
-                }
+        } ?: "Role unavailable"
+    val eligibleContent = message.content?.takeIf { it.isNotBlank() && message.failureSafeMessage == null }
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(spacing.l)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = roleLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f).semantics { heading() },
+                )
+                Spacer(modifier = Modifier.width(spacing.l))
+                MessageActionMenu(messageId = message.id, payload = eligibleContent, actions = actions)
+            }
+            eligibleContent?.let { content ->
+                Spacer(modifier = Modifier.height(4.dp))
+                MarkdownContent(markdown = content, actions = actions)
+            }
             MessageRunMetadata(message = message)
             MessageFailureSection(message = message)
             MessageRetryButton(message = message, retryEnabled = retryEnabled, onRetry = onRetry)
