@@ -45,6 +45,33 @@ The old first-parent ancestry walk is removed: a broken current tip must not be
 hidden by releasing historical validation. The Nightly validates its own source,
 then signs and publishes only that source on success.
 
+## Validation failure issues
+
+When the validation started by the Nightly completes unsuccessfully, preparation
+stays red and a separate job invokes the existing
+`.github/scripts/create-nightly-failure-issue.sh` reporter. Nothing is signed or
+published and no release state changes. The reporting job has `actions: read`,
+`contents: read` for checkout, and `issues: write`, with no signing secrets or
+release-write permission.
+
+The issue is labelled `ready-for-agent` and identifies the **validation** run,
+attempt and commit, not the parent Nightly run. Its four stage results come from
+that exact attempt's jobs: `unit-tests`, `compose-jvm-tests`,
+`api24-instrumentation`, and `maestro-journeys`. The `nightly-run` marker deduplicates
+by validation run ID; reporting another attempt updates and reopens the same issue.
+Only available, unexpired diagnostic artifacts for that attempt are linked. With
+none, the issue says: “Not uploaded. Inspect the failed job logs in the workflow
+run.” Missing evidence is never invented.
+
+A hand-started quality gate that the Nightly did not start does **not** enter this
+reporting path. The quality gate's independent nightly schedule keeps its existing
+schedule-only failure-issue automation unchanged. The Nightly does not retry or
+repair a failed validation. A green validation cannot produce an issue; the existing
+reporter also refuses when all four test stages succeeded. Missing, duplicate,
+nonterminal, or unsupported stage results fail reporting closed rather than inventing
+results. Discovery failures or expired waits without a completed identified run
+leave the Nightly red without fabricating a validation issue.
+
 ## Versions and ARM64 APK
 
 The workflow generates these values without editing a product version:
@@ -222,7 +249,15 @@ is synthetic evidence from the refusal/report test, not a live issue or run.
 Failure-report tests also cover early signer failure, missing artifacts, unreadable
 state, stale evidence, issue read-back, idempotent updates, and unchanged remote
 release state after refusal. They do not claim a real GitHub release was signed or
-published.
+published. The same synthetic API seam and a deterministic `gh` issue store execute
+the existing shell reporter, proving validation identity, four stage results,
+artifact presence/absence, one issue with update-on-rerun, and refusal of green or
+malformed evidence. These tests remain in `test_nightly_release.py`, already invoked
+by `QualityGateConfigurationTest`.
+
+Live evidence for validation-failure reporting remains unmet: after this change is
+on protected `main`, record the first real failing Nightly's validation run, attempt,
+commit and issue URL; no live failing night's issue was produced during local testing.
 
 ```text
 python3 .github/scripts/tests/test_nightly_release.py

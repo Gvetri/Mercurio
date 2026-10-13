@@ -23,6 +23,10 @@ jobs:
       actions: write
     outputs:
       publish: ${{ steps.prepare.outputs.publish }}
+      validation_failed: ${{ steps.prepare.outputs.validation_failed }}
+      failed_validation_run_id: ${{ steps.prepare.outputs.failed_validation_run_id }}
+      failed_validation_run_attempt: ${{ steps.prepare.outputs.failed_validation_run_attempt }}
+      failed_validation_sha: ${{ steps.prepare.outputs.failed_validation_sha }}
       source_sha: ${{ steps.prepare.outputs.source_sha }}
       validation_run_id: ${{ steps.prepare.outputs.validation_run_id }}
       validation_run_attempt: ${{ steps.prepare.outputs.validation_run_attempt }}
@@ -39,6 +43,28 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           NIGHTLY_VALIDATION_TIMEOUT_SECONDS: '10800'
         run: python3 .github/scripts/nightly-release.py prepare
+
+  report_validation_failure:
+    needs: prepare
+    if: ${{ always() && needs.prepare.result == 'failure' && needs.prepare.outputs.validation_failed == 'true' && github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Report the failed validation started by this Nightly
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FAILED_VALIDATION_RUN_ID: ${{ needs.prepare.outputs.failed_validation_run_id }}
+          FAILED_VALIDATION_RUN_ATTEMPT: ${{ needs.prepare.outputs.failed_validation_run_attempt }}
+          FAILED_VALIDATION_SHA: ${{ needs.prepare.outputs.failed_validation_sha }}
+        run: python3 .github/scripts/nightly-release.py report-validation
 
   sign:
     needs: prepare
