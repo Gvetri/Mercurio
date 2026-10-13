@@ -210,12 +210,21 @@ structured notes matching the supplied source and tag-derived version code and n
 with a valid APK SHA-256, the pinned certificate SHA-256, and validation identity.
 Missing, malformed, or contradictory notes are refused. A retained APK must have
 a recorded `sha256:` digest matching the notes; a missing or mismatched digest is refused.
+A retained `SHA256SUMS` must have the recorded digest of the exact checksum text
+determined by that APK hash. Recovery downloads retained `signing-metadata.json`
+and requires the publisher's exact field set, source, version, APK hash, pinned
+certificate, and validation run/attempt to agree with the notes. Its ABI list must
+be ARM64-only and its signing run/attempt must be positive integers. Unreadable,
+malformed, or contradictory metadata is refused before deletion.
 
 Duplicate names, inconsistent inventories, annotated tags, and complete-looking
-drafts also require inspection. These checks cannot distinguish uploads under the
-same bot identity: a byte-identical re-upload under the publisher's own identity
-is not detectable. A partially published release remains an inspection task;
-the command does not repair it.
+drafts also require inspection. These checks cannot establish upload provenance:
+a byte-identical re-upload under the publisher's own identity is not detectable.
+Metadata is checked semantically, not byte-for-byte: different JSON whitespace or
+field order, or changed signing run/attempt values that remain positive integers,
+are not detectable replacements. The notes do not independently record those
+signing identities or the exact ABI list; an ARM64-only list change can also pass.
+A partially published release remains an inspection task; the command does not repair it.
 
 The command prints JSON `before` and `after` API observations to stdout, including
 retained assets and tag state. It never calls an individual asset deletion endpoint,

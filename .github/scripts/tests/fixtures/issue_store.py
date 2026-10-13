@@ -9,7 +9,8 @@ class IssueStore:
         self.number = number
 
     def create(self, payload):
-        assert not self.path.exists()
+        if self.path.exists():
+            raise AssertionError("Issue already exists")
         return self._save({"state": "open", "labels": [], **payload})
 
     def patch(self, payload):

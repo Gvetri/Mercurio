@@ -211,10 +211,7 @@ def verify_artifact(directory, certificate, evidence, code, signing_run_id=None,
     require({path.name for path in directory.iterdir()} == set(ASSETS), "Unexpected release asset set")
     require(all((directory / name).is_file() and not (directory / name).is_symlink() for name in ASSETS), "Unsafe release asset")
     metadata = json.loads((directory / "signing-metadata.json").read_text())
-    require(set(metadata) == {
-        "source_sha", "validation_run_id", "validation_run_attempt", "signing_run_id",
-        "signing_run_attempt", "version_code", "version_name", "native_abis", "apk_sha256", "certificate_sha256",
-    }, "Unexpected signing metadata fields")
+    require(set(metadata) == POLICY["SIGNING_METADATA_FIELDS"], "Unexpected signing metadata fields")
     for key, value in evidence.items():
         require(metadata.get(key) == value, "APK validation evidence does not match the selected source")
     require(metadata["signing_run_id"] == (signing_run_id if signing_run_id is not None else POLICY["positive_integer"](os.environ.get("GITHUB_RUN_ID"))), "APK belongs to another signing run")
@@ -263,16 +260,7 @@ def publish(directory, certificate, failure_context=None):
     require(code > max((value for value, _, _ in history), default=1), "Nightly version is not newer than release history")
     tag = f"nightly-{code}-{sha}"
     require(api_get(f"git/matching-refs/tags/{tag}") == [], "Nightly tag already exists; operator recovery is required")
-    body = (
-        "Development snapshot for testing. It may contain regressions and is not a stable-support promise.\n\n"
-        "This is a **Nightly** prerelease, not a Stable Public Beta release.\n\n"
-        f"- Source commit: `{sha}`\n- Android version code: `{code}`\n"
-        f"- Android version name: `{metadata['version_name']}`\n- Device architecture: ARM64\n"
-        f"- APK SHA-256: `{metadata['apk_sha256']}`\n"
-        f"- Signing certificate SHA-256: `{metadata['certificate_sha256']}`\n"
-        f"- Deterministic validation: https://github.com/{REPOSITORY}/actions/runs/{evidence['validation_run_id']} "
-        f"(attempt {evidence['validation_run_attempt']})\n"
-    )
+    body = POLICY["nightly_notes"](metadata)
 
     def read_release(draft, expected_id):
         require(type(expected_id) is int and expected_id > 0, "Missing release identity")

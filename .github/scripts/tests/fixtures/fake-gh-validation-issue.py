@@ -24,8 +24,9 @@ elif args == ["api", "--paginate", "--slurp", repository + "/issues?state=all&pe
     print(json.dumps([store.list()]))
 elif args == ["api", repository + "/issues/60"]:
     print(json.dumps(store.get()))
-elif args == ["api", "--paginate", "--slurp", repository + "/actions/runs/123/artifacts?per_page=100"]:
+elif args[0] == "api" and args[-1].startswith(repository + "/actions/runs/"):
     with urllib.request.urlopen(os.environ["GITHUB_API_URL"] + "/" + args[-1]) as response:
-        print(json.dumps([json.load(response)]))
+        value = json.load(response)
+        print(json.dumps([value] if "--slurp" in args else value))
 else:
     raise SystemExit("Unexpected fixture API request: " + repr(args))

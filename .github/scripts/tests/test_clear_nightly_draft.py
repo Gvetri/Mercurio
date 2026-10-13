@@ -99,6 +99,96 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(unrelated, self.routes[f"{PREFIX}/releases/72"])
         self.assertEqual([], self.api.posts)
 
+    def test_shared_notes_builder_and_parser_agree(self):
+        import runpy
+        policy = runpy.run_path(str(ROOT / ".github/scripts/release-signing.py"))
+        self.add_metadata()
+        body = policy["nightly_notes"](self.metadata)
+        self.assertEqual(self.release["body"], body)
+        expected = {key: value for key, value in self.metadata.items()
+                    if key not in {"native_abis", "signing_run_id", "signing_run_attempt"}}
+        self.assertEqual(expected, policy["parse_nightly_notes"](body))
+        for malformed in (None, body + "extra", body.replace("7002", "invalid")):
+            with self.subTest(body=malformed):
+                with self.assertRaises(policy["ReleaseError"]):
+                    policy["parse_nightly_notes"](malformed)
+
+    def add_metadata(self):
+        self.metadata = {
+            "source_sha": SOURCE, "version_code": 7002, "version_name": f"nightly-7002-{SOURCE[:12]}",
+            "apk_sha256": "b" * 64,
+            "certificate_sha256": (ROOT / ".github/release-certificate.sha256").read_text().strip(),
+            "validation_run_id": 123, "validation_run_attempt": 1,
+            "signing_run_id": 456, "signing_run_attempt": 2, "native_abis": ["arm64-v8a"],
+        }
+        self.release["assets"].append({"id": 12, "name": "signing-metadata.json",
+                                       "uploader": {"login": "github-actions[bot]", "id": 41898282}})
+        self.routes[f"{PREFIX}/releases/assets/12"] = self.metadata
+        self.enable_deletion()
+
+    def test_refuses_replaced_checksum_or_missing_digest(self):
+        self.enable_deletion()
+        asset = {"id": 11, "name": "SHA256SUMS",
+                 "uploader": {"login": "github-actions[bot]", "id": 41898282}}
+        self.release["assets"].append(asset)
+        for digest in ("sha256:" + "c" * 64, None, "invalid"):
+            with self.subTest(digest=digest):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.api.deletes.clear()
+                self.api.requests.clear()
+                asset["digest"] = digest
+                self.assert_refusal("SHA256SUMS digest")
+                self.api.requests.clear()
+
+    def test_refuses_metadata_contradicting_identity(self):
+        self.add_metadata()
+        original = self.metadata.copy()
+        for field, value in (("source_sha", "c" * 40), ("version_code", 8001), ("version_name", "other"),
+                             ("apk_sha256", "c" * 64), ("certificate_sha256", "c" * 64),
+                             ("validation_run_id", 124), ("native_abis", ["x86_64"])):
+            with self.subTest(field=field):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.api.deletes.clear()
+                self.api.requests.clear()
+                self.metadata.clear()
+                self.metadata.update(original)
+                self.metadata[field] = value
+                self.assert_refusal("Signing metadata")
+                self.api.requests.clear()
+
+    def test_refuses_malformed_or_unreadable_metadata(self):
+        self.add_metadata()
+        for document in ("not-json", [], {}, (403, {"message": "Forbidden"})):
+            with self.subTest(document=document):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.api.deletes.clear()
+                self.api.requests.clear()
+                self.routes[f"{PREFIX}/releases/assets/12"] = document
+                self.assert_refusal("Signing metadata")
+                self.api.requests.clear()
+
+    def test_clears_consistent_retained_asset_pairs(self):
+        import hashlib
+        self.add_metadata()
+        checksum = {"id": 11, "name": "SHA256SUMS",
+                    "uploader": {"login": "github-actions[bot]", "id": 41898282},
+                    "digest": "sha256:" + hashlib.sha256(("b" * 64 + "  hermes-native-client.apk\n").encode()).hexdigest()}
+        assets = list(self.release["assets"])
+        for retained in (assets, [assets[0], checksum], [checksum, assets[1]]):
+            with self.subTest(names=[asset["name"] for asset in retained]):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.release["assets"][:] = retained
+                self.api.deletes.clear()
+                result = self.run_command()
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual([self.release_path, f"{PREFIX}/git/refs/tags/{TAG}"], self.api.deletes)
+                self.assertEqual({"phase": "after", "release": None, "tag": None},
+                                 json.loads(result.stdout.splitlines()[-1]))
+
     def test_refuses_foreign_uploader_without_deletion(self):
         self.enable_deletion()
         self.release["assets"][0]["uploader"] = {"login": "someone", "id": 123}

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -53,6 +54,30 @@ def delete(path):
         raise ReleaseError("Deletion failed; inspect retained state, do not retry automatically") from error
 
 
+def verify_metadata(asset, notes):
+    base = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    require(type(asset.get("id")) is int and asset["id"] > 0, "Signing metadata asset identity is missing")
+    request = urllib.request.Request(
+        f"{base}/repos/{NIGHTLY['REPOSITORY']}/releases/assets/{asset['id']}", headers={
+            "Accept": "application/octet-stream", "X-GitHub-Api-Version": "2022-11-28",
+            "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            metadata = json.load(response)
+    except (urllib.error.URLError, TimeoutError, ValueError) as error:
+        raise ReleaseError("Signing metadata is unreadable or malformed") from error
+    require(isinstance(metadata, dict) and set(metadata) == NIGHTLY["POLICY"]["SIGNING_METADATA_FIELDS"],
+            "Signing metadata fields are malformed")
+    require(all(type(metadata[key]) is type(value) and metadata[key] == value for key, value in notes.items())
+            and isinstance(metadata["native_abis"], list)
+            and all(abi == "arm64-v8a" for abi in metadata["native_abis"])
+            and all(type(metadata[key]) is int and metadata[key] > 0
+                    for key in ("signing_run_id", "signing_run_attempt")),
+            "Signing metadata contradicts the Nightly identity")
+
+
 def clear(identity, tag, source):
     try:
         before = snapshot(identity, tag, "before")
@@ -74,30 +99,26 @@ def clear(identity, tag, source):
         require(set(names) < set(NIGHTLY["ASSETS"]), "Complete-looking draft requires inspection")
         code = NIGHTLY["TAG"].fullmatch(tag)[1]
         certificate = (NIGHTLY["POLICY"]["ROOT"] / ".github/release-certificate.sha256").read_text().strip()
-        prefix = (
-            "Development snapshot for testing. It may contain regressions and is not a stable-support promise.\n\n"
-            "This is a **Nightly** prerelease, not a Stable Public Beta release.\n\n"
-            f"- Source commit: `{source}`\n- Android version code: `{code}`\n"
-            f"- Android version name: `nightly-{code}-{source[:12]}`\n- Device architecture: ARM64\n"
-        )
-        body = release.get("body")
-        notes = re.fullmatch(
-            re.escape(prefix) + r"- APK SHA-256: `([0-9a-f]{64})`\n"
-            + re.escape(f"- Signing certificate SHA-256: `{certificate}`\n"
-                        f"- Deterministic validation: https://github.com/{NIGHTLY['REPOSITORY']}/actions/runs/")
-            + r"[1-9][0-9]* \(attempt [1-9][0-9]*\)\n",
-            body if isinstance(body, str) else "",
-        )
-        require(re.fullmatch(r"[0-9a-f]{64}", certificate) and notes is not None,
-                "Publisher notes are missing, malformed, or contradict the Nightly identity")
+        notes = NIGHTLY["POLICY"]["parse_nightly_notes"](release.get("body"))
+        require(re.fullmatch(r"[0-9a-f]{64}", certificate)
+                and notes["source_sha"] == source and notes["version_code"] == int(code)
+                and notes["version_name"] == f"nightly-{code}-{source[:12]}"
+                and notes["certificate_sha256"] == certificate,
+                "Publisher notes contradict the Nightly identity")
         for asset in assets:
             uploader = asset.get("uploader")
             require(isinstance(uploader, dict) and uploader.get("login") == "github-actions[bot]"
                     and type(uploader.get("id")) is int and uploader["id"] == 41898282,
                     "Asset uploader is missing, unreadable, or not the release bot")
             if asset["name"] == "hermes-native-client.apk":
-                require(asset.get("digest") == f"sha256:{notes[1]}",
+                require(asset.get("digest") == f"sha256:{notes['apk_sha256']}",
                         "APK digest is missing or disagrees with publisher notes")
+            elif asset["name"] == "SHA256SUMS":
+                checksum = hashlib.sha256(f"{notes['apk_sha256']}  hermes-native-client.apk\n".encode()).hexdigest()
+                require(asset.get("digest") == f"sha256:{checksum}",
+                        "SHA256SUMS digest is missing or disagrees with publisher notes")
+            elif asset["name"] == "signing-metadata.json":
+                verify_metadata(asset, notes)
         reference = before["tag"]
         if reference is not None:
             require(reference.get("ref") == f"refs/tags/{tag}", "Tag reference mismatch")

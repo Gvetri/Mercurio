@@ -218,6 +218,78 @@ class NightlyPreparationTest(unittest.TestCase):
             cwd=root, env=environment, text=True, capture_output=True, check=False,
         )
 
+    def test_issue_store_refuses_duplicate_creation_under_optimization(self):
+        root = Path(self.directory.name)
+        fixture = ROOT / ".github/scripts/tests/fixtures"
+        result = subprocess.run(
+            ["python3", "-O", "-c",
+             "from issue_store import IssueStore; s = IssueStore('optimized-issue.json', 'owner/repo', 1); "
+             "s.create({'body': 'original'}); s.create({'body': 'replacement'})"],
+            cwd=root, env={**self.environment, "PYTHONPATH": str(fixture)}, capture_output=True, text=True,
+        )
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("original", json.loads((root / "optimized-issue.json").read_text())["body"])
+
+    def direct_reporter(self, additional):
+        root = Path(self.directory.name)
+        binary = root / "direct-bin"
+        binary.mkdir(exist_ok=True)
+        for source, target in (("fake-gh-validation-issue.py", "gh"), ("issue_store.py", "issue_store.py")):
+            shutil.copyfile(ROOT / ".github/scripts/tests/fixtures" / source, binary / target)
+        (binary / "gh").chmod(0o755)
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        return subprocess.run(
+            ["bash", str(ROOT / ".github/scripts/create-nightly-failure-issue.sh")], cwd=root,
+            env={**self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],
+                 "GH_TOKEN": "synthetic-token", "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",
+                 "GITHUB_SHA": self.selected, "GITHUB_SERVER_URL": "https://github.com",
+                 "TEST_JOB_RESULTS": json.dumps(dict.fromkeys(
+                     ("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"), "success")),
+                 "ADDITIONAL_FAILED_STAGES": json.dumps(additional)},
+            capture_output=True, text=True, check=False,
+        )
+
+    def test_direct_reporter_refuses_unproved_additional_failures(self):
+        stage = next(job for job in self.jobs if job["name"] == "formatting")
+        for case in ("invented", "succeeded", "green", "unfinished", "missing", "skipped", "unknown"):
+            with self.subTest(case=case):
+                for name in ("issue.json", "writes"):
+                    (Path(self.directory.name) / name).unlink(missing_ok=True)
+                self.selected_run.update(status="completed", conclusion="failure")
+                stage.update(name="formatting", conclusion="failure")
+                additional = ["formatting"]
+                if case == "invented":
+                    additional = ["invented-check"]
+                elif case == "succeeded":
+                    stage["conclusion"] = "success"
+                elif case == "green":
+                    self.selected_run["conclusion"] = "success"
+                elif case == "unfinished":
+                    self.selected_run["status"] = "in_progress"
+                elif case == "missing":
+                    stage["name"] = "other"
+                elif case in {"skipped", "unknown"}:
+                    stage["conclusion"] = case
+                result = self.direct_reporter(additional)
+                self.assertNotEqual(0, result.returncode, result.stdout)
+                self.assertTrue(result.stderr)
+                self.assertFalse((Path(self.directory.name) / "issue.json").exists())
+                self.assertFalse((Path(self.directory.name) / "writes").exists())
+
+    def test_direct_reporter_accepts_only_terminal_failed_conclusions(self):
+        self.selected_run["conclusion"] = "failure"
+        stage = next(job for job in self.jobs if job["name"] == "formatting")
+        root = Path(self.directory.name)
+        for conclusion in ("failure", "cancelled", "timed_out", "startup_failure", "action_required", "neutral", "stale"):
+            with self.subTest(conclusion=conclusion):
+                stage["conclusion"] = conclusion
+                result = self.direct_reporter(["formatting"])
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn("- `formatting`", json.loads((root / "issue.json").read_text())["body"])
+                self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
+                (root / "issue.json").unlink()
+                (root / "writes").unlink()
+
     def test_failed_validation_files_one_issue_with_exact_evidence_and_updates_its_attempt(self):
         self.selected_run["conclusion"] = "failure"
         for identity, job in enumerate(self.jobs, 1):
