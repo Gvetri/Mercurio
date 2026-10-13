@@ -36,9 +36,11 @@ unchanged signer verifies workflow identity, repository, main membership, source
 SHA, and every declared deterministic job, including API 24 instrumentation and
 Maestro journeys. Push-only, pull-request, fork, incomplete, or changed evidence
 cannot authorize publication. Signing and publication stay bound to the captured
-SHA and attempt. A newer commit merged during validation waits for the next Nightly;
-if the gate's shared per-ref concurrency cancels this validation, this Nightly fails
-closed instead of substituting the newer run. If `main` moves before dispatch and
+SHA and attempt. A newer commit merged during validation waits for the next Nightly:
+the dispatched validation has its own run-id concurrency group, so a push cannot
+cancel it. On success this Nightly releases the captured tip, not the newer commit.
+Other cancellation still fails closed instead of substituting another run.
+If `main` moves before dispatch and
 the run starts on another SHA, it cannot satisfy discovery for the captured tip.
 
 The old first-parent ancestry walk is removed: a broken current tip must not be

@@ -35,9 +35,11 @@ and a label edit all re-evaluate the head, so a result from an earlier state of 
 stands for the current one, and adding the `run-maestro` label starts the labeled emulator suites on
 an open pull request.
 
-The concurrency group is the pull-request number with `cancel-in-progress`, so the runs of one pull
-request never race: a newer run replaces the obsolete pending one, and only the current head's own
-run publishes the required status. Results are published per check, and only the aggregate job named
+With `cancel-in-progress: true`, pull-request runs group per pull-request number and push runs group
+per ref: a newer run supersedes the obsolete run of the same pull request or ref. Scheduled runs
+keep sharing the per-ref group. A hand-started run instead groups on its own run id, so a push cannot
+cancel a validation the Nightly started, and separate hand starts cannot cancel one another.
+Results are published per check, and only the aggregate job named
 `quality-gate` is a required status. The aggregate fails unless every check declared in
 `.github/quality-gate/required-checks.txt` reports the outcome the event expects.
 

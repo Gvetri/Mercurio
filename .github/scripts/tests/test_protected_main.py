@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -71,6 +72,27 @@ def jobs_of(workflow):
     return jobs
 
 
+def concurrency_group(workflow, event_name, run_id, ref="refs/heads/main", pull_request=None):
+    group = workflow.split("\nconcurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
+    declaration = re.search(r"^  group: (.+)$", group, re.MULTILINE)
+    assert declaration is not None, "The workflow must declare a single-line concurrency group"
+    template = declaration.group(1)
+    context = {
+        "github.workflow": "quality-gate",
+        "github.event_name": event_name,
+        "github.run_id": run_id,
+        "github.ref": ref,
+        "github.event.pull_request.number": pull_request,
+    }
+
+    def evaluate(match):
+        expression = re.sub(r"github\.[a-z_.]+", lambda token: repr(context[token.group()]), match.group(1))
+        expression = expression.replace("&&", " and ").replace("||", " or ")
+        return str(eval(expression, {"__builtins__": {}, "format": lambda pattern, *args: pattern.format(*args)}))
+
+    return re.sub(r"\$\{\{ (.*?) \}\}", evaluate, template)
+
+
 class TestProtectedMainWorkflow(unittest.TestCase):
     """The declaration of the protected-main workflow."""
 
@@ -100,11 +122,32 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read\n", self.workflow)
 
     def test_a_new_commit_cancels_the_obsolete_run_of_the_same_pull_request(self):
-        self.assertIn(
-            "  group: quality-gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}\n",
-            self.workflow,
-        )
+        first = concurrency_group(self.workflow, "pull_request", 100, pull_request=25)
+        updated = concurrency_group(self.workflow, "pull_request", 101, pull_request=25)
+        other = concurrency_group(self.workflow, "pull_request", 102, pull_request=26)
+        self.assertEqual("quality-gate-quality-gate-25", first)
+        self.assertEqual(first, updated)
+        self.assertNotEqual(first, other)
         self.assertIn("  cancel-in-progress: true\n", self.workflow)
+
+    def test_a_push_cannot_cancel_a_dispatched_validation(self):
+        dispatched = concurrency_group(self.workflow, "workflow_dispatch", 100)
+        pushed = concurrency_group(self.workflow, "push", 101)
+        self.assertNotEqual(dispatched, pushed)
+
+    def test_dispatched_validations_group_only_with_their_own_run(self):
+        dispatched = concurrency_group(self.workflow, "workflow_dispatch", 100)
+        self.assertEqual(dispatched, concurrency_group(self.workflow, "workflow_dispatch", 100))
+        self.assertNotEqual(dispatched, concurrency_group(self.workflow, "workflow_dispatch", 101))
+        self.assertNotEqual(dispatched, concurrency_group(self.workflow, "pull_request", 101, pull_request=100))
+        self.assertNotEqual(dispatched, concurrency_group(self.workflow, "schedule", 101))
+
+    def test_successive_pushes_still_supersede_each_other_per_ref(self):
+        first = concurrency_group(self.workflow, "push", 100)
+        self.assertEqual("quality-gate-quality-gate-refs/heads/main", first)
+        self.assertEqual(first, concurrency_group(self.workflow, "push", 101))
+        self.assertEqual(first, concurrency_group(self.workflow, "schedule", 102))
+        self.assertNotEqual(first, concurrency_group(self.workflow, "push", 103, ref="refs/heads/other"))
 
     def test_the_fork_guard_reports_the_read_only_policy_for_every_pull_request(self):
         fork_guard = job_block(self.workflow, "fork_guard")
@@ -366,7 +409,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.api.start()
         self.addCleanup(self.api.stop)
 
-    def run_check(self, api_url=None, owner=False):
+    def run_check(self, api_url=None, owner=False, workflow=None):
         if owner:
             self.routes.update(self.owner_routes)
         environment = dict(os.environ)
@@ -377,7 +420,18 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
                 "GITHUB_TOKEN": "test-token",
             }
         )
-        command = ["python3", str(CONFORMANCE_SCRIPT)]
+        script = CONFORMANCE_SCRIPT
+        if workflow is not None:
+            directory = tempfile.TemporaryDirectory()
+            self.addCleanup(directory.cleanup)
+            copied_root = Path(directory.name)
+            for source in (CONFORMANCE_SCRIPT, WORKFLOW, REQUIRED_CHECKS):
+                target = copied_root / source.relative_to(ROOT)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+            (copied_root / WORKFLOW.relative_to(ROOT)).write_text(workflow)
+            script = copied_root / CONFORMANCE_SCRIPT.relative_to(ROOT)
+        command = ["python3", str(script)]
         if owner:
             command.append("--owner")
         return subprocess.run(
@@ -394,6 +448,27 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertIn("Verified the 4 enforced rule(s) protecting main", completed.stdout)
         self.assertIn("Repository conformance passed.", completed.stdout)
+
+    def test_removing_dispatch_isolation_fails_conformance(self):
+        workflow = re.sub(
+            r"^  group: .+$",
+            "  group: quality-gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
+            WORKFLOW.read_text(),
+            flags=re.MULTILINE,
+        )
+        completed = self.run_check(workflow=workflow)
+        self.assertEqual(1, completed.returncode)
+        self.assertEqual(
+            "The concurrency group must isolate dispatched run ids and supersede runs per pull request or ref\n"
+            "Repository conformance failed.\n",
+            completed.stderr,
+        )
+
+    def test_removing_cancellation_fails_conformance(self):
+        workflow = WORKFLOW.read_text().replace("  cancel-in-progress: true\n", "")
+        completed = self.run_check(workflow=workflow)
+        self.assertEqual(1, completed.returncode)
+        self.assertEqual("The workflow must cancel an obsolete run\nRepository conformance failed.\n", completed.stderr)
 
     def test_a_weakened_rule_fails(self):
         self.routes["/repos/Gvetri/hermes-native-client/rules/branches/main"] = [
