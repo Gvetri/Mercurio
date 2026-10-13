@@ -327,7 +327,10 @@ class SessionMessageRenderingTest {
         composeTestRule.onNodeWithText("Share message").assertIsDisplayed().assertIsNotEnabled()
         composeTestRule.onNodeWithText("Copy message").performTouchInput { click(center) }
         composeTestRule.waitForIdle()
-        assertTrue("A failed message must not export its content", recorded.copied.isEmpty() && recorded.shared.isEmpty())
+        assertTrue(
+            "A failed message must not export its content",
+            recorded.copied.isEmpty() && recorded.shared.isEmpty(),
+        )
     }
 
     @Test
