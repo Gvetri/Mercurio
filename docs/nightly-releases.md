@@ -146,6 +146,30 @@ unpublished draft (and an orphaned tag, if present), then start a new full run w
 a new version. Never delete an already published release to force a retry. If the
 final publication succeeded but its read-back failed, inspect and verify that
 existing release instead of publishing again. No automatic cleanup hides failures.
+
+A failed signing or publication stage files or updates one `ready-for-agent` issue
+per Nightly run. The reporter reads the exact run attempt and failed jobs, lists
+only available same-attempt artifacts, and verifies the issue after writing it.
+It has `actions: read`, `issues: write`, and `contents: read` for checkout, never
+release-write access or signing secrets. The publication job uses its existing
+write token to read back retained state after refusal and uploads
+`nightly-publication-state-<run>-<attempt>`. The reporter consumes that artifact,
+not draft-release APIs. Missing artifacts, failed read-backs, and unavailable
+identities are explicitly unknown, never proof that a release or tag is absent.
+A failure inside the reusable signer can precede its outputs, leaving no recovered
+release identity. A complete-looking draft still requires inspection; an asset
+inventory alone does not prove that its bytes are valid. Reported state is a
+snapshot, not permission to skip fresh recovery checks.
+
+An agent may remove **one incomplete, unpublished draft and its orphan tag** only
+when the failure issue names their exact release id, tag, and source. The agent
+must verify that identity and the retained state again before and after removal.
+It may not touch a published release or an asset, overwrite or re-publish release
+state, or recover a partially published release. Unknown state requires inspection,
+not guessed cleanup. After deliberate recovery, start a **new full Nightly run**
+with a new version; never retry only signing or publication. This is an explicit
+agent action, never a workflow step or automatic repair.
+
 The workflow uses only `GITHUB_TOKEN`; permission or protected-tag failures stop it,
 not a fallback to an administrator credential.
 
@@ -177,7 +201,12 @@ They cover main-push routing, current-tip dispatch and exact-run correlation,
 bounded discovery and completion, cancelled/failed/unknown validation, refusal of
 historical fallback and changed evidence, duplicate prevention before dispatch,
 increasing versions, stale partial reruns, metadata and certificate checks, missing
-evidence, partial uploads, downloaded-byte corruption, and published-release read-back. They do not claim a real GitHub release was signed or
+evidence, partial uploads, downloaded-byte corruption, and published-release read-back.
+The [recorded failure issue payload](../.github/scripts/tests/fixtures/nightly-publication-failure-issue.json)
+is synthetic evidence from the refusal/report test, not a live issue or run.
+Failure-report tests also cover early signer failure, missing artifacts, unreadable
+state, stale evidence, issue read-back, idempotent updates, and unchanged remote
+release state after refusal. They do not claim a real GitHub release was signed or
 published. The same synthetic API seam and a deterministic `gh` issue store execute
 the existing shell reporter, proving validation identity, four stage results,
 artifact presence/absence, one issue with update-on-rerun, and refusal of green or
