@@ -36,8 +36,9 @@ The application package is `org.hermesnative.client`. Local release builds are u
 
 ## Nightly releases
 
-[Development Nightlies](docs/nightly-releases.md) select a fully validated `main` commit,
-generate an increasing Android version code, and build an ARM64 device APK. Publication
+[Development Nightlies](docs/nightly-releases.md) capture the current `main` tip and
+start full validation for that source. On success, they generate an increasing Android
+version code and build an ARM64 device APK. Publication
 runs unattended through the main-only Nightly signing environment. Releases are
 prereleases named **Nightly**, with source, version, checksum, and certificate metadata.
 A Nightly is not a Stable Public Beta or a stable-support promise. Merging to `main`
