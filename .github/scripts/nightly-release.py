@@ -199,7 +199,7 @@ def gh_release(arguments):
     return gh_command(["release", *arguments, "--repo", REPOSITORY])
 
 
-def publish(directory, certificate):
+def publish(directory, certificate, failure_context=None):
     POLICY["verify_generation"]()
     evidence = POLICY["verify_source"]()
     POLICY["verify_nightly_authorization"]()
@@ -238,6 +238,8 @@ def publish(directory, certificate):
         }))
         require(type(created) is dict, "Missing release creation response")
         release_id = created.get("id")
+        if failure_context is not None:
+            failure_context["created_release_id"] = release_id
         release = read_release(True, release_id)
         require(release.get("assets") == [], "New Nightly draft unexpectedly contains assets")
         gh_release(["upload", tag, *(str(directory / name) for name in ASSETS)])
@@ -258,7 +260,66 @@ def publish(directory, certificate):
         print(f"Nightly publication verified: {release['html_url']}")
 
 
+def record_publication_failure(context):
+    destination = os.environ.get("NIGHTLY_FAILURE_OBSERVATION")
+    if not destination:
+        return
+    observation = {
+        "run_id": os.environ.get("GITHUB_RUN_ID"), "attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+        "commit": os.environ.get("GITHUB_SHA"), "source_sha": os.environ.get("RELEASE_SOURCE_SHA"),
+        "version_code": os.environ.get("RELEASE_VERSION_CODE"), "tag": None, "release_id": None,
+        "created_release_id": context.get("created_release_id"),
+        "incomplete_draft": "unknown", "tag_exists": "unknown", "orphan_tag": "unknown",
+        "release_state": "unknown", "observation_error": None,
+    }
+    try:
+        POLICY["verify_context"]()
+        sha = observation["source_sha"]
+        code = observation["version_code"]
+        require(isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha)
+                and isinstance(code, str) and re.fullmatch(r"[1-9][0-9]*", code), "Missing release identity")
+        observation["tag"] = f"nightly-{code}-{sha}"
+        identity = context.get("created_release_id")
+        candidates = []
+        if identity is None:
+            for release in pages("releases"):
+                match = TAG.fullmatch(release.get("tag_name", ""))
+                if match and match[2] == sha:
+                    candidates.append(release)
+            if len(candidates) == 1:
+                identity = candidates[0].get("id")
+        if identity is not None:
+            require(type(identity) is int and identity > 0, "Missing release identity")
+            release = api_get(f"releases/{identity}")
+            match = TAG.fullmatch(release.get("tag_name", ""))
+            require(release.get("id") == identity and match and match[2] == sha
+                    and release.get("target_commitish") == sha, "Release identity changed")
+            observation.update(release_id=identity, tag=release["tag_name"], version_code=match[1])
+            if release.get("draft") is True:
+                observation["release_state"] = "draft"
+                assets = release.get("assets")
+                if isinstance(assets, list):
+                    observation["incomplete_draft"] = "yes" if {asset.get("name") for asset in assets} != set(ASSETS) else "unknown"
+            elif release.get("draft") is False:
+                observation.update(release_state="published", incomplete_draft="no")
+        elif not candidates:
+            observation["release_state"] = "not found in release listing"
+        references = api_get(f"git/matching-refs/tags/{observation['tag']}")
+        require(isinstance(references, list), "Malformed tag evidence")
+        exact = [ref for ref in references if ref.get("ref") == f"refs/tags/{observation['tag']}"]
+        require(len(exact) <= 1, "Ambiguous tag evidence")
+        observation["tag_exists"] = "yes" if exact else "no"
+        if not exact or observation["release_state"] in {"draft", "published"}:
+            observation["orphan_tag"] = "no"
+        elif not candidates and identity is None:
+            observation["orphan_tag"] = "unknown"
+    except (ReleaseError, KeyError, TypeError, ValueError, AttributeError, OSError):
+        observation["observation_error"] = "Read-back incomplete; unknown fields are not evidence of absence."
+    Path(destination).write_text(json.dumps(observation) + "\n")
+
+
 def main(clock=time):
+    failure_context = {}
     try:
         if sys.argv[1:] == ["prepare"]:
             result = prepare(clock)
@@ -267,13 +328,18 @@ def main(clock=time):
                     output.write(f"{key}={value}\n")
             print("Nightly source prepared." if result["publish"] == "true" else "Source already has a Nightly; nothing to publish.")
         elif len(sys.argv) == 4 and sys.argv[1] == "publish":
-            publish(Path(sys.argv[2]), Path(sys.argv[3]))
+            publish(Path(sys.argv[2]), Path(sys.argv[3]), failure_context)
         else:
             raise ReleaseError("Unsupported Nightly operation")
         return 0
     except (ReleaseError, SIGNER["SigningError"], KeyError, TypeError, ValueError, AttributeError, OSError, subprocess.TimeoutExpired) as error:
         message = str(error) if isinstance(error, (ReleaseError, SIGNER["SigningError"])) else "Missing or malformed Nightly evidence"
         print(f"Nightly refused: {message}", file=sys.stderr)
+        if len(sys.argv) == 4 and sys.argv[1] == "publish":
+            try:
+                record_publication_failure(failure_context)
+            except OSError:
+                print("Publication state artifact could not be written.", file=sys.stderr)
         return 1
 
 

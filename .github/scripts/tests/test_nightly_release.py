@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from urllib.parse import parse_qs, urlsplit
+import zipfile
 
 from test_protected_main import ApiStub, job_block, job_key
 from test_release_signing import REQUIRED_JOBS
@@ -27,6 +28,25 @@ class NightlyWorkflowTest(unittest.TestCase):
             self.assertNotIn("'push'", condition)
             self.assertIn("'schedule'", condition)
             self.assertIn("'workflow_dispatch'", condition)
+
+    def test_release_failure_reporter_is_separate_and_cannot_write_contents(self):
+        workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
+        self.assertIn("\n  report_release_failure:\n", workflow)
+        reporter = job_block(workflow, "report_release_failure")
+        self.assertIn("needs: [sign, publish]", reporter)
+        for condition in ("always()", "needs.sign.result == 'failure'", "needs.publish.result == 'failure'"):
+            self.assertIn(condition, job_key(reporter, "if"))
+        self.assertIn("contents: read", reporter)
+        self.assertIn("actions: read", reporter)
+        self.assertIn("issues: write", reporter)
+        self.assertNotIn("contents: write", reporter)
+        self.assertNotIn("secrets.", reporter)
+        self.assertNotIn("environment:", reporter)
+        self.assertIn("create-nightly-release-failure-issue.py", reporter)
+        publisher = job_block(workflow, "publish")
+        self.assertIn("NIGHTLY_FAILURE_OBSERVATION:", publisher)
+        self.assertIn("nightly-publication-state-${{ github.run_id }}-${{ github.run_attempt }}", publisher)
+        self.assertIn("always() && steps.publication.outcome == 'failure'", publisher)
 
     def test_nightly_scopes_dispatch_and_only_publisher_can_write_contents(self):
         workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
@@ -76,7 +96,7 @@ class NightlyPreparationTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.old, self.selected = "a" * 40, "b" * 40
+        self.old, self.selected, self.new = "a" * 40, "b" * 40, "c" * 40
         self.repository = "Gvetri/hermes-native-client"
         prefix = f"/repos/{self.repository}"
         self.selected_run = {
@@ -369,6 +389,8 @@ class NightlyPreparationTest(unittest.TestCase):
         shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-release.py", binary / "gh")
         (binary / "gh").chmod(0o755)
         self.environment["PATH"] = str(binary) + os.pathsep + self.environment["PATH"]
+        self.environment["NIGHTLY_FAILURE_OBSERVATION"] = str(root / "publication-state.json")
+        self.environment["GITHUB_SHA"] = self.new
         self.provider = root / "release-fixture"
         self.provider.mkdir()
         self.release_file = self.provider / "release.json"
@@ -393,6 +415,197 @@ class NightlyPreparationTest(unittest.TestCase):
             "python3", str(ROOT / ".github/scripts/nightly-release.py"), "publish",
             str(self.signed), str(self.certificate),
         ], env=self.environment, capture_output=True, text=True, check=False)
+
+    def report_fixture(self, failure="publish", observation=True):
+        root = Path(self.directory.name)
+        self.report_store = root / "report-fixture"
+        self.report_store.mkdir(exist_ok=True)
+        binary = root / "report-bin"
+        binary.mkdir(exist_ok=True)
+        shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-nightly-report.py", binary / "gh")
+        (binary / "gh").chmod(0o755)
+        self.report_environment = {
+            **self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],
+            "HOME": str(root), "GH_TOKEN": "synthetic-token", "GITHUB_RUN_ID": "456",
+            "GITHUB_SHA": self.new,
+        }
+        self.report_jobs = [
+            {"id": 20, "name": "sign / prepare", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "sign" else "success"},
+            {"id": 21, "name": "publish", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "publish" else "skipped"},
+        ]
+        prefix = f"/repos/{self.repository}"
+        self.report_run = {
+            "id": 456, "run_attempt": 2, "head_sha": self.new, "head_branch": "main",
+            "repository": {"full_name": self.repository}, "head_repository": {"full_name": self.repository},
+            "path": ".github/workflows/nightly-release.yml", "event": "schedule", "status": "in_progress",
+        }
+        self.report_artifacts = []
+        if observation:
+            with zipfile.ZipFile(self.report_store / "observation.zip", "w") as archive:
+                archive.write(self.environment["NIGHTLY_FAILURE_OBSERVATION"], "publication-state.json")
+            self.report_artifacts.append({"id": 31, "name": "nightly-publication-state-456-2", "expired": False})
+        self.routes.update({
+            f"{prefix}/actions/runs/456/attempts/2": self.report_run,
+            f"{prefix}/actions/runs/456/attempts/2/jobs": {"total_count": len(self.report_jobs), "jobs": self.report_jobs},
+            f"{prefix}/actions/runs/456/artifacts": {"total_count": len(self.report_artifacts), "artifacts": self.report_artifacts},
+        })
+
+    def report(self):
+        return subprocess.run(["python3", str(ROOT / ".github/scripts/create-nightly-release-failure-issue.py")],
+                              env=self.report_environment, capture_output=True, text=True, check=False)
+
+    def test_refused_publication_reports_readback_identity_without_changing_release_state(self):
+        self.signed_publication_fixture()
+        (self.provider / "fail-upload").touch()
+        self.assertNotEqual(0, self.publish().returncode)
+        before = {path.relative_to(self.provider): path.read_bytes() for path in self.provider.rglob("*") if path.is_file()}
+        self.assertNotEqual(0, self.publish().returncode)
+        self.report_fixture()
+        result = self.report()
+        self.assertEqual(0, result.returncode, result.stderr)
+        issue = json.loads((self.report_store / "issue.json").read_text())
+        for text in ("<!-- nightly-release-run:456 -->", "Attempt: `2`", self.new, self.selected,
+                     "Version code: `7002`", self.tag, "Release id: `1`", "Incomplete draft: `yes`",
+                     "Orphan tag: `no`", "nightly-publication-state-456-2", "signed-release-456-2: missing"):
+            self.assertIn(text, issue["body"])
+        self.assertEqual([{"name": "ready-for-agent"}], issue["labels"])
+        repeated = self.report()
+        self.assertEqual(0, repeated.returncode, repeated.stderr)
+        self.assertEqual(["POST", "PATCH"], (self.report_store / "writes").read_text().splitlines())
+        expected = json.loads((ROOT / ".github/scripts/tests/fixtures/nightly-publication-failure-issue.json").read_text())
+        self.assertEqual(expected, json.loads((self.report_store / "issue.json").read_text()))
+        after = {path.relative_to(self.provider): path.read_bytes() for path in self.provider.rglob("*") if path.is_file()}
+        self.assertEqual(before, after)
+
+    def test_signer_failure_before_outputs_reports_unknown_identity_and_missing_artifacts(self):
+        self.report_fixture(failure="sign", observation=False)
+        result = self.report()
+        self.assertEqual(0, result.returncode, result.stderr)
+        body = json.loads((self.report_store / "issue.json").read_text())["body"]
+        for text in ("sign / prepare", "Source SHA: `unknown`", "Version code: `unknown`", "Tag: `unknown`",
+                     "Release id: `unknown`", "Incomplete draft: `unknown`", "Orphan tag: `unknown`",
+                     "Publication state artifact: missing", "reusable signer", "nightly-publication-state-456-2: missing"):
+            self.assertIn(text, body)
+        self.assertNotIn("/artifacts/", body)
+        self.assertTrue(all("/actions/" in line or "/issues" in line
+                            for line in (self.report_store / "requests").read_text().splitlines()))
+
+    def test_later_attempt_reopens_and_updates_the_same_run_issue(self):
+        self.report_fixture(failure="sign", observation=False)
+        self.assertEqual(0, self.report().returncode)
+        issue_file = self.report_store / "issue.json"
+        issue = json.loads(issue_file.read_text())
+        issue["state"] = "closed"
+        issue_file.write_text(json.dumps(issue))
+        self.report_environment["GITHUB_RUN_ATTEMPT"] = "3"
+        self.report_run["run_attempt"] = 3
+        prefix = f"/repos/{self.repository}/actions/runs/456/attempts"
+        self.routes[f"{prefix}/3"] = self.report_run
+        self.routes[f"{prefix}/3/jobs"] = self.routes[f"{prefix}/2/jobs"]
+        result = self.report()
+        self.assertEqual(0, result.returncode, result.stderr)
+        issue = json.loads(issue_file.read_text())
+        self.assertEqual("open", issue["state"])
+        self.assertEqual(17, issue["number"])
+        self.assertIn("Attempt: `3`", issue["body"])
+        self.assertEqual(["POST", "PATCH"], (self.report_store / "writes").read_text().splitlines())
+
+    def test_reporter_refuses_success_skips_cancellation_and_foreign_run_evidence(self):
+        self.report_fixture(failure="none", observation=False)
+        for conclusion in ("success", "skipped", "cancelled", None):
+            self.report_jobs[0]["conclusion"] = conclusion
+            result = self.report()
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("No failed signing or publication", result.stderr)
+            self.assertFalse((self.report_store / "issue.json").exists())
+        self.report_jobs[0]["conclusion"] = "failure"
+        self.report_run["path"] = ".github/workflows/quality-gate.yml"
+        self.assertNotEqual(0, self.report().returncode)
+        self.assertFalse((self.report_store / "issue.json").exists())
+
+    def test_reporter_refuses_a_successful_run_even_with_inconsistent_failed_jobs(self):
+        self.report_fixture(failure="sign", observation=False)
+        self.report_run.update(status="completed", conclusion="success")
+        self.assertNotEqual(0, self.report().returncode)
+        self.assertFalse((self.report_store / "issue.json").exists())
+
+    def test_reporter_refuses_ambiguous_issues_and_verifies_the_issue_readback(self):
+        self.report_fixture(failure="sign", observation=False)
+        (self.report_store / "wrong-readback").touch()
+        result = self.report()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Published issue does not match", result.stderr)
+        (self.report_store / "wrong-readback").unlink()
+        (self.report_store / "duplicate").touch()
+        result = self.report()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Multiple issues", result.stderr)
+        self.assertEqual(["POST"], (self.report_store / "writes").read_text().splitlines())
+
+    def test_reporter_rejects_truncated_jobs_and_never_links_expired_artifacts(self):
+        self.report_fixture(failure="sign", observation=False)
+        endpoint = f"/repos/{self.repository}/actions/runs/456/attempts/2/jobs"
+        self.routes[endpoint]["total_count"] += 1
+        self.assertNotEqual(0, self.report().returncode)
+        self.assertFalse((self.report_store / "issue.json").exists())
+        self.routes[endpoint]["total_count"] -= 1
+        self.report_artifacts.extend([
+            {"id": 32, "name": "signed-release-456-2", "expired": True},
+            {"id": 33, "name": "unsigned-release-456-1", "expired": False},
+        ])
+        self.routes[f"/repos/{self.repository}/actions/runs/456/artifacts"]["total_count"] = 2
+        self.assertEqual(0, self.report().returncode)
+        body = json.loads((self.report_store / "issue.json").read_text())["body"]
+        self.assertNotIn("/artifacts/", body)
+        self.assertIn("signed-release-456-2: missing or expired", body)
+
+    def test_retained_draft_and_tag_are_read_back_even_for_an_older_version(self):
+        self.signed_publication_fixture()
+        tag = f"nightly-6001-{self.selected}"
+        retained = {"id": 1, "tag_name": tag, "target_commitish": self.selected, "draft": True, "assets": []}
+        self.release_file.write_text(json.dumps(retained))
+        self.routes[f"/repos/{self.repository}/git/matching-refs/tags/{tag}"] = [{"ref": f"refs/tags/{tag}"}]
+        before = self.release_file.read_bytes()
+        self.assertNotEqual(0, self.publish().returncode)
+        self.assertEqual(before, self.release_file.read_bytes())
+        self.assertFalse((self.provider / "operations").exists())
+        self.report_fixture()
+        result = self.report()
+        self.assertEqual(0, result.returncode, result.stderr)
+        body = json.loads((self.report_store / "issue.json").read_text())["body"]
+        for text in ("Version code: `6001`", tag, "Release id: `1`", "Incomplete draft: `yes`", "Tag exists: `yes`", "Orphan tag: `no`"):
+            self.assertIn(text, body)
+        self.assertEqual(before, self.release_file.read_bytes())
+
+    def test_failure_observation_uses_created_id_even_when_release_listing_is_unavailable(self):
+        self.signed_publication_fixture()
+        (self.provider / "fail-upload").touch()
+        listings = iter([[], {"message": "listing unavailable"}])
+        self.routes[f"/repos/{self.repository}/releases"] = lambda: next(listings)
+        self.assertNotEqual(0, self.publish().returncode)
+        observation = json.loads(Path(self.environment["NIGHTLY_FAILURE_OBSERVATION"]).read_text())
+        self.assertEqual(1, observation["release_id"])
+        self.assertEqual("yes", observation["incomplete_draft"])
+
+    def test_missing_release_readback_is_unknown_not_absent_and_stale_artifact_is_refused(self):
+        self.signed_publication_fixture()
+        (self.provider / "fail-upload").touch()
+        del self.routes[f"/repos/{self.repository}/releases/1"]
+        self.assertNotEqual(0, self.publish().returncode)
+        self.report_fixture()
+        result = self.report()
+        self.assertEqual(0, result.returncode, result.stderr)
+        body = json.loads((self.report_store / "issue.json").read_text())["body"]
+        for text in ("Release id: `unknown`", "Incomplete draft: `unknown`", "Orphan tag: `unknown`", "Read-back incomplete"):
+            self.assertIn(text, body)
+        observation = json.loads(Path(self.environment["NIGHTLY_FAILURE_OBSERVATION"]).read_text())
+        observation["attempt"] = "1"
+        with zipfile.ZipFile(self.report_store / "observation.zip", "w") as archive:
+            archive.writestr("publication-state.json", json.dumps(observation))
+        result = self.report()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("another run or attempt", result.stderr)
+        self.assertEqual(["POST"], (self.report_store / "writes").read_text().splitlines())
 
     def test_publishes_only_after_real_apk_and_remote_asset_readback_then_deduplicates(self):
         result, values = self.prepare()
@@ -442,8 +655,22 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIs(True, json.loads(self.release_file.read_text())["draft"])
         self.assertEqual(["create", "upload"], (self.provider / "operations").read_text().splitlines())
+        observation = json.loads(Path(self.environment["NIGHTLY_FAILURE_OBSERVATION"]).read_text())
+        self.assertEqual("456", observation["run_id"])
+        self.assertEqual("2", observation["attempt"])
+        self.assertEqual(self.new, observation["commit"])
+        self.assertEqual(1, observation["release_id"])
+        self.assertEqual(self.selected, observation["source_sha"])
+        self.assertEqual("7002", observation["version_code"])
+        self.assertEqual(self.tag, observation["tag"])
+        self.assertEqual("yes", observation["incomplete_draft"])
+        self.assertEqual("no", observation["tag_exists"])
+        self.assertEqual("no", observation["orphan_tag"])
+        self.assertIn(f"/repos/{self.repository}/releases/1", self.api.requests)
+        before = self.release_file.read_bytes()
         (self.provider / "fail-upload").unlink()
         self.assertNotEqual(0, self.publish().returncode)
+        self.assertEqual(before, self.release_file.read_bytes())
         self.assertEqual(["create", "upload"], (self.provider / "operations").read_text().splitlines())
 
     def test_download_mismatch_never_publishes_the_draft(self):
@@ -485,6 +712,18 @@ class NightlyPreparationTest(unittest.TestCase):
         ]
         result = self.publish()
         self.assertNotEqual(0, result.returncode)
+        self.assertFalse((self.provider / "operations").exists())
+        observation = json.loads(Path(self.environment["NIGHTLY_FAILURE_OBSERVATION"]).read_text())
+        self.assertEqual("yes", observation["tag_exists"])
+        self.assertEqual("unknown", observation["incomplete_draft"])
+        self.assertEqual("unknown", observation["orphan_tag"])
+        self.assertEqual("not found in release listing", observation["release_state"])
+        self.report_fixture()
+        result = self.report()
+        self.assertEqual(0, result.returncode, result.stderr)
+        body = json.loads((self.report_store / "issue.json").read_text())["body"]
+        self.assertIn("Tag exists: `yes`", body)
+        self.assertIn("Orphan tag: `unknown`", body)
         self.assertFalse((self.provider / "operations").exists())
 
 
