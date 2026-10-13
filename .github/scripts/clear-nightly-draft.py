@@ -78,6 +78,13 @@ def verify_metadata(asset, notes):
             "Signing metadata contradicts the Nightly identity")
 
 
+def release_identity(release):
+    return {**release, "assets": [
+        {key: value for key, value in asset.items() if key != "download_count"}
+        for asset in release["assets"]
+    ]}
+
+
 def clear(identity, tag, source):
     try:
         before = snapshot(identity, tag, "before")
@@ -92,7 +99,8 @@ def clear(identity, tag, source):
         require(release.get("name") == "Nightly" and release.get("prerelease") is True,
                 "Release is not a Nightly prerelease")
         assets = NIGHTLY["pages"](f"releases/{identity}/assets")
-        require(assets == release.get("assets"), "Asset inventory changed or is incomplete")
+        require(release_identity({"assets": assets}) == release_identity({"assets": release.get("assets")}),
+                "Asset inventory changed or is incomplete")
         names = [asset["name"] for asset in assets]
         require(len(names) == len(set(names)) and set(names) <= set(NIGHTLY["ASSETS"]),
                 "Foreign or duplicate assets require inspection")
@@ -126,7 +134,7 @@ def clear(identity, tag, source):
                     and reference["object"].get("sha") == source, "Tag source mismatch")
         owners = [item for item in NIGHTLY["pages"]("releases") if item.get("tag_name") == tag]
         require(len(owners) == 1 and owners[0].get("id") == int(identity), "Tag ownership is ambiguous")
-        require(api_get(f"releases/{identity}") == release
+        require(release_identity(api_get(f"releases/{identity}")) == release_identity(release)
                 and optional_get(f"git/ref/tags/{tag}") == reference, "Recovery state changed before deletion")
         delete(f"releases/{identity}")
         require(optional_get(f"releases/{identity}") is None, "Draft deletion read-back failed")

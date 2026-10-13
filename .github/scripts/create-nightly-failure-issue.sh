@@ -41,27 +41,32 @@ if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.
 run = os.environ["GITHUB_RUN_ID"]
 attempt = os.environ["GITHUB_RUN_ATTEMPT"]
 sha = os.environ["GITHUB_SHA"]
-results = json.loads(os.environ["TEST_JOB_RESULTS"])
-job_names = {
-    "unit_tests": "unit-tests",
-    "compose_test": "compose-jvm-tests",
-    "api24_instrumentation": "api24-instrumentation",  # gitleaks:allow -- public job name, not a credential
-    "maestro_journeys": "maestro-journeys",
-}
-if set(results) != set(job_names) or any(value not in {"success", "failure", "cancelled", "skipped"} for value in results.values()):
+try:
+    results = json.loads(os.environ["TEST_JOB_RESULTS"])
+except ValueError:
+    raise SystemExit("Expected valid JSON for required test job results.")
+policy = runpy.run_path(str(Path(sys.argv[2]) / "release-signing.py"))
+declared = policy["required_check_names"]()
+job_names = {key: declared[key] for key in (
+    "unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys",
+)}
+if not isinstance(results, dict) or set(results) != set(job_names) or any(
+    not isinstance(value, str) or value not in {"success", "failure", "cancelled", "skipped"}
+    for value in results.values()
+):
     raise SystemExit("Expected a terminal result for each required test job.")
 failed = [job for job in job_names if results[job] != "success"]
-additional = json.loads(os.environ.get("ADDITIONAL_FAILED_STAGES", "[]"))
+try:
+    additional = json.loads(os.environ.get("ADDITIONAL_FAILED_STAGES", "[]"))
+except ValueError:
+    raise SystemExit("Invalid additional failed required stages.")
 if not isinstance(additional, list) or any(
     not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", name) or name in job_names.values()
     for name in additional
 ) or len(additional) != len(set(additional)):
     raise SystemExit("Invalid additional failed required stages.")
 if additional:
-    policy = runpy.run_path(str(Path(sys.argv[2]) / "release-signing.py"))
-    required = (policy["ROOT"] / ".github/quality-gate/required-checks.txt").read_text().split()
-    declared = {"compose-jvm-tests" if name == "compose_test" else name.replace("_", "-") for name in required}
-    if not set(additional) <= declared:
+    if not set(additional) <= set(declared.values()):
         raise SystemExit("Additional stage is not a declared required check.")
     endpoint = f"repos/{repository}/actions/runs/{run}/attempts/{attempt}"
 
@@ -79,7 +84,7 @@ if additional:
     validation = evidence(endpoint)
     if not isinstance(validation, dict) or validation.get("id") != int(run) or validation.get("run_attempt") != int(attempt) or validation.get("head_sha") != sha:
         raise SystemExit("Validation run attempt identity does not match.")
-    if validation.get("status") != "completed" or validation.get("conclusion") not in failed_conclusions:
+    if validation.get("status") != "completed" or not isinstance(validation.get("conclusion"), str) or validation["conclusion"] not in failed_conclusions:
         raise SystemExit("Validation run must be completed with a terminal failure.")
     pages = evidence(endpoint + "/jobs?per_page=100", paginate=True)
     try:
@@ -88,7 +93,7 @@ if additional:
             raise ValueError()
         for name in additional:
             matching = [job for job in jobs if job.get("name") == name]
-            if len(matching) != 1 or matching[0].get("status") != "completed" or matching[0].get("conclusion") not in failed_conclusions or matching[0].get("head_sha") != sha:
+            if len(matching) != 1 or matching[0].get("status") != "completed" or not isinstance(matching[0].get("conclusion"), str) or matching[0]["conclusion"] not in failed_conclusions or matching[0].get("head_sha") != sha:
                 raise SystemExit(f"Required stage has no unique terminal failure in this attempt: {name}")
     except (KeyError, TypeError, ValueError, AttributeError):
         raise SystemExit("Validation jobs are missing, malformed, or truncated.")

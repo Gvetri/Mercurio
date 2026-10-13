@@ -218,11 +218,11 @@ be ARM64-only and its signing run/attempt must be positive integers. Unreadable,
 malformed, or contradictory metadata is refused before deletion.
 
 Duplicate names, inconsistent inventories, annotated tags, and complete-looking
-drafts also require inspection. These checks cannot establish upload provenance:
-a byte-identical re-upload under the publisher's own identity is not detectable.
-Metadata is checked semantically, not byte-for-byte: different JSON whitespace or
-field order, or changed signing run/attempt values that remain positive integers,
-are not detectable replacements. The notes do not independently record those
+drafts also require inspection. These checks establish consistency, not upload
+provenance or metadata byte identity. Metadata is checked semantically, not
+byte-for-byte: equivalent JSON with different whitespace or field order, or changed
+signing run/attempt values that remain positive integers, can pass these semantic
+checks. The notes do not independently record those
 signing identities or the exact ABI list; an ARM64-only list change can also pass.
 A partially published release remains an inspection task; the command does not repair it.
 
@@ -237,8 +237,11 @@ unchanged. A missing draft never authorizes standalone orphan-tag cleanup.
 Exit `0` means both targets read back absent. Exit `1` reports a refusal or failed
 operation on stderr; malformed CLI usage exits `2`. Invalid arguments or workflow
 execution are rejected before any API access. For valid identities, refusals also
-read state before and after without mutation; an unavailable read is printed as
-unknown, never absence. If deletion fails midway, the command prints retained state
+read state before and after without explicit writes. Reading an asset increments
+GitHub's `download_count`, a benign side effect of reading. The command excludes only
+that asset counter from inventory and release change detection; all other asset
+fields, release fields, and tag state remain compared. An unavailable read is printed
+as unknown, never absence. If deletion fails midway, the command prints retained state
 and stops without retry or rollback. Inspect it rather than guessing a second cleanup.
 
 The workflow uses only `GITHUB_TOKEN`; permission or protected-tag failures stop it,

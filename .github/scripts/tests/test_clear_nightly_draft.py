@@ -64,6 +64,10 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertNotIn("Traceback", result.stderr)
         evidence = [json.loads(line) for line in result.stdout.splitlines()]
         self.assertEqual(["before", "after"], [item.pop("phase") for item in evidence])
+        download = f"{PREFIX}/releases/assets/12"
+        if callable(self.routes.get(download)) and download in self.api.requests:
+            evidence[0]["release"]["assets"][-1]["download_count"] += 1
+            before[self.release_path]["assets"][-1]["download_count"] += 1
         self.assertEqual(evidence[0], evidence[1])
         self.assertEqual(before, {key: value for key, value in self.routes.items() if not callable(value)})
         self.assertEqual(2, self.api.requests.count(self.release_path))
@@ -121,10 +125,82 @@ class ClearNightlyDraftTest(unittest.TestCase):
             "validation_run_id": 123, "validation_run_attempt": 1,
             "signing_run_id": 456, "signing_run_attempt": 2, "native_abis": ["arm64-v8a"],
         }
-        self.release["assets"].append({"id": 12, "name": "signing-metadata.json",
-                                       "uploader": {"login": "github-actions[bot]", "id": 41898282}})
-        self.routes[f"{PREFIX}/releases/assets/12"] = self.metadata
+        asset = {"id": 12, "name": "signing-metadata.json", "download_count": 0,
+                 "uploader": {"login": "github-actions[bot]", "id": 41898282}}
+        self.release["assets"].append(asset)
+
+        def download_metadata():
+            asset["download_count"] += 1
+            return self.metadata
+
+        self.routes[f"{PREFIX}/releases/assets/12"] = download_metadata
         self.enable_deletion()
+
+    def test_metadata_download_counter_does_not_prevent_clearing_draft(self):
+        self.add_metadata()
+        asset = self.release["assets"][-1]
+        result = self.run_command()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, asset["download_count"])
+        self.assertEqual(1, self.api.requests.count(f"{PREFIX}/releases/assets/12"))
+        self.assertEqual([self.release_path, f"{PREFIX}/git/refs/tags/{TAG}"], self.api.deletes)
+        self.assertEqual({"phase": "after", "release": None, "tag": None},
+                         json.loads(result.stdout.splitlines()[-1]))
+
+    def test_metadata_read_does_not_hide_real_release_mutations(self):
+        self.add_metadata()
+        original = copy.deepcopy(self.release)
+        mutations = [
+            lambda: self.release["assets"].append({"id": 13, "name": "extra"}),
+            lambda: self.release["assets"].pop(0),
+            *[lambda key=key: self.release["assets"][0].update({key: "changed"})
+              for key in ("id", "name", "size", "digest", "uploader", "updated_at", "state")],
+            *[lambda key=key: self.release.update({key: "changed"})
+              for key in ("body", "name", "draft", "updated_at", "download_count")],
+        ]
+        for mutate in mutations:
+            with self.subTest(mutation=mutations.index(mutate)):
+                self.release.clear()
+                self.release.update(copy.deepcopy(original))
+                self.routes[f"{self.release_path}/assets"] = self.release["assets"]
+
+                def download():
+                    self.release["assets"][-1]["download_count"] += 1
+                    mutate()
+                    return self.metadata
+
+                self.routes[f"{PREFIX}/releases/assets/12"] = download
+                result = self.run_command()
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertIn("Recovery state changed", result.stderr)
+                self.assertEqual([], self.api.deletes)
+                self.assertEqual([], self.api.posts)
+                self.assertEqual([], self.api.patches)
+
+    def test_metadata_read_does_not_hide_tag_appearance_or_disappearance(self):
+        self.add_metadata()
+        for present in (False, True):
+            with self.subTest(present=present):
+                if present:
+                    self.routes[self.tag_path] = self.tag
+                else:
+                    self.routes.pop(self.tag_path, None)
+
+                def download():
+                    self.release["assets"][-1]["download_count"] += 1
+                    if present:
+                        del self.routes[self.tag_path]
+                    else:
+                        self.routes[self.tag_path] = self.tag
+                    return self.metadata
+
+                self.routes[f"{PREFIX}/releases/assets/12"] = download
+                result = self.run_command()
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertIn("Recovery state changed", result.stderr)
+                self.assertEqual([], self.api.deletes)
+                self.assertEqual([], self.api.posts)
+                self.assertEqual([], self.api.patches)
 
     def test_refuses_replaced_checksum_or_missing_digest(self):
         self.enable_deletion()

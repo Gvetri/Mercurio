@@ -230,7 +230,7 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertEqual("original", json.loads((root / "optimized-issue.json").read_text())["body"])
 
-    def direct_reporter(self, additional):
+    def direct_reporter(self, additional, overrides=None):
         root = Path(self.directory.name)
         binary = root / "direct-bin"
         binary.mkdir(exist_ok=True)
@@ -245,9 +245,43 @@ class NightlyPreparationTest(unittest.TestCase):
                  "GITHUB_SHA": self.selected, "GITHUB_SERVER_URL": "https://github.com",
                  "TEST_JOB_RESULTS": json.dumps(dict.fromkeys(
                      ("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"), "success")),
-                 "ADDITIONAL_FAILED_STAGES": json.dumps(additional)},
+                 "ADDITIONAL_FAILED_STAGES": json.dumps(additional), **(overrides or {})},
             capture_output=True, text=True, check=False,
         )
+
+    def assert_clean_reporter_refusal(self, result):
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertEqual(1, len(result.stderr.splitlines()), result.stderr)
+        self.assertLess(len(result.stderr), 180)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse((Path(self.directory.name) / "issue.json").exists())
+        self.assertFalse((Path(self.directory.name) / "writes").exists())
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
+
+    def test_direct_reporter_cleanly_refuses_non_string_run_and_job_conclusions(self):
+        stage = next(job for job in self.jobs if job["name"] == "formatting")
+        for target in (self.selected_run, stage):
+            for conclusion in ([], {}, None, 7, True):
+                with self.subTest(target=target.get("name", "run"), conclusion=conclusion):
+                    self.selected_run["conclusion"] = stage["conclusion"] = "failure"
+                    target["conclusion"] = conclusion
+                    self.assert_clean_reporter_refusal(self.direct_reporter(["formatting"]))
+
+    def test_direct_reporter_cleanly_refuses_malformed_additional_json(self):
+        for value in ("[", "not-json", '{"stage":'):
+            with self.subTest(value=value):
+                self.assert_clean_reporter_refusal(self.direct_reporter(
+                    [], {"ADDITIONAL_FAILED_STAGES": value}))
+
+    def test_direct_reporter_cleanly_refuses_malformed_test_results(self):
+        results = dict.fromkeys(
+            ("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"), "success")
+        for value in ("[", "null", "[]", "7", json.dumps(list(results)),
+                      *[json.dumps({**results, "unit_tests": value}) for value in ([], {}, None, 7)]):
+            with self.subTest(value=value):
+                self.assert_clean_reporter_refusal(self.direct_reporter([], {"TEST_JOB_RESULTS": value}))
 
     def test_direct_reporter_refuses_unproved_additional_failures(self):
         stage = next(job for job in self.jobs if job["name"] == "formatting")

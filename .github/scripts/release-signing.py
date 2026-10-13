@@ -125,6 +125,12 @@ def verify_generation():
     require(os.environ.get("RELEASE_GENERATION_ATTEMPT") == os.environ["GITHUB_RUN_ATTEMPT"], "Partial rerun cannot reuse a prepared version; rerun all jobs")
 
 
+def required_check_names():
+    required = (ROOT / ".github/quality-gate/required-checks.txt").read_text().split()
+    return {job: "compose-jvm-tests" if job == "compose_test" else job.replace("_", "-")
+            for job in required}
+
+
 def verify_validation_run(run_id):
     """Check the full deterministic main validation without imposing a caller event."""
     require(type(run_id) is int and run_id > 0, "Invalid validation run identity")
@@ -161,11 +167,9 @@ def verify_validation_run(run_id):
             break
         require(len(batch) == 100, "Truncated validation jobs")
         page += 1
-    required = (ROOT / ".github/quality-gate/required-checks.txt").read_text().split()
     expected = {
-        ("compose-jvm-tests" if job == "compose_test" else job.replace("_", "-")):
-        ("skipped" if job in {"fork_guard", "draft_validation", "commit_message"} else "success")
-        for job in required
+        name: "skipped" if job in {"fork_guard", "draft_validation", "commit_message"} else "success"
+        for job, name in required_check_names().items()
     }
     expected["quality-gate"] = "success"
     for name, conclusion in expected.items():

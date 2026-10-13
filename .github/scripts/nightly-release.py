@@ -128,12 +128,8 @@ def report_validation():
         "failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale",
     }, "Cannot report a successful or unfinished validation")
     jobs = pages(f"actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs")
-    stages = {
-        "unit_tests": "unit-tests", "compose_test": "compose-jvm-tests",
-        "api24_instrumentation": "api24-instrumentation", "maestro_journeys": "maestro-journeys",
-    }
-    required = (POLICY["ROOT"] / ".github/quality-gate/required-checks.txt").read_text().split()
-    names = {**{key: key.replace("_", "-") for key in required}, **stages}
+    stages = {"unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"}
+    names = POLICY["required_check_names"]()
     results = {}
     additional = []
     for key, name in names.items():
