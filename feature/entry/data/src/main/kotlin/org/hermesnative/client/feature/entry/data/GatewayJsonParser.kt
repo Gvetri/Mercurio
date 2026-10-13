@@ -388,8 +388,8 @@ internal data class RunAdmission(
  * One SSE record from the pinned Run observation stream.
  *
  * The pinned Gateway writes the event type inside the JSON `data:` payload
- * (`{"event": ..., "run_id": ..., ...}`) and never writes a named `event:` line
- * or an `id:` line; comment-only keepalives are ignored by [GatewaySseParser].
+ * (`{"event": ..., "run_id": ..., ...}`) and never writes a named `event:` line;
+ * comment lines and `id:` field lines are ignored by [GatewaySseParser].
  */
 internal data class GatewaySseFrame(
     val data: String,
@@ -421,7 +421,7 @@ internal object GatewaySseParser {
         lines: List<String>,
         operation: String,
     ): GatewaySseFrame? {
-        val contentLines = lines.filterNot { it.startsWith(":") }
+        val contentLines = lines.filterNot { it.startsWith(":") || it.startsWith("id:") }
         if (contentLines.isEmpty()) return null
         val dataLines = contentLines.filter { it.startsWith("data:") }
         if (dataLines.isEmpty() || dataLines.size != contentLines.size) {

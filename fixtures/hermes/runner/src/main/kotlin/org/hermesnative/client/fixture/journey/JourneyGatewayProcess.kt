@@ -33,6 +33,8 @@ private const val DEFAULT_PAGE_LIMIT = 50
 internal const val DEFAULT_KEYSTORE_PASSWORD = "journey-fixture"
 private const val HOLD_OPEN_KEEPALIVE_MILLIS = 500L
 private val keepAliveComment: ByteArray = ": keep-alive\n\n".toByteArray(Charsets.UTF_8)
+private val streamOpenComment: ByteArray = ": open\n\n".toByteArray(Charsets.UTF_8)
+private val streamClosedComment: ByteArray = ": stream closed\n\n".toByteArray(Charsets.UTF_8)
 
 /**
  * The controlled fake Gateway for deterministic emulator journeys.
@@ -469,11 +471,15 @@ private object JourneyGatewaySse {
     ) {
         val interruptAfter = script.interruptAfterEvents
         val events = script.observation
+        if (script.liveFraming) {
+            exchange.responseBody.write(streamOpenComment)
+            exchange.responseBody.flush()
+        }
         events.forEachIndexed { index, event ->
             if (!script.holdOpen && script.finalStatus != null && index == events.lastIndex) {
                 behavior.observationDelivered[runId] = true
             }
-            exchange.responseBody.write(JourneyGatewayJson.renderEvent(script, event))
+            exchange.responseBody.write(JourneyGatewayJson.renderEvent(script, event, index))
             exchange.responseBody.flush()
             if (interruptAfter != null && index + 1 >= interruptAfter) {
                 behavior.interruptedRunIds += runId
@@ -485,6 +491,10 @@ private object JourneyGatewaySse {
             writeKeepAliveEvents(exchange)
         } else if (script.finalStatus != null && events.isEmpty()) {
             behavior.observationDelivered[runId] = true
+        }
+        if (script.liveFraming) {
+            exchange.responseBody.write(streamClosedComment)
+            exchange.responseBody.flush()
         }
     }
 
@@ -526,6 +536,7 @@ private object JourneyGatewayJson {
     internal fun renderEvent(
         script: JourneyRunScript,
         event: JourneyRunEvent,
+        eventIndex: Int,
     ): ByteArray {
         val data =
             buildString {
@@ -533,8 +544,14 @@ private object JourneyGatewayJson {
                 event.delta?.let { append(""","delta":${it.jsonValue()}""") }
                 append('}')
             }
-        val rendered = "data: $data\n\n"
-        return rendered.toByteArray(Charsets.UTF_8)
+        val record =
+            buildString {
+                if (script.liveFraming) {
+                    append("id: $eventIndex\n")
+                }
+                append("data: $data\n\n")
+            }
+        return record.toByteArray(Charsets.UTF_8)
     }
 
     internal fun sessionJson(session: JourneySession): String =
