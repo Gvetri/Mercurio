@@ -28,6 +28,25 @@ class NightlyWorkflowTest(unittest.TestCase):
             self.assertIn("'schedule'", condition)
             self.assertIn("'workflow_dispatch'", condition)
 
+    def test_validation_report_is_failure_only_separate_and_cannot_publish(self):
+        workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
+        reporter = job_block(workflow, "report_validation_failure")
+        self.assertIn("\n  report_validation_failure:\n", workflow)
+        self.assertEqual("prepare", job_key(reporter, "needs"))
+        self.assertIn("always() && needs.prepare.result == 'failure'", reporter)
+        self.assertIn("needs.prepare.outputs.validation_failed == 'true'", reporter)
+        self.assertIn("github.ref == 'refs/heads/main' && github.ref_protected", reporter)
+        self.assertIn("    permissions:\n      actions: read\n      contents: read\n      issues: write\n", reporter)
+        self.assertNotIn("secrets.", reporter)
+        self.assertNotIn("contents: write", reporter)
+        self.assertIn("python3 .github/scripts/nightly-release.py report-validation", reporter)
+        for name in ("run_id", "run_attempt", "sha"):
+            self.assertIn(f"FAILED_VALIDATION_{name.upper()}: ${{{{ needs.prepare.outputs.failed_validation_{name} }}}}", reporter)
+            self.assertIn(f"failed_validation_{name}: ${{{{ steps.prepare.outputs.failed_validation_{name} }}}}", workflow)
+        self.assertNotIn("continue-on-error", job_block(workflow, "prepare"))
+        self.assertNotIn("always()", job_block(workflow, "sign"))
+        self.assertNotIn("always()", job_block(workflow, "publish"))
+
     def test_nightly_scopes_dispatch_and_only_publisher_can_write_contents(self):
         workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
         header = workflow.split("jobs:", 1)[0]
@@ -102,6 +121,8 @@ class NightlyPreparationTest(unittest.TestCase):
             f"{prefix}/actions/workflows/quality-gate.yml": {"id": 45},
             f"{prefix}/actions/workflows/quality-gate.yml/runs": lambda: {"total_count": len(self.runs), "workflow_runs": self.runs},
             f"{prefix}/actions/runs/123": self.selected_run,
+            f"{prefix}/actions/runs/123/attempts/1": self.selected_run,
+            f"{prefix}/actions/runs/123/attempts/2": self.selected_run,
             f"{prefix}/actions/runs/123/attempts/1/jobs": {"total_count": len(self.jobs), "jobs": self.jobs},
             f"{prefix}/compare/{self.selected}...main": {"status": "ahead", "merge_base_commit": {"sha": self.selected}},
             f"{prefix}/releases": self.releases,
@@ -133,6 +154,128 @@ class NightlyPreparationTest(unittest.TestCase):
         )
         values = dict(line.split("=", 1) for line in output.read_text().splitlines()) if output.exists() else {}
         return result, values
+
+    def test_failed_dispatch_preserves_reporting_identity_without_release_authority(self):
+        self.selected_run["conclusion"] = "failure"
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual({
+            "validation_failed": "true", "failed_validation_run_id": "123",
+            "failed_validation_run_attempt": "1", "failed_validation_sha": self.selected,
+        }, values)
+        self.assertEqual([], self.releases)
+        self.assertEqual(1, len(self.api.posts))
+
+    def report_validation(self, values):
+        root = Path(self.directory.name)
+        binary = root / "issue-bin"
+        binary.mkdir(exist_ok=True)
+        shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-validation-issue.py", binary / "gh")
+        (binary / "gh").chmod(0o755)
+        environment = {
+            **self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],
+            "GITHUB_RUN_ID": "456", "GITHUB_SHA": self.old,
+            "GITHUB_SERVER_URL": "https://github.com",
+            "FAILED_VALIDATION_RUN_ID": values["failed_validation_run_id"],
+            "FAILED_VALIDATION_RUN_ATTEMPT": values["failed_validation_run_attempt"],
+            "FAILED_VALIDATION_SHA": values["failed_validation_sha"],
+        }
+        return subprocess.run(
+            ["python3", str(ROOT / ".github/scripts/nightly-release.py"), "report-validation"],
+            cwd=root, env=environment, text=True, capture_output=True, check=False,
+        )
+
+    def test_failed_validation_files_one_issue_with_exact_evidence_and_updates_its_attempt(self):
+        self.selected_run["conclusion"] = "failure"
+        for identity, job in enumerate(self.jobs, 1):
+            job["id"] = identity
+            if job["name"] == "maestro-journeys":
+                job["conclusion"] = "failure"
+        artifacts = [{"id": 99, "name": "journey-evidence-123-1", "expired": False}]
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": artifacts}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        result = self.report_validation(values)
+        self.assertEqual(0, result.returncode, result.stderr)
+        root = Path(self.directory.name)
+        issue = json.loads((root / "issue.json").read_text())
+        self.assertEqual([{"name": "ready-for-agent"}], issue["labels"])
+        for expected in ("<!-- nightly-run:123 -->", "Attempt: `1`", self.selected,
+                         "`maestro-journeys`: `failure`", "`unit-tests`: `success`",
+                         "`compose-jvm-tests`: `success`", "`api24-instrumentation`: `success`",
+                         "/actions/runs/123/artifacts/99"):
+            self.assertIn(expected, issue["body"])
+        self.assertNotIn(self.old, issue["body"])
+        self.assertNotIn("nightly-run:456", issue["body"])
+        self.selected_run["run_attempt"] = 2
+        self.routes[f"/repos/{self.repository}/actions/runs/123/attempts/2/jobs"] = {
+            "total_count": len(self.jobs), "jobs": self.jobs,
+        }
+        values["failed_validation_run_attempt"] = "2"
+        result = self.report_validation(values)
+        self.assertEqual(0, result.returncode, result.stderr)
+        issue = json.loads((root / "issue.json").read_text())
+        self.assertIn("Attempt: `2`", issue["body"])
+        self.assertIn("Not uploaded. Inspect the failed job logs in the workflow run.", issue["body"])
+        self.assertNotIn("/artifacts/99", issue["body"])
+        self.assertEqual(["POST", "PATCH"], (root / "writes").read_text().splitlines())
+        self.assertEqual([], self.releases)
+        self.assertEqual(1, len(self.api.posts))
+        self.assertTrue(any("/attempts/2/jobs?" in path for path in self.api.requests))
+
+    def test_green_validation_and_all_success_stages_cannot_create_an_issue(self):
+        values = {"failed_validation_run_id": "123", "failed_validation_run_attempt": "1",
+                  "failed_validation_sha": self.selected}
+        result = self.report_validation(values)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Cannot report a successful", result.stderr)
+        self.selected_run["conclusion"] = "failure"
+        for identity, job in enumerate(self.jobs, 1):
+            job["id"] = identity
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        result = self.report_validation(values)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("cannot publish a successful test run", result.stderr)
+        self.assertFalse((Path(self.directory.name) / "writes").exists())
+
+    def test_reporting_refuses_missing_duplicate_nonterminal_and_wrong_source_stages(self):
+        self.selected_run["conclusion"] = "failure"
+        jobs = [{**job, "id": identity} for identity, job in enumerate(self.jobs, 1)]
+        stage = next(job for job in jobs if job["name"] == "unit-tests")
+        values = {"failed_validation_run_id": "123", "failed_validation_run_attempt": "1",
+                  "failed_validation_sha": self.selected}
+        endpoint = f"/repos/{self.repository}/actions/runs/123/attempts/1/jobs"
+        others = [job for job in jobs if job != stage]
+        cases = [others, jobs + [{**stage, "id": 999}],
+                 others + [{**stage, "status": "in_progress", "conclusion": None}],
+                 others + [{**stage, "conclusion": "timed_out"}],
+                 others + [{**stage, "head_sha": self.old}]]
+        for case in cases:
+            with self.subTest(jobs=case):
+                self.routes[endpoint] = {"total_count": len(case), "jobs": case}
+                result = self.report_validation(values)
+                self.assertNotEqual(0, result.returncode)
+                self.assertFalse((Path(self.directory.name) / "writes").exists())
+        self.routes[endpoint] = {"total_count": len(jobs) + 1, "jobs": jobs}
+        result = self.report_validation(values)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Truncated", result.stderr)
+
+    def test_reporting_refuses_changed_validation_identity(self):
+        self.selected_run["conclusion"] = "failure"
+        values = {"failed_validation_run_id": "123", "failed_validation_run_attempt": "1",
+                  "failed_validation_sha": self.selected}
+        endpoint = f"/repos/{self.repository}/actions/runs/123/attempts/1"
+        for field, value in (("id", 124), ("run_attempt", 2), ("head_sha", self.old),
+                             ("event", "schedule"), ("workflow_id", 46), ("head_branch", "topic"),
+                             ("path", ".github/workflows/other.yml"),
+                             ("head_repository", {"full_name": "someone/fork"})):
+            with self.subTest(field=field):
+                self.routes[endpoint] = {**self.selected_run, field: value}
+                result = self.report_validation(values)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("identity changed", result.stderr)
+                self.assertFalse((Path(self.directory.name) / "writes").exists())
 
     def test_dispatches_full_validation_for_the_tip_and_uses_its_exact_evidence(self):
         result, values = self.prepare()
@@ -230,7 +373,15 @@ class NightlyPreparationTest(unittest.TestCase):
                 result, values = self.prepare()
                 self.assertNotEqual(0, result.returncode)
                 self.assertIn("Dispatched validation", result.stderr)
-                self.assertEqual({}, values)
+                if conclusion in {"cancelled", "failure", "timed_out"}:
+                    self.assertEqual({
+                        "validation_failed": "true", "failed_validation_run_id": "123",
+                        "failed_validation_run_attempt": "1", "failed_validation_sha": self.selected,
+                    }, values)
+                else:
+                    self.assertEqual({}, values)
+                self.assertNotIn("publish", values)
+                self.assertNotIn("version_code", values)
         self.runs.clear()
         self.selected_run.update(status="unknown", conclusion="success")
         result, values = self.prepare()

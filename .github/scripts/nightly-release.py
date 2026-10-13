@@ -103,6 +103,12 @@ def validate_tip(sha, clock=time):
                 "Dispatched validation identity changed")
         status = run.get("status")
         if status == "completed":
+            if run.get("conclusion") in {"failure", "cancelled", "timed_out", "action_required", "startup_failure"}:
+                verify_dispatched_identity(run, run_id, attempt, sha)
+                write_outputs({
+                    "validation_failed": "true", "failed_validation_run_id": run_id,
+                    "failed_validation_run_attempt": attempt, "failed_validation_sha": sha,
+                })
             require(run.get("conclusion") == "success",
                     f"Dispatched validation {run_id} ended with {run.get('conclusion')}; no Nightly was published")
             evidence = POLICY["verify_source"]()
@@ -112,6 +118,61 @@ def validate_tip(sha, clock=time):
                 "Unknown validation state; no Nightly was published")
         clock.sleep(min(interval, max(0, deadline - clock.monotonic())))
     raise ReleaseError("Dispatched validation did not finish within the time bound")
+
+
+def write_outputs(values):
+    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+        for key, value in values.items():
+            output.write(f"{key}={value}\n")
+
+
+def verify_dispatched_identity(run, run_id, attempt, sha):
+    workflow = api_get("actions/workflows/quality-gate.yml")
+    require(run.get("id") == run_id and run.get("run_attempt") == attempt
+            and run.get("head_sha") == sha and run.get("head_branch") == "main"
+            and run.get("event") == "workflow_dispatch"
+            and run.get("workflow_id") == workflow.get("id")
+            and run.get("path") == ".github/workflows/quality-gate.yml"
+            and run.get("repository", {}).get("full_name") == REPOSITORY
+            and run.get("head_repository", {}).get("full_name") == REPOSITORY,
+            "Dispatched validation identity changed")
+
+
+def report_validation():
+    POLICY["verify_context"]()
+    run_id = POLICY["positive_integer"](os.environ.get("FAILED_VALIDATION_RUN_ID"))
+    attempt = POLICY["positive_integer"](os.environ.get("FAILED_VALIDATION_RUN_ATTEMPT"))
+    sha = os.environ["FAILED_VALIDATION_SHA"]
+    require(re.fullmatch(r"[0-9a-f]{40}", sha), "Invalid failed validation source")
+    run = api_get(f"actions/runs/{run_id}/attempts/{attempt}")
+    verify_dispatched_identity(run, run_id, attempt, sha)
+    require(run.get("status") == "completed" and run.get("conclusion") in {
+        "failure", "cancelled", "timed_out", "action_required", "startup_failure",
+    }, "Cannot report a successful or unfinished validation")
+    jobs = pages(f"actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs")
+    stages = {
+        "unit_tests": "unit-tests", "compose_test": "compose-jvm-tests",
+        "api24_instrumentation": "api24-instrumentation", "maestro_journeys": "maestro-journeys",
+    }
+    results = {}
+    for key, name in stages.items():
+        matching = [job for job in jobs if job.get("name") == name]
+        require(len(matching) == 1, f"Missing or duplicate validation stage: {name}")
+        job = matching[0]
+        require(job.get("head_sha") == sha and job.get("status") == "completed"
+                and job.get("conclusion") in {"success", "failure", "cancelled", "skipped"},
+                f"Invalid terminal validation stage: {name}")
+        results[key] = job["conclusion"]
+    environment = {
+        **os.environ, "GITHUB_RUN_ID": str(run_id), "GITHUB_RUN_ATTEMPT": str(attempt),
+        "GITHUB_SHA": sha, "TEST_JOB_RESULTS": json.dumps(results),
+        "GH_TOKEN": os.environ["GITHUB_TOKEN"],
+    }
+    result = subprocess.run(
+        ["bash", str(Path(__file__).with_name("create-nightly-failure-issue.sh"))],
+        env=environment, timeout=300, check=False,
+    )
+    require(result.returncode == 0, "Validation failure reporter refused; inspect the failed validation logs")
 
 
 def release_history():
@@ -262,10 +323,10 @@ def main(clock=time):
     try:
         if sys.argv[1:] == ["prepare"]:
             result = prepare(clock)
-            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                for key, value in result.items():
-                    output.write(f"{key}={value}\n")
+            write_outputs(result)
             print("Nightly source prepared." if result["publish"] == "true" else "Source already has a Nightly; nothing to publish.")
+        elif sys.argv[1:] == ["report-validation"]:
+            report_validation()
         elif len(sys.argv) == 4 and sys.argv[1] == "publish":
             publish(Path(sys.argv[2]), Path(sys.argv[3]))
         else:
