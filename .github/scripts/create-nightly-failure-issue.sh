@@ -20,11 +20,13 @@ trap 'rm -rf "$temporary_directory"' EXIT
 
 gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" > "$temporary_directory/artifacts.json"
 gh api --paginate --slurp "${issues_endpoint}?state=all&per_page=100" > "$temporary_directory/issues.json"
-python3 - "$temporary_directory" <<'PY'
+python3 - "$temporary_directory" "$(dirname "${BASH_SOURCE[0]}")" <<'PY'
 from pathlib import Path
 import json
 import os
 import re
+import runpy
+import subprocess
 import sys
 from urllib.parse import urlparse
 
@@ -39,17 +41,63 @@ if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.
 run = os.environ["GITHUB_RUN_ID"]
 attempt = os.environ["GITHUB_RUN_ATTEMPT"]
 sha = os.environ["GITHUB_SHA"]
-results = json.loads(os.environ["TEST_JOB_RESULTS"])
-job_names = {
-    "unit_tests": "unit-tests",
-    "compose_test": "compose-jvm-tests",
-    "api24_instrumentation": "api24-instrumentation",  # gitleaks:allow -- public job name, not a credential
-    "maestro_journeys": "maestro-journeys",
-}
-if set(results) != set(job_names) or any(value not in {"success", "failure", "cancelled", "skipped"} for value in results.values()):
+try:
+    results = json.loads(os.environ["TEST_JOB_RESULTS"])
+except ValueError:
+    raise SystemExit("Expected valid JSON for required test job results.")
+policy = runpy.run_path(str(Path(sys.argv[2]) / "release-signing.py"))
+declared = policy["required_check_names"]()
+job_names = {key: declared[key] for key in (
+    "unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys",
+)}
+if not isinstance(results, dict) or set(results) != set(job_names) or any(
+    not isinstance(value, str) or value not in {"success", "failure", "cancelled", "skipped"}
+    for value in results.values()
+):
     raise SystemExit("Expected a terminal result for each required test job.")
 failed = [job for job in job_names if results[job] != "success"]
-if not failed:
+try:
+    additional = json.loads(os.environ.get("ADDITIONAL_FAILED_STAGES", "[]"))
+except ValueError:
+    raise SystemExit("Invalid additional failed required stages.")
+if not isinstance(additional, list) or any(
+    not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", name) or name in job_names.values()
+    for name in additional
+) or len(additional) != len(set(additional)):
+    raise SystemExit("Invalid additional failed required stages.")
+if additional:
+    if not set(additional) <= set(declared.values()):
+        raise SystemExit("Additional stage is not a declared required check.")
+    endpoint = f"repos/{repository}/actions/runs/{run}/attempts/{attempt}"
+
+    def evidence(path, paginate=False):
+        command = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), path]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode:
+            raise SystemExit("Validation evidence is unavailable.")
+        try:
+            return json.loads(result.stdout)
+        except ValueError:
+            raise SystemExit("Validation evidence is malformed.")
+
+    failed_conclusions = {"failure", "cancelled", "timed_out", "startup_failure", "action_required", "neutral", "stale"}
+    validation = evidence(endpoint)
+    if not isinstance(validation, dict) or validation.get("id") != int(run) or validation.get("run_attempt") != int(attempt) or validation.get("head_sha") != sha:
+        raise SystemExit("Validation run attempt identity does not match.")
+    if validation.get("status") != "completed" or not isinstance(validation.get("conclusion"), str) or validation["conclusion"] not in failed_conclusions:
+        raise SystemExit("Validation run must be completed with a terminal failure.")
+    pages = evidence(endpoint + "/jobs?per_page=100", paginate=True)
+    try:
+        jobs = [job for page in pages for job in page["jobs"]]
+        if any(page["total_count"] != len(jobs) for page in pages):
+            raise ValueError()
+        for name in additional:
+            matching = [job for job in jobs if job.get("name") == name]
+            if len(matching) != 1 or matching[0].get("status") != "completed" or not isinstance(matching[0].get("conclusion"), str) or matching[0]["conclusion"] not in failed_conclusions or matching[0].get("head_sha") != sha:
+                raise SystemExit(f"Required stage has no unique terminal failure in this attempt: {name}")
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise SystemExit("Validation jobs are missing, malformed, or truncated.")
+if not failed and not additional:
     raise SystemExit("The nightly issue script cannot publish a successful test run.")
 run_url = f"{server}/{repository}/actions/runs/{run}"
 marker = f"<!-- nightly-run:{run} -->"
@@ -59,6 +107,9 @@ lines = [marker, "", "# Nightly test failure", "",
          "## Required test jobs", ""]
 for job, name in job_names.items():
     lines.append(f"- `{name}`: `{results[job]}`")
+if additional:
+    lines.extend(["", "## Additional failed required jobs", ""])
+    lines.extend(f"- `{name}`" for name in additional)
 lines.extend(["", "## Available diagnostic reports", ""])
 expected_names = {
     f"jvm-test-reports-{run}-{attempt}",
@@ -75,7 +126,7 @@ for artifact in artifacts:
 if not artifacts:
     lines.append("- Not uploaded. Inspect the failed job logs in the workflow run.")
 lines.extend(["", "Inspect the first failing command in each failed job. A dependency download failure still blocks the quality gate."])
-payload = {"title": f"Nightly test failure: {', '.join(job_names[job] for job in failed)} (run {run})",
+payload = {"title": f"Nightly test failure: {', '.join([job_names[job] for job in failed] + additional)} (run {run})",
            "body": "\n".join(lines) + "\n", "labels": ["ready-for-agent"]}
 issues = [issue for page in json.loads((root / "issues.json").read_text()) for issue in page
           if issue.get("pull_request") is None and marker in (issue.get("body") or "")]

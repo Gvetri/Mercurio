@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import unittest
 
-from test_protected_main import ApiStub
+from github_api_fixture import GitHubApiFixture
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / ".github/scripts/clear-nightly-draft.py"
@@ -22,7 +22,18 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.release = {
             "id": 71, "tag_name": TAG, "target_commitish": SOURCE,
             "draft": True, "published_at": None, "prerelease": True, "name": "Nightly",
-            "assets": [{"id": 10, "name": "hermes-native-client.apk", "state": "uploaded"}],
+            "body": (
+                "Development snapshot for testing. It may contain regressions and is not a stable-support promise.\n\n"
+                "This is a **Nightly** prerelease, not a Stable Public Beta release.\n\n"
+                f"- Source commit: `{SOURCE}`\n- Android version code: `7002`\n"
+                f"- Android version name: `nightly-7002-{SOURCE[:12]}`\n- Device architecture: ARM64\n"
+                f"- APK SHA-256: `{'b' * 64}`\n"
+                f"- Signing certificate SHA-256: `{(ROOT / '.github/release-certificate.sha256').read_text().strip()}`\n"
+                "- Deterministic validation: https://github.com/Gvetri/hermes-native-client/actions/runs/123 (attempt 1)\n"
+            ),
+            "assets": [{"id": 10, "name": "hermes-native-client.apk", "state": "uploaded",
+                        "uploader": {"login": "github-actions[bot]", "id": 41898282},
+                        "digest": "sha256:" + "b" * 64}],
         }
         self.tag = {"ref": f"refs/tags/{TAG}", "object": {"type": "commit", "sha": SOURCE}}
         self.routes = {
@@ -31,7 +42,7 @@ class ClearNightlyDraftTest(unittest.TestCase):
             f"{PREFIX}/releases": lambda: [self.release] if self.release_path in self.routes else [],
             f"{self.release_path}/assets": self.release["assets"],
         }
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
         self.environment = {
@@ -53,11 +64,16 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertNotIn("Traceback", result.stderr)
         evidence = [json.loads(line) for line in result.stdout.splitlines()]
         self.assertEqual(["before", "after"], [item.pop("phase") for item in evidence])
+        download = f"{PREFIX}/releases/assets/12"
+        if callable(self.routes.get(download)) and download in self.api.requests:
+            evidence[0]["release"]["assets"][-1]["download_count"] += 1
+            before[self.release_path]["assets"][-1]["download_count"] += 1
         self.assertEqual(evidence[0], evidence[1])
         self.assertEqual(before, {key: value for key, value in self.routes.items() if not callable(value)})
         self.assertEqual(2, self.api.requests.count(self.release_path))
         self.assertEqual([], self.api.posts)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.patches)
         return result
 
     def enable_deletion(self):
@@ -87,6 +103,211 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(unrelated, self.routes[f"{PREFIX}/releases/72"])
         self.assertEqual([], self.api.posts)
 
+    def test_shared_notes_builder_and_parser_agree(self):
+        import runpy
+        policy = runpy.run_path(str(ROOT / ".github/scripts/release-signing.py"))
+        self.add_metadata()
+        body = policy["nightly_notes"](self.metadata)
+        self.assertEqual(self.release["body"], body)
+        expected = {key: value for key, value in self.metadata.items()
+                    if key not in {"native_abis", "signing_run_id", "signing_run_attempt"}}
+        self.assertEqual(expected, policy["parse_nightly_notes"](body))
+        for malformed in (None, body + "extra", body.replace("7002", "invalid")):
+            with self.subTest(body=malformed):
+                with self.assertRaises(policy["ReleaseError"]):
+                    policy["parse_nightly_notes"](malformed)
+
+    def add_metadata(self):
+        self.metadata = {
+            "source_sha": SOURCE, "version_code": 7002, "version_name": f"nightly-7002-{SOURCE[:12]}",
+            "apk_sha256": "b" * 64,
+            "certificate_sha256": (ROOT / ".github/release-certificate.sha256").read_text().strip(),
+            "validation_run_id": 123, "validation_run_attempt": 1,
+            "signing_run_id": 456, "signing_run_attempt": 2, "native_abis": ["arm64-v8a"],
+        }
+        asset = {"id": 12, "name": "signing-metadata.json", "download_count": 0,
+                 "uploader": {"login": "github-actions[bot]", "id": 41898282}}
+        self.release["assets"].append(asset)
+
+        def download_metadata():
+            asset["download_count"] += 1
+            return self.metadata
+
+        self.routes[f"{PREFIX}/releases/assets/12"] = download_metadata
+        self.enable_deletion()
+
+    def test_metadata_download_counter_does_not_prevent_clearing_draft(self):
+        self.add_metadata()
+        asset = self.release["assets"][-1]
+        result = self.run_command()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, asset["download_count"])
+        self.assertEqual(1, self.api.requests.count(f"{PREFIX}/releases/assets/12"))
+        self.assertEqual([self.release_path, f"{PREFIX}/git/refs/tags/{TAG}"], self.api.deletes)
+        self.assertEqual({"phase": "after", "release": None, "tag": None},
+                         json.loads(result.stdout.splitlines()[-1]))
+
+    def test_metadata_read_does_not_hide_real_release_mutations(self):
+        self.add_metadata()
+        original = copy.deepcopy(self.release)
+        mutations = [
+            lambda: self.release["assets"].append({"id": 13, "name": "extra"}),
+            lambda: self.release["assets"].pop(0),
+            *[lambda key=key: self.release["assets"][0].update({key: "changed"})
+              for key in ("id", "name", "size", "digest", "uploader", "updated_at", "state")],
+            *[lambda key=key: self.release.update({key: "changed"})
+              for key in ("body", "name", "draft", "updated_at", "download_count")],
+        ]
+        for mutate in mutations:
+            with self.subTest(mutation=mutations.index(mutate)):
+                self.release.clear()
+                self.release.update(copy.deepcopy(original))
+                self.routes[f"{self.release_path}/assets"] = self.release["assets"]
+
+                def download():
+                    self.release["assets"][-1]["download_count"] += 1
+                    mutate()
+                    return self.metadata
+
+                self.routes[f"{PREFIX}/releases/assets/12"] = download
+                result = self.run_command()
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertIn("Recovery state changed", result.stderr)
+                self.assertEqual([], self.api.deletes)
+                self.assertEqual([], self.api.posts)
+                self.assertEqual([], self.api.patches)
+
+    def test_metadata_read_does_not_hide_tag_appearance_or_disappearance(self):
+        self.add_metadata()
+        for present in (False, True):
+            with self.subTest(present=present):
+                if present:
+                    self.routes[self.tag_path] = self.tag
+                else:
+                    self.routes.pop(self.tag_path, None)
+
+                def download():
+                    self.release["assets"][-1]["download_count"] += 1
+                    if present:
+                        del self.routes[self.tag_path]
+                    else:
+                        self.routes[self.tag_path] = self.tag
+                    return self.metadata
+
+                self.routes[f"{PREFIX}/releases/assets/12"] = download
+                result = self.run_command()
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertIn("Recovery state changed", result.stderr)
+                self.assertEqual([], self.api.deletes)
+                self.assertEqual([], self.api.posts)
+                self.assertEqual([], self.api.patches)
+
+    def test_refuses_replaced_checksum_or_missing_digest(self):
+        self.enable_deletion()
+        asset = {"id": 11, "name": "SHA256SUMS",
+                 "uploader": {"login": "github-actions[bot]", "id": 41898282}}
+        self.release["assets"].append(asset)
+        for digest in ("sha256:" + "c" * 64, None, "invalid"):
+            with self.subTest(digest=digest):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.api.deletes.clear()
+                self.api.requests.clear()
+                asset["digest"] = digest
+                self.assert_refusal("SHA256SUMS digest")
+                self.api.requests.clear()
+
+    def test_refuses_metadata_contradicting_identity(self):
+        self.add_metadata()
+        original = self.metadata.copy()
+        for field, value in (("source_sha", "c" * 40), ("version_code", 8001), ("version_name", "other"),
+                             ("apk_sha256", "c" * 64), ("certificate_sha256", "c" * 64),
+                             ("validation_run_id", 124), ("native_abis", ["x86_64"])):
+            with self.subTest(field=field):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.api.deletes.clear()
+                self.api.requests.clear()
+                self.metadata.clear()
+                self.metadata.update(original)
+                self.metadata[field] = value
+                self.assert_refusal("Signing metadata")
+                self.api.requests.clear()
+
+    def test_refuses_malformed_or_unreadable_metadata(self):
+        self.add_metadata()
+        for document in ("not-json", [], {}, (403, {"message": "Forbidden"})):
+            with self.subTest(document=document):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.api.deletes.clear()
+                self.api.requests.clear()
+                self.routes[f"{PREFIX}/releases/assets/12"] = document
+                self.assert_refusal("Signing metadata")
+                self.api.requests.clear()
+
+    def test_clears_consistent_retained_asset_pairs(self):
+        import hashlib
+        self.add_metadata()
+        checksum = {"id": 11, "name": "SHA256SUMS",
+                    "uploader": {"login": "github-actions[bot]", "id": 41898282},
+                    "digest": "sha256:" + hashlib.sha256(("b" * 64 + "  hermes-native-client.apk\n").encode()).hexdigest()}
+        assets = list(self.release["assets"])
+        for retained in (assets, [assets[0], checksum], [checksum, assets[1]]):
+            with self.subTest(names=[asset["name"] for asset in retained]):
+                self.routes[self.release_path] = self.release
+                self.routes[self.tag_path] = self.tag
+                self.release["assets"][:] = retained
+                self.api.deletes.clear()
+                result = self.run_command()
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual([self.release_path, f"{PREFIX}/git/refs/tags/{TAG}"], self.api.deletes)
+                self.assertEqual({"phase": "after", "release": None, "tag": None},
+                                 json.loads(result.stdout.splitlines()[-1]))
+
+    def test_refuses_foreign_uploader_without_deletion(self):
+        self.enable_deletion()
+        self.release["assets"][0]["uploader"] = {"login": "someone", "id": 123}
+        self.assert_refusal("Asset uploader")
+
+    def test_refuses_missing_or_unreadable_uploader_without_deletion(self):
+        self.enable_deletion()
+        asset = self.release["assets"][0]
+        for uploader in (None, {}, "github-actions[bot]", {"login": "github-actions[bot]"},
+                         {"login": "github-actions[bot]", "id": 123}):
+            with self.subTest(uploader=uploader):
+                asset["uploader"] = uploader
+                self.assert_refusal("Asset uploader")
+                self.api.requests.clear()
+        del asset["uploader"]
+        self.assert_refusal("Asset uploader")
+
+    def test_refuses_apk_digest_disagreeing_with_notes_without_deletion(self):
+        self.enable_deletion()
+        self.release["assets"][0]["digest"] = "sha256:" + "c" * 64
+        self.assert_refusal("APK digest")
+
+    def test_refuses_missing_or_malformed_notes_without_deletion(self):
+        self.enable_deletion()
+        for body in (None, "", "operator notes", self.release["body"].replace("b" * 64, "not-a-digest")):
+            with self.subTest(body=body):
+                self.release["body"] = body
+                self.assert_refusal("Publisher notes")
+                self.api.requests.clear()
+        del self.release["body"]
+        self.assert_refusal("Publisher notes")
+
+    def test_refuses_notes_contradicting_identity_without_deletion(self):
+        self.enable_deletion()
+        body = self.release["body"]
+        for original, changed in ((SOURCE, "d" * 40), ("`7002`", "`8001`"),
+                                  ("nightly-7002-", "nightly-8001-"),
+                                  ((ROOT / ".github/release-certificate.sha256").read_text().strip(), "e" * 64)):
+            with self.subTest(original=original):
+                self.release["body"] = body.replace(original, changed)
+                self.assert_refusal("Publisher notes")
+                self.api.requests.clear()
+
     def test_refuses_workflow_execution_without_remote_access(self):
         self.environment["GITHUB_ACTIONS"] = "true"
         result = self.run_command()
@@ -94,6 +315,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertIn("Local recovery only", result.stderr)
         self.assertEqual([], self.api.requests)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
 
     def test_refuses_inconsistent_named_tag_source_before_remote_access(self):
         result = self.run_command("--release-id", "71", "--tag", TAG, "--source-sha", "b" * 40)
@@ -115,6 +338,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(["before", "after"], [item["phase"] for item in evidence])
         self.assertTrue(all(item["tag"] == {"state": "unknown"} for item in evidence))
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
         self.assertIn(self.release_path, self.routes)
 
     def test_unavailable_evidence_is_printed_as_unknown_before_and_after_without_writes(self):
@@ -126,6 +351,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(["before", "after"], [item["phase"] for item in evidence])
         self.assertTrue(all(item["release"] == {"state": "unknown"} for item in evidence))
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
 
     def test_refuses_unknown_publication_state_with_unchanged_before_after_evidence(self):
         del self.release["published_at"]
@@ -143,6 +370,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("Recovery state changed", result.stderr)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
         self.assertFalse(json.loads(result.stdout.splitlines()[-1])["release"]["draft"])
 
     def test_new_tag_owner_after_draft_deletion_prevents_tag_deletion(self):
@@ -280,6 +509,8 @@ class ClearNightlyDraftTest(unittest.TestCase):
                 self.assertIn("Invalid", result.stderr)
         self.assertEqual([], self.api.requests)
         self.assertEqual([], self.api.deletes)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
 
 
 if __name__ == "__main__":

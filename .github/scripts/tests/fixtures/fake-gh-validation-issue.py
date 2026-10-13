@@ -5,26 +5,28 @@ from pathlib import Path
 import sys
 import urllib.request
 
+from issue_store import IssueStore
+
 args = sys.argv[1:]
 repository = "repos/Gvetri/hermes-native-client"
 state = Path("issue.json")
+store = IssueStore(state, "Gvetri/hermes-native-client", 60)
 if args[:3] in (["api", "--method", "POST"], ["api", "--method", "PATCH"]):
     method = args[2]
     assert args[3] == repository + ("/issues" if method == "POST" else "/issues/60")
     assert state.exists() == (method == "PATCH")
     payload = json.loads(Path(args[args.index("--input") + 1]).read_text())
-    issue = {**payload, "number": 60, "html_url": "https://github.com/Gvetri/hermes-native-client/issues/60",
-             "state": "open", "labels": [{"name": name} for name in payload["labels"]]}
-    state.write_text(json.dumps(issue))
+    issue = store.patch(payload) if method == "PATCH" else store.create(payload)
     with Path("writes").open("a") as output:
         output.write(method + "\n")
     print(json.dumps(issue))
 elif args == ["api", "--paginate", "--slurp", repository + "/issues?state=all&per_page=100"]:
-    print(json.dumps([[json.loads(state.read_text())] if state.exists() else []]))
+    print(json.dumps([store.list()]))
 elif args == ["api", repository + "/issues/60"]:
-    print(state.read_text())
-elif args == ["api", "--paginate", "--slurp", repository + "/actions/runs/123/artifacts?per_page=100"]:
+    print(json.dumps(store.get()))
+elif args[0] == "api" and args[-1].startswith(repository + "/actions/runs/"):
     with urllib.request.urlopen(os.environ["GITHUB_API_URL"] + "/" + args[-1]) as response:
-        print(json.dumps([json.load(response)]))
+        value = json.load(response)
+        print(json.dumps([value] if "--slurp" in args else value))
 else:
     raise SystemExit("Unexpected fixture API request: " + repr(args))
