@@ -10,31 +10,12 @@ import urllib.request
 
 POLICY = runpy.run_path(str(Path(__file__).with_name("release-signing.py")))
 api_get = POLICY["api_get"]
+pages = POLICY["pages"]
 require = POLICY["require"]
 ReleaseError = POLICY["ReleaseError"]
 REPOSITORY = POLICY["REPOSITORY"]
 TAG = re.compile(r"nightly-([1-9][0-9]*)-([0-9a-f]{40})")
 MARKER = "<!-- nightly-watchdog -->"
-
-
-def pages(path, key=None):
-    result, seen = [], set()
-    page = 1
-    while True:
-        separator = "&" if "?" in path else "?"
-        response = api_get(f"{path}{separator}per_page=100&page={page}")
-        batch = response[key] if key else response
-        require(isinstance(batch, list), "Malformed Nightly history")
-        for item in batch:
-            identity = item.get("id", item.get("sha"))
-            require(identity is not None and identity not in seen, "Duplicate Nightly history record")
-            seen.add(identity)
-        result.extend(batch)
-        if len(batch) < 100:
-            if key:
-                require(response.get("total_count") == len(result), "Truncated Nightly history")
-            return result
-        page += 1
 
 
 def select_source():

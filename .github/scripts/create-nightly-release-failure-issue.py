@@ -85,11 +85,15 @@ def report():
             and actual.get("path") == ".github/workflows/nightly-release.yml"
             and actual.get("event") in {"schedule", "workflow_dispatch"}
             and (actual.get("status") == "in_progress" and actual.get("conclusion") is None
-                 or actual.get("status") == "completed" and actual.get("conclusion") in {"failure", "cancelled"}),
+                 or actual.get("status") == "completed" and actual.get("conclusion") in {
+                     "failure", "cancelled", "timed_out", "startup_failure", "action_required", "stale", "neutral",
+                 }),
             "Unexpected Nightly run evidence")
     jobs = records(f"actions/runs/{run}/attempts/{attempt}/jobs?per_page=100", "jobs")
     failed = [job["name"] for job in jobs if (job.get("name") == "publish" or job.get("name", "").startswith("sign / "))
-              and job.get("status") == "completed" and job.get("conclusion") == "failure" and job.get("head_sha") == commit]
+              and job.get("status") == "completed" and job.get("conclusion") in {
+                  "failure", "timed_out", "startup_failure", "action_required", "stale", "neutral",
+              } and job.get("head_sha") == commit]
     require(failed, "No failed signing or publication stage; refusing to file an issue")
     artifacts = records(f"actions/runs/{run}/artifacts?per_page=100", "artifacts")
     state = observed_state(artifacts, run, attempt, commit)

@@ -16,33 +16,11 @@ import urllib.request
 
 POLICY = runpy.run_path(str(Path(__file__).with_name("release-signing.py")))
 api_get = POLICY["api_get"]
+pages = POLICY["pages"]
 require = POLICY["require"]
 ReleaseError = POLICY["ReleaseError"]
 REPOSITORY = POLICY["REPOSITORY"]
 TAG = re.compile(r"nightly-([1-9][0-9]*)-([0-9a-f]{40})")
-
-
-def pages(path, key=None, deadline=None, clock=time):
-    """Read every page and reject truncated or repeated provider records."""
-    result, seen = [], set()
-    page = 1
-    while True:
-        if deadline is not None:
-            require(clock.monotonic() < deadline, "Validation lookup exceeded its time bound")
-        separator = "&" if "?" in path else "?"
-        response = api_get(f"{path}{separator}per_page=100&page={page}")
-        batch = response[key] if key else response
-        require(isinstance(batch, list), "Malformed Nightly history")
-        for item in batch:
-            identity = item.get("id", item.get("sha"))
-            require(identity is not None and identity not in seen, "Duplicate Nightly history record")
-            seen.add(identity)
-        result.extend(batch)
-        if len(batch) < 100:
-            if key:
-                require(response.get("total_count") == len(result), "Truncated Nightly history")
-            return result
-        page += 1
 
 
 def dispatch_validation():
@@ -160,7 +138,10 @@ def report_validation():
         require(len(matching) == 1, f"Missing or duplicate validation stage: {name}")
         job = matching[0]
         require(job.get("head_sha") == sha and job.get("status") == "completed"
-                and isinstance(job.get("conclusion"), str) and job["conclusion"],
+                and isinstance(job.get("conclusion"), str) and job["conclusion"] in {
+                    "success", "skipped", "cancelled", "failure", "timed_out",
+                    "startup_failure", "action_required", "neutral", "stale",
+                },
                 f"Invalid terminal validation stage: {name}")
         conclusion = job["conclusion"]
         results[key] = conclusion if conclusion in {"success", "skipped", "cancelled"} else "failure"

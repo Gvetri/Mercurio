@@ -6,7 +6,6 @@ import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume
 import org.junit.Test
 
 class QualityGateConfigurationTest {
@@ -17,13 +16,13 @@ class QualityGateConfigurationTest {
             },
         )
 
-    private fun assumePosixWrapperSupport() {
-        Assume.assumeTrue(
+    private fun assertPosixWrapperSupport() {
+        assertTrue(
             "The evidence wrapper requires a POSIX filesystem.",
             FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
         )
         listOf("bash", "timeout", "python3").forEach { tool ->
-            Assume.assumeTrue(
+            assertTrue(
                 "The evidence wrapper requires $tool.",
                 System.getenv("PATH").orEmpty().split(File.pathSeparator).any { directory ->
                     File(directory, tool).canExecute()
@@ -33,7 +32,7 @@ class QualityGateConfigurationTest {
     }
 
     private fun runPythonSuite(relativePath: String) {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val process = ProcessBuilder("python3", repositoryRoot.resolve(relativePath).absolutePath)
             .directory(repositoryRoot)
             .redirectErrorStream(true)
@@ -44,7 +43,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun test_job_failures_preserve_gating_reporting_and_redaction() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val process = ProcessBuilder("python3", repositoryRoot.resolve(".github/scripts/tests/test_test_jobs.py").absolutePath)
             .directory(repositoryRoot)
             .redirectErrorStream(true)
@@ -60,7 +59,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun nightly_release_validates_main_tip_and_publishes_verified_metadata() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val process = ProcessBuilder("python3", repositoryRoot.resolve(".github/scripts/tests/test_nightly_release.py").absolutePath)
             .directory(repositoryRoot)
             .redirectErrorStream(true)
@@ -71,7 +70,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun stable_beta_requires_closed_milestone_exact_candidate_and_fresh_approval() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val process = ProcessBuilder("python3", repositoryRoot.resolve(".github/scripts/tests/test_stable_public_beta.py").absolutePath)
             .directory(repositoryRoot)
             .redirectErrorStream(true)
@@ -82,7 +81,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun release_signing_fails_closed_and_verifies_apk_identity() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val process =
             ProcessBuilder(
                 "python3", "-m", "unittest", "discover",
@@ -290,7 +289,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun evidence_wrapper_redacts_quoted_json_credentials() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val tempDir = Files.createTempDirectory("android-test-evidence-test")
         try {
             val evidenceDir = tempDir.resolve("artifacts/android-test-evidence")
@@ -355,7 +354,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun evidence_wrapper_preserves_capture_failures_as_sanitized_evidence() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val tempDir = Files.createTempDirectory("android-test-evidence-capture-failure-test")
         try {
             val evidenceDir = tempDir.resolve("artifacts/android-test-evidence")
@@ -437,7 +436,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun evidence_wrapper_redaction_timeout_keeps_marker_and_unsanitized_file() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val tempDir = Files.createTempDirectory("android-test-evidence-redaction-timeout-test")
         try {
             val evidenceDir = tempDir.resolve("artifacts/android-test-evidence")
@@ -507,7 +506,7 @@ class QualityGateConfigurationTest {
 
     @Test
     fun evidence_wrapper_timeout_stops_descendant_before_marker_removal() {
-        assumePosixWrapperSupport()
+        assertPosixWrapperSupport()
         val tempDir = Files.createTempDirectory("android-test-evidence-timeout-test")
         try {
             val evidenceDir = tempDir.resolve("artifacts/android-test-evidence")

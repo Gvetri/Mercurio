@@ -67,9 +67,12 @@ A hand-started quality gate that the Nightly did not start does **not** enter th
 reporting path. The quality gate's independent nightly schedule keeps its existing
 schedule-only failure-issue automation unchanged. The Nightly does not retry or
 repair a failed validation. A green validation cannot produce an issue; the existing
-reporter also refuses when all four test stages succeeded. Missing, duplicate,
-nonterminal, or unsupported stage results fail reporting closed rather than inventing
-results. Discovery failures or expired waits without a completed identified run
+reporter also refuses when all four test stages succeeded. Stage conclusions of
+`failure`, `timed_out`, `startup_failure`, `action_required`, `neutral`, and `stale`
+are normalized to `failure`; `success`, `skipped`, and `cancelled` retain their values.
+Missing, duplicate, nonterminal, wrong-source, or malformed stage results, and any
+conclusion outside GitHub's closed conclusion enum, fail reporting closed rather
+than inventing results. Discovery failures or expired waits without a completed identified run
 leave the Nightly red without fabricating a validation issue.
 
 ## Versions and ARM64 APK

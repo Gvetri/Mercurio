@@ -263,7 +263,7 @@ class NightlyPreparationTest(unittest.TestCase):
         result, values = self.prepare()
         self.assertNotEqual(0, result.returncode)
         root = Path(self.directory.name)
-        for conclusion in ("timed_out", "action_required", "startup_failure", "neutral", "stale", "unexpected_terminal"):
+        for conclusion in ("failure", "timed_out", "action_required", "startup_failure", "neutral", "stale"):
             with self.subTest(conclusion=conclusion):
                 stage["conclusion"] = conclusion
                 (root / "issue.json").unlink(missing_ok=True)
@@ -274,6 +274,22 @@ class NightlyPreparationTest(unittest.TestCase):
                     issue = json.loads((root / "issue.json").read_text())
                     self.assertIn("`api24-instrumentation`: `failure`", issue["body"])
                     self.assertEqual(expected_writes, (root / "writes").read_text().splitlines())
+
+    def test_unsupported_terminal_validation_stage_refuses_without_writing_an_issue(self):
+        self.selected_run["conclusion"] = "failure"
+        for identity, job in enumerate(self.jobs, 1):
+            job["id"] = identity
+        stage = next(job for job in self.jobs if job["name"] == "api24-instrumentation")
+        stage["conclusion"] = "unexpected_terminal"
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        result = self.report_validation(values)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Invalid terminal validation stage: api24-instrumentation", result.stderr)
+        root = Path(self.directory.name)
+        self.assertFalse((root / "issue.json").exists())
+        self.assertFalse((root / "writes").exists())
 
     def test_stale_completed_run_preserves_identity_and_reports_failed_stage(self):
         self.selected_run["conclusion"] = "stale"
@@ -678,6 +694,33 @@ class NightlyPreparationTest(unittest.TestCase):
         after = {path.relative_to(self.provider): path.read_bytes() for path in self.provider.rglob("*") if path.is_file()}
         self.assertEqual(before, after)
 
+    def test_known_terminal_release_stage_failures_file_exactly_one_issue(self):
+        self.report_fixture(observation=False)
+        for name in ("publish", "sign / prepare"):
+            for conclusion in ("failure", "timed_out", "startup_failure", "action_required", "stale", "neutral"):
+                with self.subTest(stage=name, conclusion=conclusion):
+                    for job in self.report_jobs:
+                        job["conclusion"] = conclusion if job["name"] == name else "skipped"
+                    (self.report_store / "issue.json").unlink(missing_ok=True)
+                    (self.report_store / "writes").unlink(missing_ok=True)
+                    result = self.report()
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    issue = json.loads((self.report_store / "issue.json").read_text())
+                    self.assertIn(f"- `{name}`: `failure`", issue["body"])
+                    self.assertEqual(["POST"], (self.report_store / "writes").read_text().splitlines())
+
+    def test_completed_unsuccessful_release_runs_report_verified_failed_stages(self):
+        self.report_fixture(failure="sign", observation=False)
+        for conclusion in ("failure", "cancelled", "timed_out", "startup_failure", "action_required", "stale", "neutral"):
+            with self.subTest(conclusion=conclusion):
+                self.report_run.update(status="completed", conclusion=conclusion)
+                (self.report_store / "issue.json").unlink(missing_ok=True)
+                (self.report_store / "writes").unlink(missing_ok=True)
+                result = self.report()
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn("`sign / prepare`: `failure`", json.loads((self.report_store / "issue.json").read_text())["body"])
+                self.assertEqual(["POST"], (self.report_store / "writes").read_text().splitlines())
+
     def test_signer_failure_before_outputs_reports_unknown_identity_and_missing_artifacts(self):
         self.report_fixture(failure="sign", observation=False)
         result = self.report()
@@ -727,7 +770,7 @@ class NightlyPreparationTest(unittest.TestCase):
 
     def test_reporter_refuses_success_skips_cancellation_and_foreign_run_evidence(self):
         self.report_fixture(failure="none", observation=False)
-        for conclusion in ("success", "skipped", "cancelled", None):
+        for conclusion in ("success", "skipped", "cancelled", "unexpected_terminal", None):
             self.report_jobs[0]["conclusion"] = conclusion
             result = self.report()
             self.assertNotEqual(0, result.returncode)
@@ -740,9 +783,12 @@ class NightlyPreparationTest(unittest.TestCase):
 
     def test_reporter_refuses_a_successful_run_even_with_inconsistent_failed_jobs(self):
         self.report_fixture(failure="sign", observation=False)
-        self.report_run.update(status="completed", conclusion="success")
-        self.assertNotEqual(0, self.report().returncode)
-        self.assertFalse((self.report_store / "issue.json").exists())
+        for conclusion in ("success", "skipped", "unexpected_terminal", None):
+            with self.subTest(conclusion=conclusion):
+                self.report_run.update(status="completed", conclusion=conclusion)
+                self.assertNotEqual(0, self.report().returncode)
+                self.assertFalse((self.report_store / "issue.json").exists())
+                self.assertFalse((self.report_store / "writes").exists())
 
     def test_reporter_refuses_ambiguous_issues_and_verifies_the_issue_readback(self):
         self.report_fixture(failure="sign", observation=False)

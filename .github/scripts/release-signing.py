@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -33,6 +34,28 @@ def api_get(path):
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, ValueError) as error:
         raise ReleaseError("Required GitHub evidence is unavailable") from error
+
+
+def pages(path, key=None, deadline=None, clock=time):
+    result, seen = [], set()
+    page = 1
+    while True:
+        if deadline is not None:
+            require(clock.monotonic() < deadline, "Validation lookup exceeded its time bound")
+        separator = "&" if "?" in path else "?"
+        response = api_get(f"{path}{separator}per_page=100&page={page}")
+        batch = response[key] if key else response
+        require(isinstance(batch, list), "Malformed Nightly history")
+        for item in batch:
+            identity = item.get("id", item.get("sha"))
+            require(identity is not None and identity not in seen, "Duplicate Nightly history record")
+            seen.add(identity)
+        result.extend(batch)
+        if len(batch) < 100:
+            if key:
+                require(response.get("total_count") == len(result), "Truncated Nightly history")
+            return result
+        page += 1
 
 
 def positive_integer(value):
