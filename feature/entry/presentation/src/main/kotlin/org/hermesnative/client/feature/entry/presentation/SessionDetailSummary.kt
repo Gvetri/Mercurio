@@ -1,5 +1,6 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
@@ -40,12 +42,34 @@ internal fun SessionDetailSummary(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val state = detail.content
-    RefreshHistoryButton(
-        state = state,
-        mutation = detail.mutation,
-        listRequestActive = detail.listRequestActive,
-        onEvent = onEvent,
-    )
+    val groupRunWithRefresh =
+        LocalConfiguration.current.screenWidthDp >= TWO_PANE_MIN_WIDTH_DP && state.latestRun != null
+    if (groupRunWithRefresh) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RefreshHistoryButton(
+                state = state,
+                mutation = detail.mutation,
+                listRequestActive = detail.listRequestActive,
+                onEvent = onEvent,
+                modifier = Modifier,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                LatestRunSection(state = state, retryEnabled = retryEnabled, onEvent = onEvent)
+            }
+        }
+    } else {
+        RefreshHistoryButton(
+            state = state,
+            mutation = detail.mutation,
+            listRequestActive = detail.listRequestActive,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
     SessionSummaryStatusTexts(
         state = state,
         listIsStale = detail.listIsStale,
@@ -58,7 +82,10 @@ internal fun SessionDetailSummary(
         onEvent = onEvent,
         showMenu = false,
     )
-    LatestRunSection(state = state, retryEnabled = retryEnabled, onEvent = onEvent)
+    if (!groupRunWithRefresh && state.latestRun != null) {
+        Spacer(modifier = Modifier.height(12.dp))
+        LatestRunSection(state = state, retryEnabled = retryEnabled, onEvent = onEvent)
+    }
 }
 
 @Composable
@@ -67,11 +94,12 @@ private fun RefreshHistoryButton(
     mutation: SessionMutationUiState?,
     listRequestActive: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
+    modifier: Modifier,
 ) {
     TextButton(
         onClick = { onEvent(EntryUiEvent.RefreshSessionsClicked) },
         enabled = !state.isRefreshing && !listRequestActive && mutation?.pendingAction == null,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        modifier = modifier.heightIn(min = 48.dp),
     ) {
         Text(text = "Refresh history")
     }
@@ -133,7 +161,6 @@ private fun LatestRunSection(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     state.latestRun?.let { run ->
-        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "Latest Run: ${run.id.value}",
             style = MaterialTheme.typography.bodySmall,
