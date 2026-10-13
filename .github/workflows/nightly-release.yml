@@ -17,7 +17,10 @@ jobs:
   prepare:
     if: ${{ github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 190
+    permissions:
+      contents: read
+      actions: write
     outputs:
       publish: ${{ steps.prepare.outputs.publish }}
       source_sha: ${{ steps.prepare.outputs.source_sha }}
@@ -30,10 +33,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Select validated main source and skip an existing Nightly
+      - name: Capture main tip, skip an existing Nightly, and validate before signing
         id: prepare
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NIGHTLY_VALIDATION_TIMEOUT_SECONDS: '10800'
         run: python3 .github/scripts/nightly-release.py prepare
 
   sign:
@@ -42,6 +46,8 @@ jobs:
     uses: ./.github/workflows/release-signing.yml
     with:
       validation_run_id: ${{ needs.prepare.outputs.validation_run_id }}
+      source_sha: ${{ needs.prepare.outputs.source_sha }}
+      validation_run_attempt: ${{ needs.prepare.outputs.validation_run_attempt }}
       nightly_version_code: ${{ needs.prepare.outputs.version_code }}
       generation_attempt: ${{ needs.prepare.outputs.generation_attempt }}
     secrets:

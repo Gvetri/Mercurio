@@ -71,8 +71,9 @@ its sanitization step completes, and uploaded evidence is retained for 14 days.
 
 A merge does not package or publish an application APK or generate a product version.
 Signing-policy tests may create minimal disposable APK fixtures; those are not application
-builds or distribution artifacts. Full scheduled/manual validation is required before
-[the separate Nightly publisher](nightly-releases.md) can select a source commit.
+builds or distribution artifacts. [The separate Nightly workflow](nightly-releases.md)
+captures the current `main` tip, skips an already published source, and dispatches full
+validation on `main`. Only that exact successful validation permits signing and publication.
 
 `draft-validation` runs for every in-repository pull request: on a draft it is the whole validation,
 and on a ready pull request it adds a fast formatting and lint result beside the complete gate. The

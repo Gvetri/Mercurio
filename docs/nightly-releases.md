@@ -9,26 +9,41 @@ human-approved promotion of an existing signed Nightly.
 ## Daily path and source selection
 
 `.github/workflows/nightly-release.yml` is scheduled daily at **04:37 UTC**. GitHub
-may delay a scheduled run. The full deterministic `quality-gate` validation runs
-separately at 02:00 UTC, or through a manual dispatch. A merge to `main` runs
-validation and compiles debug/release Kotlin, but does not package an application
-APK, create a release, or generate a product version. Pull-request APK builds and
-scheduled/manual device tests keep their existing validation roles.
+may delay a scheduled run. Each Nightly captures the current tip of `main`, checks
+release history, and starts `quality-gate.yml` on `main` through `workflow_dispatch`.
+The independent 02:00 UTC quality-gate schedule and its failure reporting remain
+unchanged. A merge to `main` validates and compiles debug/release Kotlin, but does
+not package an application APK, create a release, or generate a product version.
+Pull-request APK builds and scheduled/manual device tests keep their existing roles.
 
-The publisher starts from the current `main` tip and walks its first-parent history.
-It queries workflow runs separately for each exact source SHA, so unrelated run
-history cannot exhaust GitHub's 1,000-result filtered-search limit. It selects the
-newest source with a successful scheduled or manually dispatched `quality-gate.yml`
-run from this repository. A late rerun of an older source does
-not outrank a newer validated source. It verifies the exact workflow ID, source SHA,
-run attempt, and every declared deterministic job, including API 24 instrumentation
-and Maestro journeys. Push-only and pull-request results are not sufficient.
-Missing, failed, skipped, stale, foreign, or incomplete evidence stops the release.
-An API error or truncated history stops selection; it is not permission to guess.
+Before dispatch, a published Nightly for the captured SHA makes the run succeed
+without validation, building, signing, or publishing another one. A visible draft
+still stops preparation for recovery; duplicate or inconsistent source identities
+fail closed. The history check uses the existing release listing, not workflow history.
 
-If that source already has a published Nightly, the run succeeds without building,
-signing, or publishing another one. No successful source means no Nightly. A failed
-newer source does not become release input merely because it is the current tip.
+For an unreleased tip, preparation dispatches the existing full gate and waits for
+its result. It correlates new workflow-dispatch runs by `main`, the captured SHA,
+and creation time, excludes runs present before dispatch, and refuses ambiguous
+matches. Discovery is limited to five minutes; the entire validation wait is
+limited to **three hours** (`10800` seconds), within a **190-minute** preparation
+job. This leaves room for the full gate, including its sequential device stages,
+without an unbounded wait. Dispatch errors, missing runs, cancellation, failed
+validation, unknown states, unavailable evidence, and expired waits publish nothing.
+The wait never retries a dispatch or falls back to an older successful source.
+
+The exact dispatched run and attempt become release evidence only after the
+unchanged signer verifies workflow identity, repository, main membership, source
+SHA, and every declared deterministic job, including API 24 instrumentation and
+Maestro journeys. Push-only, pull-request, fork, incomplete, or changed evidence
+cannot authorize publication. Signing and publication stay bound to the captured
+SHA and attempt. A newer commit merged during validation waits for the next Nightly;
+if the gate's shared per-ref concurrency cancels this validation, this Nightly fails
+closed instead of substituting the newer run. If `main` moves before dispatch and
+the run starts on another SHA, it cannot satisfy discovery for the captured tip.
+
+The old first-parent ancestry walk is removed: a broken current tip must not be
+hidden by releasing historical validation. The Nightly validates its own source,
+then signs and publishes only that source on success.
 
 ## Versions and ARM64 APK
 
@@ -53,8 +68,9 @@ properties. It builds the normal release application with only `arm64-v8a` nativ
 libraries; `x86_64` remains available to non-Nightly emulator validation. A build
 with no native libraries is also device-compatible. The signer reads the actual APK
 application ID, embedded versions, and ABIs instead of trusting caller metadata.
-A selected source that predates support for these properties cannot pass that check;
-a successful full validation of a Nightly-capable source is needed to bootstrap.
+The Nightly now validates the current tip itself rather than bootstrapping from an
+older successful source. The build-metadata check remains mandatory: a source that
+does not honor the generated properties cannot produce a Nightly.
 
 ## Signing and publication boundaries
 
@@ -72,13 +88,15 @@ The signing job has only the two environment-scoped Android signing secrets. It
 has no provider credentials and performs no live-provider smoke test. It verifies
 the pinned certificate and uploads an immutable, same-run signed artifact.
 
+Preparation alone has `actions: write` to dispatch validation, while retaining
+`contents: read` and no signing secrets. The signing stage's permissions are unchanged.
 Only the separate publication job has `contents: write`; it has no signing
 environment or signing secrets. Before writing it rechecks validation, trusted
 Nightly caller and environment, run/attempt, version, source, certificate, APK checksum, and the exact
 three-file artifact allowlist. Workflow concurrency serializes daily/manual runs,
 and the publisher rechecks duplicate history.
 It refuses an existing tag or source, including a draft visible to its write token.
-The read-only preparation token may not see drafts; the publication check remains
+The contents-read-only preparation token may not see drafts; the publication check remains
 authoritative and refuses a second write.
 
 Publication proceeds in this order:
@@ -128,10 +146,11 @@ Nightly distribution artifact.
 
 The API and publication fixtures are local test stand-ins. The tests use real
 Android packaging/signing tools with disposable keys, never the production key.
-They cover main-push routing, latest validated source selection, duplicate
-prevention, increasing versions, stale partial reruns, metadata and certificate
-checks, missing evidence, partial uploads, downloaded-byte corruption, and the
-published-release read-back. They do not claim a real GitHub release was signed or
+They cover main-push routing, current-tip dispatch and exact-run correlation,
+bounded discovery and completion, cancelled/failed/unknown validation, refusal of
+historical fallback and changed evidence, duplicate prevention before dispatch,
+increasing versions, stale partial reruns, metadata and certificate checks, missing
+evidence, partial uploads, downloaded-byte corruption, and published-release read-back. They do not claim a real GitHub release was signed or
 published.
 
 ```text

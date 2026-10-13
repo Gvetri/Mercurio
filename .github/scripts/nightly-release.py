@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Prepare and publish one source-bound development Nightly through the protected signer."""
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,10 @@ import runpy
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 POLICY = runpy.run_path(str(Path(__file__).with_name("release-signing.py")))
 api_get = POLICY["api_get"]
@@ -17,11 +22,13 @@ REPOSITORY = POLICY["REPOSITORY"]
 TAG = re.compile(r"nightly-([1-9][0-9]*)-([0-9a-f]{40})")
 
 
-def pages(path, key=None):
+def pages(path, key=None, deadline=None, clock=time):
     """Read every page and reject truncated or repeated provider records."""
     result, seen = [], set()
     page = 1
     while True:
+        if deadline is not None:
+            require(clock.monotonic() < deadline, "Validation lookup exceeded its time bound")
         separator = "&" if "?" in path else "?"
         response = api_get(f"{path}{separator}per_page=100&page={page}")
         batch = response[key] if key else response
@@ -38,30 +45,73 @@ def pages(path, key=None):
         page += 1
 
 
-def select_source():
-    """Prefer main ancestry, not the completion time of a rerun of an older commit."""
-    head = api_get("branches/main")["commit"]["sha"]
-    visited = set()
-    while head:
-        require(isinstance(head, str) and re.fullmatch(r"[0-9a-f]{40}", head)
-                and head not in visited, "Incomplete main ancestry")
-        visited.add(head)
-        runs = pages(f"actions/workflows/quality-gate.yml/runs?branch=main&status=success&head_sha={head}", "workflow_runs")
-        eligible = [run for run in runs if (
-            run.get("head_sha") == head and run.get("head_branch") == "main"
-            and run.get("event") in {"schedule", "workflow_dispatch"}
-            and run.get("status") == "completed" and run.get("conclusion") == "success"
-            and run.get("head_repository", {}).get("full_name") == REPOSITORY
-        )]
-        if eligible:
-            selected = max(eligible, key=lambda run: run["id"])
-            os.environ["RELEASE_VALIDATION_RUN_ID"] = str(selected["id"])
-            return POLICY["verify_source"]()
-        commit = api_get(f"commits/{head}")
-        require(commit.get("sha") == head, "Main ancestry response has the wrong commit")
-        parents = commit["parents"]
-        head = parents[0]["sha"] if parents else None
-    raise ReleaseError("No fully validated main commit is available for a Nightly")
+def dispatch_validation():
+    base = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    request = urllib.request.Request(
+        f"{base}/repos/{REPOSITORY}/actions/workflows/quality-gate.yml/dispatches",
+        data=json.dumps({"ref": "main"}).encode(), method="POST", headers={
+            "Accept": "application/vnd.github+json", "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            require(response.status == 204, "Validation dispatch returned an unexpected response")
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise ReleaseError("Validation dispatch failed; no Nightly was published") from error
+
+
+def validate_tip(sha, clock=time):
+    timeout = POLICY["positive_integer"](os.environ.get("NIGHTLY_VALIDATION_TIMEOUT_SECONDS", "10800"))
+    interval = POLICY["positive_integer"](os.environ.get("NIGHTLY_VALIDATION_POLL_SECONDS", "15"))
+    require(timeout <= 10800 and interval <= timeout, "Invalid validation wait bound")
+    deadline = clock.monotonic() + timeout
+    discovery_deadline = min(deadline, clock.monotonic() + 300)
+    started = datetime.fromtimestamp(clock.time(), timezone.utc).replace(microsecond=0)
+    query = urllib.parse.urlencode({
+        "event": "workflow_dispatch", "branch": "main", "head_sha": sha,
+        "created": ">=" + started.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
+    path = f"actions/workflows/quality-gate.yml/runs?{query}"
+    before = {run["id"] for run in pages(path, "workflow_runs", discovery_deadline, clock)}
+    started = datetime.fromtimestamp(clock.time(), timezone.utc).replace(microsecond=0)
+    dispatch_validation()
+    selected = None
+    while clock.monotonic() < discovery_deadline:
+        runs = pages(path, "workflow_runs", discovery_deadline, clock)
+        candidates = [run for run in runs if run["id"] not in before
+                      and run.get("event") == "workflow_dispatch"
+                      and run.get("head_branch") == "main" and run.get("head_sha") == sha
+                      and datetime.fromisoformat(run["created_at"]) >= started]
+        require(len(candidates) <= 1, "Dispatched validation is ambiguous; no Nightly was published")
+        if candidates:
+            selected = candidates[0]
+            break
+        clock.sleep(min(interval, max(0, discovery_deadline - clock.monotonic())))
+    require(selected is not None, "Dispatched validation did not appear within the discovery bound")
+    run_id, attempt = selected["id"], selected["run_attempt"]
+    require(type(run_id) is int and run_id > 0 and type(attempt) is int and attempt > 0,
+            "Invalid dispatched validation identity")
+    os.environ.update(RELEASE_SOURCE_SHA=sha, RELEASE_VALIDATION_RUN_ID=str(run_id),
+                      RELEASE_VALIDATION_RUN_ATTEMPT=str(attempt))
+    print(f"Validating main tip {sha}: run {run_id}, attempt {attempt}", flush=True)
+    while clock.monotonic() < deadline:
+        run = api_get(f"actions/runs/{run_id}")
+        require(run.get("id") == run_id and run.get("head_sha") == sha
+                and run.get("run_attempt") == attempt and run.get("event") == "workflow_dispatch",
+                "Dispatched validation identity changed")
+        status = run.get("status")
+        if status == "completed":
+            require(run.get("conclusion") == "success",
+                    f"Dispatched validation {run_id} ended with {run.get('conclusion')}; no Nightly was published")
+            evidence = POLICY["verify_source"]()
+            require(clock.monotonic() < deadline, "Dispatched validation did not finish within the time bound")
+            return evidence
+        require(status in {"queued", "in_progress", "waiting", "pending", "requested"},
+                "Unknown validation state; no Nightly was published")
+        clock.sleep(min(interval, max(0, deadline - clock.monotonic())))
+    raise ReleaseError("Dispatched validation did not finish within the time bound")
 
 
 def release_history():
@@ -77,10 +127,10 @@ def release_history():
     return history
 
 
-def prepare():
+def prepare(clock=time):
     POLICY["verify_context"]()
-    evidence = select_source()
-    sha = evidence["source_sha"]
+    sha = api_get("branches/main")["commit"]["sha"]
+    require(isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha), "Invalid main tip")
     history = release_history()
     existing = [release for _, source, release in history if source == sha]
     if existing:
@@ -92,6 +142,7 @@ def prepare():
         return {"publish": "false", "source_sha": sha}
     code = POLICY["generation_code"]()
     require(code > max((code for code, _, _ in history), default=1), "Version code is not newer; start a new workflow run")
+    evidence = validate_tip(sha, clock)
     return {
         "publish": "true", **evidence, "version_code": code,
         "version_name": f"nightly-{code}-{sha[:12]}", "tag": f"nightly-{code}-{sha}",
@@ -207,10 +258,10 @@ def publish(directory, certificate):
         print(f"Nightly publication verified: {release['html_url']}")
 
 
-def main():
+def main(clock=time):
     try:
         if sys.argv[1:] == ["prepare"]:
-            result = prepare()
+            result = prepare(clock)
             with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
                 for key, value in result.items():
                     output.write(f"{key}={value}\n")

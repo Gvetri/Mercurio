@@ -492,14 +492,27 @@ class ApiStub:
     def __init__(self, routes):
         self.routes = routes
         self.requests = []
+        self.posts = []
         self.server = None
         self.thread = None
 
     def start(self):
         routes = self.routes
         requests = self.requests
+        posts = self.posts
 
         class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                posts.append((self.path, payload))
+                route = routes.get(("POST", self.path))
+                if route is None:
+                    self.send_response(404)
+                else:
+                    status = route(payload) if callable(route) else route
+                    self.send_response(status)
+                self.end_headers()
+
             def do_GET(self):
                 requests.append(self.path)
                 request_path = self.path if self.path in routes else self.path.split("?", 1)[0]
