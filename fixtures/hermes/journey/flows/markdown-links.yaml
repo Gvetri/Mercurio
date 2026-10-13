@@ -28,8 +28,10 @@ name: markdown-links
 - tapOn: "Message actions for message-markdown-1"
 - assertVisible: "Copy message"
 - assertVisible: "Share message"
+- takeScreenshot: markdown-links-01-menu-open
 - back
 - assertNotVisible: "Copy message"
+- takeScreenshot: markdown-links-02-menu-closed
 - scrollUntilVisible:
     element:
       text: ".*the secure page.*"
