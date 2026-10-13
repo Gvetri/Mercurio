@@ -3,6 +3,10 @@ package org.hermesnative.client.feature.entry.presentation
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.view.KeyEvent
+import android.view.inspector.WindowInspector
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,7 +20,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.isDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -29,12 +33,15 @@ import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
 import org.hermesnative.client.feature.entry.domain.SessionId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -48,7 +55,7 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-notnight")
 class SessionMessageRenderingTest {
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun authoritative_roles_form_a_readable_hierarchy_without_diagnostic_prefixes() {
@@ -252,31 +259,36 @@ class SessionMessageRenderingTest {
         assertEquals(listOf("Safe **Markdown** text"), recorded.shared)
     }
 
-    /**
-     * Opening the menu is a pure state change: no copy or share runs until an item is
-     * selected. Robolectric does not dispatch the popup's system-back or outside dismissal
-     * (the same paused-window limitation family as robolectric/robolectric#8460), so the
-     * dismissal path is exercised on a device by the markdown-links journey, which
-     * re-asserts the closed menu after Back.
-     */
     @Test
-    fun opening_the_message_menu_runs_no_copy_or_share() {
-        val recorded = RecordingActions()
+    fun opening_and_dismissing_the_message_menu_runs_no_copy_or_share() {
+        val clipboard = clipboardManager()
+        clipboard.setPrimaryClip(ClipData.newPlainText("before", "before"))
+        val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
             HermesTheme {
-                SessionMessageContent(
-                    message = SessionMessageUiState("message-1", "assistant", "Selected content"),
-                    retryEnabled = false,
-                    onRetry = {},
-                    actions = recorded.asMessageActions(),
+                EntryScreen(
+                    state = twoPaneConversationState(messageId = "message-1", content = "Selected content"),
+                    onEvent = events::add,
                 )
             }
         }
-
         openMessageMenu("message-1")
         composeTestRule.onNodeWithText("Copy message").assertIsDisplayed()
         composeTestRule.onNodeWithText("Share message").assertIsDisplayed()
-        assertTrue("Opening the menu must run no action", recorded.copied.isEmpty() && recorded.shared.isEmpty())
+        assertEquals("before", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        assertNull(shadowOf(composeTestRule.activity).nextStartedActivity)
+        composeTestRule.runOnUiThread {
+            val popup =
+                WindowInspector.getGlobalWindowViews().single { it !== composeTestRule.activity.window.decorView }
+            popup.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
+            popup.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
+        }
+        composeTestRule.onNodeWithText("Copy message").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Share message").assertDoesNotExist()
+        assertEquals("before", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        assertNull(shadowOf(composeTestRule.activity).nextStartedActivity)
+        assertTrue(events.isEmpty())
+        assertFalse(composeTestRule.activity.isFinishing)
     }
 
     @Test
@@ -335,7 +347,7 @@ class SessionMessageRenderingTest {
 
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun two_pane_message_menu_copy_carries_the_exact_selected_payload() {
+    fun two_pane_message_menu_copy_and_share_carry_the_exact_selected_payload() {
         val clipboard = clipboardManager()
         clipboard.setPrimaryClip(ClipData.newPlainText("before", "before"))
 
@@ -352,14 +364,19 @@ class SessionMessageRenderingTest {
         openMessageMenu("message-1")
         composeTestRule.onNodeWithText("Copy message").assertIsDisplayed().performClick()
         assertEquals("Safe **Markdown** text", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        assertNull(shadowOf(composeTestRule.activity).nextStartedActivity)
+        openMessageMenu("message-1")
+        composeTestRule.onNodeWithText("Share message").performClick()
+        assertSharedPayload("Safe **Markdown** text")
+        assertEquals("Safe **Markdown** text", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
     }
 
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun a_changed_selection_dismisses_the_message_menu_without_copying_or_sharing() {
+    fun a_changed_session_owner_dismisses_the_menu_even_when_the_message_id_is_reused() {
         val clipboard = clipboardManager()
         clipboard.setPrimaryClip(ClipData.newPlainText("before", "before"))
-        val state = mutableStateOf(twoPaneConversationState(messageId = "message-alpha", content = "Alpha payload"))
+        val state = mutableStateOf(twoPaneConversationState(messageId = "shared-message", content = "Alpha payload"))
 
         composeTestRule.setContent {
             HermesTheme {
@@ -367,10 +384,15 @@ class SessionMessageRenderingTest {
             }
         }
 
-        openMessageMenu("message-alpha")
+        openMessageMenu("shared-message")
         composeTestRule.onNodeWithText("Copy message").assertIsDisplayed()
         composeTestRule.runOnIdle {
-            state.value = twoPaneConversationState(messageId = "message-beta", content = "Beta payload")
+            state.value =
+                twoPaneConversationState(
+                    messageId = "shared-message",
+                    content = "Beta payload",
+                    owner = session("second", "Second Session"),
+                )
         }
         composeTestRule.onNodeWithText("Copy message").assertDoesNotExist()
         assertEquals(
@@ -378,9 +400,30 @@ class SessionMessageRenderingTest {
             "before",
             clipboard.primaryClip?.getItemAt(0)?.text?.toString(),
         )
-        openMessageMenu("message-beta")
+        composeTestRule.onNodeWithText("Share message").assertDoesNotExist()
+        assertNull(shadowOf(composeTestRule.activity).nextStartedActivity)
+        openMessageMenu("shared-message")
+        composeTestRule.onNodeWithText("Share message").performClick()
+        assertSharedPayload("Beta payload")
+        assertEquals("before", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        openMessageMenu("shared-message")
         composeTestRule.onNodeWithText("Copy message").assertIsDisplayed().performClick()
         assertEquals("Beta payload", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        assertNull(shadowOf(composeTestRule.activity).nextStartedActivity)
+        openMessageMenu("shared-message")
+        composeTestRule.runOnIdle {
+            state.value = twoPaneConversationState(messageId = "shared-message", content = "Alpha payload")
+        }
+        composeTestRule.onNodeWithText("Copy message").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Share message").assertDoesNotExist()
+        assertEquals("Beta payload", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        assertNull(shadowOf(composeTestRule.activity).nextStartedActivity)
+        openMessageMenu("shared-message")
+        composeTestRule.onNodeWithText("Copy message").performClick()
+        assertEquals("Alpha payload", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
+        openMessageMenu("shared-message")
+        composeTestRule.onNodeWithText("Share message").performClick()
+        assertSharedPayload("Alpha payload")
     }
 
     @Test
@@ -425,17 +468,28 @@ class SessionMessageRenderingTest {
     private fun twoPaneConversationState(
         messageId: String,
         content: String,
+        owner: SessionItemUiState = session("first", "First Session"),
     ): EntryUiState =
         entryState(
             SessionListUiState(
                 sessions = listOf(session("first", "First Session"), session("second", "Second Session")),
                 openedSession =
                     OpenSessionUiState(
-                        session = session("first", "First Session"),
+                        session = owner,
                         messages = listOf(message(messageId, "assistant", content)),
                     ),
             ),
         )
+
+    private fun assertSharedPayload(expected: String) {
+        val chooser = shadowOf(composeTestRule.activity).nextStartedActivity
+        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+        val share = chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+        assertEquals(Intent.ACTION_SEND, share?.action)
+        assertEquals("text/plain", share?.type)
+        assertEquals(expected, share?.getStringExtra(Intent.EXTRA_TEXT))
+        assertNull(shadowOf(composeTestRule.activity).nextStartedActivity)
+    }
 
     private fun openMessageMenu(messageId: String) {
         composeTestRule

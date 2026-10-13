@@ -4,8 +4,11 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -27,6 +30,31 @@ import org.robolectric.annotation.GraphicsMode
 class ConversationKeyboardScreenTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun app_send_has_an_unambiguous_action_target_separate_from_the_keyboard() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    entryState(
+                        SessionListUiState(
+                            openedSession =
+                                OpenSessionUiState(
+                                    session("first", "First Session"),
+                                    emptyList(),
+                                    composerText = "Draft",
+                                ),
+                        ),
+                    ),
+                    onEvent = events::add,
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag("conversation-send")
+            .assertTextEquals("Send").assertHasClickAction().performClick()
+        assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
+    }
 
     @Test
     fun multiline_composer_stays_above_the_keyboard_when_the_first_reply_arrives() {

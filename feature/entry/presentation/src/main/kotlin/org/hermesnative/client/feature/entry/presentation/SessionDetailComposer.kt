@@ -16,11 +16,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -94,6 +96,7 @@ private fun composerTailModifier(
         .heightIn(max = tailMaxHeight)
         .verticalScroll(scrollState)
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ComposerSendButton(
     state: OpenSessionUiState,
@@ -103,7 +106,9 @@ private fun ComposerSendButton(
     Button(
         onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
         enabled = sendEnabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        modifier =
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("conversation-send").semantics { testTagsAsResourceId = true },
     ) {
         Text(
             text =

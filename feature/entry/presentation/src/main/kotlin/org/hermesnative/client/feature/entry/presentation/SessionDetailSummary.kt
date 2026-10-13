@@ -20,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -66,7 +68,7 @@ private fun RefreshHistoryButton(
     listRequestActive: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
-    OutlinedButton(
+    TextButton(
         onClick = { onEvent(EntryUiEvent.RefreshSessionsClicked) },
         enabled = !state.isRefreshing && !listRequestActive && mutation?.pendingAction == null,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -162,6 +164,7 @@ internal fun SessionMessageContent(
     retryEnabled: Boolean,
     onRetry: (RunId) -> Unit,
     actions: MessageActions = rememberMessageActions(),
+    onTrailingContentHeightChanged: (Int) -> Unit = {},
 ) {
     val spacing = LocalHermesDesignTokens.current.spacing
     val roleLabel =
@@ -173,6 +176,7 @@ internal fun SessionMessageContent(
             }
         } ?: "Role unavailable"
     val eligibleContent = message.content?.takeIf { it.isNotBlank() && message.failureSafeMessage == null }
+    val bottomPadding = with(LocalDensity.current) { spacing.l.roundToPx() }
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(spacing.l)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -188,16 +192,23 @@ internal fun SessionMessageContent(
                 Spacer(modifier = Modifier.height(4.dp))
                 MarkdownContent(markdown = content, actions = actions)
             }
-            MessageRunMetadata(message = message)
-            MessageFailureSection(message = message)
-            MessageRetryButton(message = message, retryEnabled = retryEnabled, onRetry = onRetry)
-            if (message.failureSafeMessage == null) {
-                message.runResult?.let { result ->
-                    Text(text = "Run result: $result")
+            Column(
+                modifier =
+                    Modifier.onSizeChanged {
+                        onTrailingContentHeightChanged(if (eligibleContent == null) 0 else it.height + bottomPadding)
+                    },
+            ) {
+                MessageRunMetadata(message = message)
+                MessageFailureSection(message = message)
+                MessageRetryButton(message = message, retryEnabled = retryEnabled, onRetry = onRetry)
+                if (message.failureSafeMessage == null) {
+                    message.runResult?.let { result ->
+                        Text(text = "Run result: $result")
+                    }
                 }
-            }
-            message.timestamp?.let { timestamp ->
-                Text(text = "Timestamp: ${formatGatewayTimestamp(timestamp)}")
+                message.timestamp?.let { timestamp ->
+                    Text(text = "Timestamp: ${formatGatewayTimestamp(timestamp)}")
+                }
             }
         }
     }
