@@ -1,16 +1,24 @@
 package org.hermesnative.client.feature.entry.presentation
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 
@@ -45,27 +53,46 @@ internal fun rememberMessageActions(): MessageActions {
     }
 }
 
+/**
+ * The visible per-message three-dot menu. [payload] is the message's exact raw content when
+ * it is eligible to leave the client, and null otherwise: an ineligible message keeps the
+ * visible trigger while both items stay disabled and run no callback. Opening or dismissing
+ * the menu never runs an action on its own.
+ */
 @Composable
-internal fun MessageActionControls(
-    content: String,
+internal fun MessageActionMenu(
+    messageId: String,
+    payload: String?,
     actions: MessageActions,
 ) {
-    val spacing = LocalHermesDesignTokens.current.spacing
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(spacing.s),
-    ) {
-        OutlinedButton(
-            onClick = { actions.copy(content) },
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+    var expanded by remember(messageId) { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier =
+                Modifier.size(48.dp).semantics {
+                    contentDescription = "Message actions for $messageId"
+                },
         ) {
-            Text(text = "Copy message")
+            Icon(imageVector = Icons.Default.MoreVert, contentDescription = null)
         }
-        OutlinedButton(
-            onClick = { actions.share(content) },
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-        ) {
-            Text(text = "Share message")
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Copy message") },
+                onClick = {
+                    expanded = false
+                    payload?.let(actions.copy)
+                },
+                enabled = payload != null,
+            )
+            DropdownMenuItem(
+                text = { Text("Share message") },
+                onClick = {
+                    expanded = false
+                    payload?.let(actions.share)
+                },
+                enabled = payload != null,
+            )
         }
     }
 }
