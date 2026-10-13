@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-from test_protected_main import ApiStub
+from github_api_fixture import GitHubApiFixture
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / ".github/scripts/release-signing.py"
@@ -48,7 +48,7 @@ class ReleaseSourceTest(unittest.TestCase):
                 "status": "ahead", "merge_base_commit": {"sha": SOURCE},
             },
         }
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
         self.environment = {
@@ -157,7 +157,7 @@ class SigningEnvironmentTest(unittest.TestCase):
             f"/repos/{REPOSITORY}/branches/main": {"protected": True},
             f"/repos/{REPOSITORY}/actions/runs/456/approvals": self.approvals,
         }
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
         self.environment = {

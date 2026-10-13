@@ -10,7 +10,8 @@ import sys
 import tempfile
 import unittest
 
-from test_protected_main import ApiStub, job_block
+from github_api_fixture import GitHubApiFixture
+from test_protected_main import job_block
 from test_release_signing import REQUIRED_JOBS
 from signing_fixture import make_signing_fixture
 
@@ -153,7 +154,7 @@ class StableBetaTest(unittest.TestCase):
         self.provider = self.root / "release-fixture"
         self.provider.mkdir()
         self.release_file = self.provider / "release.json"
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
         self.environment = {

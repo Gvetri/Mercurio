@@ -9,7 +9,8 @@ import unittest
 from urllib.parse import parse_qs, urlsplit
 import zipfile
 
-from test_protected_main import ApiStub, job_block, job_key
+from github_api_fixture import GitHubApiFixture
+from test_protected_main import job_block, job_key
 from test_release_signing import REQUIRED_JOBS
 from signing_fixture import make_signing_fixture
 
@@ -149,7 +150,7 @@ class NightlyPreparationTest(unittest.TestCase):
             f"{prefix}/compare/{self.selected}...main": {"status": "ahead", "merge_base_commit": {"sha": self.selected}},
             f"{prefix}/releases": self.releases,
         }
-        self.api = ApiStub(self.routes)
+        self.api = GitHubApiFixture(self.routes)
         self.api.start()
         self.addCleanup(self.api.stop)
         self.environment = {
@@ -202,6 +203,7 @@ class NightlyPreparationTest(unittest.TestCase):
         binary = root / "issue-bin"
         binary.mkdir(exist_ok=True)
         shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-validation-issue.py", binary / "gh")
+        shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/issue_store.py", binary / "issue_store.py")
         (binary / "gh").chmod(0o755)
         environment = {
             **self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],
@@ -215,6 +217,112 @@ class NightlyPreparationTest(unittest.TestCase):
             ["python3", str(ROOT / ".github/scripts/nightly-release.py"), "report-validation"],
             cwd=root, env=environment, text=True, capture_output=True, check=False,
         )
+
+    def test_issue_store_refuses_duplicate_creation_under_optimization(self):
+        root = Path(self.directory.name)
+        fixture = ROOT / ".github/scripts/tests/fixtures"
+        result = subprocess.run(
+            ["python3", "-O", "-c",
+             "from issue_store import IssueStore; s = IssueStore('optimized-issue.json', 'owner/repo', 1); "
+             "s.create({'body': 'original'}); s.create({'body': 'replacement'})"],
+            cwd=root, env={**self.environment, "PYTHONPATH": str(fixture)}, capture_output=True, text=True,
+        )
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("original", json.loads((root / "optimized-issue.json").read_text())["body"])
+
+    def direct_reporter(self, additional, overrides=None):
+        root = Path(self.directory.name)
+        binary = root / "direct-bin"
+        binary.mkdir(exist_ok=True)
+        for source, target in (("fake-gh-validation-issue.py", "gh"), ("issue_store.py", "issue_store.py")):
+            shutil.copyfile(ROOT / ".github/scripts/tests/fixtures" / source, binary / target)
+        (binary / "gh").chmod(0o755)
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        return subprocess.run(
+            ["bash", str(ROOT / ".github/scripts/create-nightly-failure-issue.sh")], cwd=root,
+            env={**self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],
+                 "GH_TOKEN": "synthetic-token", "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",
+                 "GITHUB_SHA": self.selected, "GITHUB_SERVER_URL": "https://github.com",
+                 "TEST_JOB_RESULTS": json.dumps(dict.fromkeys(
+                     ("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"), "success")),
+                 "ADDITIONAL_FAILED_STAGES": json.dumps(additional), **(overrides or {})},
+            capture_output=True, text=True, check=False,
+        )
+
+    def assert_clean_reporter_refusal(self, result):
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertEqual(1, len(result.stderr.splitlines()), result.stderr)
+        self.assertLess(len(result.stderr), 180)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse((Path(self.directory.name) / "issue.json").exists())
+        self.assertFalse((Path(self.directory.name) / "writes").exists())
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
+
+    def test_direct_reporter_cleanly_refuses_non_string_run_and_job_conclusions(self):
+        stage = next(job for job in self.jobs if job["name"] == "formatting")
+        for target in (self.selected_run, stage):
+            for conclusion in ([], {}, None, 7, True):
+                with self.subTest(target=target.get("name", "run"), conclusion=conclusion):
+                    self.selected_run["conclusion"] = stage["conclusion"] = "failure"
+                    target["conclusion"] = conclusion
+                    self.assert_clean_reporter_refusal(self.direct_reporter(["formatting"]))
+
+    def test_direct_reporter_cleanly_refuses_malformed_additional_json(self):
+        for value in ("[", "not-json", '{"stage":'):
+            with self.subTest(value=value):
+                self.assert_clean_reporter_refusal(self.direct_reporter(
+                    [], {"ADDITIONAL_FAILED_STAGES": value}))
+
+    def test_direct_reporter_cleanly_refuses_malformed_test_results(self):
+        results = dict.fromkeys(
+            ("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"), "success")
+        for value in ("[", "null", "[]", "7", json.dumps(list(results)),
+                      *[json.dumps({**results, "unit_tests": value}) for value in ([], {}, None, 7)]):
+            with self.subTest(value=value):
+                self.assert_clean_reporter_refusal(self.direct_reporter([], {"TEST_JOB_RESULTS": value}))
+
+    def test_direct_reporter_refuses_unproved_additional_failures(self):
+        stage = next(job for job in self.jobs if job["name"] == "formatting")
+        for case in ("invented", "succeeded", "green", "unfinished", "missing", "skipped", "unknown"):
+            with self.subTest(case=case):
+                for name in ("issue.json", "writes"):
+                    (Path(self.directory.name) / name).unlink(missing_ok=True)
+                self.selected_run.update(status="completed", conclusion="failure")
+                stage.update(name="formatting", conclusion="failure")
+                additional = ["formatting"]
+                if case == "invented":
+                    additional = ["invented-check"]
+                elif case == "succeeded":
+                    stage["conclusion"] = "success"
+                elif case == "green":
+                    self.selected_run["conclusion"] = "success"
+                elif case == "unfinished":
+                    self.selected_run["status"] = "in_progress"
+                elif case == "missing":
+                    stage["name"] = "other"
+                elif case in {"skipped", "unknown"}:
+                    stage["conclusion"] = case
+                result = self.direct_reporter(additional)
+                self.assertNotEqual(0, result.returncode, result.stdout)
+                self.assertTrue(result.stderr)
+                self.assertFalse((Path(self.directory.name) / "issue.json").exists())
+                self.assertFalse((Path(self.directory.name) / "writes").exists())
+
+    def test_direct_reporter_accepts_only_terminal_failed_conclusions(self):
+        self.selected_run["conclusion"] = "failure"
+        stage = next(job for job in self.jobs if job["name"] == "formatting")
+        root = Path(self.directory.name)
+        for conclusion in ("failure", "cancelled", "timed_out", "startup_failure", "action_required", "neutral", "stale"):
+            with self.subTest(conclusion=conclusion):
+                stage["conclusion"] = conclusion
+                result = self.direct_reporter(["formatting"])
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn("- `formatting`", json.loads((root / "issue.json").read_text())["body"])
+                self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
+                (root / "issue.json").unlink()
+                (root / "writes").unlink()
 
     def test_failed_validation_files_one_issue_with_exact_evidence_and_updates_its_attempt(self):
         self.selected_run["conclusion"] = "failure"
@@ -243,9 +351,13 @@ class NightlyPreparationTest(unittest.TestCase):
             "total_count": len(self.jobs), "jobs": self.jobs,
         }
         values["failed_validation_run_attempt"] = "2"
+        issue["state"] = "closed"
+        (root / "issue.json").write_text(json.dumps(issue))
         result = self.report_validation(values)
         self.assertEqual(0, result.returncode, result.stderr)
         issue = json.loads((root / "issue.json").read_text())
+        self.assertEqual("open", issue["state"])
+        self.assertEqual(60, issue["number"])
         self.assertIn("Attempt: `2`", issue["body"])
         self.assertIn("Not uploaded. Inspect the failed job logs in the workflow run.", issue["body"])
         self.assertNotIn("/artifacts/99", issue["body"])
@@ -305,6 +417,25 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         root = Path(self.directory.name)
         self.assertIn("`maestro-journeys`: `failure`", json.loads((root / "issue.json").read_text())["body"])
+        self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
+
+    def test_formatting_failure_files_one_issue_without_changing_test_results(self):
+        self.selected_run["conclusion"] = "failure"
+        for identity, job in enumerate(self.jobs, 1):
+            job["id"] = identity
+            if job["name"] == "formatting":
+                job["conclusion"] = "failure"
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        result = self.report_validation(values)
+        self.assertEqual(0, result.returncode, result.stderr)
+        root = Path(self.directory.name)
+        issue = json.loads((root / "issue.json").read_text())
+        self.assertIn("## Additional failed required jobs\n\n- `formatting`", issue["body"])
+        self.assertIn("## Required test jobs\n\n- `unit-tests`: `success`\n"
+                      "- `compose-jvm-tests`: `success`\n- `api24-instrumentation`: `success`\n"
+                      "- `maestro-journeys`: `success`\n", issue["body"])
         self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
 
     def test_green_validation_and_all_success_stages_cannot_create_an_issue(self):
@@ -393,6 +524,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual("false", values["publish"])
         self.assertNotIn("version_code", values)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
         self.releases[0]["draft"] = True
         result, values = self.prepare()
         self.assertNotEqual(0, result.returncode)
@@ -502,6 +635,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Invalid main tip", result.stderr)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_dispatch_failure_is_not_publication_recovery(self):
         self.routes[("POST", f"/repos/{self.repository}/actions/workflows/quality-gate.yml/dispatches")] = 403
@@ -561,6 +696,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Truncated Nightly history", result.stderr)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
         self.releases.extend([
             {"id": identity, "tag_name": f"nightly-{code}-{self.selected}"}
             for identity, code in ((1, 6001), (2, 6002))
@@ -569,6 +706,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Multiple Nightlies", result.stderr)
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def test_duplicate_check_reads_all_release_pages_before_dispatch(self):
         endpoint = f"/repos/{self.repository}/releases"
@@ -583,6 +722,8 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("false", values["publish"])
         self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.patches)
+        self.assertEqual([], self.api.deletes)
 
     def signed_publication_fixture(self):
         root = Path(self.directory.name)
@@ -640,6 +781,7 @@ class NightlyPreparationTest(unittest.TestCase):
         binary = root / "report-bin"
         binary.mkdir(exist_ok=True)
         shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-nightly-report.py", binary / "gh")
+        shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/issue_store.py", binary / "issue_store.py")
         (binary / "gh").chmod(0o755)
         self.report_environment = {
             **self.environment, "PATH": str(binary) + os.pathsep + self.environment["PATH"],

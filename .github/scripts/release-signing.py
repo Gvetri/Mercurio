@@ -22,6 +22,44 @@ def require(condition, message):
         raise ReleaseError(message)
 
 
+NIGHTLY_NOTES = (
+    "Development snapshot for testing. It may contain regressions and is not a stable-support promise.\n\n"
+    "This is a **Nightly** prerelease, not a Stable Public Beta release.\n\n"
+    "- Source commit: `{source_sha}`\n- Android version code: `{version_code}`\n"
+    "- Android version name: `{version_name}`\n- Device architecture: ARM64\n"
+    "- APK SHA-256: `{apk_sha256}`\n"
+    "- Signing certificate SHA-256: `{certificate_sha256}`\n"
+    f"- Deterministic validation: https://github.com/{REPOSITORY}/actions/runs/"
+    "{validation_run_id} (attempt {validation_run_attempt})\n"
+)
+SIGNING_METADATA_FIELDS = {
+    "source_sha", "validation_run_id", "validation_run_attempt", "signing_run_id",
+    "signing_run_attempt", "version_code", "version_name", "native_abis", "apk_sha256", "certificate_sha256",
+}
+
+
+def nightly_notes(metadata):
+    return NIGHTLY_NOTES.format_map(metadata)
+
+
+def parse_nightly_notes(body):
+    fields = {
+        "source_sha": r"[0-9a-f]{40}", "version_code": r"[1-9][0-9]*",
+        "version_name": r"nightly-[1-9][0-9]*-[0-9a-f]{12}",
+        "apk_sha256": r"[0-9a-f]{64}", "certificate_sha256": r"[0-9a-f]{64}",
+        "validation_run_id": r"[1-9][0-9]*", "validation_run_attempt": r"[1-9][0-9]*",
+    }
+    pattern = re.escape(NIGHTLY_NOTES)
+    for name, value in fields.items():
+        pattern = pattern.replace(re.escape("{" + name + "}"), f"(?P<{name}>{value})")
+    match = re.fullmatch(pattern, body if isinstance(body, str) else "")
+    require(match is not None, "Publisher notes are missing or malformed")
+    values = match.groupdict()
+    for name in ("version_code", "validation_run_id", "validation_run_attempt"):
+        values[name] = int(values[name])
+    return values
+
+
 def api_get(path):
     base = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
     request = urllib.request.Request(f"{base}/repos/{REPOSITORY}/{path}", headers={
@@ -87,6 +125,12 @@ def verify_generation():
     require(os.environ.get("RELEASE_GENERATION_ATTEMPT") == os.environ["GITHUB_RUN_ATTEMPT"], "Partial rerun cannot reuse a prepared version; rerun all jobs")
 
 
+def required_check_names():
+    required = (ROOT / ".github/quality-gate/required-checks.txt").read_text().split()
+    return {job: "compose-jvm-tests" if job == "compose_test" else job.replace("_", "-")
+            for job in required}
+
+
 def verify_validation_run(run_id):
     """Check the full deterministic main validation without imposing a caller event."""
     require(type(run_id) is int and run_id > 0, "Invalid validation run identity")
@@ -123,11 +167,9 @@ def verify_validation_run(run_id):
             break
         require(len(batch) == 100, "Truncated validation jobs")
         page += 1
-    required = (ROOT / ".github/quality-gate/required-checks.txt").read_text().split()
     expected = {
-        ("compose-jvm-tests" if job == "compose_test" else job.replace("_", "-")):
-        ("skipped" if job in {"fork_guard", "draft_validation", "commit_message"} else "success")
-        for job in required
+        name: "skipped" if job in {"fork_guard", "draft_validation", "commit_message"} else "success"
+        for job, name in required_check_names().items()
     }
     expected["quality-gate"] = "success"
     for name, conclusion in expected.items():
