@@ -17,9 +17,16 @@ jobs:
   prepare:
     if: ${{ github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 190
+    permissions:
+      contents: read
+      actions: write
     outputs:
       publish: ${{ steps.prepare.outputs.publish }}
+      validation_failed: ${{ steps.prepare.outputs.validation_failed }}
+      failed_validation_run_id: ${{ steps.prepare.outputs.failed_validation_run_id }}
+      failed_validation_run_attempt: ${{ steps.prepare.outputs.failed_validation_run_attempt }}
+      failed_validation_sha: ${{ steps.prepare.outputs.failed_validation_sha }}
       source_sha: ${{ steps.prepare.outputs.source_sha }}
       validation_run_id: ${{ steps.prepare.outputs.validation_run_id }}
       validation_run_attempt: ${{ steps.prepare.outputs.validation_run_attempt }}
@@ -30,11 +37,34 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Select validated main source and skip an existing Nightly
+      - name: Capture main tip, skip an existing Nightly, and validate before signing
         id: prepare
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NIGHTLY_VALIDATION_TIMEOUT_SECONDS: '10800'
         run: python3 .github/scripts/nightly-release.py prepare
+
+  report_validation_failure:
+    needs: prepare
+    if: ${{ always() && needs.prepare.result == 'failure' && needs.prepare.outputs.validation_failed == 'true' && github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Report the failed validation started by this Nightly
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FAILED_VALIDATION_RUN_ID: ${{ needs.prepare.outputs.failed_validation_run_id }}
+          FAILED_VALIDATION_RUN_ATTEMPT: ${{ needs.prepare.outputs.failed_validation_run_attempt }}
+          FAILED_VALIDATION_SHA: ${{ needs.prepare.outputs.failed_validation_sha }}
+        run: python3 .github/scripts/nightly-release.py report-validation
 
   sign:
     needs: prepare
@@ -42,6 +72,8 @@ jobs:
     uses: ./.github/workflows/release-signing.yml
     with:
       validation_run_id: ${{ needs.prepare.outputs.validation_run_id }}
+      source_sha: ${{ needs.prepare.outputs.source_sha }}
+      validation_run_attempt: ${{ needs.prepare.outputs.validation_run_attempt }}
       nightly_version_code: ${{ needs.prepare.outputs.version_code }}
       generation_attempt: ${{ needs.prepare.outputs.generation_attempt }}
     secrets:
@@ -77,6 +109,37 @@ jobs:
           path: signed
           merge-multiple: true
       - name: Verify, stage, read back, and publish the Nightly prerelease
+        id: publication
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          NIGHTLY_FAILURE_OBSERVATION: ${{ runner.temp }}/publication-state.json
         run: python3 .github/scripts/nightly-release.py publish signed .github/release-certificate.sha256
+      - name: Preserve publication read-back for the read-only reporter
+        if: ${{ always() && steps.publication.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nightly-publication-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publication-state.json
+          if-no-files-found: error
+          retention-days: 14
+
+  report_release_failure:
+    needs: [prepare, sign, publish]
+    if: ${{ always() && (needs.sign.result == 'failure' || needs.publish.result == 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: File or update the observed Nightly release failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          RELEASE_VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
+        run: python3 .github/scripts/create-nightly-release-failure-issue.py

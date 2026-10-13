@@ -1,0 +1,32 @@
+name: nightly-watchdog
+
+on:
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-watchdog-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  report_nightly_starvation:
+    if: ${{ github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Report validated main source and alert only if unreleased
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/nightly-watchdog.py
