@@ -52,7 +52,9 @@ class NightlyWorkflowTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
         self.assertIn("\n  report_release_failure:\n", workflow)
         reporter = job_block(workflow, "report_release_failure")
-        self.assertIn("needs: [sign, publish]", reporter)
+        self.assertIn("needs: [prepare, sign, publish]", reporter)
+        for name in ("source_sha", "version_code"):
+            self.assertIn(f"RELEASE_{name.upper()}: ${{{{ needs.prepare.outputs.{name} }}}}", reporter)
         for condition in ("always()", "needs.sign.result == 'failure'", "needs.publish.result == 'failure'"):
             self.assertIn(condition, job_key(reporter, "if"))
         self.assertIn("contents: read", reporter)
@@ -175,6 +177,15 @@ class NightlyPreparationTest(unittest.TestCase):
         values = dict(line.split("=", 1) for line in output.read_text().splitlines()) if output.exists() else {}
         return result, values
 
+    def test_unknown_terminal_conclusion_is_not_printed_or_accepted(self):
+        self.selected_run["conclusion"] = "untrusted-api-value-must-not-appear"
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertNotIn(self.selected_run["conclusion"], result.stdout + result.stderr)
+        self.assertIn("Dispatched validation 123 did not succeed; no Nightly was published", result.stderr)
+        self.assertEqual({}, values)
+        self.assertEqual([], self.releases)
+
     def test_failed_dispatch_preserves_reporting_identity_without_release_authority(self):
         self.selected_run["conclusion"] = "failure"
         result, values = self.prepare()
@@ -243,6 +254,43 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual(1, len(self.api.posts))
         self.assertTrue(any("/attempts/2/jobs?" in path for path in self.api.requests))
 
+    def test_terminal_stage_failures_file_exactly_one_issue(self):
+        self.selected_run["conclusion"] = "failure"
+        for identity, job in enumerate(self.jobs, 1):
+            job["id"] = identity
+        stage = next(job for job in self.jobs if job["name"] == "api24-instrumentation")
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        root = Path(self.directory.name)
+        for conclusion in ("timed_out", "action_required", "startup_failure", "neutral", "stale", "unexpected_terminal"):
+            with self.subTest(conclusion=conclusion):
+                stage["conclusion"] = conclusion
+                (root / "issue.json").unlink(missing_ok=True)
+                (root / "writes").unlink(missing_ok=True)
+                for expected_writes in (["POST"], ["POST", "PATCH"]):
+                    result = self.report_validation(values)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    issue = json.loads((root / "issue.json").read_text())
+                    self.assertIn("`api24-instrumentation`: `failure`", issue["body"])
+                    self.assertEqual(expected_writes, (root / "writes").read_text().splitlines())
+
+    def test_stale_completed_run_preserves_identity_and_reports_failed_stage(self):
+        self.selected_run["conclusion"] = "stale"
+        for identity, job in enumerate(self.jobs, 1):
+            job["id"] = identity
+            if job["name"] == "maestro-journeys":
+                job["conclusion"] = "stale"
+        self.routes[f"/repos/{self.repository}/actions/runs/123/artifacts"] = {"artifacts": []}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("true", values.get("validation_failed"))
+        result = self.report_validation(values)
+        self.assertEqual(0, result.returncode, result.stderr)
+        root = Path(self.directory.name)
+        self.assertIn("`maestro-journeys`: `failure`", json.loads((root / "issue.json").read_text())["body"])
+        self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
+
     def test_green_validation_and_all_success_stages_cannot_create_an_issue(self):
         values = {"failed_validation_run_id": "123", "failed_validation_run_attempt": "1",
                   "failed_validation_sha": self.selected}
@@ -268,7 +316,9 @@ class NightlyPreparationTest(unittest.TestCase):
         others = [job for job in jobs if job != stage]
         cases = [others, jobs + [{**stage, "id": 999}],
                  others + [{**stage, "status": "in_progress", "conclusion": None}],
-                 others + [{**stage, "conclusion": "timed_out"}],
+                 others + [{**stage, "status": "in_progress", "conclusion": "failure"}],
+                 others + [{key: value for key, value in stage.items() if key != "conclusion"}],
+                 *[others + [{**stage, "conclusion": value}] for value in (None, "", 7)],
                  others + [{**stage, "head_sha": self.old}]]
         for case in cases:
             with self.subTest(jobs=case):
@@ -640,6 +690,20 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertNotIn("/artifacts/", body)
         self.assertTrue(all("/actions/" in line or "/issues" in line
                             for line in (self.report_store / "requests").read_text().splitlines()))
+
+    def test_signer_failure_reports_prepared_identity_without_claiming_remote_state(self):
+        self.report_fixture(failure="sign", observation=False)
+        self.report_environment.update(RELEASE_SOURCE_SHA=self.selected, RELEASE_VERSION_CODE="7002")
+        result = self.report()
+        self.assertEqual(0, result.returncode, result.stderr)
+        body = json.loads((self.report_store / "issue.json").read_text())["body"]
+        for text in (f"Source SHA: `{self.selected}`", "Version code: `7002`",
+                     f"Tag: `nightly-7002-{self.selected}`", "Release id: `unknown`",
+                     "Release state: `unknown`", "Incomplete draft: `unknown`", "Tag exists: `unknown`",
+                     "Orphan tag: `unknown`", "intended identity, not proof a release exists",
+                     "Publication state artifact: missing"):
+            self.assertIn(text, body)
+        self.assertEqual(["POST"], (self.report_store / "writes").read_text().splitlines())
 
     def test_later_attempt_reopens_and_updates_the_same_run_issue(self):
         self.report_fixture(failure="sign", observation=False)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Report observed Nightly signing/publication failures without release write access."""
 import io
 import json
 import os
@@ -94,6 +93,14 @@ def report():
     require(failed, "No failed signing or publication stage; refusing to file an issue")
     artifacts = records(f"actions/runs/{run}/artifacts?per_page=100", "artifacts")
     state = observed_state(artifacts, run, attempt, commit)
+    intended = {}
+    for key, pattern in (("source_sha", r"[0-9a-f]{40}"), ("version_code", r"[1-9][0-9]*")):
+        value = os.environ.get(f"RELEASE_{key.upper()}")
+        if value:
+            require(re.fullmatch(pattern, value), "Malformed intended release identity")
+            intended[key] = value
+    if "source_sha" in intended and "version_code" in intended:
+        intended["tag"] = f"nightly-{intended['version_code']}-{intended['source_sha']}"
     url = f"https://github.com/{REPOSITORY}/actions/runs/{run}"
     marker = f"<!-- nightly-release-run:{run} -->"
     lines = [marker, "", "# Nightly signing or publication failure", "", f"- Run: [{run}]({url})",
@@ -105,10 +112,13 @@ def report():
                        ("Release state", "release_state"), ("Incomplete draft", "incomplete_draft"),
                        ("Tag exists", "tag_exists"), ("Orphan tag", "orphan_tag")):
         value = state.get(key) if state else None
+        if value is None:
+            value = intended.get(key)
         lines.append(f"- {title}: `{value if value is not None else 'unknown'}`")
     if state is None:
         lines.append("- Publication state artifact: missing or expired. No release state was read back by this reporter. "
-                     "A failure inside the reusable signer can precede all signer outputs; its release identity is unavailable here.")
+                     "A failure inside the reusable signer can precede all signer outputs. "
+                     "Source/version/tag from preparation are the intended identity, not proof a release exists.")
     else:
         lines.append("- Snapshot read back by the publication job after refusal; not a live recovery authorization. "
                      "Source/version/tag without a release id are the intended identity, not proof a release exists.")

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Deliberately clear one issue-named incomplete Nightly draft, never from CI."""
 import argparse
 import json
 import os
@@ -95,7 +94,7 @@ def clear(identity, tag, source):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Deliberately clear one issue-named incomplete Nightly draft, never from CI.")
     parser.add_argument("--release-id", required=True)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--source-sha", required=True)

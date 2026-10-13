@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Issue-only write adapter over the synthetic API and artifact store."""
 import json
 import os
 from pathlib import Path

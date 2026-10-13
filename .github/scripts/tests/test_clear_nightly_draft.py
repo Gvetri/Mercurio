@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Exercise deliberate Nightly recovery through the real HTTP boundary."""
 import copy
 import json
 import os

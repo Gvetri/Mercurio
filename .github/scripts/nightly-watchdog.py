@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Report validated main sources without a published Nightly; write only the alarm issue."""
 import json
 import os
 from pathlib import Path

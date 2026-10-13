@@ -1,4 +1,3 @@
-"""Exercise the read-only Nightly alarm against deterministic GitHub evidence."""
 import json
 import subprocess
 import unittest

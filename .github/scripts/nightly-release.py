@@ -103,14 +103,14 @@ def validate_tip(sha, clock=time):
                 "Dispatched validation identity changed")
         status = run.get("status")
         if status == "completed":
-            if run.get("conclusion") in {"failure", "cancelled", "timed_out", "action_required", "startup_failure"}:
+            if run.get("conclusion") in {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}:
                 verify_dispatched_identity(run, run_id, attempt, sha)
                 write_outputs({
                     "validation_failed": "true", "failed_validation_run_id": run_id,
                     "failed_validation_run_attempt": attempt, "failed_validation_sha": sha,
                 })
             require(run.get("conclusion") == "success",
-                    f"Dispatched validation {run_id} ended with {run.get('conclusion')}; no Nightly was published")
+                    f"Dispatched validation {run_id} did not succeed; no Nightly was published")
             evidence = POLICY["verify_source"]()
             require(clock.monotonic() < deadline, "Dispatched validation did not finish within the time bound")
             return evidence
@@ -147,7 +147,7 @@ def report_validation():
     run = api_get(f"actions/runs/{run_id}/attempts/{attempt}")
     verify_dispatched_identity(run, run_id, attempt, sha)
     require(run.get("status") == "completed" and run.get("conclusion") in {
-        "failure", "cancelled", "timed_out", "action_required", "startup_failure",
+        "failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale",
     }, "Cannot report a successful or unfinished validation")
     jobs = pages(f"actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs")
     stages = {
@@ -160,9 +160,10 @@ def report_validation():
         require(len(matching) == 1, f"Missing or duplicate validation stage: {name}")
         job = matching[0]
         require(job.get("head_sha") == sha and job.get("status") == "completed"
-                and job.get("conclusion") in {"success", "failure", "cancelled", "skipped"},
+                and isinstance(job.get("conclusion"), str) and job["conclusion"],
                 f"Invalid terminal validation stage: {name}")
-        results[key] = job["conclusion"]
+        conclusion = job["conclusion"]
+        results[key] = conclusion if conclusion in {"success", "skipped", "cancelled"} else "failure"
     environment = {
         **os.environ, "GITHUB_RUN_ID": str(run_id), "GITHUB_RUN_ATTEMPT": str(attempt),
         "GITHUB_SHA": sha, "TEST_JOB_RESULTS": json.dumps(results),

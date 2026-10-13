@@ -124,7 +124,7 @@ jobs:
           retention-days: 14
 
   report_release_failure:
-    needs: [sign, publish]
+    needs: [prepare, sign, publish]
     if: ${{ always() && (needs.sign.result == 'failure' || needs.publish.result == 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -140,4 +140,6 @@ jobs:
       - name: File or update the observed Nightly release failure
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          RELEASE_VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
         run: python3 .github/scripts/create-nightly-release-failure-issue.py

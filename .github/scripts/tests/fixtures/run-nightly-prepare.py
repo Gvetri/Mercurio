@@ -1,4 +1,3 @@
-"""Run the real Nightly entry point with a deterministic validation clock."""
 from datetime import datetime, timezone
 from pathlib import Path
 import runpy

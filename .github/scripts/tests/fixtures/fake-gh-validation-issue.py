@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Deterministic issue store with artifact reads from the synthetic Actions API."""
 import json
 import os
 from pathlib import Path
