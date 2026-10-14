@@ -166,6 +166,7 @@ internal object JourneyInvariants {
         when (scenarioName) {
             "active-run-isolation" -> JourneyRunInvariants.verifyActiveRunIsolation(telemetry)
             "streaming" -> JourneyRunInvariants.verifyStreaming(telemetry)
+            "live-streaming" -> JourneyRunInvariants.verifyLiveStreaming(telemetry)
             "interrupted-sse-refetch" -> JourneyRunInvariants.verifyInterruptedSseRefetch(telemetry)
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
@@ -212,6 +213,7 @@ internal object JourneyInvariants {
     const val ACTIVE_RUN_ID = "active-run"
     const val ACTIVE_SESSION_ID = "session-alpha"
     const val STREAMING_RUN_ID = "streaming-run"
+    const val LIVE_RUN_ID = "live-run"
     const val INTERRUPTED_RUN_ID = "interrupted-run"
     const val RETRY_SESSION_ID = "session-retry"
 }
@@ -420,6 +422,15 @@ private object JourneyRunInvariants {
         check(sse.opened == 1) { "Streaming Run was observed ${sse.opened} times; expected exactly 1." }
         check(runCreatesFor(telemetry, JourneyInvariants.ACTIVE_SESSION_ID) == 1) {
             "The client submitted the streaming Run more than once."
+        }
+    }
+
+    internal fun verifyLiveStreaming(telemetry: JsonObject) {
+        val sse = sseFor(telemetry, JourneyInvariants.LIVE_RUN_ID)
+        check(sse.opened == 1) { "Live-framed Run was observed ${sse.opened} times; expected exactly 1." }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the live-framed Run." }
+        check(runCreatesFor(telemetry, JourneyInvariants.ACTIVE_SESSION_ID) == 1) {
+            "The client submitted the live-framed Run more than once."
         }
     }
 

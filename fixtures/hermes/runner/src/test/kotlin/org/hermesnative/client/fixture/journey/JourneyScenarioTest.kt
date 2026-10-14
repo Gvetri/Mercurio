@@ -75,6 +75,20 @@ class JourneyScenarioTest {
     }
 
     @Test
+    fun live_framing_run_script_parses_from_the_scenario_file() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"live-framed","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["runs","run_events"],"sessions":[],"runs":[{"run_id":"live-run",""" +
+                    """"session_id":"session-alpha","live_framing":true,"observation":[],""" +
+                    """"final_status":"completed"}]}""",
+            )
+        val scenario = JourneyScenarioParser.parse(file, revision)
+        assertTrue(scenario.runs.single().liveFraming)
+    }
+
+    @Test
     fun interrupted_and_held_open_run_scripts_are_rejected() {
         val revision = pinnedDescriptor.provenance.value
         val file =
