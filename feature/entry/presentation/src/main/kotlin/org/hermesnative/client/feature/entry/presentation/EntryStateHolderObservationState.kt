@@ -100,3 +100,18 @@ internal fun EntryStateHolder.isLocallyOwnedRun(
     sessionRuns[sessionId].orEmpty().any { it.id == runId } ||
         uncertainSubmissionRunIds[sessionId] == runId ||
         unresolvedLocalRunIds[recoverySessionKey(sessionId)]?.contains(runId) == true
+
+/**
+ * Stops observing the opened session's active Run without leaving the Session: closing the
+ * screen observation cancels the local Run stream, so the outcome is reconciled like any
+ * interrupted stream until the Gateway reports the Run's terminal state.
+ */
+internal fun EntryStateHolder.stopRunObservation() {
+    val observation =
+        synchronized(sessionRequestLock) {
+            mutableUiState.value.sessionList?.openedSession?.session?.id?.let { sessionId ->
+                runObservations.remove(sessionId)
+            }
+        }
+    observation?.close()
+}

@@ -53,6 +53,40 @@ class RunObservationStateHolderTest {
     }
 
     @Test
+    fun stopping_the_run_closes_the_screen_observation_and_reconciles_the_reported_run_state() {
+        val session = observationSession("session-1")
+        val run = Run(RunId("run-1"), session.id, "starting")
+        val observation = ObservationBlockingObservation()
+        val gateway =
+            ObservationScriptedGateway(session).apply {
+                enqueueRun(run)
+                statusByRun[run.id] = Run(RunId("run-1"), session.id, "completed")
+                this.observation = observation
+            }
+        val holder = observationHolder(gateway, Dispatchers.Default)
+
+        try {
+            openObservedSession(holder, gateway, session.id)
+            holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
+            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            assertTrue(observation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+
+            holder.onEvent(EntryUiEvent.StopRunClicked)
+
+            assertTrue(observation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            awaitObservationState(holder) {
+                val opened = requireNotNull(it.sessionList?.openedSession)
+                opened.latestRunState == RunPresentationState.SUCCEEDED &&
+                    !opened.activeRuns.any { active -> active.id == run.id }
+            }
+            assertTrue(gateway.statusRequests.contains(run.id))
+            assertFalse(gateway.cancelledRunIds.contains(run.id))
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
     fun returning_to_sessions_closes_only_the_screen_observer_and_does_not_cancel_the_remote_run() {
         val session = observationSession("session-1")
         val run = Run(RunId("run-1"), session.id, "starting")

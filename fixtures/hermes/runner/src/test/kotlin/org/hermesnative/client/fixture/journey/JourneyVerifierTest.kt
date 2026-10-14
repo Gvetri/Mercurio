@@ -38,6 +38,23 @@ class JourneyVerifierTest {
     }
 
     @Test
+    fun composer_stop_verifier_accepts_a_client_aborted_run_and_reconciled_status() {
+        val process = startGateway("composer-stop", tls = false)
+        try {
+            val endpoint = process.endpoint
+            get(endpoint, "/health")
+            post(endpoint, "/v1/runs", """{"input":"Stop this run","session_id":"session-alpha"}""")
+            abortStream(endpoint, "stop-run")
+            awaitRunStatus(endpoint, "stop-run", "\"completed\"")
+            get(endpoint, "/v1/runs/stop-run")
+            val telemetry = fetchTelemetry(endpoint.resolve("/__fixture/telemetry"))
+            JourneyInvariants.verify("composer-stop", telemetry)
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
     fun every_committed_journey_scenario_declares_its_invariants() {
         val scenarioFiles =
             scenariosDir.listFiles().orEmpty().filter { file -> file.isFile && file.extension == "json" }

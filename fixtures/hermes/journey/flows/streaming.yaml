@@ -48,7 +48,7 @@ name: streaming
     visible: "Streaming partial text"
     timeout: 30000
 - assertVisible:
-    text: "Send"
+    text: "Stop"
     childOf:
       id: "conversation-send"
 - takeScreenshot: "keyboard-first-reply"
@@ -56,6 +56,6 @@ name: streaming
 - assertVisible: "Assistant"
 - assertVisible: "Message"
 - assertVisible:
-    text: "Send"
+    text: "Stop"
     childOf:
       id: "conversation-send"
