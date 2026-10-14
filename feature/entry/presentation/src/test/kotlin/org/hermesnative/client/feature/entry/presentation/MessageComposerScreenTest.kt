@@ -3,7 +3,6 @@ package org.hermesnative.client.feature.entry.presentation
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -63,6 +62,53 @@ class MessageComposerScreenTest {
     }
 
     @Test
+    fun active_observed_run_replaces_send_with_the_stop_affordance() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        connectedState(
+                            composerText = "Running draft",
+                            latestRun = Run(RunId("run-1"), SessionId("session-1"), "running"),
+                            latestRunState = RunPresentationState.RUNNING,
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Message").assertIsEnabled()
+        composeTestRule.onNodeWithText("Send").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Stop").assertHasClickAction().assertIsEnabled().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.StopRunClicked), events)
+    }
+
+    @Test
+    fun completed_run_returns_the_send_control_to_the_normal_send_state() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        connectedState(
+                            composerText = "Next question",
+                            latestRun = Run(RunId("run-1"), SessionId("session-1"), "completed"),
+                            latestRunState = RunPresentationState.SUCCEEDED,
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Stop").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Send").assertHasClickAction().assertIsEnabled().performClick()
+
+        assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
+    }
+
+    @Test
     fun active_run_keeps_the_composer_editable_but_disables_send() {
         composeTestRule.setContent {
             HermesTheme {
@@ -71,6 +117,7 @@ class MessageComposerScreenTest {
                         connectedState(
                             composerText = "Draft",
                             latestRun = Run(RunId("run-1"), SessionId("session-1"), "running"),
+                            latestRunState = RunPresentationState.RUNNING,
                         ),
                     onEvent = {},
                 )
@@ -78,7 +125,8 @@ class MessageComposerScreenTest {
         }
 
         composeTestRule.onNodeWithText("Message").assertIsEnabled()
-        composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Send").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Stop").assertHasClickAction()
     }
 
     @Test

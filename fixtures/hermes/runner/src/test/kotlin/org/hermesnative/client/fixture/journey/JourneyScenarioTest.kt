@@ -104,6 +104,46 @@ class JourneyScenarioTest {
     }
 
     @Test
+    fun disconnect_finalized_run_script_parses_from_the_scenario_file() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"composer-stopped","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["runs","run_events"],"sessions":[],"runs":[{"run_id":"stop-run",""" +
+                    """"session_id":"session-alpha","hold_open":true,"finalize_on_disconnect":true,""" +
+                    """"observation":[],"final_status":"completed"}]}""",
+            )
+        val scenario = JourneyScenarioParser.parse(file, revision)
+        assertTrue(scenario.runs.single().finalizeOnDisconnect)
+    }
+
+    @Test
+    fun disconnect_finalized_run_script_without_a_held_open_stream_is_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"invalid-disconnect-run","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions"],"sessions":[],"runs":[{"run_id":"r1","session_id":"s1",""" +
+                    """"finalize_on_disconnect":true,"observation":[],"final_status":"completed"}]}""",
+            )
+        val error = runCatching { JourneyScenarioParser.parse(file, revision) }.exceptionOrNull()
+        assertTrue(error is JourneyScenarioFormatException)
+    }
+
+    @Test
+    fun disconnect_finalized_run_script_without_a_final_status_is_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"invalid-disconnect-run","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions"],"sessions":[],"runs":[{"run_id":"r1","session_id":"s1",""" +
+                    """"hold_open":true,"finalize_on_disconnect":true,"observation":[]}]}""",
+            )
+        val error = runCatching { JourneyScenarioParser.parse(file, revision) }.exceptionOrNull()
+        assertTrue(error is JourneyScenarioFormatException)
+    }
+
+    @Test
     fun refused_run_creation_with_scripted_outcome_is_rejected() {
         val revision = pinnedDescriptor.provenance.value
         val file =

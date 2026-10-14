@@ -105,9 +105,19 @@ private fun ComposerSendButton(
     sendEnabled: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
+    val runIsExecuting =
+        state.latestRunState == RunPresentationState.STARTING ||
+            state.latestRunState == RunPresentationState.RUNNING ||
+            state.latestRunState == RunPresentationState.COMPLETING
     Button(
-        onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
-        enabled = sendEnabled,
+        onClick = {
+            if (runIsExecuting) {
+                onEvent(EntryUiEvent.StopRunClicked)
+            } else {
+                onEvent(EntryUiEvent.SendMessageClicked)
+            }
+        },
+        enabled = runIsExecuting || sendEnabled,
         modifier =
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .testTag("conversation-send").semantics { testTagsAsResourceId = true },
@@ -115,6 +125,7 @@ private fun ComposerSendButton(
         Text(
             text =
                 when {
+                    runIsExecuting -> "Stop"
                     state.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
                         state.hasUnresolvedSubmission -> "Refresh history to resolve"
                     state.sendErrorCategory != null -> "Try again"

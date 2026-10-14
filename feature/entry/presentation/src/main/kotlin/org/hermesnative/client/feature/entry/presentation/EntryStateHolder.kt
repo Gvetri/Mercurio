@@ -147,6 +147,8 @@ sealed interface EntryUiEvent {
 
     data object SendMessageClicked : Run
 
+    data object StopRunClicked : Run
+
     data object DiscardUnresolvedSendClicked : Run
 
     data object ConfirmDiscardUnresolvedSendClicked : Run
@@ -469,6 +471,7 @@ class EntryStateHolder(
         when (event) {
             is EntryUiEvent.ComposerTextChanged -> updateComposerText(event.value)
             is EntryUiEvent.SendMessageClicked -> retryUncertainSubmissionOrSend()
+            is EntryUiEvent.StopRunClicked -> stopRunObservation()
             is EntryUiEvent.DiscardUnresolvedSendClicked -> showDiscardUnresolvedSendConfirmation()
             is EntryUiEvent.ConfirmDiscardUnresolvedSendClicked -> confirmDiscardUnresolvedSend()
             is EntryUiEvent.CancelDiscardUnresolvedSendClicked -> cancelDiscardUnresolvedSend()

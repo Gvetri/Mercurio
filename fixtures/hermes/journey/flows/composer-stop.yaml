@@ -1,0 +1,45 @@
+appId: org.hermesnative.client
+name: composer-stop
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: composer-stop-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Alpha Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- tapOn: "Message"
+- inputText: "Stop this run"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Run state: Running"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Stop"
+    timeout: 30000
+- takeScreenshot: composer-stop-active
+- tapOn: "Stop"
+- scrollUntilVisible:
+    element:
+      text: "Refresh history"
+    direction: UP
+    timeout: 30000
+- tapOn: "Refresh history"
+- extendedWaitUntil:
+    visible: "Run state: Succeeded"
+    timeout: 30000
+- assertNotVisible: "Stop"
+- assertVisible: "Send"
+- takeScreenshot: composer-stop-stopped

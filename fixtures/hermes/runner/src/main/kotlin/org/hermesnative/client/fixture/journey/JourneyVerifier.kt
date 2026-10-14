@@ -178,6 +178,7 @@ internal object JourneyInvariants {
             "streaming" -> JourneyRunInvariants.verifyStreaming(telemetry)
             "live-streaming" -> JourneyRunInvariants.verifyLiveStreaming(telemetry)
             "interrupted-sse-refetch" -> JourneyRunInvariants.verifyInterruptedSseRefetch(telemetry)
+            "composer-stop" -> JourneyRunInvariants.verifyComposerStop(telemetry)
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
@@ -199,6 +200,7 @@ internal object JourneyInvariants {
     const val ACTIVE_SESSION_ID = "session-alpha"
     const val STREAMING_RUN_ID = "streaming-run"
     const val LIVE_RUN_ID = "live-run"
+    const val STOP_RUN_ID = "stop-run"
     const val INTERRUPTED_RUN_ID = "interrupted-run"
     const val RETRY_SESSION_ID = "session-retry"
 }
@@ -428,6 +430,21 @@ private object JourneyRunInvariants {
         check(runStatusRequests(telemetry) >= 1) { "The client did not refetch authoritative Run status." }
         check(runCreatesFor(telemetry, JourneyInvariants.ACTIVE_SESSION_ID) == 1) {
             "The client re-submitted the interrupted Run."
+        }
+    }
+
+    internal fun verifyComposerStop(telemetry: JsonObject) {
+        val sse = sseFor(telemetry, JourneyInvariants.STOP_RUN_ID)
+        check(sse.opened == 1) { "Stopped Run was observed ${sse.opened} times; expected exactly 1." }
+        check(sse.closed == 1) {
+            "Stopped Run observation closed ${sse.closed} times; expected exactly 1 (the composer stop)."
+        }
+        check(JourneyInvariants.STOP_RUN_ID !in interruptedRunIds(telemetry)) {
+            "The Gateway interrupted the Run; the client did not stop it."
+        }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the Run after stopping." }
+        check(runCreatesFor(telemetry, JourneyInvariants.ACTIVE_SESSION_ID) == 1) {
+            "The client submitted the stopped Run more than once."
         }
     }
 
