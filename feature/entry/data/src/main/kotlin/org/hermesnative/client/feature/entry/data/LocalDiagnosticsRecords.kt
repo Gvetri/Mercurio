@@ -20,6 +20,14 @@ import java.time.format.DateTimeFormatter
  * approved enum values come from the domain, and the field patterns are shared
  * constants. They must change together, and `LocalDiagnosticsRecordsTest`
  * round-trips every encoded record through validation to catch a drift.
+ *
+ * The patterns and approved values are derived on first use instead of in the
+ * class initializer. On API 24 a device-side failure while the initializer runs
+ * marks the whole class permanently erroneous — every later use is rejected
+ * with `ExceptionInInitializerError` and recording silently dies for the
+ * session, which is exactly the failure reported in issue #173. Deriving lazily
+ * keeps the initializer trivial, so a first-use failure becomes a retryable
+ * per-record failure that the buffer reports through its failure channel.
  */
 object LocalDiagnosticsRecords {
     const val SCHEMA_VERSION = 1
@@ -31,24 +39,32 @@ object LocalDiagnosticsRecords {
 
     private const val UTC_INSTANT_PATTERN = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z"
 
-    private val safeFieldValue = Regex(SAFE_FIELD_VALUE_PATTERN)
-    private val clientVersion = Regex(CLIENT_VERSION_PATTERN)
-    private val approvedEventTypes = LocalDiagnosticEventType.entries.joinToString("|") { it.value }
-    private val approvedStatuses = LocalDiagnosticStatus.entries.joinToString("|") { it.value }
+    private val safeFieldValue: Regex by lazy { Regex(SAFE_FIELD_VALUE_PATTERN) }
+    private val clientVersion: Regex by lazy { Regex(CLIENT_VERSION_PATTERN) }
+    private val approvedEventTypes: String by lazy {
+        LocalDiagnosticEventType.entries.joinToString("|") { it.value }
+    }
+    private val approvedStatuses: String by lazy {
+        LocalDiagnosticStatus.entries.joinToString("|") { it.value }
+    }
 
-    private val eventRecord =
-        Regex(
-            "\\A\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$EVENT_RECORD_TYPE\"," +
-                "\"event_type\":\"(?:$approvedEventTypes)\",\"occurred_at\":\"$UTC_INSTANT_PATTERN\"" +
-                "(?:,\"status\":\"(?:$approvedStatuses)\")?}\\z",
-        )
+    private val eventRecord: Regex
+        by lazy {
+            Regex(
+                "\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$EVENT_RECORD_TYPE\"," +
+                    "\"event_type\":\"(?:$approvedEventTypes)\",\"occurred_at\":\"$UTC_INSTANT_PATTERN\"" +
+                    "(?:,\"status\":\"(?:$approvedStatuses)\")?\\}",
+            )
+        }
 
-    private val metadataRecord =
-        Regex(
-            "\\A\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$METADATA_RECORD_TYPE\"," +
-                "\"client_version\":\"$CLIENT_VERSION_PATTERN\",\"exported_at\":\"$UTC_INSTANT_PATTERN\"" +
-                "(?:,\"gateway_revision\":\"$SAFE_FIELD_VALUE_PATTERN\")?}\\z",
-        )
+    private val metadataRecord: Regex
+        by lazy {
+            Regex(
+                "\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$METADATA_RECORD_TYPE\"," +
+                    "\"client_version\":\"$CLIENT_VERSION_PATTERN\",\"exported_at\":\"$UTC_INSTANT_PATTERN\"" +
+                    "(?:,\"gateway_revision\":\"$SAFE_FIELD_VALUE_PATTERN\")?\\}",
+            )
+        }
 
     /** True when [value] is a lowercase token the record format may carry. */
     fun isSafeFieldValue(value: String): Boolean = safeFieldValue.matches(value)

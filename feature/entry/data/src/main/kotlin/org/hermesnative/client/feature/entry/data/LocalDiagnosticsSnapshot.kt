@@ -24,6 +24,10 @@ sealed interface LocalDiagnosticsSnapshotEncoding {
  * The snapshot begins with exactly one metadata record and then repeats the
  * retained records in their stored order. Encoding a snapshot is read-only: it
  * never clears, mutates, or appends a second copy to the buffer.
+ *
+ * The export file-name format is derived on first use for the same reason as
+ * the record patterns in [LocalDiagnosticsRecords]: a failure while the class
+ * initializer runs must not disable the surface permanently on API 24.
  */
 object LocalDiagnosticsSnapshot {
     /** File-name suffix of every export snapshot. */
@@ -73,6 +77,6 @@ object LocalDiagnosticsSnapshot {
                 } ?: LocalDiagnosticsSnapshotEncoding.Rejected
         }
 
-    private val FILE_NAME_FORMAT =
-        DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
+    private val FILE_NAME_FORMAT: DateTimeFormatter
+        by lazy { DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC) }
 }
