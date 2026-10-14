@@ -16,6 +16,25 @@ import java.util.concurrent.atomic.AtomicReference
 class GatewaySseParserTest {
     private val runId = RunId("run-1")
 
+    private val capturedLiveGatewayStream =
+        """
+        : open
+
+        id: 0
+        data: {"event":"message.delta","run_id":"run-1","delta":"Receipt confirmed","seq":0}
+
+        id: 1
+        data: {"event":"message.delta","run_id":"run-1","delta":" \u2014","seq":1}
+
+        id: 7
+        data: {"event":"reasoning.available","run_id":"run-1","text":"Receipt confirmed \u2014","seq":7}
+
+        id: 8
+        data: {"event":"run.completed","run_id":"run-1","completed":true,"partial":false,"interrupted":false,"seq":8}
+
+        : stream closed
+        """.trimIndent().lines()
+
     @Test
     fun parses_data_only_events_with_the_event_type_inside_the_json_payload() {
         val frames =
@@ -89,6 +108,61 @@ class GatewaySseParserTest {
         assertEquals(listOf("a", "a"), events.map { it.text })
         assertNull(events[0].eventId)
         assertNull(events[1].eventId)
+    }
+
+    @Test
+    fun parses_the_captured_live_gateway_framing_with_comment_and_id_lines() {
+        val frames =
+            GatewaySseParser.frames(
+                capturedLiveGatewayStream.asSequence(),
+                "run observation",
+            ).toList()
+
+        val events = frames.mapNotNull { GatewayJsonParser.parseRunEvent("run observation", it) }
+
+        assertEquals(
+            listOf(
+                RunEventType.MESSAGE_DELTA,
+                RunEventType.MESSAGE_DELTA,
+                RunEventType.RUNNING,
+                RunEventType.COMPLETED,
+            ),
+            events.map { it.type },
+        )
+        assertEquals("Receipt confirmed", events[0].text)
+        assertEquals(" \u2014", events[1].text)
+        assertEquals("succeeded", events[3].status)
+    }
+
+    @Test
+    fun the_captured_live_gateway_stream_yields_deltas_and_a_terminal_completed_event() {
+        val observation =
+            GatewayRunEventObservation(
+                operation = "run observation",
+                openStream = {
+                    GatewayEventStream(
+                        statusCode = 200,
+                        lines = capturedLiveGatewayStream.asSequence(),
+                    )
+                },
+                parseFrame = { frame -> GatewayJsonParser.parseRunEvent("run observation", frame) },
+                mapTransportFailure = { GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED) },
+            )
+
+        val events = observation.toList()
+
+        assertEquals(
+            listOf(
+                RunEventType.MESSAGE_DELTA,
+                RunEventType.MESSAGE_DELTA,
+                RunEventType.RUNNING,
+                RunEventType.COMPLETED,
+            ),
+            events.map { it.type },
+        )
+        assertEquals("Receipt confirmed", events[0].text)
+        assertEquals(" \u2014", events[1].text)
+        assertEquals("succeeded", events.last().status)
     }
 
     @Test
