@@ -10,6 +10,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 TOOL_ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = REPO_ROOT / "docs" / "local-live-smoke.md"
+EVIDENCE_PAIR_PATH = ".github/stable-public-beta/live-smoke.json"
+
+
+def references_live_smoke_gate(text):
+    scanned = text.replace(EVIDENCE_PAIR_PATH, "")
+    return "live-smoke" in scanned or "live_smoke" in scanned
 
 
 class LocalOnlyGuardTests(unittest.TestCase):
@@ -17,10 +23,26 @@ class LocalOnlyGuardTests(unittest.TestCase):
         workflows = REPO_ROOT / ".github" / "workflows"
         offenders = []
         for path in sorted(workflows.glob("*.yml")) + sorted(workflows.glob("*.yaml")):
-            text = path.read_text(encoding="utf-8", errors="replace")
-            if "live-smoke" in text or "live_smoke" in text:
+            if references_live_smoke_gate(path.read_text(encoding="utf-8", errors="replace")):
                 offenders.append(path.name)
         self.assertEqual(offenders, [], "the live smoke gate must stay outside CI workflows")
+
+    def test_legitimate_evidence_path_reference_is_not_flagged(self):
+        text = ("run: python3 .github/scripts/stable-public-beta.py prepare "
+                ".github/stable-public-beta/declaration.json "
+                ".github/stable-public-beta/live-smoke.json .github/release-certificate.sha256")
+        self.assertFalse(references_live_smoke_gate(text))
+
+    def test_tool_reference_is_flagged(self):
+        self.assertTrue(references_live_smoke_gate("run: python3 tools/live-smoke/live_smoke.py run"))
+
+    def test_documentation_reference_is_flagged(self):
+        self.assertTrue(references_live_smoke_gate("run: cat docs/local-live-smoke.md"))
+
+    def test_evidence_path_beside_a_gate_reference_is_flagged(self):
+        text = ("run: python3 tools/live-smoke/live_smoke.py validate-evidence "
+                "--evidence .github/stable-public-beta/live-smoke.json")
+        self.assertTrue(references_live_smoke_gate(text))
 
     def test_tool_drives_maestro_only_through_mcp(self):
         orchestrate = (TOOL_ROOT / "livesmoke" / "orchestrate.py").read_text(encoding="utf-8")
