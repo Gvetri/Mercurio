@@ -212,6 +212,13 @@ class StableBetaTest(unittest.TestCase):
             shutil.copyfile(asset, store / asset.name)
         self.smoke.write_text(json.dumps(sample_evidence(json.loads((signed / "signing-metadata.json").read_text())["apk_sha256"])))
 
+    def reset_provider_draft(self):
+        for path in (self.release_file, self.provider / "operations", self.provider / "nightly-downloads"):
+            path.unlink(missing_ok=True)
+        for directory in (self.provider / "assets", self.provider / "discarded-assets", self.provider / "nightly-assets",
+                          self.root / "signing", self.root / "signed"):
+            shutil.rmtree(directory, ignore_errors=True)
+
     def command(self, operation, *extra):
         output = Path(self.environment["GITHUB_OUTPUT"])
         output.unlink(missing_ok=True)
@@ -471,11 +478,8 @@ class StableBetaTest(unittest.TestCase):
     def test_partial_upload_or_corrupt_readback_keeps_draft_for_manual_recovery(self):
         for flag in ("fail-upload", "corrupt-stable-download"):
             with self.subTest(flag=flag):
-                if flag == "corrupt-stable-download":
-                    self.release_file.unlink()
-                    (self.provider / "assets").rename(self.provider / "discarded-assets")
-                    (self.provider / "operations").unlink()
-                self.signed_candidate() if flag == "fail-upload" else None
+                self.reset_provider_draft()
+                self.signed_candidate()
                 result, prepared = self.prepare()
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.environment["STABLE_BETA_FREEZE"] = prepared["freeze"]
