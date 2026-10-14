@@ -73,6 +73,9 @@ fun EntryScreen(
             if (sessionList?.openedSession?.isDiscardUnresolvedSendConfirmationOpen == true) {
                 UnresolvedSendDiscardConfirmation(onEvent = onEvent)
             }
+            sessionList?.pendingSessionDelete()?.let { pending ->
+                DeleteSessionConfirmation(pending = pending, onEvent = onEvent)
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -242,8 +243,8 @@ class SessionActionMenuIntegrationTest {
             composeTestRule.onNodeWithText("Unpin Session").assertIsDisplayed()
             choose("Delete Session")
             val confirmations = composeTestRule.onAllNodesWithText("Delete \"Server title\"?")
-            confirmations.assertCountEquals(2)
-            confirmations.onLast().assertIsDisplayed()
+            confirmations.assertCountEquals(1)
+            confirmations.onFirst().assertIsDisplayed()
             assertEquals("Keep this draft", holder.uiState.value.sessionList?.openedSession?.composerText)
             assertTrue(gateway.mutations.isEmpty())
         } finally {
@@ -315,9 +316,10 @@ class SessionActionMenuIntegrationTest {
     private fun assertDeleteCancellationKeepsTheSession(gateway: MenuGateway) {
         openMenu("First Session")
         choose("Delete Session")
-        composeTestRule.onNodeWithText("Delete \"First Session\"?").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete \"First Session\"?").assertIsDisplayed()
         composeTestRule.onNodeWithText("Remote deletion cannot be undone by this client.")
-            .performScrollTo().assertIsDisplayed()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel Delete").assertIsDisplayed()
         assertTrue(gateway.mutations.isEmpty())
         choose("Cancel Delete")
         assertTrue(gateway.mutations.isEmpty())
@@ -409,7 +411,7 @@ class SessionActionMenuIntegrationTest {
             choose("Confirm Delete Session")
             assertEquals("Renamed Session", firstSession(holder).title)
             composeTestRule.onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-                .performScrollTo().assertIsDisplayed()
+                .assertIsDisplayed()
             assertEquals(7, gateway.mutations.size)
             choose("Try again")
             assertEquals(8, gateway.mutations.size)

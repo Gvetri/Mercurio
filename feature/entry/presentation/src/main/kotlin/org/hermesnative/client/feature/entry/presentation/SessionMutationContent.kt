@@ -74,46 +74,7 @@ internal fun RenameSessionContent(
 }
 
 @Composable
-internal fun DeleteSessionContent(
-    session: SessionItemUiState,
-    state: SessionDeleteUiState,
-    errorCategory: SessionMutationErrorCategory?,
-    enabled: Boolean,
-    onEvent: (EntryUiEvent) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
-        Text(
-            text = "Delete Session",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.semantics { heading() },
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = "Delete \"${session.title}\"?")
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = "Remote deletion cannot be undone by this client.")
-        Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = { onEvent(EntryUiEvent.ConfirmDeleteSessionClicked(session.id)) },
-            enabled = enabled && !state.isSubmitting,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) {
-            Text(text = if (errorCategory == null) "Confirm Delete Session" else "Try again")
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        OutlinedButton(
-            onClick = { onEvent(EntryUiEvent.CancelDeleteSessionClicked(session.id)) },
-            enabled = !state.isSubmitting,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) {
-            Text(text = "Cancel Delete")
-        }
-        SessionMutationProgress(visible = state.isSubmitting, label = "Deleting Session…", topSpacing = 8.dp)
-        SessionMutationErrorMessage(message = errorCategory?.safeMessage, topSpacing = 8.dp)
-    }
-}
-
-@Composable
-private fun SessionMutationProgress(
+internal fun SessionMutationProgress(
     visible: Boolean,
     label: String,
     topSpacing: Dp,
@@ -130,7 +91,7 @@ private fun SessionMutationProgress(
 }
 
 @Composable
-private fun SessionMutationErrorMessage(
+internal fun SessionMutationErrorMessage(
     message: String?,
     topSpacing: Dp,
 ) {
