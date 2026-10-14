@@ -1296,9 +1296,9 @@ class QualityGateConfigurationTest {
         val script = issueScript.readText()
         assertTrue("The issue must use the ready-for-agent label.", script.contains("ready-for-agent"))
         assertTrue("The issue must carry a run marker for deduplication.", script.contains("nightly-run:"))
-        assertTrue("The script must update an existing issue before verification.", script.contains("gh api --method PATCH"))
+        assertTrue("The script must update an existing issue before verification.", script.contains("--method PATCH"))
         assertTrue("The existing issue must be reopened before verification.", script.contains("payload[\"state\"] = \"open\""))
-        assertTrue("The script must read the exact issue after publication.", script.contains("gh api \"${'$'}{issues_endpoint}/${'$'}{issue_number}\""))
+        assertTrue("The script must read the exact issue after publication.", script.contains("gh_api_or_refuse \"${'$'}temporary_directory/verified.json\" read-back \"${'$'}issue_number\" \"${'$'}{issues_endpoint}/${'$'}{issue_number}\""))
         assertTrue("Artifact links must come from the current run metadata.", script.contains("/actions/runs/${'$'}{GITHUB_RUN_ID}/artifacts?per_page=100"))
     }
 }
