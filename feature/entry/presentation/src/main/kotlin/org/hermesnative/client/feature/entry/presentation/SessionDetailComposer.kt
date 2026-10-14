@@ -24,6 +24,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun SessionDetailComposerTail(
     state: OpenSessionUiState,
@@ -71,7 +73,10 @@ internal fun SessionDetailComposerTail(
                 onValueChange = { onEvent(EntryUiEvent.ComposerTextChanged(it)) },
                 label = { Text("Message") },
                 placeholder = { Text("Write a message") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth().testTag("conversation-message-input").semantics {
+                        testTagsAsResourceId = true
+                    },
                 enabled = composerEnabled,
                 singleLine = false,
                 maxLines = 5,
@@ -109,6 +114,14 @@ private fun ComposerSendButton(
         state.latestRunState == RunPresentationState.STARTING ||
             state.latestRunState == RunPresentationState.RUNNING ||
             state.latestRunState == RunPresentationState.COMPLETING
+    val label =
+        when {
+            runIsExecuting -> "Stop"
+            state.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
+                state.hasUnresolvedSubmission -> "Refresh history to resolve"
+            state.sendErrorCategory != null -> "Try again"
+            else -> "Send"
+        }
     Button(
         onClick = {
             if (runIsExecuting) {
@@ -120,18 +133,12 @@ private fun ComposerSendButton(
         enabled = runIsExecuting || sendEnabled,
         modifier =
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .testTag("conversation-send").semantics { testTagsAsResourceId = true },
-    ) {
-        Text(
-            text =
-                when {
-                    runIsExecuting -> "Stop"
-                    state.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
-                        state.hasUnresolvedSubmission -> "Refresh history to resolve"
-                    state.sendErrorCategory != null -> "Try again"
-                    else -> "Send"
+                .testTag("conversation-send").semantics {
+                    testTagsAsResourceId = true
+                    contentDescription = if (label == "Send") "Send message" else label
                 },
-        )
+    ) {
+        Text(text = label)
     }
 }
 
@@ -161,6 +168,7 @@ private fun ComposerSendErrorRow(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ComposerDiscardButton(
     enabled: Boolean,
@@ -169,7 +177,10 @@ private fun ComposerDiscardButton(
     TextButton(
         onClick = { onEvent(EntryUiEvent.DiscardUnresolvedSendClicked) },
         enabled = enabled,
-        modifier = Modifier.heightIn(min = 48.dp),
+        modifier =
+            Modifier.heightIn(min = 48.dp).testTag("conversation-discard-unsent").semantics {
+                testTagsAsResourceId = true
+            },
     ) {
         Text(text = "Discard unsent record")
     }
