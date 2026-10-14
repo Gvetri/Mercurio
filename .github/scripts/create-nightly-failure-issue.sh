@@ -14,6 +14,15 @@ if ! [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ && "$G
     exit 1
 fi
 
+gh_api_or_refuse() {
+    local output="$1" operation="$2" issue="$3"
+    shift 3
+    if ! gh api "$@" > "$output"; then
+        printf 'Nightly failure issue %s failed; an issue may have been filed for run %s%s.\n' "$operation" "$GITHUB_RUN_ID" "${issue:+ (issue $issue)}" >&2
+        exit 1
+    fi
+}
+
 issues_endpoint="repos/${GITHUB_REPOSITORY}/issues"
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
@@ -120,19 +129,26 @@ expected_names = {
     f"android-test-failure-evidence-{run}-{attempt}",
     f"journey-evidence-{run}-{attempt}",
 }
-try:
-    artifact_pages = json.loads((root / "artifacts.json").read_text())
-except ValueError:
-    raise SystemExit("Expected valid JSON for the run artifacts response.")
-if not isinstance(artifact_pages, list) or any(
-    not isinstance(page, dict) or not isinstance(page.get("artifacts"), list) or any(
-        not isinstance(artifact, dict)
-        or not (artifact.get("name") is None or isinstance(artifact.get("name"), str))
-        for artifact in page["artifacts"]
-    )
-    for page in artifact_pages
-):
-    raise SystemExit("Malformed run artifacts response.")
+def ensure_page_list(path, response_name, page_is_valid):
+    try:
+        pages = json.loads(path.read_text())
+    except ValueError:
+        raise SystemExit(f"Expected valid JSON for the {response_name} response.")
+    if not isinstance(pages, list) or any(not page_is_valid(page) for page in pages):
+        raise SystemExit(f"Malformed {response_name} response.")
+    return pages
+
+
+def optional_string(entry, key):
+    value = entry.get(key)
+    return value is None or isinstance(value, str)
+
+
+artifact_pages = ensure_page_list(
+    root / "artifacts.json", "run artifacts",
+    lambda page: isinstance(page, dict) and isinstance(page.get("artifacts"), list) and all(
+        isinstance(artifact, dict) and optional_string(artifact, "name")
+        for artifact in page["artifacts"]))
 artifacts = [artifact for page in artifact_pages for artifact in page["artifacts"]
              if artifact.get("name") in expected_names and artifact.get("expired") is False
              and type(artifact.get("id")) is int]
@@ -143,19 +159,11 @@ if not artifacts:
 lines.extend(["", "Inspect the first failing command in each failed job. A dependency download failure still blocks the quality gate."])
 payload = {"title": f"Nightly test failure: {', '.join([job_names[job] for job in failed] + additional)} (run {run})",
            "body": "\n".join(lines) + "\n", "labels": ["ready-for-agent"]}
-try:
-    issue_pages = json.loads((root / "issues.json").read_text())
-except ValueError:
-    raise SystemExit("Expected valid JSON for the issues response.")
-if not isinstance(issue_pages, list) or any(
-    not isinstance(page, list) or any(
-        not isinstance(issue_entry, dict)
-        or not (issue_entry.get("body") is None or isinstance(issue_entry.get("body"), str))
-        for issue_entry in page
-    )
-    for page in issue_pages
-):
-    raise SystemExit("Malformed issues response.")
+issue_pages = ensure_page_list(
+    root / "issues.json", "issues",
+    lambda page: isinstance(page, list) and all(
+        isinstance(issue_entry, dict) and optional_string(issue_entry, "body")
+        for issue_entry in page))
 issues = [issue for page in issue_pages for issue in page
           if issue.get("pull_request") is None and marker in (issue.get("body") or "")]
 if len(issues) > 1:
@@ -171,15 +179,9 @@ PY
 
 if [[ -s "$temporary_directory/existing-number" ]]; then
     issue_number="$(< "$temporary_directory/existing-number")"
-    if ! gh api --method PATCH "${issues_endpoint}/${issue_number}" --input "$temporary_directory/payload.json" > "$temporary_directory/response.json"; then
-        printf 'Nightly failure issue update failed; an issue may have been filed for run %s (issue %s).\n' "$GITHUB_RUN_ID" "$issue_number" >&2
-        exit 1
-    fi
+    gh_api_or_refuse "$temporary_directory/response.json" update "$issue_number" --method PATCH "${issues_endpoint}/${issue_number}" --input "$temporary_directory/payload.json"
 else
-    if ! gh api --method POST "$issues_endpoint" --input "$temporary_directory/payload.json" > "$temporary_directory/response.json"; then
-        printf 'Nightly failure issue creation failed; an issue may have been filed for run %s.\n' "$GITHUB_RUN_ID" >&2
-        exit 1
-    fi
+    gh_api_or_refuse "$temporary_directory/response.json" creation "" --method POST "$issues_endpoint" --input "$temporary_directory/payload.json"
     python3 - "$temporary_directory" "$GITHUB_RUN_ID" <<'PY'
 from pathlib import Path
 import json
@@ -198,10 +200,7 @@ PY
     issue_number="$(< "$temporary_directory/issue-number")"
 fi
 
-if ! gh api "${issues_endpoint}/${issue_number}" > "$temporary_directory/verified.json"; then
-    printf 'Nightly failure issue read-back failed; an issue may have been filed for run %s (issue %s).\n' "$GITHUB_RUN_ID" "$issue_number" >&2
-    exit 1
-fi
+gh_api_or_refuse "$temporary_directory/verified.json" read-back "$issue_number" "${issues_endpoint}/${issue_number}"
 python3 - "$temporary_directory" "$GITHUB_RUN_ID" "$issue_number" <<'PY'
 from pathlib import Path
 import json
