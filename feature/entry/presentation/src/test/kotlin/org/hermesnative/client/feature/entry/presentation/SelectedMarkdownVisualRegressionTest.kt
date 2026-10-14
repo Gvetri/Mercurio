@@ -96,6 +96,18 @@ class SelectedMarkdownVisualRegressionTest {
             ./gradlew :feature:entry:presentation:verifyRoborazziDebug --console=plain --no-daemon --stacktrace
             ```
 
+            ```yaml
+            # gateway settings
+            endpoint: "wss://example.invalid/ws"
+            retry: on # keep the last session
+            ```
+
+            ```toml
+            # compose draft
+            title = "Weekly notes" # shown in the list
+            keep = 8080
+            ```
+
             A rejected scheme such as [danger](javascript:alert(1)) stays inert text.
             """.trimIndent()
 
