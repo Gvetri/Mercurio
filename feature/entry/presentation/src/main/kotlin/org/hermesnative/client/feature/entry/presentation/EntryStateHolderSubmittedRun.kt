@@ -158,7 +158,7 @@ internal fun EntryStateHolder.recordSubmittedRunState(application: SubmittedRunA
         sessionSendErrors[application.sessionId] = MessageSendErrorCategory.UNCERTAIN
     } else if (
         submittedDraft != null &&
-        sessionDraftRevisions[application.sessionId] == submittedDraft.revision
+        sessionDrafts[application.sessionId] == submittedDraft.text
     ) {
         sessionSendErrors.remove(application.sessionId)
         sessionDrafts.remove(application.sessionId)

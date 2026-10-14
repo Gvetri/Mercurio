@@ -148,6 +148,7 @@ journeys=(
     capabilities-additive
     capabilities-missing-required
     accessibility-controls
+    confirmed-send
 )
 
 for journey in "${journeys[@]}"; do

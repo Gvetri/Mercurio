@@ -1,0 +1,51 @@
+appId: org.hermesnative.client
+name: confirmed-send
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: confirmed-send-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- assertVisible: "Polish Session"
+- tapOn: "Polish Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- assertVisible: "No messages in this Session."
+- tapOn: "Message"
+- inputText: "Polish ping"
+- hideKeyboard
+- takeScreenshot: confirmed-send-draft
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Write a message"
+    timeout: 30000
+- takeScreenshot: confirmed-send-composer-cleared
+- extendedWaitUntil:
+    visible: "Run state: Succeeded"
+    timeout: 30000
+- assertVisible: "Polish reply"
+- assertVisible: "Latest Run"
+- assertNotVisible: ".*run-ux-1.*"
+- tapOn:
+    text: "Show run ID"
+    index: 0
+- extendedWaitUntil:
+    visible: "Run ID: run-ux-1"
+    timeout: 30000
+- takeScreenshot: confirmed-send-run-id-disclosed
+- tapOn:
+    text: "Hide run ID"
+    index: 0
+- extendedWaitUntil:
+    notVisible: "Run ID: run-ux-1"
+    timeout: 30000

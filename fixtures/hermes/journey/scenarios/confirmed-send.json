@@ -1,0 +1,42 @@
+{
+  "name": "confirmed-send",
+  "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+  "port": 18443,
+  "tls": true,
+  "capabilities": [
+    "sessions",
+    "session",
+    "session_messages",
+    "runs",
+    "run_status",
+    "run_events"
+  ],
+  "sessions": [
+    {
+      "id": "session-ux",
+      "title": "Polish Session",
+      "preview": "Synthetic preview",
+      "pinned": false
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "run-ux-1",
+      "session_id": "session-ux",
+      "create_status": "started",
+      "observation": [
+        {
+          "type": "run.completed"
+        }
+      ],
+      "final_status": "completed",
+      "terminal_history": [
+        {
+          "id": "message-ux-1",
+          "role": "assistant",
+          "content": "Polish reply"
+        }
+      ]
+    }
+  ]
+}

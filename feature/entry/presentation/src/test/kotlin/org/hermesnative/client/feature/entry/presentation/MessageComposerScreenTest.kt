@@ -38,11 +38,30 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Latest Run: run-1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed()
         composeTestRule.onNodeWithText("Run status: Completed").assertIsDisplayed()
         composeTestRule.onNodeWithText("Send").assertHasClickAction().assertIsEnabled().performClick()
 
         assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
+    }
+
+    @Test
+    fun the_latest_run_identity_stays_behind_an_explicit_disclosure() {
+        val run = Run(RunId("run-1"), SessionId("session-1"), "succeeded")
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedState(latestRun = run),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Run status: Completed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("run-1", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Show run ID").performClick()
+        composeTestRule.onNodeWithText("Run ID: run-1").assertIsDisplayed()
     }
 
     @Test

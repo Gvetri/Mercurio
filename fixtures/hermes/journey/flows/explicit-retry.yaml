@@ -31,7 +31,13 @@ name: explicit-retry
     direction: DOWN
     timeout: 30000
 - extendedWaitUntil:
-    visible: "Latest Run: run-retry-1"
+    visible: "Latest Run"
+    timeout: 30000
+- tapOn:
+    text: "Show run ID"
+    index: 0
+- extendedWaitUntil:
+    visible: "Run ID: run-retry-1"
     timeout: 30000
 - extendedWaitUntil:
     visible: "Stable retry failure"

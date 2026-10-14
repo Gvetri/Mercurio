@@ -189,7 +189,7 @@ class MessageSubmissionStateHolderTest {
     }
 
     @Test
-    fun editing_a_draft_away_and_back_does_not_clear_the_new_draft_when_submission_completes() {
+    fun an_in_flight_draft_edit_back_to_the_submitted_text_clears_the_confirmed_composer() {
         val session = session("session-1")
         val run = Run(RunId("run-1"), session.id, "starting")
         val gateway =
@@ -211,7 +211,7 @@ class MessageSubmissionStateHolderTest {
             awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
 
             assertEquals(
-                "Original draft",
+                "",
                 requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).composerText,
             )
         } finally {
