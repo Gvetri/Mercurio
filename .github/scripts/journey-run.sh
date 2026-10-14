@@ -136,6 +136,7 @@ journeys=(
     pagination-search
     active-run-isolation
     streaming
+    live-streaming
     interrupted-sse-refetch
     terminal-success
     terminal-failure

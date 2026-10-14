@@ -94,6 +94,7 @@ data class JourneyRunScript(
     val interruptAfterEvents: Int? = null,
     val holdOpen: Boolean = false,
     val refuseCreate: Boolean = false,
+    val liveFraming: Boolean = false,
     val finalStatus: String? = null,
     val terminalHistory: List<JourneyMessage> = emptyList(),
 ) {
@@ -163,6 +164,7 @@ private val allowedRunKeys =
         "interrupt_after_events",
         "hold_open",
         "refuse_create",
+        "live_framing",
         "final_status",
         "terminal_history",
     )
@@ -309,6 +311,7 @@ private object JourneyScenarioJson {
                 interruptAfterEvents = optionalInt(run, "interrupt_after_events"),
                 holdOpen = optionalBoolean(run, "hold_open", default = false),
                 refuseCreate = optionalBoolean(run, "refuse_create", default = false),
+                liveFraming = optionalBoolean(run, "live_framing", default = false),
                 finalStatus = optionalString(run, "final_status"),
                 terminalHistory = parseMessages(run, "terminal_history", "run[$index].terminal_history"),
             )
