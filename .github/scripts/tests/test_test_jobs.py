@@ -848,6 +848,14 @@ class NightlyFailureReporterGuardTest(unittest.TestCase):
         self.assertLess(len(result.stderr), 180)
         self.assertNotIn("Traceback", result.stderr)
 
+    def assert_refusal_without_writes(self, overrides):
+        self.clear_reporter_state()
+        result = self.run_reporter(overrides=overrides)
+        self.assert_single_line_refusal(result)
+        self.assertFalse((self.root / "writes").exists())
+        self.assertFalse((self.root / "issue.json").exists())
+        return result
+
     def clear_reporter_state(self, *, keep_issue=False):
         for name in (("writes", "submitted-payload.json") if keep_issue
                      else ("issue.json", "writes", "submitted-payload.json")):
@@ -859,11 +867,7 @@ class NightlyFailureReporterGuardTest(unittest.TestCase):
                       '[{"artifacts": [{"name": ["jvm-test-reports-123-1"], "expired": false, "id": 99}]}]',
                       '[{"artifacts": [{"name": 7, "expired": false, "id": 99}]}]'):
             with self.subTest(value=value):
-                self.clear_reporter_state()
-                result = self.run_reporter(overrides={"FIXTURE_ARTIFACTS": value})
-                self.assert_single_line_refusal(result)
-                self.assertFalse((self.root / "writes").exists())
-                self.assertFalse((self.root / "issue.json").exists())
+                self.assert_refusal_without_writes({"FIXTURE_ARTIFACTS": value})
                 self.assertFalse((self.root / "submitted-payload.json").exists())
 
     def test_nightly_reporter_refuses_malformed_issue_pages_with_one_stderr_line(self):
@@ -872,20 +876,12 @@ class NightlyFailureReporterGuardTest(unittest.TestCase):
                       '[[{"pull_request": null, "body": {"nightly": "123"}}]]',
                       '[[{"pull_request": null, "body": ["<!-- nightly-run:123 -->"]}]]'):
             with self.subTest(value=value):
-                self.clear_reporter_state()
-                result = self.run_reporter(overrides={"FIXTURE_ISSUES": value})
-                self.assert_single_line_refusal(result)
-                self.assertFalse((self.root / "writes").exists())
-                self.assertFalse((self.root / "issue.json").exists())
+                self.assert_refusal_without_writes({"FIXTURE_ISSUES": value})
 
     def test_nightly_reporter_refuses_malformed_github_server_urls_with_one_stderr_line(self):
         for value in ("https://[::1", "https://github.com]x[", "https://[::1]x"):
             with self.subTest(value=value):
-                self.clear_reporter_state()
-                result = self.run_reporter(overrides={"GITHUB_SERVER_URL": value})
-                self.assert_single_line_refusal(result)
-                self.assertFalse((self.root / "writes").exists())
-                self.assertFalse((self.root / "issue.json").exists())
+                self.assert_refusal_without_writes({"GITHUB_SERVER_URL": value})
 
     def test_nightly_reporter_publishes_byte_identical_payloads_for_well_formed_input(self):
         fixtures = ROOT / ".github/scripts/tests/fixtures"
@@ -938,12 +934,8 @@ class NightlyFailureReporterGuardTest(unittest.TestCase):
                 self.assertIn(phrase, result.stderr)
                 self.assertIn(identity, result.stderr)
                 self.assertEqual(["POST"], (self.root / "writes").read_text().splitlines())
-        self.clear_reporter_state()
-        result = self.run_reporter(overrides={"FIXTURE_WRITE_FAIL": "1"})
-        self.assert_single_line_refusal(result)
+        result = self.assert_refusal_without_writes({"FIXTURE_WRITE_FAIL": "1"})
         self.assertIn("creation failed; an issue may have been filed for run 123", result.stderr)
-        self.assertFalse((self.root / "writes").exists())
-        self.assertFalse((self.root / "issue.json").exists())
 
     def test_nightly_reporter_mismatch_refusals_say_the_issue_may_have_been_filed(self):
         self.assertEqual(0, self.run_reporter().returncode)
