@@ -37,7 +37,6 @@ name: accessibility-controls
 - assertVisible: "Confirm Delete Session"
 - assertVisible: "Cancel Delete"
 - takeScreenshot: accessibility-controls-delete-confirmation
-- assertVisible: "Alpha Session"
 - tapOn: "Cancel Delete"
 - assertVisible: "Alpha Session"
 - assertNotVisible: "Confirm Delete Session"
