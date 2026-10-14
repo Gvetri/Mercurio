@@ -155,6 +155,7 @@ class LocalDiagnosticsRecordsTest {
                 """{"schema_version":1,"record_type":"event","event_type":"session_list_load",""" +
                     """"occurred_at":"2026-09-28T10:15:3""",
                 VALID_RECORD + " trailing",
+                VALID_RECORD + "\n",
                 """{"schema_version": 1,"record_type":"event","event_type":"session_list_load",""" +
                     """"occurred_at":"2026-09-28T10:15:30Z"}""",
                 """[{"schema_version":1,"record_type":"event"}]""",

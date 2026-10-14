@@ -1,6 +1,7 @@
 package org.hermesnative.client.feature.entry.wiring
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,7 @@ import org.hermesnative.client.feature.entry.domain.GatewayConnectionRepository
 import org.hermesnative.client.feature.entry.presentation.EntryStateHolder
 import org.hermesnative.client.feature.entry.presentation.EntryStateHolderDependencies
 import org.hermesnative.client.feature.entry.presentation.LocalDiagnosticsPorts
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 object EntryWiring {
@@ -34,7 +36,10 @@ object EntryWiring {
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
         val localDiagnosticsBuffer =
-            RollingLocalDiagnosticsBuffer(FileLocalDiagnosticsStorage(context))
+            RollingLocalDiagnosticsBuffer(
+                FileLocalDiagnosticsStorage(context),
+                onRecordFailure = ::reportLocalDiagnosticsRecordFailure,
+            )
         return EntryStateHolder(
             initialState = initialState,
             verifyGatewayConnection = verifyGatewayConnection,
@@ -129,3 +134,17 @@ private fun newGatewayClient(
     endpoint: String,
     bearerCredential: String,
 ): DefaultGatewayClient = DefaultGatewayClient(endpoint, bearerCredential)
+
+private const val LOCAL_DIAGNOSTICS_LOG_TAG = "LocalDiagnostics"
+
+private val localDiagnosticsRecordFailureReported = AtomicBoolean(false)
+
+private fun reportLocalDiagnosticsRecordFailure(error: Throwable) {
+    if (localDiagnosticsRecordFailureReported.compareAndSet(false, true)) {
+        Log.w(
+            LOCAL_DIAGNOSTICS_LOG_TAG,
+            "Local diagnostics recording failed; recording stays disabled until a later attempt succeeds.",
+            error,
+        )
+    }
+}
