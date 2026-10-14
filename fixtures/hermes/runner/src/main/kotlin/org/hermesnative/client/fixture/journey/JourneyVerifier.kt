@@ -181,6 +181,7 @@ internal object JourneyInvariants {
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
+            "confirmed-send" -> JourneyRunInvariants.verifyConfirmedSend(telemetry)
             "markdown-blocks" -> requireConnectionAttempted(telemetry)
             "stale-recoverable" -> requireConnectionAttempted(telemetry)
             "diagnostics-recording" -> JourneyDiagnosticsInvariants.verifyDiagnosticsRecording(telemetry)
@@ -201,6 +202,8 @@ internal object JourneyInvariants {
     const val LIVE_RUN_ID = "live-run"
     const val INTERRUPTED_RUN_ID = "interrupted-run"
     const val RETRY_SESSION_ID = "session-retry"
+    const val CONFIRMED_SEND_SESSION_ID = "session-ux"
+    const val CONFIRMED_SEND_RUN_ID = "run-ux-1"
 }
 
 private object JourneySessionCreationInvariants {
@@ -454,6 +457,16 @@ private object JourneyRunInvariants {
             "The client did not submit exactly two Run creations (one refused while offline plus one recovery retry)."
         }
         check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the recovered Run." }
+    }
+
+    internal fun verifyConfirmedSend(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        check(runCreatesFor(telemetry, JourneyInvariants.CONFIRMED_SEND_SESSION_ID) == 1) {
+            "The confirmed send did not submit exactly one Run creation."
+        }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the confirmed Run." }
+        val sse = sseFor(telemetry, JourneyInvariants.CONFIRMED_SEND_RUN_ID)
+        check(sse.opened >= 1) { "The client did not observe the confirmed Run." }
     }
 
     private const val OFFLINE_SEND_SESSION_ID = "session-offline"
