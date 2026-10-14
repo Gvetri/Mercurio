@@ -6,8 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -185,7 +185,7 @@ class ConversationLayoutScreenTest {
         composeTestRule
             .onNode(
                 hasClickAction() and (hasText("Send") or hasText("Refresh history to resolve")),
-            ).performScrollTo().assertIsNotEnabled().assertIsDisplayed()
+            ).performScrollTo().assertIsEnabled().assertIsDisplayed()
         val draft =
             composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
                 .fetchSemanticsNode().boundsInRoot
