@@ -143,6 +143,7 @@ journeys=(
     explicit-retry
     stale-recoverable
     markdown-links
+    markdown-blocks
     capabilities-additive
     capabilities-missing-required
     accessibility-controls
