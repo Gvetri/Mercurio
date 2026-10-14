@@ -28,3 +28,29 @@ name: accessibility-controls
 - assertVisible: "Message"
 - assertVisible: "Send"
 - assertVisible: "Back to Sessions"
+- back
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Session actions for Alpha Session"
+- tapOn: "Delete Session"
+- assertVisible: "Confirm Delete Session"
+- assertVisible: "Cancel Delete"
+- takeScreenshot: accessibility-controls-delete-confirmation
+- assertVisible: "Alpha Session"
+- tapOn: "Cancel Delete"
+- assertVisible: "Alpha Session"
+- assertNotVisible: "Confirm Delete Session"
+- tapOn: "Alpha Session"
+- extendedWaitUntil:
+    visible: "Message"
+    timeout: 30000
+- assertVisible:
+    id: "conversation-message-input"
+- assertVisible:
+    id: "conversation-send"
+- tapOn:
+    id: "conversation-send"
+- assertVisible: "Write a message"
+- assertVisible: "Back to Sessions"
+- takeScreenshot: accessibility-controls-composer-resource-ids
