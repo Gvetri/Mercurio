@@ -81,8 +81,6 @@ private fun SessionRowMutationArea(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val mutation = row.mutation
-    // The app-modal delete confirmation (DeleteSessionConfirmation) is the single surface
-    // for delete progress, errors and retry; the row itself renders no delete feedback.
     if (mutation?.delete != null) return
     when {
         mutation?.rename != null ->
@@ -152,8 +150,6 @@ internal fun SessionActionControls(
     onEvent: (EntryUiEvent) -> Unit,
     showMenu: Boolean = true,
 ) {
-    // The app-modal delete confirmation (DeleteSessionConfirmation) is the single surface
-    // for delete progress, errors and retry; no inline counterpart renders next to it.
     if (mutation?.delete != null) return
     when {
         mutation?.rename != null ->

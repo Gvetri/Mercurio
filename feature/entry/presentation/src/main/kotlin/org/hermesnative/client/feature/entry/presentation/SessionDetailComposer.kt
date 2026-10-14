@@ -117,8 +117,6 @@ private fun ComposerSendButton(
             state.sendErrorCategory != null -> "Try again"
             else -> "Send"
         }
-    // The keyboard IME action also reads "Send"; give the app control a distinct
-    // accessible name so assistive tech can tell them apart.
     Button(
         onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
         enabled = sendEnabled,
