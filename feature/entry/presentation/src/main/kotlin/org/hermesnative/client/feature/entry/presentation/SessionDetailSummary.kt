@@ -161,11 +161,15 @@ private fun LatestRunSection(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     state.latestRun?.let { run ->
-        Text(
-            text = "Latest Run: ${run.id.value}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Latest Run",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            RunIdDisclosure(run.id)
+        }
         state.latestRunState?.let { runState ->
             Text(
                 text = "Run state: ${runState.label}",
@@ -244,11 +248,7 @@ internal fun SessionMessageContent(
 @Composable
 private fun MessageRunMetadata(message: SessionMessageUiState) {
     message.runId?.let { runId ->
-        Text(
-            text = "Run ID: ${runId.value}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        RunIdDisclosure(runId)
     }
     message.runState?.let { runState ->
         Text(

@@ -35,6 +35,12 @@ name: interrupted-sse-refetch
     end: "50%, 62%"
     duration: 400
 - extendedWaitUntil:
-    visible: "Latest Run: interrupted-run"
+    visible: "Latest Run"
+    timeout: 30000
+- tapOn:
+    text: "Show run ID"
+    index: 0
+- extendedWaitUntil:
+    visible: "Run ID: interrupted-run"
     timeout: 30000
 - assertVisible: "Refetched failure"
