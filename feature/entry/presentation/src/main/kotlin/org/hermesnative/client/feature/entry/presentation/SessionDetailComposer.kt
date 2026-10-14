@@ -24,6 +24,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -109,22 +110,24 @@ private fun ComposerSendButton(
     sendEnabled: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
+    val label =
+        when {
+            state.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
+                state.hasUnresolvedSubmission -> "Refresh history to resolve"
+            state.sendErrorCategory != null -> "Try again"
+            else -> "Send"
+        }
     Button(
         onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
         enabled = sendEnabled,
         modifier =
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .testTag("conversation-send").semantics { testTagsAsResourceId = true },
-    ) {
-        Text(
-            text =
-                when {
-                    state.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
-                        state.hasUnresolvedSubmission -> "Refresh history to resolve"
-                    state.sendErrorCategory != null -> "Try again"
-                    else -> "Send"
+                .testTag("conversation-send").semantics {
+                    testTagsAsResourceId = true
+                    contentDescription = if (label == "Send") "Send message" else label
                 },
-        )
+    ) {
+        Text(text = label)
     }
 }
 
@@ -154,6 +157,7 @@ private fun ComposerSendErrorRow(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ComposerDiscardButton(
     enabled: Boolean,
@@ -162,7 +166,10 @@ private fun ComposerDiscardButton(
     TextButton(
         onClick = { onEvent(EntryUiEvent.DiscardUnresolvedSendClicked) },
         enabled = enabled,
-        modifier = Modifier.heightIn(min = 48.dp),
+        modifier =
+            Modifier.heightIn(min = 48.dp).testTag("conversation-discard-unsent").semantics {
+                testTagsAsResourceId = true
+            },
     ) {
         Text(text = "Discard unsent record")
     }
