@@ -50,6 +50,12 @@ name: accessibility-controls
     id: "conversation-send"
 - tapOn:
     id: "conversation-send"
+# The composer placeholder ("Write a message") is composed only while the input
+# is focused and empty (M3 placeholder, SessionDetailComposer.kt). Tapping Send
+# on an empty composer is a no-op (Send is disabled while the text is blank), so
+# the input is still empty here; focus it to reveal the placeholder.
+- tapOn:
+    id: "conversation-message-input"
 - assertVisible: "Write a message"
 - assertVisible: "Back to Sessions"
 - takeScreenshot: accessibility-controls-composer-resource-ids
