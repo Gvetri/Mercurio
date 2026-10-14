@@ -35,6 +35,12 @@ name: terminal-failure
     end: "50%, 62%"
     duration: 400
 - extendedWaitUntil:
-    visible: "Latest Run: run-failure"
+    visible: "Latest Run"
+    timeout: 30000
+- tapOn:
+    text: "Show run ID"
+    index: 0
+- extendedWaitUntil:
+    visible: "Run ID: run-failure"
     timeout: 30000
 - assertVisible: "Stable failure result"

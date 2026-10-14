@@ -67,7 +67,7 @@ class ConversationSummaryLayoutTest {
             composeTestRule.onNodeWithText("Refresh history").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         val refreshBounds = refresh.fetchSemanticsNode().boundsInRoot
         val latest =
-            composeTestRule.onNodeWithText("Latest Run: run-A1").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val status =
             composeTestRule.onNodeWithText("Run state: Succeeded").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
 
@@ -88,7 +88,7 @@ class ConversationSummaryLayoutTest {
             composeTestRule.onNodeWithText("Refresh history").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         val refreshBounds = refresh.fetchSemanticsNode().boundsInRoot
         val latest =
-            composeTestRule.onNodeWithText("Latest Run: run-A1").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val status =
             composeTestRule.onNodeWithText("Run state: Succeeded").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
 
