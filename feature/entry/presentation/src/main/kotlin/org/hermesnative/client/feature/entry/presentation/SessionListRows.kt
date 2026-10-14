@@ -28,7 +28,7 @@ internal fun SessionRow(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val mutation = row.mutation
-    val inlineMode = mutation?.rename != null || mutation?.delete != null
+    val inlineMode = mutation?.rename != null
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier =
@@ -81,19 +81,12 @@ private fun SessionRowMutationArea(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val mutation = row.mutation
+    if (mutation?.delete != null) return
     when {
         mutation?.rename != null ->
             RenameSessionContent(
                 session = row.session,
                 state = mutation.rename,
-                enabled = row.enabled,
-                onEvent = onEvent,
-            )
-        mutation?.delete != null ->
-            DeleteSessionContent(
-                session = row.session,
-                state = mutation.delete,
-                errorCategory = mutation.errorCategory,
                 enabled = row.enabled,
                 onEvent = onEvent,
             )
@@ -157,19 +150,12 @@ internal fun SessionActionControls(
     onEvent: (EntryUiEvent) -> Unit,
     showMenu: Boolean = true,
 ) {
+    if (mutation?.delete != null) return
     when {
         mutation?.rename != null ->
             RenameSessionContent(
                 session = session,
                 state = mutation.rename,
-                enabled = enabled,
-                onEvent = onEvent,
-            )
-        mutation?.delete != null ->
-            DeleteSessionContent(
-                session = session,
-                state = mutation.delete,
-                errorCategory = mutation.errorCategory,
                 enabled = enabled,
                 onEvent = onEvent,
             )

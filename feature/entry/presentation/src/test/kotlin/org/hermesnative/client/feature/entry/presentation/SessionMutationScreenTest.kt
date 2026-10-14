@@ -79,7 +79,6 @@ class SessionMutationScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Delete Session").assertIsDisplayed()
         composeTestRule.onNodeWithText("Delete \"Remote Session\"?").assertIsDisplayed()
         composeTestRule
             .onNodeWithText("Remote deletion cannot be undone by this client.")
@@ -213,7 +212,6 @@ class SessionMutationScreenTest {
 
         composeTestRule
             .onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-            .performScrollTo()
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.ConfirmDeleteSessionClicked(sessionId)), events)

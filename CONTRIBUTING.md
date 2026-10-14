@@ -122,7 +122,7 @@ Markdown rendering contracts.
 | `create_session_short_window_long_error` | Session list | Constrained-height witness at twice the font scale (long draft, actions reachable) |
 | `create_session_short_window_long_error_scrolled` | Session list | The same witness scrolled to the retained failure message |
 | `rename_session_confirmation` | Session list | Inline modal-equivalent rename confirmation mode |
-| `delete_session_confirmation` | Session list | Inline modal-equivalent delete confirmation mode |
+| `delete_session_confirmation` | Session list | App-modal delete confirmation dialog |
 | `empty_session_detail` | Session detail | New Session with no history |
 | `session_detail_with_messages` | Session detail | Stable user and assistant history |
 | `session_detail_overflowing_transcript` | Session detail | A transcript longer than the pane, opened at its newest message |
@@ -160,10 +160,11 @@ The Create Session surface is now the standard Material 3 `AlertDialog`: the
 `create_session*` states capture that real dialog window over the Session list (and beside
 it in the two-pane layout). The Gateway-removal confirmation
 (`gateway_removal_confirmation`, and the `connection_remove_confirmation*` states over the
-retained Sessions surface) uses the same stock `AlertDialog` surface. Rename and Delete
-confirmation stay inline: they render as a conditional mode in the existing Compose state
-model and have no dialog overlay, so they stay covered without changing production behavior
-only to create a screenshot.
+retained Sessions surface) uses the same stock `AlertDialog` surface. The Delete
+confirmation uses the same stock `AlertDialog`, hosted at the entry root so it stays
+reachable in both layouts. The Rename confirmation stays inline: it renders as a
+conditional mode in the existing Compose state model and has no dialog overlay, so it stays
+covered without changing production behavior only to create a screenshot.
 
 The matrix uses Robolectric SDK 35, native graphics mode, and synthetic in-memory values.
 Each capture declares its viewport qualifier: the default is `w411dp-h891dp-notnight`; the
