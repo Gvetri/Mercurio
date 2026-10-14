@@ -56,6 +56,7 @@ data class JourneyScenario(
     val sessions: List<JourneySession> = emptyList(),
     val runs: List<JourneyRunScript> = emptyList(),
     val failNextSessionList: Boolean = false,
+    val failAfterFirstSessionList: Boolean = false,
     val holdCreateMs: Int? = null,
 ) {
     init {
@@ -144,6 +145,7 @@ private val allowedTopLevelKeys =
         "sessions",
         "runs",
         "fail_next_session_list",
+        "fail_after_first_session_list",
         "hold_create_ms",
     )
 private val allowedSessionKeys = setOf("id", "title", "preview", "pinned", "history")
@@ -234,6 +236,8 @@ object JourneyScenarioParser {
                 runs = JourneyScenarioJson.parseRuns(root),
                 failNextSessionList =
                     JourneyScenarioJson.optionalBoolean(root, "fail_next_session_list", default = false),
+                failAfterFirstSessionList =
+                    JourneyScenarioJson.optionalBoolean(root, "fail_after_first_session_list", default = false),
                 holdCreateMs = JourneyScenarioJson.optionalInt(root, "hold_create_ms"),
             )
         } catch (error: IllegalArgumentException) {

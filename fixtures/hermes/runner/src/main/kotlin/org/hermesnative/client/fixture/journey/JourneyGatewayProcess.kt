@@ -197,6 +197,10 @@ private object JourneyGatewayRoutes {
         behavior: JourneyGatewayBehavior,
     ) {
         val body = record(exchange, behavior)
+        if (behavior.offlineGate.onSessionListRequest()) {
+            respond(exchange, HTTP_SERVICE_UNAVAILABLE, """{"error":"synthetic-offline-failure"}""")
+            return
+        }
         if (unauthorized(exchange, behavior)) {
             respond(exchange, HTTP_UNAUTHORIZED, """{"error":"unauthorized"}""")
             return
@@ -262,8 +266,13 @@ private object JourneyGatewayRoutes {
         behavior: JourneyGatewayBehavior,
     ) {
         val body = record(exchange, behavior)
-        if (unauthorized(exchange, behavior)) {
-            respond(exchange, HTTP_UNAUTHORIZED, """{"error":"unauthorized"}""")
+        val offline = behavior.offlineGate.blocking
+        if (offline || unauthorized(exchange, behavior)) {
+            if (offline) {
+                respond(exchange, HTTP_SERVICE_UNAVAILABLE, """{"error":"synthetic-offline-failure"}""")
+            } else {
+                respond(exchange, HTTP_UNAUTHORIZED, """{"error":"unauthorized"}""")
+            }
             return
         }
         val resource = exchange.requestURI.path.removePrefix("/api/sessions/")
@@ -630,6 +639,25 @@ private object JourneyGatewayJson {
     }
 }
 
+internal class OfflineAfterFirstSessionListGate(
+    private val enabled: Boolean,
+) {
+    private val sessionListRequests = AtomicInteger(0)
+
+    @Volatile
+    private var armed = false
+
+    val blocking: Boolean
+        get() = enabled && armed
+
+    fun onSessionListRequest(): Boolean {
+        if (!enabled) return false
+        val request = sessionListRequests.incrementAndGet()
+        armed = armed || request > 1
+        return request > 1
+    }
+}
+
 internal class JourneyGatewayBehavior(
     val scenario: JourneyScenario,
 ) {
@@ -639,6 +667,8 @@ internal class JourneyGatewayBehavior(
 
     @Volatile
     private var failNextSessionList = scenario.failNextSessionList
+
+    val offlineGate = OfflineAfterFirstSessionListGate(enabled = scenario.failAfterFirstSessionList)
 
     val sseOpened: ConcurrentHashMap<String, AtomicInteger> = ConcurrentHashMap()
     val sseClosed: ConcurrentHashMap<String, AtomicInteger> = ConcurrentHashMap()

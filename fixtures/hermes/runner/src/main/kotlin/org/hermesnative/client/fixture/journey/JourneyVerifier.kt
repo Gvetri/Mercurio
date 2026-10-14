@@ -151,6 +151,16 @@ internal object JourneyInvariants {
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
             "pagination-search" -> verifyPaginationSearch(telemetry)
             "stale-recoverable" -> verifyStaleRecoverable(telemetry)
+            "offline-session-list" -> {
+                requireConnectionAttempted(telemetry)
+                val paths = recordedRequestPaths(telemetry)
+                check(paths.count { it == "/api/sessions" } >= 2) {
+                    "The client did not retry the Session list while the Gateway was offline."
+                }
+                check(paths.any { it.startsWith("/api/sessions/") }) {
+                    "The client did not attempt to open a Session while the Gateway was offline."
+                }
+            }
             "markdown-links" -> verifyMarkdownLinks(telemetry)
             "accessibility-controls" -> verifyAccessibilityControls(telemetry)
             "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)

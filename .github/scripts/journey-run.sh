@@ -142,6 +142,7 @@ journeys=(
     terminal-failure
     explicit-retry
     stale-recoverable
+    offline-session-list
     markdown-links
     capabilities-additive
     capabilities-missing-required
