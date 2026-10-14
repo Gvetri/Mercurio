@@ -1,7 +1,6 @@
 package org.hermesnative.client.feature.entry.presentation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,17 +9,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
@@ -193,52 +188,6 @@ private val QUOTE_BAR_WIDTH = 3.dp
 private const val HEADING_LEVEL_3 = 3
 
 private const val HEADING_LEVEL_4 = 4
-
-@Composable
-private fun MarkdownCodeBlock(
-    block: MarkdownBlock.CodeBlock,
-    onCopy: (String) -> Unit,
-) {
-    val spacing = LocalHermesDesignTokens.current.spacing
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = MaterialTheme.shapes.small,
-                )
-                .padding(spacing.s),
-        verticalArrangement = Arrangement.spacedBy(spacing.xs),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = block.language.orEmpty(),
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(
-                onClick = { onCopy(block.code) },
-                modifier = Modifier.heightIn(min = 48.dp),
-            ) {
-                Text(text = "Copy code")
-            }
-        }
-        Text(
-            text = block.code,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace,
-            softWrap = false,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-        )
-    }
-}
 
 private fun List<MarkdownSpan>.toAnnotatedString(
     linkColor: Color,
