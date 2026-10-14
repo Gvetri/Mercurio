@@ -32,6 +32,11 @@ name: failed-offline-send
 - launchApp:
     clearState: false
 - extendedWaitUntil:
+    visible: "Verify your Hermes Gateway"
+    timeout: 30000
+- hideKeyboard
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
     visible: "Sessions"
     timeout: 30000
 - tapOn: "Offline Session"
@@ -40,7 +45,7 @@ name: failed-offline-send
     timeout: 30000
 - takeScreenshot: failed-offline-send-draft-restored
 - tapOn:
-    text: "Send"
+    text: "Try again"
     retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: "Offline send recovered"
