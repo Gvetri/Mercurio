@@ -1,5 +1,6 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -8,8 +9,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -188,6 +191,85 @@ class MarkdownContentTest {
         composeTestRule.onNodeWithText("Paragraph 1").assertExists()
         composeTestRule.onNodeWithText("Paragraph 400").assertExists()
     }
+
+    @Test
+    fun a_labeled_code_block_colors_its_tokens_by_kind() {
+        val code = "fun greet() {\n  // plan\n  val total = \"x\" + 2\n}"
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(markdown = "```kotlin\n$code\n```", actions = RecordingActions().asMessageActions())
+            }
+        }
+
+        val annotated =
+            composeTestRule.onNodeWithText(code).fetchSemanticsNode().config[SemanticsProperties.Text].single()
+        val syntax = HermesLightTokens.syntaxColors
+        assertEquals(code, annotated.text)
+        assertEquals(syntax.function, annotated.styleColorAt(code.indexOf("greet(")))
+        assertEquals(syntax.comment, annotated.styleColorAt(code.indexOf("//")))
+        assertEquals(syntax.keyword, annotated.styleColorAt(code.indexOf("val")))
+        assertEquals(syntax.string, annotated.styleColorAt(code.indexOf("\"x\"")))
+        assertEquals(syntax.number, annotated.styleColorAt(code.indexOf("2")))
+        assertEquals(5, annotated.spanStyles.map { style -> style.item.color }.distinct().size)
+    }
+
+    @Test
+    fun the_language_label_decides_which_words_are_keywords() {
+        val pythonCode = "def run(): pass"
+        val kotlinCode = "val run = 1"
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(
+                    markdown = "```python\n$pythonCode\n```\n\n```kotlin\n$kotlinCode\n```",
+                    actions = RecordingActions().asMessageActions(),
+                )
+            }
+        }
+
+        val python =
+            composeTestRule.onNodeWithText(pythonCode).fetchSemanticsNode().config[SemanticsProperties.Text].single()
+        val kotlin =
+            composeTestRule.onNodeWithText(kotlinCode).fetchSemanticsNode().config[SemanticsProperties.Text].single()
+        assertEquals(HermesLightTokens.syntaxColors.keyword, python.styleColorAt(0))
+        assertEquals(HermesLightTokens.syntaxColors.keyword, kotlin.styleColorAt(0))
+        assertNull("run is not a Kotlin keyword in this grammar", kotlin.styleColorAt(kotlinCode.indexOf("run")))
+    }
+
+    @Test
+    fun an_unlabeled_code_block_renders_as_plain_text_without_token_styles() {
+        val code = "val x = 1"
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(markdown = "```\n$code\n```", actions = RecordingActions().asMessageActions())
+            }
+        }
+
+        val annotated =
+            composeTestRule.onNodeWithText(code).fetchSemanticsNode().config[SemanticsProperties.Text].single()
+        assertEquals(code, annotated.text)
+        assertTrue(annotated.spanStyles.isEmpty())
+    }
+
+    @Test
+    fun an_unsupported_language_label_renders_as_plain_text_without_token_styles() {
+        val code = "val x = 1"
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(
+                    markdown = "```brainfuck\n$code\n```",
+                    actions = RecordingActions().asMessageActions(),
+                )
+            }
+        }
+
+        val annotated =
+            composeTestRule.onNodeWithText(code).fetchSemanticsNode().config[SemanticsProperties.Text].single()
+        assertEquals(code, annotated.text)
+        assertTrue(annotated.spanStyles.isEmpty())
+    }
+
+    private fun AnnotatedString.styleColorAt(offset: Int): Color? =
+        spanStyles.find { style -> style.start <= offset && offset < style.end }?.item?.color
 
     @Test
     fun a_heading_renders_styled_text_without_its_marker() {
