@@ -104,6 +104,7 @@ data class OpenSessionUiState(
     val isSending: Boolean = false,
     val sendErrorCategory: MessageSendErrorCategory? = null,
     val hasUnresolvedSubmission: Boolean = false,
+    val isDiscardUnresolvedSendConfirmationOpen: Boolean = false,
     val latestRunState: RunPresentationState? = null,
     val latestRunRetryAvailable: Boolean = false,
     val activeResponse: SessionMessageUiState? = null,

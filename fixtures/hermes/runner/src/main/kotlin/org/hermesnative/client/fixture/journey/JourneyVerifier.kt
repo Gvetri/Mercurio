@@ -151,6 +151,7 @@ internal object JourneyInvariants {
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
             "pagination-search" -> verifyPaginationSearch(telemetry)
             "stale-recoverable" -> verifyStaleRecoverable(telemetry)
+            "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
             "markdown-links" -> verifyMarkdownLinks(telemetry)
             "accessibility-controls" -> verifyAccessibilityControls(telemetry)
             "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)
@@ -462,6 +463,16 @@ private object JourneyRunInvariants {
         }
         check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile Run status." }
     }
+
+    internal fun verifyFailedOfflineSend(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        check(runCreatesFor(telemetry, OFFLINE_SEND_SESSION_ID) == 2) {
+            "The client did not submit exactly two Run creations (one refused while offline plus one recovery retry)."
+        }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the recovered Run." }
+    }
+
+    private const val OFFLINE_SEND_SESSION_ID = "session-offline"
 }
 
 private const val MIN_ARGUMENT_COUNT = 2
