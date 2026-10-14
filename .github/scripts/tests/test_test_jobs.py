@@ -3,6 +3,7 @@ import os
 import json
 import signal
 from pathlib import Path
+import shutil
 import subprocess
 import textwrap
 import tempfile
@@ -817,6 +818,169 @@ class IssueAdapterContractTest(unittest.TestCase):
                 reopened = invoke(["--method", "PATCH", f"{endpoint}/{number}"], {"state": "open"})
                 self.assertEqual({**updated, "state": "open"}, reopened)
                 self.assertEqual([[reopened]], invoke(["--paginate", "--slurp", endpoint + "?state=all&per_page=100"]))
+
+
+class NightlyFailureReporterGuardTest(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        fake_gh = self.root / "gh"
+        shutil.copyfile(ROOT / ".github/scripts/tests/fixtures/fake-gh-nightly-reporter.py", fake_gh)
+        fake_gh.chmod(0o755)
+
+    def run_reporter(self, attempt="1", overrides=None):
+        environment = {**os.environ, "PATH": str(self.root) + os.pathsep + os.environ["PATH"],
+                       "GH_TOKEN": "fixture-not-a-credential", "GITHUB_REPOSITORY": "example/client",
+                       "GITHUB_SERVER_URL": "https://github.com", "GITHUB_RUN_ID": "123",
+                       "GITHUB_RUN_ATTEMPT": attempt, "GITHUB_SHA": "a" * 40,
+                       "TEST_JOB_RESULTS": json.dumps({"unit_tests": "failure", "compose_test": "success",
+                                                       "api24_instrumentation": "success",
+                                                       "maestro_journeys": "success"})}
+        if overrides:
+            environment.update(overrides)
+        return subprocess.run(["bash", str(ROOT / ".github/scripts/create-nightly-failure-issue.sh")],
+                              cwd=self.root, env=environment, capture_output=True, text=True, timeout=30)
+
+    def assert_single_line_refusal(self, result):
+        self.assertNotEqual(0, result.returncode, result.stdout)
+        self.assertEqual(1, len(result.stderr.splitlines()), result.stderr)
+        self.assertLess(len(result.stderr), 180)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def clear_reporter_state(self, *, keep_issue=False):
+        for name in (("writes", "submitted-payload.json") if keep_issue
+                     else ("issue.json", "writes", "submitted-payload.json")):
+            (self.root / name).unlink(missing_ok=True)
+
+    def test_nightly_reporter_refuses_malformed_artifact_pages_with_one_stderr_line(self):
+        for value in ("not json", "", "null", '["page"]', "[{}]", '[{"artifacts": "x"}]',
+                      '[{"artifacts": [[{"nested": 1}]]}]', '[{"artifacts": [null]}]',
+                      '[{"artifacts": [{"name": ["jvm-test-reports-123-1"], "expired": false, "id": 99}]}]',
+                      '[{"artifacts": [{"name": 7, "expired": false, "id": 99}]}]'):
+            with self.subTest(value=value):
+                self.clear_reporter_state()
+                result = self.run_reporter(overrides={"FIXTURE_ARTIFACTS": value})
+                self.assert_single_line_refusal(result)
+                self.assertFalse((self.root / "writes").exists())
+                self.assertFalse((self.root / "issue.json").exists())
+                self.assertFalse((self.root / "submitted-payload.json").exists())
+
+    def test_nightly_reporter_refuses_malformed_issue_pages_with_one_stderr_line(self):
+        for value in ("not json", "", '{"a": 1}', "[null]", '[{"a": 1}]', '[["entry"]]',
+                      '[[[7]]]', '[[{"pull_request": null, "body": 7}]]',
+                      '[[{"pull_request": null, "body": {"nightly": "123"}}]]',
+                      '[[{"pull_request": null, "body": ["<!-- nightly-run:123 -->"]}]]'):
+            with self.subTest(value=value):
+                self.clear_reporter_state()
+                result = self.run_reporter(overrides={"FIXTURE_ISSUES": value})
+                self.assert_single_line_refusal(result)
+                self.assertFalse((self.root / "writes").exists())
+                self.assertFalse((self.root / "issue.json").exists())
+
+    def test_nightly_reporter_refuses_malformed_github_server_urls_with_one_stderr_line(self):
+        for value in ("https://[::1", "https://github.com]x[", "https://[::1]x"):
+            with self.subTest(value=value):
+                self.clear_reporter_state()
+                result = self.run_reporter(overrides={"GITHUB_SERVER_URL": value})
+                self.assert_single_line_refusal(result)
+                self.assertFalse((self.root / "writes").exists())
+                self.assertFalse((self.root / "issue.json").exists())
+
+    def test_nightly_reporter_publishes_byte_identical_payloads_for_well_formed_input(self):
+        fixtures = ROOT / ".github/scripts/tests/fixtures"
+        for attempt, expected in (("1", (fixtures / "nightly-test-failure-payload.json").read_bytes()),
+                                 ("2", (fixtures / "nightly-test-failure-payload-update.json").read_bytes())):
+            with self.subTest(attempt=attempt):
+                result = self.run_reporter(attempt=attempt)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("Verified nightly failure issue #60: https://github.com/example/client/issues/60\n",
+                                 result.stdout)
+                self.assertEqual(expected, (self.root / "submitted-payload.json").read_bytes())
+        self.assertEqual(["POST", "PATCH"], (self.root / "writes").read_text().splitlines())
+
+    def test_nightly_reporter_reports_may_have_been_filed_for_post_write_failures(self):
+        for overrides, phrase, identity in (
+            ({"FIXTURE_WRITE_RESPONSE": "not json"}, "response is unreadable", "run 123"),
+            ({"FIXTURE_WRITE_RESPONSE": "{}"}, "response is unreadable", "run 123"),
+            ({"FIXTURE_WRITE_RESPONSE": "null"}, "response is unreadable", "run 123"),
+            ({"FIXTURE_WRITE_RESPONSE": "[60]"}, "response is unreadable", "run 123"),
+            ({"FIXTURE_WRITE_RESPONSE": '{"number": "60"}'}, "no numeric identifier", "run 123"),
+            ({"FIXTURE_WRITE_RESPONSE": '{"number": 60.5}'}, "no numeric identifier", "run 123"),
+            ({"FIXTURE_READ_FAIL": "1"}, "read-back failed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": "not json"}, "read-back is unreadable", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": "{"}, "read-back is unreadable", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": "null"}, "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": '[{"number": 60}]'}, "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": json.dumps({"state": "open", "html_url": "u", "labels": []})},
+             "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": json.dumps({"number": "60", "state": "open", "html_url": "u", "labels": []})},
+             "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": json.dumps({"number": 60, "state": "open", "labels": []})},
+             "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": json.dumps({"number": 60, "state": "open", "html_url": 7, "labels": []})},
+             "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": json.dumps({"number": 60, "state": "open", "html_url": "u",
+                                                   "labels": ["ready-for-agent"]})},
+             "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": json.dumps({"number": 60, "state": "open", "html_url": "u",
+                                                   "labels": None})},
+             "read-back is malformed", "issue 60"),
+            ({"FIXTURE_READ_RESPONSE": json.dumps({"number": 60, "state": "open", "html_url": "u"})},
+             "read-back is malformed", "issue 60"),
+        ):
+            with self.subTest(overrides=overrides):
+                self.clear_reporter_state()
+                result = self.run_reporter(overrides=overrides)
+                self.assert_single_line_refusal(result)
+                self.assertIn("may have been filed", result.stderr)
+                self.assertIn("run 123", result.stderr)
+                self.assertIn(phrase, result.stderr)
+                self.assertIn(identity, result.stderr)
+                self.assertEqual(["POST"], (self.root / "writes").read_text().splitlines())
+        self.clear_reporter_state()
+        result = self.run_reporter(overrides={"FIXTURE_WRITE_FAIL": "1"})
+        self.assert_single_line_refusal(result)
+        self.assertIn("creation failed; an issue may have been filed for run 123", result.stderr)
+        self.assertFalse((self.root / "writes").exists())
+        self.assertFalse((self.root / "issue.json").exists())
+
+    def test_nightly_reporter_mismatch_refusals_say_the_issue_may_have_been_filed(self):
+        self.assertEqual(0, self.run_reporter().returncode)
+        issue = json.loads((self.root / "issue.json").read_text())
+        for tamper, phrase in (
+            ({"title": "Nightly test failure: unit-tests (run 999)"}, "does not match"),
+            ({"body": issue["body"] + "tampered"}, "does not match"),
+            ({"state": "closed"}, "does not match"),
+            ({"labels": [{"name": "other"}]}, "missing the ready-for-agent label"),
+            ({"labels": [{"name": {}}]}, "missing the ready-for-agent label"),
+        ):
+            with self.subTest(phrase=phrase, tamper=sorted(tamper)):
+                self.clear_reporter_state(keep_issue=True)
+                result = self.run_reporter(attempt="1",
+                                           overrides={"FIXTURE_READ_RESPONSE": json.dumps({**issue, **tamper})})
+                self.assert_single_line_refusal(result)
+                self.assertIn(phrase, result.stderr)
+                self.assertIn("may have been filed", result.stderr)
+                self.assertIn("run 123", result.stderr)
+                self.assertIn("issue 60", result.stderr)
+                self.assertEqual(["PATCH"], (self.root / "writes").read_text().splitlines())
+
+    def test_nightly_reporter_reports_the_issue_number_when_an_update_or_read_back_fails(self):
+        self.assertEqual(0, self.run_reporter().returncode)
+        self.clear_reporter_state(keep_issue=True)
+        result = self.run_reporter(attempt="2", overrides={"FIXTURE_WRITE_FAIL": "1"})
+        self.assert_single_line_refusal(result)
+        self.assertIn("update failed; an issue may have been filed", result.stderr)
+        self.assertIn("run 123", result.stderr)
+        self.assertIn("issue 60", result.stderr)
+        self.clear_reporter_state(keep_issue=True)
+        result = self.run_reporter(attempt="2", overrides={"FIXTURE_READ_FAIL": "1"})
+        self.assert_single_line_refusal(result)
+        self.assertIn("read-back failed; an issue may have been filed", result.stderr)
+        self.assertIn("run 123", result.stderr)
+        self.assertIn("issue 60", result.stderr)
+        self.assertEqual(["PATCH"], (self.root / "writes").read_text().splitlines())
 
 
 if __name__ == "__main__":
