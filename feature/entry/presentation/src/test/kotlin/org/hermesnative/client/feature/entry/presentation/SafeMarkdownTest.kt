@@ -250,11 +250,76 @@ class SafeMarkdownTest {
 
     @Test(timeout = 1_500)
     fun many_unclosed_link_destinations_do_not_make_parsing_quadratic() {
-        val content = "[]((".repeat(38_000)
+        val content = "[](((".repeat(38_000)
 
         val blocks = parseSafeMarkdown(content)
 
         assertEquals(content, blocks.plainText())
+    }
+
+    @Test
+    fun atx_headings_parse_as_heading_blocks_without_their_marker() {
+        val blocks = parseSafeMarkdown("# Alpha Heading\n\n## Beta **Heading**")
+
+        assertEquals(listOf("Heading", "Heading"), blocks.map { it::class.simpleName })
+        assertEquals("Alpha Heading\nBeta Heading", blocks.plainText())
+        assertEquals(listOf(1, 2), blocks.filterIsInstance<MarkdownBlock.Heading>().map { it.level })
+        assertEquals(listOf("Heading"), blocks.spans().filter { it.bold }.map { it.text })
+    }
+
+    @Test
+    fun a_heading_needs_a_space_after_the_hashes() {
+        val blocks = parseSafeMarkdown("#tag stays text")
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals("#tag stays text", blocks.plainText())
+    }
+
+    @Test
+    fun a_run_of_seven_or_more_hashes_is_not_a_heading() {
+        val blocks = parseSafeMarkdown("####### not a heading")
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals("####### not a heading", blocks.plainText())
+    }
+
+    @Test
+    fun a_blockquote_gathers_its_lines_and_drops_the_quote_markers() {
+        val blocks = parseSafeMarkdown("> quoted wisdom\n> continues **here**")
+
+        assertEquals(listOf("Blockquote"), blocks.map { it::class.simpleName })
+        assertEquals("quoted wisdom continues here", blocks.plainText())
+        assertEquals(listOf("here"), blocks.spans().filter { it.bold }.map { it.text })
+    }
+
+    @Test
+    fun a_thematic_break_renders_as_a_rule_block() {
+        val dashes = parseSafeMarkdown("---")
+        val asterisks = parseSafeMarkdown("***")
+        val spaced = parseSafeMarkdown("- - -")
+
+        assertEquals(listOf("HorizontalRule"), dashes.map { it::class.simpleName })
+        assertEquals(listOf("HorizontalRule"), asterisks.map { it::class.simpleName })
+        assertEquals(listOf("HorizontalRule"), spaced.map { it::class.simpleName })
+    }
+
+    @Test
+    fun a_line_that_is_not_only_rule_characters_stays_a_paragraph() {
+        val blocks = parseSafeMarkdown("-- not a rule --")
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals("-- not a rule --", blocks.plainText())
+    }
+
+    @Test
+    fun block_elements_keep_their_authored_order_around_paragraphs() {
+        val blocks = parseSafeMarkdown("# Title\n\nIntro text\n\n> a quote\n\n---\n\n- an item")
+
+        assertEquals(
+            listOf("Heading", "Paragraph", "Blockquote", "HorizontalRule", "BulletList"),
+            blocks.map { it::class.simpleName },
+        )
+        assertEquals("Title\nIntro text\na quote\n\nan item", blocks.plainText())
     }
 }
 
@@ -264,9 +329,12 @@ private fun List<MarkdownBlock>.spans(): List<MarkdownSpan> =
     flatMap { block ->
         when (block) {
             is MarkdownBlock.Paragraph -> block.spans
+            is MarkdownBlock.Heading -> block.spans
+            is MarkdownBlock.Blockquote -> block.spans
             is MarkdownBlock.BulletList -> block.items.flatten()
             is MarkdownBlock.NumberedList -> block.items.flatMap { it.spans }
             is MarkdownBlock.CodeBlock -> emptyList()
+            is MarkdownBlock.HorizontalRule -> emptyList()
         }
     }
 
@@ -274,8 +342,11 @@ private fun List<MarkdownBlock>.plainText(): String =
     joinToString(separator = "\n") { block ->
         when (block) {
             is MarkdownBlock.Paragraph -> block.spans.joinToString(separator = "") { it.text }
+            is MarkdownBlock.Heading -> block.spans.joinToString(separator = "") { it.text }
+            is MarkdownBlock.Blockquote -> block.spans.joinToString(separator = "") { it.text }
             is MarkdownBlock.BulletList -> block.items.joinToString(separator = "\n") { item -> item.text() }
             is MarkdownBlock.NumberedList -> block.items.joinToString(separator = "\n") { item -> item.spans.text() }
             is MarkdownBlock.CodeBlock -> block.code
+            is MarkdownBlock.HorizontalRule -> ""
         }
     }
