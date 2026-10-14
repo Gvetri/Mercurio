@@ -12,11 +12,12 @@ internal fun EntryStateHolder.clearRecoveryState() {
     recoveryHandledEntries.clear()
 }
 
-internal fun EntryStateHolder.clearSessionDraftsAndRuns() {
+internal fun EntryStateHolder.clearSessionDraftsAndRuns(endpoint: String) {
     sessionDrafts.clear()
     sessionDraftRevisions.clear()
     sessionSendErrors.clear()
     pendingRunDrafts.clear()
+    sessionDraftStore.clearEndpoint(endpoint)
     sessionRuns.clear()
     submittedRunInputs.clear()
     authoritativeSessionHistoryGenerations.clear()

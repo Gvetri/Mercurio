@@ -273,6 +273,35 @@ class JourneyGatewayProcessTest {
     }
 
     @Test
+    fun live_framing_stream_emits_the_real_gateway_comment_and_id_field_lines() {
+        val process = startGateway("live-streaming", tls = false)
+        try {
+            val endpoint = process.endpoint
+            post(endpoint, "/v1/runs", """{"input":"Run this","session_id":"session-alpha"}""")
+            val connection =
+                (endpoint.resolve("/v1/runs/live-run/events").toURL().openConnection() as HttpURLConnection)
+            connection.connectTimeout = 2_000
+            connection.readTimeout = 5_000
+            connection.requestMethod = "GET"
+            val lines = connection.inputStream.bufferedReader().lineSequence().toList()
+            assertEquals(": open", lines.first())
+            assertEquals(": stream closed", lines.last { it.isNotEmpty() })
+            val dataIndexes =
+                lines.mapIndexedNotNull { index, line -> if (line.startsWith("data:")) index else null }
+            assertEquals(3, dataIndexes.size)
+            dataIndexes.forEach { dataIndex ->
+                val idLine = lines[dataIndex - 1]
+                assertTrue("The data line at $dataIndex lacks a preceding id field.", idLine.startsWith("id:"))
+            }
+            assertEquals(listOf("id: 0", "id: 1", "id: 2"), dataIndexes.map { lines[it - 1] })
+            assertTrue(lines.any { it.contains("\"event\":\"message.delta\"") })
+            assertTrue(lines.any { it.contains("\"event\":\"run.completed\"") })
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
     fun bearer_credential_is_enforced_for_gateway_routes() {
         val process = startGateway("connection", tls = false)
         try {
@@ -306,6 +335,27 @@ class JourneyGatewayProcessTest {
             val endpoint = process.endpoint
             assertEquals(503, get(endpoint, "/api/sessions"))
             assertEquals(200, get(endpoint, "/api/sessions"))
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun offline_gate_fails_every_session_request_after_the_first_list() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"offline-gate","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions","session"],"fail_after_first_session_list":true,""" +
+                    """"sessions":[{"id":"session-alpha","title":"Alpha Session","preview":null,"pinned":false}]}""",
+            )
+        val scenario = JourneyScenarioParser.parse(file, revision)
+        val process = JourneyGatewayProcess.start(scenario.copy(port = freePort(), tls = false))
+        try {
+            val endpoint = process.endpoint
+            assertEquals(200, get(endpoint, "/api/sessions"))
+            assertEquals(503, get(endpoint, "/api/sessions"))
+            assertEquals(503, get(endpoint, "/api/sessions/session-alpha"))
         } finally {
             process.stop()
         }

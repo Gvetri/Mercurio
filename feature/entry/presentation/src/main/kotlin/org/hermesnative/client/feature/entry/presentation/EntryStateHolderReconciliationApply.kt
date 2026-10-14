@@ -172,6 +172,7 @@ internal fun EntryStateHolder.clearConfirmedSubmissionState(
         val uncertainDraft = uncertainSendDrafts.remove(sessionId)
         if (uncertainDraft != null && sessionDraftRevisions[sessionId] == uncertainDraft.revision) {
             sessionDrafts.remove(sessionId)
+            sessionDraftStore.remove(sessionDraftKey(sessionId))
         }
         ambiguousSubmissionSessions.remove(sessionId)
     }

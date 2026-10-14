@@ -144,17 +144,27 @@ internal object JourneyInvariants {
         telemetry: JsonObject,
     ) {
         when (scenarioName) {
-            "connection" -> verifyConnection(telemetry)
-            "session-list-first" -> verifySessionListFirst(telemetry)
+            "connection" -> requireConnectionAttempted(telemetry)
+            "session-list-first" -> requireConnectionAttempted(telemetry)
             "empty-sessions" -> JourneySessionCreationInvariants.verifyEmptySessions(telemetry)
             "pending-creation" -> JourneySessionCreationInvariants.verifyPendingCreation(telemetry)
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
-            "pagination-search" -> verifyPaginationSearch(telemetry)
-            "stale-recoverable" -> verifyStaleRecoverable(telemetry)
-            "markdown-links" -> verifyMarkdownLinks(telemetry)
-            "accessibility-controls" -> verifyAccessibilityControls(telemetry)
+            "pagination-search" -> requireConnectionAttempted(telemetry)
+            "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
+            "offline-session-list" -> {
+                requireConnectionAttempted(telemetry)
+                val paths = recordedRequestPaths(telemetry)
+                check(paths.count { it == "/api/sessions" } >= 2) {
+                    "The client did not retry the Session list while the Gateway was offline."
+                }
+                check(paths.any { it.startsWith("/api/sessions/") }) {
+                    "The client did not attempt to open a Session while the Gateway was offline."
+                }
+            }
+            "markdown-links" -> requireConnectionAttempted(telemetry)
+            "accessibility-controls" -> requireConnectionAttempted(telemetry)
             "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)
-            "capabilities-missing-required" -> verifyCapabilitiesBoundary(telemetry)
+            "capabilities-missing-required" -> requireConnectionAttempted(telemetry)
             else -> verifyAdditionalScenario(scenarioName, telemetry)
         }
     }
@@ -166,36 +176,16 @@ internal object JourneyInvariants {
         when (scenarioName) {
             "active-run-isolation" -> JourneyRunInvariants.verifyActiveRunIsolation(telemetry)
             "streaming" -> JourneyRunInvariants.verifyStreaming(telemetry)
+            "live-streaming" -> JourneyRunInvariants.verifyLiveStreaming(telemetry)
             "interrupted-sse-refetch" -> JourneyRunInvariants.verifyInterruptedSseRefetch(telemetry)
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
+            "markdown-blocks" -> requireConnectionAttempted(telemetry)
+            "stale-recoverable" -> requireConnectionAttempted(telemetry)
+            "diagnostics-recording" -> JourneyDiagnosticsInvariants.verifyDiagnosticsRecording(telemetry)
             else -> error("No journey invariants declared for scenario '$scenarioName'.")
         }
-    }
-
-    private fun verifyConnection(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifySessionListFirst(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyPaginationSearch(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyStaleRecoverable(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyMarkdownLinks(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyCapabilitiesBoundary(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
     }
 
     private fun verifyCapabilitiesAdditive(telemetry: JsonObject) {
@@ -205,13 +195,10 @@ internal object JourneyInvariants {
         }
     }
 
-    private fun verifyAccessibilityControls(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
     const val ACTIVE_RUN_ID = "active-run"
     const val ACTIVE_SESSION_ID = "session-alpha"
     const val STREAMING_RUN_ID = "streaming-run"
+    const val LIVE_RUN_ID = "live-run"
     const val INTERRUPTED_RUN_ID = "interrupted-run"
     const val RETRY_SESSION_ID = "session-retry"
 }
@@ -423,6 +410,15 @@ private object JourneyRunInvariants {
         }
     }
 
+    internal fun verifyLiveStreaming(telemetry: JsonObject) {
+        val sse = sseFor(telemetry, JourneyInvariants.LIVE_RUN_ID)
+        check(sse.opened == 1) { "Live-framed Run was observed ${sse.opened} times; expected exactly 1." }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the live-framed Run." }
+        check(runCreatesFor(telemetry, JourneyInvariants.ACTIVE_SESSION_ID) == 1) {
+            "The client submitted the live-framed Run more than once."
+        }
+    }
+
     internal fun verifyInterruptedSseRefetch(telemetry: JsonObject) {
         val sse = sseFor(telemetry, JourneyInvariants.INTERRUPTED_RUN_ID)
         check(sse.opened == 1) { "Interrupted Run was observed ${sse.opened} times; expected exactly 1." }
@@ -450,6 +446,29 @@ private object JourneyRunInvariants {
             "The client did not submit exactly two Run creations (initial run plus one explicit retry)."
         }
         check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile Run status." }
+    }
+
+    internal fun verifyFailedOfflineSend(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        check(runCreatesFor(telemetry, OFFLINE_SEND_SESSION_ID) == 2) {
+            "The client did not submit exactly two Run creations (one refused while offline plus one recovery retry)."
+        }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the recovered Run." }
+    }
+
+    private const val OFFLINE_SEND_SESSION_ID = "session-offline"
+}
+
+private object JourneyDiagnosticsInvariants {
+    internal fun verifyDiagnosticsRecording(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        val loadedSessionList =
+            telemetry["requests"]?.jsonArray.orEmpty().any { request ->
+                val fields = request.jsonObject
+                fields["method"]?.jsonPrimitive?.content == "GET" &&
+                    fields["path"]?.jsonPrimitive?.content == "/api/sessions"
+            }
+        check(loadedSessionList) { "The diagnostics journey never loaded the Session list." }
     }
 }
 

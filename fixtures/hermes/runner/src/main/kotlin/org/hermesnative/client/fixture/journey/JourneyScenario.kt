@@ -56,6 +56,7 @@ data class JourneyScenario(
     val sessions: List<JourneySession> = emptyList(),
     val runs: List<JourneyRunScript> = emptyList(),
     val failNextSessionList: Boolean = false,
+    val failAfterFirstSessionList: Boolean = false,
     val holdCreateMs: Int? = null,
 ) {
     init {
@@ -93,6 +94,8 @@ data class JourneyRunScript(
     val observation: List<JourneyRunEvent> = emptyList(),
     val interruptAfterEvents: Int? = null,
     val holdOpen: Boolean = false,
+    val refuseCreate: Boolean = false,
+    val liveFraming: Boolean = false,
     val finalStatus: String? = null,
     val terminalHistory: List<JourneyMessage> = emptyList(),
 ) {
@@ -102,6 +105,12 @@ data class JourneyRunScript(
         }
         require(!holdOpen || interruptAfterEvents == null) {
             "A held-open observation cannot interrupt."
+        }
+        require(
+            !refuseCreate ||
+                (observation.isEmpty() && finalStatus == null && terminalHistory.isEmpty()),
+        ) {
+            "A refused Run creation cannot script observation or terminal behavior."
         }
     }
 }
@@ -143,6 +152,7 @@ private val allowedTopLevelKeys =
         "sessions",
         "runs",
         "fail_next_session_list",
+        "fail_after_first_session_list",
         "hold_create_ms",
     )
 private val allowedSessionKeys = setOf("id", "title", "preview", "pinned", "history")
@@ -155,6 +165,8 @@ private val allowedRunKeys =
         "observation",
         "interrupt_after_events",
         "hold_open",
+        "refuse_create",
+        "live_framing",
         "final_status",
         "terminal_history",
     )
@@ -232,6 +244,8 @@ object JourneyScenarioParser {
                 runs = JourneyScenarioJson.parseRuns(root),
                 failNextSessionList =
                     JourneyScenarioJson.optionalBoolean(root, "fail_next_session_list", default = false),
+                failAfterFirstSessionList =
+                    JourneyScenarioJson.optionalBoolean(root, "fail_after_first_session_list", default = false),
                 holdCreateMs = JourneyScenarioJson.optionalInt(root, "hold_create_ms"),
             )
         } catch (error: IllegalArgumentException) {
@@ -300,6 +314,8 @@ private object JourneyScenarioJson {
                 observation = parseObservation(run, index),
                 interruptAfterEvents = optionalInt(run, "interrupt_after_events"),
                 holdOpen = optionalBoolean(run, "hold_open", default = false),
+                refuseCreate = optionalBoolean(run, "refuse_create", default = false),
+                liveFraming = optionalBoolean(run, "live_framing", default = false),
                 finalStatus = optionalString(run, "final_status"),
                 terminalHistory = parseMessages(run, "terminal_history", "run[$index].terminal_history"),
             )
