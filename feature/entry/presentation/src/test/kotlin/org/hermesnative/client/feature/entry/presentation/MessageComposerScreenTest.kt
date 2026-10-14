@@ -1,10 +1,13 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -38,11 +41,30 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Latest Run: run-1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed()
         composeTestRule.onNodeWithText("Run status: Completed").assertIsDisplayed()
         composeTestRule.onNodeWithText("Send").assertHasClickAction().assertIsEnabled().performClick()
 
         assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
+    }
+
+    @Test
+    fun the_latest_run_identity_stays_behind_an_explicit_disclosure() {
+        val run = Run(RunId("run-1"), SessionId("session-1"), "succeeded")
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedState(latestRun = run),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Run status: Completed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("run-1", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Show run ID").performClick()
+        composeTestRule.onNodeWithText("Run ID: run-1").assertIsDisplayed()
     }
 
     @Test
@@ -173,6 +195,72 @@ class MessageComposerScreenTest {
             listOf(EntryUiEvent.DiscardUnresolvedSendClicked),
             events,
         )
+    }
+
+    @Test
+    fun send_control_keeps_a_button_role_and_stays_enabled_for_a_valid_draft() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedState(composerText = "Run this"),
+                    onEvent = {},
+                )
+            }
+        }
+
+        val sendNode = composeTestRule.onNodeWithTag("conversation-send").fetchSemanticsNode()
+        assertEquals(Role.Button, sendNode.config[SemanticsProperties.Role])
+        composeTestRule.onNodeWithTag("conversation-send").assertIsEnabled()
+    }
+
+    @Test
+    fun send_control_is_disabled_when_the_draft_is_blank() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedState(composerText = ""),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("conversation-send").assertIsNotEnabled()
+    }
+
+    @Test
+    fun send_control_distinguishes_itself_from_the_keyboard_ime_send_action() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedState(composerText = "Run this"),
+                    onEvent = {},
+                )
+            }
+        }
+
+        val sendNode = composeTestRule.onNodeWithTag("conversation-send").fetchSemanticsNode()
+        assertEquals(listOf("Send message"), sendNode.config[SemanticsProperties.ContentDescription])
+    }
+
+    @Test
+    fun composer_controls_expose_stable_resource_ids_for_assistive_tech() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        connectedState(
+                            composerText = FAILED_SEND_COMPOSER_DRAFT,
+                            sendErrorCategory = MessageSendErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ).withUnresolvedSubmission(),
+                    onEvent = {},
+                )
+            }
+        }
+
+        val messageInput = composeTestRule.onNodeWithTag("conversation-message-input").fetchSemanticsNode()
+        assertEquals("conversation-message-input", messageInput.config[SemanticsProperties.TestTag])
+        val discard = composeTestRule.onNodeWithTag("conversation-discard-unsent").fetchSemanticsNode()
+        assertEquals("conversation-discard-unsent", discard.config[SemanticsProperties.TestTag])
     }
 
     private fun connectedState(
