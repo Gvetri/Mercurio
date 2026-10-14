@@ -341,6 +341,27 @@ class JourneyGatewayProcessTest {
     }
 
     @Test
+    fun offline_gate_fails_every_session_request_after_the_first_list() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"offline-gate","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions","session"],"fail_after_first_session_list":true,""" +
+                    """"sessions":[{"id":"session-alpha","title":"Alpha Session","preview":null,"pinned":false}]}""",
+            )
+        val scenario = JourneyScenarioParser.parse(file, revision)
+        val process = JourneyGatewayProcess.start(scenario.copy(port = freePort(), tls = false))
+        try {
+            val endpoint = process.endpoint
+            assertEquals(200, get(endpoint, "/api/sessions"))
+            assertEquals(503, get(endpoint, "/api/sessions"))
+            assertEquals(503, get(endpoint, "/api/sessions/session-alpha"))
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
     fun held_create_response_is_recorded_before_the_bounded_release() {
         val revision = pinnedDescriptor.provenance.value
         val file =

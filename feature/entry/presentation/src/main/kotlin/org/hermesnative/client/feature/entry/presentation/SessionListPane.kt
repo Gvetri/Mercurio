@@ -83,6 +83,7 @@ internal fun SessionListPane(
                     onEvent = onEvent,
                     onSearchFocusChanged = { searchFocused = it },
                 )
+                SessionListStatusTexts(state = state)
             }
             val listState = rememberLazyListState()
             LaunchedEffect(state.searchQuery) {
@@ -196,7 +197,6 @@ private fun LazyListScope.sessionListItems(
             SessionPaginationFooter(state = state, onEvent = onEvent)
         }
     }
-    item { SessionListStatusTexts(state = state) }
 }
 
 @Composable
