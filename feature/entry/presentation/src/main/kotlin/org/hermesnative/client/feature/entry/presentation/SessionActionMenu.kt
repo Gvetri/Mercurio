@@ -15,11 +15,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun SessionActionMenu(
     session: SessionItemUiState,
@@ -32,7 +36,8 @@ internal fun SessionActionMenu(
             onClick = { expanded = true },
             enabled = enabled,
             modifier =
-                Modifier.size(48.dp).semantics {
+                Modifier.size(48.dp).testTag("sessions-row-actions").semantics {
+                    testTagsAsResourceId = true
                     contentDescription = "Session actions for ${session.title}"
                 },
         ) {
