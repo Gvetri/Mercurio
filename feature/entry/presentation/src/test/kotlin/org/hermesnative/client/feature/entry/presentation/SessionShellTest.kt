@@ -468,7 +468,7 @@ class SessionShellTest {
     fun short_landscape_window_reaches_the_list_controls_without_rows() {
         setShellContent(sessionList = SessionListUiState())
 
-        composeTestRule.onNodeWithTag("session-list").performScrollToIndex(2)
+        composeTestRule.onNodeWithTag("session-list").performScrollToIndex(1)
 
         composeTestRule.onNodeWithText("Refresh").performScrollTo().assertIsDisplayed()
     }
