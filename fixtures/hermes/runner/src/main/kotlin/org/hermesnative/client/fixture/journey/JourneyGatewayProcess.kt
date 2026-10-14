@@ -33,6 +33,8 @@ private const val DEFAULT_PAGE_LIMIT = 50
 internal const val DEFAULT_KEYSTORE_PASSWORD = "journey-fixture"
 private const val HOLD_OPEN_KEEPALIVE_MILLIS = 500L
 private val keepAliveComment: ByteArray = ": keep-alive\n\n".toByteArray(Charsets.UTF_8)
+private val streamOpenComment: ByteArray = ": open\n\n".toByteArray(Charsets.UTF_8)
+private val streamClosedComment: ByteArray = ": stream closed\n\n".toByteArray(Charsets.UTF_8)
 
 /**
  * The controlled fake Gateway for deterministic emulator journeys.
@@ -195,6 +197,10 @@ private object JourneyGatewayRoutes {
         behavior: JourneyGatewayBehavior,
     ) {
         val body = record(exchange, behavior)
+        if (behavior.offlineGate.onSessionListRequest()) {
+            respond(exchange, HTTP_SERVICE_UNAVAILABLE, """{"error":"synthetic-offline-failure"}""")
+            return
+        }
         if (unauthorized(exchange, behavior)) {
             respond(exchange, HTTP_UNAUTHORIZED, """{"error":"unauthorized"}""")
             return
@@ -260,8 +266,13 @@ private object JourneyGatewayRoutes {
         behavior: JourneyGatewayBehavior,
     ) {
         val body = record(exchange, behavior)
-        if (unauthorized(exchange, behavior)) {
-            respond(exchange, HTTP_UNAUTHORIZED, """{"error":"unauthorized"}""")
+        val offline = behavior.offlineGate.blocking
+        if (offline || unauthorized(exchange, behavior)) {
+            if (offline) {
+                respond(exchange, HTTP_SERVICE_UNAVAILABLE, """{"error":"synthetic-offline-failure"}""")
+            } else {
+                respond(exchange, HTTP_UNAUTHORIZED, """{"error":"unauthorized"}""")
+            }
             return
         }
         val resource = exchange.requestURI.path.removePrefix("/api/sessions/")
@@ -389,6 +400,8 @@ private object JourneyGatewayRoutes {
         val script = behavior.nextRunScript(sessionId)
         if (script == null) {
             respond(exchange, HTTP_NOT_FOUND, """{"error":"no-synthetic-run"}""")
+        } else if (script.refuseCreate) {
+            respond(exchange, HTTP_SERVICE_UNAVAILABLE, """{"error":"run-create-refused"}""")
         } else {
             respond(
                 exchange,
@@ -469,11 +482,15 @@ private object JourneyGatewaySse {
     ) {
         val interruptAfter = script.interruptAfterEvents
         val events = script.observation
+        if (script.liveFraming) {
+            exchange.responseBody.write(streamOpenComment)
+            exchange.responseBody.flush()
+        }
         events.forEachIndexed { index, event ->
             if (!script.holdOpen && script.finalStatus != null && index == events.lastIndex) {
                 behavior.observationDelivered[runId] = true
             }
-            exchange.responseBody.write(JourneyGatewayJson.renderEvent(script, event))
+            exchange.responseBody.write(JourneyGatewayJson.renderEvent(script, event, index))
             exchange.responseBody.flush()
             if (interruptAfter != null && index + 1 >= interruptAfter) {
                 behavior.interruptedRunIds += runId
@@ -485,6 +502,10 @@ private object JourneyGatewaySse {
             writeKeepAliveEvents(exchange)
         } else if (script.finalStatus != null && events.isEmpty()) {
             behavior.observationDelivered[runId] = true
+        }
+        if (script.liveFraming) {
+            exchange.responseBody.write(streamClosedComment)
+            exchange.responseBody.flush()
         }
     }
 
@@ -526,6 +547,7 @@ private object JourneyGatewayJson {
     internal fun renderEvent(
         script: JourneyRunScript,
         event: JourneyRunEvent,
+        eventIndex: Int,
     ): ByteArray {
         val data =
             buildString {
@@ -533,8 +555,14 @@ private object JourneyGatewayJson {
                 event.delta?.let { append(""","delta":${it.jsonValue()}""") }
                 append('}')
             }
-        val rendered = "data: $data\n\n"
-        return rendered.toByteArray(Charsets.UTF_8)
+        val record =
+            buildString {
+                if (script.liveFraming) {
+                    append("id: $eventIndex\n")
+                }
+                append("data: $data\n\n")
+            }
+        return record.toByteArray(Charsets.UTF_8)
     }
 
     internal fun sessionJson(session: JourneySession): String =
@@ -613,6 +641,25 @@ private object JourneyGatewayJson {
     }
 }
 
+internal class OfflineAfterFirstSessionListGate(
+    private val enabled: Boolean,
+) {
+    private val sessionListRequests = AtomicInteger(0)
+
+    @Volatile
+    private var armed = false
+
+    val blocking: Boolean
+        get() = enabled && armed
+
+    fun onSessionListRequest(): Boolean {
+        if (!enabled) return false
+        val request = sessionListRequests.incrementAndGet()
+        armed = armed || request > 1
+        return request > 1
+    }
+}
+
 internal class JourneyGatewayBehavior(
     val scenario: JourneyScenario,
 ) {
@@ -622,6 +669,8 @@ internal class JourneyGatewayBehavior(
 
     @Volatile
     private var failNextSessionList = scenario.failNextSessionList
+
+    val offlineGate = OfflineAfterFirstSessionListGate(enabled = scenario.failAfterFirstSessionList)
 
     val sseOpened: ConcurrentHashMap<String, AtomicInteger> = ConcurrentHashMap()
     val sseClosed: ConcurrentHashMap<String, AtomicInteger> = ConcurrentHashMap()

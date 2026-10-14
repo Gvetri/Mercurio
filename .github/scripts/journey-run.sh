@@ -136,15 +136,20 @@ journeys=(
     pagination-search
     active-run-isolation
     streaming
+    live-streaming
     interrupted-sse-refetch
     terminal-success
     terminal-failure
     explicit-retry
     stale-recoverable
+    failed-offline-send
+    offline-session-list
     markdown-links
+    markdown-blocks
     capabilities-additive
     capabilities-missing-required
     accessibility-controls
+    diagnostics-recording
 )
 
 for journey in "${journeys[@]}"; do

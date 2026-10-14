@@ -10,6 +10,26 @@ internal sealed interface MarkdownBlock {
         val spans: List<MarkdownSpan>,
     ) : MarkdownBlock
 
+    /**
+     * An ATX heading without its marker runs. The level is the authored hash count, so the
+     * renderer can style the emphasis the source declared.
+     */
+    data class Heading(
+        val level: Int,
+        val spans: List<MarkdownSpan>,
+    ) : MarkdownBlock
+
+    /**
+     * One quoted passage: the consecutive `>`-prefixed lines with their markers dropped.
+     * A nested marker stays literal text inside the quote, so no level is invented.
+     */
+    data class Blockquote(
+        val spans: List<MarkdownSpan>,
+    ) : MarkdownBlock
+
+    /** A thematic break: three or more of one rule character, optionally space separated. */
+    data object HorizontalRule : MarkdownBlock
+
     data class BulletList(
         val items: List<List<MarkdownSpan>>,
     ) : MarkdownBlock
@@ -70,9 +90,10 @@ private const val MAX_LINK_LENGTH = 2_048
 private const val CODE_FENCE = "```"
 
 /**
- * Parses the supported Markdown subset of untrusted Gateway content: paragraphs,
- * lists, emphasis, HTTPS links, and fenced code blocks. Unsupported constructs stay
- * literal text, so nothing in the source can become executable content.
+ * Parses the supported Markdown subset of untrusted Gateway content: headings,
+ * blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links, and fenced code
+ * blocks. Unsupported constructs stay literal text, so nothing in the source can become
+ * executable content.
  */
 internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
@@ -100,6 +121,26 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
                 flushParagraph()
                 index++
             }
+            ATX_HEADING.matches(line.trim()) -> {
+                flushParagraph()
+                blocks +=
+                    MarkdownBlock.Heading(
+                        level = line.trim().takeWhile { it == '#' }.length,
+                        spans = parseInline(line.trim().dropWhile { it == '#' }.trim()),
+                    )
+                index++
+            }
+            isBlockquoteLine(line) -> {
+                flushParagraph()
+                val (spans, nextIndex) = readBlockquote(lines, index)
+                blocks += MarkdownBlock.Blockquote(spans)
+                index = nextIndex
+            }
+            isThematicBreak(line) -> {
+                flushParagraph()
+                blocks += MarkdownBlock.HorizontalRule
+                index++
+            }
             bulletItem(line) != null -> {
                 flushParagraph()
                 val (items, nextIndex) = readListItemRun(lines, index, ::bulletItem)
@@ -121,6 +162,34 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     flushParagraph()
     return blocks
 }
+
+private val ATX_HEADING = Regex("""^#{1,6}\s+.+$""")
+
+private fun isBlockquoteLine(line: String): Boolean = line.trimStart().startsWith(">")
+
+private fun readBlockquote(
+    lines: List<String>,
+    startIndex: Int,
+): Pair<List<MarkdownSpan>, Int> {
+    val quoted = mutableListOf<String>()
+    var index = startIndex
+    while (index < lines.size && isBlockquoteLine(lines[index])) {
+        quoted += lines[index].trimStart().drop(1).removePrefix(" ")
+        index++
+    }
+    return parseInline(quoted.joinToString(separator = " ")) to index
+}
+
+private fun isThematicBreak(line: String): Boolean {
+    val compact = line.filter { it != ' ' && it != '\t' }
+    return compact.length >= MIN_THEMATIC_BREAK_LENGTH &&
+        compact.first() in THEMATIC_BREAK_CHARACTERS &&
+        compact.all { it == compact.first() }
+}
+
+private const val MIN_THEMATIC_BREAK_LENGTH = 3
+
+private const val THEMATIC_BREAK_CHARACTERS = "-_*"
 
 private fun readFenceBlock(
     lines: List<String>,
