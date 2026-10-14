@@ -20,6 +20,7 @@ import org.hermesnative.client.feature.entry.data.InMemoryGatewayConnectionDataS
 import org.hermesnative.client.feature.entry.data.RunSubmissionUncertaintyStorage
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilities
 import org.hermesnative.client.feature.entry.domain.GatewayConnectionRepository
+import org.hermesnative.client.feature.entry.domain.NoOpSessionDraftStore
 import org.hermesnative.client.feature.entry.domain.PendingRunSubmissionKey
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.hermesnative.client.feature.entry.domain.Run
@@ -33,6 +34,7 @@ import org.hermesnative.client.feature.entry.domain.RunRecoveryRegistry
 import org.hermesnative.client.feature.entry.domain.RunSubmissionUncertaintySnapshot
 import org.hermesnative.client.feature.entry.domain.RunSubmissionUncertaintyStore
 import org.hermesnative.client.feature.entry.domain.Session
+import org.hermesnative.client.feature.entry.domain.SessionDraftStore
 import org.hermesnative.client.feature.entry.domain.SessionGatewayPort
 import org.hermesnative.client.feature.entry.domain.SessionHistory
 import org.hermesnative.client.feature.entry.domain.SessionId
@@ -161,6 +163,7 @@ internal class ReconciliationHolderSettings(
     val sendTimeoutMillis: Long = 30_000L,
     val recoveryRegistry: RunRecoveryRegistry? = null,
     val uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
+    val sessionDraftStore: SessionDraftStore = NoOpSessionDraftStore,
     val scope: CoroutineScope? = null,
 )
 
@@ -184,6 +187,7 @@ internal fun reconciliationHolder(
             EntryStateHolderDependencies(
                 runRecoveryRegistry = settings.recoveryRegistry,
                 runSubmissionUncertaintyStore = settings.uncertaintyStore,
+                sessionDraftStore = settings.sessionDraftStore,
                 persistRunRecoveryEntry =
                     settings.recoveryRegistry?.let { registry -> { _, entry -> registry.save(entry) } },
                 removeRunRecoveryEntry =

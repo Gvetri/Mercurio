@@ -141,7 +141,7 @@ internal suspend fun EntryStateHolder.reportUncertainRunSubmission(
 ): Boolean {
     recordDiagnostic(LocalDiagnosticEventType.RUN_SUBMISSION, LocalDiagnosticStatus.UNCERTAIN)
     runCatching {
-        runSubmissionUncertaintyStore.markAmbiguous(
+        runSubmissionUncertaintyStore.markSettled(
             PendingRunSubmissionKey(work.requestEndpoint, work.sessionId),
             work.attemptId,
         )

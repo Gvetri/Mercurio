@@ -391,6 +391,8 @@ private object JourneyGatewayRoutes {
         val script = behavior.nextRunScript(sessionId)
         if (script == null) {
             respond(exchange, HTTP_NOT_FOUND, """{"error":"no-synthetic-run"}""")
+        } else if (script.refuseCreate) {
+            respond(exchange, HTTP_SERVICE_UNAVAILABLE, """{"error":"run-create-refused"}""")
         } else {
             respond(
                 exchange,

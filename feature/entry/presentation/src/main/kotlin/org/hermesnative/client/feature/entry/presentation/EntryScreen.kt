@@ -70,6 +70,9 @@ fun EntryScreen(
             if (state.isRemoveConfirmationOpen) {
                 RemoveGatewayConnectionConfirmation(onEvent = onEvent)
             }
+            if (sessionList?.openedSession?.isDiscardUnresolvedSendConfirmationOpen == true) {
+                UnresolvedSendDiscardConfirmation(onEvent = onEvent)
+            }
         }
     }
 }

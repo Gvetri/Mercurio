@@ -32,6 +32,7 @@ object EntryWiring {
         val initialState = LoadEntryState(repository).execute()
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
+        val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
         val localDiagnosticsBuffer =
             RollingLocalDiagnosticsBuffer(FileLocalDiagnosticsStorage(context))
         return EntryStateHolder(
@@ -55,10 +56,12 @@ object EntryWiring {
                             repository,
                             runRecoveryRegistry,
                             runSubmissionUncertaintyStore,
+                            sessionDraftStore,
                             localDiagnosticsBuffer,
                         ),
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
+                    sessionDraftStore = sessionDraftStore,
                     runStatusNotificationSettingsStore = SharedPreferencesRunStatusNotificationSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
@@ -96,11 +99,13 @@ private fun buildConnectionRemovalUseCase(
     repository: GatewayConnectionRepository,
     runRecoveryRegistry: EndpointScopedRunRecoveryRegistry,
     runSubmissionUncertaintyStore: SharedPreferencesRunSubmissionUncertaintyStore,
+    sessionDraftStore: SharedPreferencesSessionDraftStore,
     localDiagnosticsBuffer: RollingLocalDiagnosticsBuffer,
 ): RemoveGatewayConnection =
     RemoveGatewayConnection(repository) { endpoint ->
         runRecoveryRegistry.clearForEndpoint(endpoint)
         endpoint?.let(runSubmissionUncertaintyStore::clearEndpoint)
+        endpoint?.let(sessionDraftStore::clearEndpoint)
         localDiagnosticsBuffer.clear()
     }
 

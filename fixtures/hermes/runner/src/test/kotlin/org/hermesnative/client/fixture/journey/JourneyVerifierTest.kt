@@ -175,6 +175,41 @@ class JourneyVerifierTest {
     }
 
     @Test
+    fun failed_offline_send_verifier_requires_two_run_creates_and_status_reconciliation() {
+        JourneyInvariants.verify("failed-offline-send", offlineSendTelemetry())
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("failed-offline-send", offlineSendTelemetry(runCreates = 1))
+        }
+        assertThrows(IllegalStateException::class.java) {
+            JourneyInvariants.verify("failed-offline-send", offlineSendTelemetry(runStatusRequests = 0))
+        }
+    }
+
+    private fun offlineSendTelemetry(
+        runCreates: Int = 2,
+        runStatusRequests: Int = 1,
+    ) = buildJsonObject {
+        put(
+            "requests",
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("method", "GET")
+                        put("path", "/v1/capabilities")
+                    },
+                )
+            },
+        )
+        put(
+            "run_creates",
+            buildJsonObject {
+                put("session-offline", runCreates)
+            },
+        )
+        put("run_status_requests", runStatusRequests)
+    }
+
+    @Test
     fun verifier_trusts_the_committed_ca_when_fetching_https_telemetry() {
         val keystoreFile = File(repositoryRoot, "fixtures/hermes/journey-tls/journey-gateway.p12")
         val scenarioFile = File(scenariosDir, "terminal-success.json")
