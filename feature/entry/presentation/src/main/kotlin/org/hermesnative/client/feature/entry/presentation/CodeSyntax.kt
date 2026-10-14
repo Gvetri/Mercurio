@@ -19,63 +19,62 @@ internal fun highlightCode(
     code: String,
 ): List<CodeToken> {
     val grammar = codeGrammar(language) ?: return emptyList()
-    val tokens = mutableListOf<CodeToken>()
+    val state = ScannerState(code, grammar, mutableListOf())
     var index = 0
-    while (index < code.length) {
-        index = scanStep(code, grammar, index, tokens)
+    while (index < state.code.length) {
+        index = scanStep(state, index)
     }
-    return tokens
+    return state.tokens
 }
 
+private data class ScannerState(
+    val code: String,
+    val grammar: CodeGrammar,
+    val tokens: MutableList<CodeToken>,
+)
+
 private fun scanStep(
-    code: String,
-    grammar: CodeGrammar,
+    state: ScannerState,
     index: Int,
-    tokens: MutableList<CodeToken>,
 ): Int {
-    val char = code[index]
-    val block = grammar.blockComment
-    val line = grammar.lineComment
+    val char = state.code[index]
+    val block = state.grammar.blockComment
+    val line = state.grammar.lineComment
     return when {
-        block != null && code.startsWith(block.first, index) -> scanComment(code, grammar, index, tokens)
-        line != null && code.startsWith(line, index) -> scanComment(code, grammar, index, tokens)
-        char in grammar.quotes -> scanString(code, grammar, index, tokens)
-        char.isDigit() -> scanNumber(code, index, tokens)
-        char == '_' || char.isLetter() -> scanWord(code, grammar, index, tokens)
+        block != null && state.code.startsWith(block.first, index) -> {
+            val close = state.code.indexOf(block.second, startIndex = index + block.first.length)
+            emitComment(state, index, if (close < 0) state.code.length else close + block.second.length)
+        }
+        line != null && state.code.startsWith(line, index) -> {
+            val newline = state.code.indexOf('\n', startIndex = index)
+            emitComment(state, index, if (newline < 0) state.code.length else newline)
+        }
+        char in state.grammar.quotes -> scanString(state, index)
+        char.isDigit() -> scanNumber(state, index)
+        char == '_' || char.isLetter() -> scanWord(state, index)
         else -> index + 1
     }
 }
 
-private fun scanComment(
-    code: String,
-    grammar: CodeGrammar,
+private fun emitComment(
+    state: ScannerState,
     index: Int,
-    tokens: MutableList<CodeToken>,
+    end: Int,
 ): Int {
-    val block = grammar.blockComment
-    val end =
-        if (block != null && code.startsWith(block.first, index)) {
-            val close = code.indexOf(block.second, startIndex = index + block.first.length)
-            if (close < 0) code.length else close + block.second.length
-        } else {
-            val newline = code.indexOf('\n', startIndex = index)
-            if (newline < 0) code.length else newline
-        }
-    tokens += CodeToken(index, end, CodeTokenKind.Comment)
+    state.tokens += CodeToken(index, end, CodeTokenKind.Comment)
     return end
 }
 
 private fun scanString(
-    code: String,
-    grammar: CodeGrammar,
+    state: ScannerState,
     index: Int,
-    tokens: MutableList<CodeToken>,
 ): Int {
+    val code = state.code
     val quote = code[index]
-    val triple = quote in grammar.tripleQuotes && code.startsWith("$quote$quote$quote", startIndex = index)
+    val triple = quote in state.grammar.tripleQuotes && code.startsWith("$quote$quote$quote", startIndex = index)
     val closing = if (triple) "$quote$quote$quote" else quote.toString()
     val limit =
-        if (quote in grammar.tripleQuotes) {
+        if (quote in state.grammar.tripleQuotes) {
             code.length
         } else {
             val newline = code.indexOf('\n', startIndex = index + 1)
@@ -94,15 +93,15 @@ private fun scanString(
             else -> cursor += 1
         }
     }
-    tokens += CodeToken(index, end, CodeTokenKind.String)
+    state.tokens += CodeToken(index, end, CodeTokenKind.String)
     return end
 }
 
 private fun scanNumber(
-    code: String,
+    state: ScannerState,
     index: Int,
-    tokens: MutableList<CodeToken>,
 ): Int {
+    val code = state.code
     val hex = code[index] == '0' && index + 1 < code.length && (code[index + 1] == 'x' || code[index + 1] == 'X')
     val digitsStart = if (hex) index + 2 else index
     val digits =
@@ -112,7 +111,7 @@ private fun scanNumber(
             consume(code, digitsStart) { it.isDigit() || it == '_' }
         }
     val cursor = consumeNumericTail(code, digits)
-    tokens += CodeToken(index, cursor, CodeTokenKind.Number)
+    state.tokens += CodeToken(index, cursor, CodeTokenKind.Number)
     return cursor
 }
 
@@ -145,11 +144,11 @@ private fun consumeExponent(
 }
 
 private fun scanWord(
-    code: String,
-    grammar: CodeGrammar,
+    state: ScannerState,
     index: Int,
-    tokens: MutableList<CodeToken>,
 ): Int {
+    val code = state.code
+    val grammar = state.grammar
     val end = consume(code, index) { it.isLetterOrDigit() || it == '_' }
     val word = code.substring(index, end)
     val isKeyword =
@@ -161,7 +160,7 @@ private fun scanWord(
             else -> null
         }
     if (kind != null) {
-        tokens += CodeToken(index, end, kind)
+        state.tokens += CodeToken(index, end, kind)
     }
     return end
 }
