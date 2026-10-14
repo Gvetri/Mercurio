@@ -151,6 +151,7 @@ internal object JourneyInvariants {
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
             "pagination-search" -> verifyPaginationSearch(telemetry)
             "stale-recoverable" -> verifyStaleRecoverable(telemetry)
+            "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
             "markdown-links" -> verifyMarkdownLinks(telemetry)
             "accessibility-controls" -> verifyAccessibilityControls(telemetry)
             "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)
@@ -166,6 +167,7 @@ internal object JourneyInvariants {
         when (scenarioName) {
             "active-run-isolation" -> JourneyRunInvariants.verifyActiveRunIsolation(telemetry)
             "streaming" -> JourneyRunInvariants.verifyStreaming(telemetry)
+            "live-streaming" -> JourneyRunInvariants.verifyLiveStreaming(telemetry)
             "interrupted-sse-refetch" -> JourneyRunInvariants.verifyInterruptedSseRefetch(telemetry)
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
@@ -212,6 +214,7 @@ internal object JourneyInvariants {
     const val ACTIVE_RUN_ID = "active-run"
     const val ACTIVE_SESSION_ID = "session-alpha"
     const val STREAMING_RUN_ID = "streaming-run"
+    const val LIVE_RUN_ID = "live-run"
     const val INTERRUPTED_RUN_ID = "interrupted-run"
     const val RETRY_SESSION_ID = "session-retry"
 }
@@ -423,6 +426,15 @@ private object JourneyRunInvariants {
         }
     }
 
+    internal fun verifyLiveStreaming(telemetry: JsonObject) {
+        val sse = sseFor(telemetry, JourneyInvariants.LIVE_RUN_ID)
+        check(sse.opened == 1) { "Live-framed Run was observed ${sse.opened} times; expected exactly 1." }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the live-framed Run." }
+        check(runCreatesFor(telemetry, JourneyInvariants.ACTIVE_SESSION_ID) == 1) {
+            "The client submitted the live-framed Run more than once."
+        }
+    }
+
     internal fun verifyInterruptedSseRefetch(telemetry: JsonObject) {
         val sse = sseFor(telemetry, JourneyInvariants.INTERRUPTED_RUN_ID)
         check(sse.opened == 1) { "Interrupted Run was observed ${sse.opened} times; expected exactly 1." }
@@ -451,6 +463,16 @@ private object JourneyRunInvariants {
         }
         check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile Run status." }
     }
+
+    internal fun verifyFailedOfflineSend(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        check(runCreatesFor(telemetry, OFFLINE_SEND_SESSION_ID) == 2) {
+            "The client did not submit exactly two Run creations (one refused while offline plus one recovery retry)."
+        }
+        check(runStatusRequests(telemetry) >= 1) { "The client did not reconcile the recovered Run." }
+    }
+
+    private const val OFFLINE_SEND_SESSION_ID = "session-offline"
 }
 
 private const val MIN_ARGUMENT_COUNT = 2

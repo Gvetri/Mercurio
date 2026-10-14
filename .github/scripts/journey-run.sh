@@ -136,11 +136,13 @@ journeys=(
     pagination-search
     active-run-isolation
     streaming
+    live-streaming
     interrupted-sse-refetch
     terminal-success
     terminal-failure
     explicit-retry
     stale-recoverable
+    failed-offline-send
     markdown-links
     capabilities-additive
     capabilities-missing-required
