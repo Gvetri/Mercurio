@@ -94,6 +94,7 @@ data class JourneyRunScript(
     val observation: List<JourneyRunEvent> = emptyList(),
     val interruptAfterEvents: Int? = null,
     val holdOpen: Boolean = false,
+    val finalizeOnDisconnect: Boolean = false,
     val refuseCreate: Boolean = false,
     val liveFraming: Boolean = false,
     val finalStatus: String? = null,
@@ -105,6 +106,9 @@ data class JourneyRunScript(
         }
         require(!holdOpen || interruptAfterEvents == null) {
             "A held-open observation cannot interrupt."
+        }
+        require(!finalizeOnDisconnect || (holdOpen && finalStatus != null)) {
+            "A disconnect-finalized observation must hold open and declare its final status."
         }
         require(
             !refuseCreate ||
@@ -165,6 +169,7 @@ private val allowedRunKeys =
         "observation",
         "interrupt_after_events",
         "hold_open",
+        "finalize_on_disconnect",
         "refuse_create",
         "live_framing",
         "final_status",
@@ -314,6 +319,7 @@ private object JourneyScenarioJson {
                 observation = parseObservation(run, index),
                 interruptAfterEvents = optionalInt(run, "interrupt_after_events"),
                 holdOpen = optionalBoolean(run, "hold_open", default = false),
+                finalizeOnDisconnect = optionalBoolean(run, "finalize_on_disconnect", default = false),
                 refuseCreate = optionalBoolean(run, "refuse_create", default = false),
                 liveFraming = optionalBoolean(run, "live_framing", default = false),
                 finalStatus = optionalString(run, "final_status"),

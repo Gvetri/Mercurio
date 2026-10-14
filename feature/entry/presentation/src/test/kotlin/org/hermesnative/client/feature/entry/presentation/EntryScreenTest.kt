@@ -378,7 +378,7 @@ class EntryScreenTest {
             assertEquals(false, holder.uiState.value.sessionList?.openedSession?.hasUnresolvedSubmission)
 
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First draft")) }
-            composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
+            composeTestRule.onNodeWithText("Stop").assertIsEnabled()
 
             composeTestRule.onNodeWithText("Back to Sessions").performClick()
             assertTrue(gateway.firstObservation.closed.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))

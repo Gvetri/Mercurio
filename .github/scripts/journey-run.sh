@@ -138,6 +138,7 @@ journeys=(
     streaming
     live-streaming
     interrupted-sse-refetch
+    composer-stop
     terminal-success
     terminal-failure
     explicit-retry

@@ -94,6 +94,32 @@ internal fun streamEvents(
     return events
 }
 
+internal fun abortStream(
+    endpoint: URI,
+    runId: String,
+) {
+    val connection = (endpoint.resolve("/v1/runs/$runId/events").toURL().openConnection() as HttpURLConnection)
+    connection.connectTimeout = 2_000
+    connection.readTimeout = 5_000
+    connection.requestMethod = "GET"
+    connection.inputStream.bufferedReader().readLine()
+    connection.inputStream.close()
+    connection.disconnect()
+}
+
+internal fun awaitRunStatus(
+    endpoint: URI,
+    runId: String,
+    expectedBodyFragment: String,
+) {
+    val deadline = System.currentTimeMillis() + 5_000
+    while (System.currentTimeMillis() < deadline) {
+        if (get(endpoint, "/v1/runs/$runId").contains(expectedBodyFragment)) return
+        Thread.sleep(100)
+    }
+    throw AssertionError("Run $runId did not report $expectedBodyFragment within 5 seconds.")
+}
+
 internal fun tempScenario(content: String): File {
     val file = File.createTempFile("journey-scenario", ".json")
     file.writeText(content)
