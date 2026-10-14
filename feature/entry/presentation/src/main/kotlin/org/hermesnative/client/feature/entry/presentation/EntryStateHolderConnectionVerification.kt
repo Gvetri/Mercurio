@@ -186,7 +186,7 @@ internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnecti
         mutationOwners.clear()
         val connectionRecoveryJobsToCancel = connectionRecoveryJobs.toList()
         clearRecoveryState()
-        clearSessionDraftsAndRuns()
+        clearSessionDraftsAndRuns(mutableUiState.value.endpoint)
         val observationsToClose = runObservations.values.toList()
         val requestJobs = collectAndClearRequestJobs()
         ReleasedConnectionState(

@@ -94,6 +94,7 @@ data class JourneyRunScript(
     val observation: List<JourneyRunEvent> = emptyList(),
     val interruptAfterEvents: Int? = null,
     val holdOpen: Boolean = false,
+    val refuseCreate: Boolean = false,
     val liveFraming: Boolean = false,
     val finalStatus: String? = null,
     val terminalHistory: List<JourneyMessage> = emptyList(),
@@ -104,6 +105,12 @@ data class JourneyRunScript(
         }
         require(!holdOpen || interruptAfterEvents == null) {
             "A held-open observation cannot interrupt."
+        }
+        require(
+            !refuseCreate ||
+                (observation.isEmpty() && finalStatus == null && terminalHistory.isEmpty()),
+        ) {
+            "A refused Run creation cannot script observation or terminal behavior."
         }
     }
 }
@@ -158,6 +165,7 @@ private val allowedRunKeys =
         "observation",
         "interrupt_after_events",
         "hold_open",
+        "refuse_create",
         "live_framing",
         "final_status",
         "terminal_history",
@@ -306,6 +314,7 @@ private object JourneyScenarioJson {
                 observation = parseObservation(run, index),
                 interruptAfterEvents = optionalInt(run, "interrupt_after_events"),
                 holdOpen = optionalBoolean(run, "hold_open", default = false),
+                refuseCreate = optionalBoolean(run, "refuse_create", default = false),
                 liveFraming = optionalBoolean(run, "live_framing", default = false),
                 finalStatus = optionalString(run, "final_status"),
                 terminalHistory = parseMessages(run, "terminal_history", "run[$index].terminal_history"),

@@ -1,0 +1,54 @@
+appId: org.hermesnative.client
+name: failed-offline-send
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: failed-offline-send-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Offline Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- tapOn: "Message"
+- inputText: "Recover this offline draft"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Refresh history to resolve"
+    timeout: 30000
+- assertVisible: "Recover this offline draft"
+- assertVisible: "Discard unsent record"
+- takeScreenshot: failed-offline-send-unresolved
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Verify your Hermes Gateway"
+    timeout: 30000
+- hideKeyboard
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Offline Session"
+- extendedWaitUntil:
+    visible: "Recover this offline draft"
+    timeout: 30000
+- takeScreenshot: failed-offline-send-draft-restored
+- tapOn:
+    text: "Try again"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible: "Offline send recovered"
+    timeout: 30000
+- assertVisible: "Offline send recovered"
+- assertNotVisible: "Discard unsent record"

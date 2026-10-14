@@ -14,6 +14,7 @@ import org.hermesnative.client.feature.entry.application.VerifyGatewayConnection
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsExporter
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsStore
+import org.hermesnative.client.feature.entry.domain.NoOpSessionDraftStore
 import org.hermesnative.client.feature.entry.domain.PendingRunSubmissionKey
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunEventObservation
@@ -28,6 +29,7 @@ import org.hermesnative.client.feature.entry.domain.RunStatusNotificationSetting
 import org.hermesnative.client.feature.entry.domain.RunStatusNotifier
 import org.hermesnative.client.feature.entry.domain.RunSubmissionUncertaintySnapshot
 import org.hermesnative.client.feature.entry.domain.RunSubmissionUncertaintyStore
+import org.hermesnative.client.feature.entry.domain.SessionDraftStore
 import org.hermesnative.client.feature.entry.domain.SessionGatewayPort
 import org.hermesnative.client.feature.entry.domain.SessionId
 import org.hermesnative.client.feature.entry.domain.toRunPresentationState
@@ -144,6 +146,12 @@ sealed interface EntryUiEvent {
     ) : Run
 
     data object SendMessageClicked : Run
+
+    data object DiscardUnresolvedSendClicked : Run
+
+    data object ConfirmDiscardUnresolvedSendClicked : Run
+
+    data object CancelDiscardUnresolvedSendClicked : Run
 
     data class RetryRunClicked(
         val runId: RunId,
@@ -291,6 +299,7 @@ data class EntryStateHolderDependencies(
     val removeRunRecoveryEntry: ((String, RunRecoveryEntry) -> Unit)? = null,
     val removeGatewayConnectionUseCase: RemoveGatewayConnection? = null,
     val runSubmissionUncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
+    val sessionDraftStore: SessionDraftStore = NoOpSessionDraftStore,
     val onRunSubmissionCompleted: (() -> Unit)? = null,
     val onRunSubmissionSettled: (() -> Unit)? = null,
     val runStatusNotificationSettingsStore: RunStatusNotificationSettingsStore? = null,
@@ -314,6 +323,7 @@ class EntryStateHolder(
     internal val removeRunRecoveryEntry = dependencies.removeRunRecoveryEntry
     internal val removeGatewayConnectionUseCase = dependencies.removeGatewayConnectionUseCase
     internal val runSubmissionUncertaintyStore = dependencies.runSubmissionUncertaintyStore
+    internal val sessionDraftStore = dependencies.sessionDraftStore
     internal val onRunSubmissionCompleted = dependencies.onRunSubmissionCompleted
     internal val onRunSubmissionSettled = dependencies.onRunSubmissionSettled
     internal val runStatusNotificationSettingsStore = dependencies.runStatusNotificationSettingsStore
@@ -459,6 +469,9 @@ class EntryStateHolder(
         when (event) {
             is EntryUiEvent.ComposerTextChanged -> updateComposerText(event.value)
             is EntryUiEvent.SendMessageClicked -> retryUncertainSubmissionOrSend()
+            is EntryUiEvent.DiscardUnresolvedSendClicked -> showDiscardUnresolvedSendConfirmation()
+            is EntryUiEvent.ConfirmDiscardUnresolvedSendClicked -> confirmDiscardUnresolvedSend()
+            is EntryUiEvent.CancelDiscardUnresolvedSendClicked -> cancelDiscardUnresolvedSend()
             is EntryUiEvent.RetryRunClicked -> retryRun(event.runId)
         }
     }
