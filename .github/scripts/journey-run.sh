@@ -144,6 +144,7 @@ journeys=(
     stale-recoverable
     failed-offline-send
     markdown-links
+    markdown-blocks
     capabilities-additive
     capabilities-missing-required
     accessibility-controls
