@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun SessionDetailComposerTail(
     state: OpenSessionUiState,
@@ -71,7 +72,10 @@ internal fun SessionDetailComposerTail(
                 onValueChange = { onEvent(EntryUiEvent.ComposerTextChanged(it)) },
                 label = { Text("Message") },
                 placeholder = { Text("Write a message") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth().testTag("conversation-message-input").semantics {
+                        testTagsAsResourceId = true
+                    },
                 enabled = composerEnabled,
                 singleLine = false,
                 maxLines = 5,

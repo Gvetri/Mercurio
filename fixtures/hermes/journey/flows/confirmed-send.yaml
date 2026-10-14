@@ -27,14 +27,17 @@ name: confirmed-send
 - takeScreenshot: confirmed-send-draft
 - tapOn: "Send"
 - extendedWaitUntil:
-    visible: "Write a message"
-    timeout: 30000
-- takeScreenshot: confirmed-send-composer-cleared
-- extendedWaitUntil:
     visible: "Run state: Succeeded"
     timeout: 30000
 - assertVisible: "Polish reply"
 - assertVisible: "Latest Run"
+- tapOn:
+    id: "conversation-message-input"
+- extendedWaitUntil:
+    visible: "Write a message"
+    timeout: 30000
+- takeScreenshot: confirmed-send-composer-cleared
+- hideKeyboard
 - assertNotVisible: ".*run-ux-1.*"
 - tapOn:
     text: "Show run ID"
