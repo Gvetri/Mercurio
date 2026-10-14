@@ -51,18 +51,18 @@ object LocalDiagnosticsRecords {
     private val eventRecord: Regex
         by lazy {
             Regex(
-                "\\A\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$EVENT_RECORD_TYPE\"," +
+                "\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$EVENT_RECORD_TYPE\"," +
                     "\"event_type\":\"(?:$approvedEventTypes)\",\"occurred_at\":\"$UTC_INSTANT_PATTERN\"" +
-                    "(?:,\"status\":\"(?:$approvedStatuses)\")?}\\z",
+                    "(?:,\"status\":\"(?:$approvedStatuses)\")?\\}",
             )
         }
 
     private val metadataRecord: Regex
         by lazy {
             Regex(
-                "\\A\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$METADATA_RECORD_TYPE\"," +
+                "\\{\"schema_version\":$SCHEMA_VERSION,\"record_type\":\"$METADATA_RECORD_TYPE\"," +
                     "\"client_version\":\"$CLIENT_VERSION_PATTERN\",\"exported_at\":\"$UTC_INSTANT_PATTERN\"" +
-                    "(?:,\"gateway_revision\":\"$SAFE_FIELD_VALUE_PATTERN\")?}\\z",
+                    "(?:,\"gateway_revision\":\"$SAFE_FIELD_VALUE_PATTERN\")?\\}",
             )
         }
 

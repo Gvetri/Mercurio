@@ -17,9 +17,9 @@ name: diagnostics-recording
 - takeScreenshot: diagnostics-before-opening
 - tapOn: "More options"
 - tapOn: "Local diagnostics"
-- assertVisible: "Diagnostics stay on this device."
+- assertVisible: "Diagnostics stay on this device\\..*"
 - extendedWaitUntil:
-    visible: "diagnostic records stored on this device."
+    visible: ".*diagnostic record.* stored on this device.*"
     timeout: 10000
 - assertNotVisible: "No diagnostics available"
 - takeScreenshot: diagnostics-recorded-after-connection
