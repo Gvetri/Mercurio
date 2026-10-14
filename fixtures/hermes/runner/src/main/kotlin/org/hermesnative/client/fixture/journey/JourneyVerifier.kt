@@ -144,12 +144,12 @@ internal object JourneyInvariants {
         telemetry: JsonObject,
     ) {
         when (scenarioName) {
-            "connection" -> verifyConnection(telemetry)
-            "session-list-first" -> verifySessionListFirst(telemetry)
+            "connection" -> requireConnectionAttempted(telemetry)
+            "session-list-first" -> requireConnectionAttempted(telemetry)
             "empty-sessions" -> JourneySessionCreationInvariants.verifyEmptySessions(telemetry)
             "pending-creation" -> JourneySessionCreationInvariants.verifyPendingCreation(telemetry)
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
-            "pagination-search" -> verifyPaginationSearch(telemetry)
+            "pagination-search" -> requireConnectionAttempted(telemetry)
             "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
             "offline-session-list" -> {
                 requireConnectionAttempted(telemetry)
@@ -161,10 +161,10 @@ internal object JourneyInvariants {
                     "The client did not attempt to open a Session while the Gateway was offline."
                 }
             }
-            "markdown-links" -> verifyMarkdownLinks(telemetry)
-            "accessibility-controls" -> verifyAccessibilityControls(telemetry)
+            "markdown-links" -> requireConnectionAttempted(telemetry)
+            "accessibility-controls" -> requireConnectionAttempted(telemetry)
             "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)
-            "capabilities-missing-required" -> verifyCapabilitiesBoundary(telemetry)
+            "capabilities-missing-required" -> requireConnectionAttempted(telemetry)
             else -> verifyAdditionalScenario(scenarioName, telemetry)
         }
     }
@@ -181,33 +181,10 @@ internal object JourneyInvariants {
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
-            "stale-recoverable" -> verifyStaleRecoverable(telemetry)
+            "markdown-blocks" -> requireConnectionAttempted(telemetry)
+            "stale-recoverable" -> requireConnectionAttempted(telemetry)
             else -> error("No journey invariants declared for scenario '$scenarioName'.")
         }
-    }
-
-    private fun verifyConnection(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifySessionListFirst(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyPaginationSearch(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyStaleRecoverable(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyMarkdownLinks(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
-    }
-
-    private fun verifyCapabilitiesBoundary(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
     }
 
     private fun verifyCapabilitiesAdditive(telemetry: JsonObject) {
@@ -215,10 +192,6 @@ internal object JourneyInvariants {
         check(runCreatesFor(telemetry, ACTIVE_SESSION_ID) == 1) {
             "The client submitted the additive Run more than once."
         }
-    }
-
-    private fun verifyAccessibilityControls(telemetry: JsonObject) {
-        requireConnectionAttempted(telemetry)
     }
 
     const val ACTIVE_RUN_ID = "active-run"

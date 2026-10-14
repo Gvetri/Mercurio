@@ -145,6 +145,7 @@ journeys=(
     failed-offline-send
     offline-session-list
     markdown-links
+    markdown-blocks
     capabilities-additive
     capabilities-missing-required
     accessibility-controls

@@ -1,0 +1,32 @@
+{
+  "name": "markdown-blocks",
+  "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+  "port": 18443,
+  "tls": true,
+  "capabilities": [
+    "sessions",
+    "session_create",
+    "session",
+    "session_update",
+    "session_delete",
+    "session_messages",
+    "runs",
+    "run_status",
+    "run_events"
+  ],
+  "sessions": [
+    {
+      "id": "session-blocks",
+      "title": "Blocks Session",
+      "preview": "Synthetic preview",
+      "pinned": false,
+      "history": [
+        {
+          "id": "message-blocks-1",
+          "role": "assistant",
+          "content": "# Alpha Heading\n\nPlain assistant paragraph.\n\n> This is a blockquote.\n\n---\n\n- First bullet\n- Second bullet"
+        }
+      ]
+    }
+  ]
+}
