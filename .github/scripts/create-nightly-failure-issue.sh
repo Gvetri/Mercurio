@@ -35,7 +35,10 @@ repository = os.environ["GITHUB_REPOSITORY"]
 server = os.environ["GITHUB_SERVER_URL"].rstrip("/")
 if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
     raise SystemExit("Invalid repository identifier.")
-parsed = urlparse(server)
+try:
+    parsed = urlparse(server)
+except ValueError:
+    raise SystemExit("Invalid GitHub server URL.")
 if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
     raise SystemExit("Invalid GitHub server URL.")
 run = os.environ["GITHUB_RUN_ID"]
@@ -117,8 +120,20 @@ expected_names = {
     f"android-test-failure-evidence-{run}-{attempt}",
     f"journey-evidence-{run}-{attempt}",
 }
-artifacts = [artifact for page in json.loads((root / "artifacts.json").read_text())
-             for artifact in page["artifacts"]
+try:
+    artifact_pages = json.loads((root / "artifacts.json").read_text())
+except ValueError:
+    raise SystemExit("Expected valid JSON for the run artifacts response.")
+if not isinstance(artifact_pages, list) or any(
+    not isinstance(page, dict) or not isinstance(page.get("artifacts"), list) or any(
+        not isinstance(artifact, dict)
+        or not (artifact.get("name") is None or isinstance(artifact.get("name"), str))
+        for artifact in page["artifacts"]
+    )
+    for page in artifact_pages
+):
+    raise SystemExit("Malformed run artifacts response.")
+artifacts = [artifact for page in artifact_pages for artifact in page["artifacts"]
              if artifact.get("name") in expected_names and artifact.get("expired") is False
              and type(artifact.get("id")) is int]
 for artifact in artifacts:
@@ -128,7 +143,20 @@ if not artifacts:
 lines.extend(["", "Inspect the first failing command in each failed job. A dependency download failure still blocks the quality gate."])
 payload = {"title": f"Nightly test failure: {', '.join([job_names[job] for job in failed] + additional)} (run {run})",
            "body": "\n".join(lines) + "\n", "labels": ["ready-for-agent"]}
-issues = [issue for page in json.loads((root / "issues.json").read_text()) for issue in page
+try:
+    issue_pages = json.loads((root / "issues.json").read_text())
+except ValueError:
+    raise SystemExit("Expected valid JSON for the issues response.")
+if not isinstance(issue_pages, list) or any(
+    not isinstance(page, list) or any(
+        not isinstance(issue_entry, dict)
+        or not (issue_entry.get("body") is None or isinstance(issue_entry.get("body"), str))
+        for issue_entry in page
+    )
+    for page in issue_pages
+):
+    raise SystemExit("Malformed issues response.")
+issues = [issue for page in issue_pages for issue in page
           if issue.get("pull_request") is None and marker in (issue.get("body") or "")]
 if len(issues) > 1:
     raise SystemExit("Multiple issues identify this run; refusing an ambiguous update.")
@@ -143,24 +171,62 @@ PY
 
 if [[ -s "$temporary_directory/existing-number" ]]; then
     issue_number="$(< "$temporary_directory/existing-number")"
-    gh api --method PATCH "${issues_endpoint}/${issue_number}" --input "$temporary_directory/payload.json" > "$temporary_directory/response.json"
+    if ! gh api --method PATCH "${issues_endpoint}/${issue_number}" --input "$temporary_directory/payload.json" > "$temporary_directory/response.json"; then
+        printf 'Nightly failure issue update failed; an issue may have been filed for run %s (issue %s).\n' "$GITHUB_RUN_ID" "$issue_number" >&2
+        exit 1
+    fi
 else
-    gh api --method POST "$issues_endpoint" --input "$temporary_directory/payload.json" > "$temporary_directory/response.json"
-    issue_number="$(python3 -c 'import json,sys; n=json.load(open(sys.argv[1]))["number"]; assert type(n) is int; print(n)' "$temporary_directory/response.json")"
-fi
-
-gh api "${issues_endpoint}/${issue_number}" > "$temporary_directory/verified.json"
-python3 - "$temporary_directory" <<'PY'
+    if ! gh api --method POST "$issues_endpoint" --input "$temporary_directory/payload.json" > "$temporary_directory/response.json"; then
+        printf 'Nightly failure issue creation failed; an issue may have been filed for run %s.\n' "$GITHUB_RUN_ID" >&2
+        exit 1
+    fi
+    python3 - "$temporary_directory" "$GITHUB_RUN_ID" <<'PY'
 from pathlib import Path
 import json
 import sys
 
 root = Path(sys.argv[1])
-expected = json.loads((root / "payload.json").read_text())
-actual = json.loads((root / "verified.json").read_text())
+run = sys.argv[2]
+try:
+    number = json.loads((root / "response.json").read_text())["number"]
+except (ValueError, KeyError, TypeError):
+    raise SystemExit(f"Nightly failure issue response is unreadable; an issue may have been filed for run {run}.")
+if type(number) is not int:
+    raise SystemExit(f"Nightly failure issue response has no numeric identifier; an issue may have been filed for run {run}.")
+(root / "issue-number").write_text(str(number))
+PY
+    issue_number="$(< "$temporary_directory/issue-number")"
+fi
+
+if ! gh api "${issues_endpoint}/${issue_number}" > "$temporary_directory/verified.json"; then
+    printf 'Nightly failure issue read-back failed; an issue may have been filed for run %s (issue %s).\n' "$GITHUB_RUN_ID" "$issue_number" >&2
+    exit 1
+fi
+python3 - "$temporary_directory" "$GITHUB_RUN_ID" "$issue_number" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+root = Path(sys.argv[1])
+run = sys.argv[2]
+number = sys.argv[3]
+
+def refusal(reason):
+    raise SystemExit(f"{reason}; an issue may have been filed (run {run}, issue {number}).")
+
+try:
+    expected = json.loads((root / "payload.json").read_text())
+    actual = json.loads((root / "verified.json").read_text())
+except ValueError:
+    refusal("Published issue read-back is unreadable")
+if (not isinstance(actual, dict) or type(actual.get("number")) is not int
+        or not isinstance(actual.get("html_url"), str)
+        or not isinstance(actual.get("labels"), list)
+        or any(not isinstance(label, dict) for label in actual["labels"])):
+    refusal("Published issue read-back is malformed")
 if actual.get("state") != "open" or any(actual.get(key) != expected[key] for key in ("title", "body")):
-    raise SystemExit("Published issue does not match the required failure report.")
-if "ready-for-agent" not in {label.get("name") for label in actual.get("labels", [])}:
-    raise SystemExit("Published issue is missing the ready-for-agent label.")
+    refusal("Published issue does not match the required failure report")
+if not any(label.get("name") == "ready-for-agent" for label in actual["labels"]):
+    refusal("Published issue is missing the ready-for-agent label")
 print(f"Verified nightly failure issue #{actual['number']}: {actual['html_url']}")
 PY
