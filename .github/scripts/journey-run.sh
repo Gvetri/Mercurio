@@ -142,6 +142,7 @@ journeys=(
     terminal-failure
     explicit-retry
     stale-recoverable
+    failed-offline-send
     markdown-links
     markdown-blocks
     capabilities-additive

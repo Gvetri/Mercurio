@@ -114,7 +114,7 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
             openedSession.toOpenSessionUiState(
                 OpenSessionOverlay(
                     messages = toMessageUiStates(openedSession.history),
-                    composerText = sessionDrafts[sessionId].orEmpty(),
+                    composerText = restoredSessionDraft(sessionId),
                     sendErrorCategory = sendErrorCategoryFor(sessionId),
                     hasUnresolvedSubmission =
                         hasUnresolvedSubmission(sessionId) || recoveryLoadBlocksSession,
@@ -230,6 +230,7 @@ internal fun EntryStateHolder.updateComposerText(value: String) {
         sessionDrafts[opened.session.id] = value
         sessionDraftRevisions[opened.session.id] =
             sessionDraftRevisions[opened.session.id]?.plus(1) ?: 1L
+        sessionDraftStore.write(sessionDraftKey(opened.session.id), value)
         sessionSendErrors.remove(opened.session.id)
         mutableUiState.value =
             mutableUiState.value.copy(
