@@ -5,7 +5,10 @@
   "tls": true,
   "capabilities": [
     "sessions",
+    "session_create",
     "session",
+    "session_update",
+    "session_delete",
     "session_messages",
     "runs",
     "run_status",
