@@ -22,6 +22,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -83,6 +84,30 @@ class SessionMessageRenderingTest {
         val header = composeTestRule.onNodeWithText("User").fetchSemanticsNode().boundsInRoot
         val body = composeTestRule.onNodeWithText("Message body 0").fetchSemanticsNode().boundsInRoot
         assertTrue("The role header must lead the message it owns", header.bottom <= body.top)
+    }
+
+    @Test
+    fun message_run_identifiers_stay_behind_an_explicit_disclosure() {
+        composeTestRule.setContent {
+            HermesTheme {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    SessionMessageContent(
+                        message =
+                            SessionMessageUiState(
+                                "message",
+                                "assistant",
+                                "Answer",
+                                runId = RunId("message-run"),
+                            ),
+                        retryEnabled = false,
+                        onRetry = {},
+                    )
+                }
+            }
+        }
+        composeTestRule.onNodeWithText("message-run", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Show run ID").performClick()
+        composeTestRule.onNodeWithText("Run ID: message-run").assertIsDisplayed()
     }
 
     @Test
@@ -498,9 +523,11 @@ class SessionMessageRenderingTest {
                 )
             }
         }
+        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
+        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
         val content = composeTestRule.onNodeWithText("Answer").fetchSemanticsNode().boundsInRoot
         val messageId = composeTestRule.onNodeWithText("Run ID: message-run").fetchSemanticsNode().boundsInRoot
-        val latestId = composeTestRule.onNodeWithText("Latest Run: latest-run").fetchSemanticsNode().boundsInRoot
+        val latestId = composeTestRule.onNodeWithText("Latest Run").fetchSemanticsNode().boundsInRoot
         val status =
             composeTestRule.onNodeWithText("Run state: ${RunPresentationState.SUCCEEDED.label}")
                 .fetchSemanticsNode().boundsInRoot

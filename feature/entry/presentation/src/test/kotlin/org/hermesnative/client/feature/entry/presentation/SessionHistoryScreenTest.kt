@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -311,8 +312,6 @@ class SessionHistoryScreenTest {
 
     @Test
     fun mixed_local_and_external_runs_show_gateway_identity_status_result_and_timestamp() {
-        val externalRunId = RunId("external-run")
-        val localRunId = RunId("local-run")
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
@@ -339,7 +338,7 @@ class SessionHistoryScreenTest {
                                                         id = "external-message",
                                                         role = null,
                                                         content = null,
-                                                        runId = externalRunId,
+                                                        runId = RunId("external-run"),
                                                         runStatus = "failed",
                                                         runResult = "Gateway failure",
                                                         timestamp = java.time.Instant.parse("2026-09-08T20:00:00Z"),
@@ -348,7 +347,7 @@ class SessionHistoryScreenTest {
                                                         id = "local-message",
                                                         role = "assistant",
                                                         content = "Local result",
-                                                        runId = localRunId,
+                                                        runId = RunId("local-run"),
                                                         runStatus = "succeeded",
                                                         runResult = "Done",
                                                         timestamp = java.time.Instant.parse("2026-09-08T21:00:00Z"),
@@ -362,12 +361,14 @@ class SessionHistoryScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Run ID: external-run").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Run status: Failed").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
+        composeTestRule.onNodeWithText("Run ID: external-run").assertIsDisplayed()
         composeTestRule.onNodeWithText("Run result: Gateway failure").performScrollTo().assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Timestamp:", substring = true).assertCountEquals(2)
-        composeTestRule.onNodeWithText("Run ID: local-run").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Local result").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
+        composeTestRule.onNodeWithText("Run ID: local-run").assertIsDisplayed()
     }
 
     @Test
