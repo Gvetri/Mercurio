@@ -118,6 +118,49 @@ class SessionMessageRenderingTest {
     }
 
     @Test
+    fun an_assistant_reply_renders_markdown_blocks_instead_of_literal_markers() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        entryState(
+                            SessionListUiState(
+                                sessions = listOf(session("first", "First Session")),
+                                openedSession =
+                                    OpenSessionUiState(
+                                        session = session("first", "First Session"),
+                                        messages =
+                                            listOf(
+                                                SessionMessageUiState(
+                                                    id = "message-1",
+                                                    role = "assistant",
+                                                    content =
+                                                        "# Alpha Heading\n\n" +
+                                                            "This is a paragraph.\n\n" +
+                                                            "> This is a blockquote.\n\n" +
+                                                            "---\n\n" +
+                                                            "- First bullet\n- Second bullet",
+                                                ),
+                                            ),
+                                    ),
+                            ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Alpha Heading").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("This is a blockquote.").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("First bullet").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Second bullet").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("#", substring = true).assertCountEquals(0)
+        composeTestRule.onAllNodesWithText(">", substring = true).assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("---").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("## Alpha Heading").assertCountEquals(0)
+    }
+
+    @Test
     fun the_streamed_response_and_its_code_block_render_safely_while_it_grows() {
         composeTestRule.setContent {
             HermesTheme {
