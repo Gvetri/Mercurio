@@ -3,12 +3,18 @@ package org.hermesnative.client.feature.entry.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -17,10 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -30,9 +39,9 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Renders the supported Markdown subset of untrusted Gateway content as native Compose
- * text: paragraphs, lists, emphasis, HTTPS links, and fenced code blocks. The content is
- * never interpreted as markup beyond that subset, so no HTML, script, or other executable
- * content can run, and no WebView is involved.
+ * text: headings, blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links,
+ * and fenced code blocks. The content is never interpreted as markup beyond that subset,
+ * so no HTML, script, or other executable content can run, and no WebView is involved.
  *
  * Link destinations are carried as annotations built from [allowedExternalLinkDestination];
  * a blocked destination is rendered as its inert label and cannot be selected.
@@ -52,6 +61,9 @@ internal fun MarkdownContent(
         blocks.forEach { block ->
             when (block) {
                 is MarkdownBlock.Paragraph -> MarkdownParagraph(spans = block.spans, actions = actions)
+                is MarkdownBlock.Heading -> MarkdownHeading(heading = block, actions = actions)
+                is MarkdownBlock.Blockquote -> MarkdownBlockquote(spans = block.spans, actions = actions)
+                is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
                 is MarkdownBlock.BulletList ->
                     MarkdownList(
                         items = block.items.map { item -> RenderedItem(marker = BULLET_MARKER, spans = item) },
@@ -82,13 +94,78 @@ private fun MarkdownParagraph(
 }
 
 @Composable
+private fun MarkdownHeading(
+    heading: MarkdownBlock.Heading,
+    actions: MessageActions,
+) {
+    Text(
+        text =
+            heading.spans.toAnnotatedString(
+                linkColor = MaterialTheme.colorScheme.primary,
+                onOpenLink = actions.openLink,
+            ),
+        style = headingStyle(heading.level),
+        modifier = Modifier.semantics { heading() },
+    )
+}
+
+@Composable
+private fun headingStyle(level: Int): TextStyle =
+    when (level) {
+        1 -> MaterialTheme.typography.headlineSmall
+        2 -> MaterialTheme.typography.titleLarge
+        HEADING_LEVEL_3 -> MaterialTheme.typography.titleMedium
+        HEADING_LEVEL_4 -> MaterialTheme.typography.titleSmall
+        else -> MaterialTheme.typography.bodyLarge
+    }
+
+@Composable
+private fun MarkdownBlockquote(
+    spans: List<MarkdownSpan>,
+    actions: MessageActions,
+) {
+    val spacing = LocalHermesDesignTokens.current.spacing
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(spacing.s),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .width(QUOTE_BAR_WIDTH)
+                    .fillMaxHeight()
+                    .background(color = MaterialTheme.colorScheme.outlineVariant),
+        )
+        Text(
+            text =
+                spans.toAnnotatedString(
+                    linkColor = MaterialTheme.colorScheme.primary,
+                    onOpenLink = actions.openLink,
+                ),
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun MarkdownHorizontalRule() {
+    HorizontalDivider()
+}
+
+@Composable
 private fun MarkdownList(
     items: List<RenderedItem>,
     actions: MessageActions,
 ) {
     val spacing = LocalHermesDesignTokens.current.spacing
     val linkColor = MaterialTheme.colorScheme.primary
-    Column(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
+    Column(
+        modifier = Modifier.padding(start = spacing.m),
+        verticalArrangement = Arrangement.spacedBy(spacing.xs),
+    ) {
         items.forEach { item ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -110,6 +187,12 @@ private data class RenderedItem(
 )
 
 private const val BULLET_MARKER = "•"
+
+private val QUOTE_BAR_WIDTH = 3.dp
+
+private const val HEADING_LEVEL_3 = 3
+
+private const val HEADING_LEVEL_4 = 4
 
 @Composable
 private fun MarkdownCodeBlock(

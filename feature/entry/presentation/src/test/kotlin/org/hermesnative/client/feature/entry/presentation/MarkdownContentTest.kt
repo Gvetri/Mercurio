@@ -1,6 +1,7 @@
 package org.hermesnative.client.feature.entry.presentation
 
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -186,6 +187,88 @@ class MarkdownContentTest {
 
         composeTestRule.onNodeWithText("Paragraph 1").assertExists()
         composeTestRule.onNodeWithText("Paragraph 400").assertExists()
+    }
+
+    @Test
+    fun a_heading_renders_styled_text_without_its_marker() {
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(
+                    markdown = "# Release Notes\n\nbody text",
+                    actions = RecordingActions().asMessageActions(),
+                )
+            }
+        }
+
+        val heading = composeTestRule.onNodeWithText("Release Notes")
+        heading.assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("#", substring = true).assertCountEquals(0)
+        assertTrue(
+            "The heading must expose heading semantics",
+            composeTestRule
+                .onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.Text]
+                .single()
+                .text == "Release Notes",
+        )
+    }
+
+    @Test
+    fun a_blockquote_renders_its_text_without_the_quote_marker() {
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(
+                    markdown = "> quoted wisdom\n\nbody text",
+                    actions = RecordingActions().asMessageActions(),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("quoted wisdom").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText(">", substring = true).assertCountEquals(0)
+        val quoteBounds = composeTestRule.onNodeWithText("quoted wisdom").fetchSemanticsNode().boundsInRoot
+        val bodyBounds = composeTestRule.onNodeWithText("body text").fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "The quoted text must be indented beside its bar, unlike the paragraph",
+            quoteBounds.left > bodyBounds.left,
+        )
+    }
+
+    @Test
+    fun a_thematic_break_renders_without_literal_rule_text() {
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(
+                    markdown = "Above the rule\n\n---\n\nBelow the rule",
+                    actions = RecordingActions().asMessageActions(),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Above the rule").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Below the rule").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("---").assertCountEquals(0)
+    }
+
+    @Test
+    fun list_items_render_indented_instead_of_flush_with_paragraphs() {
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(
+                    markdown = "Intro paragraph\n\n- first item",
+                    actions = RecordingActions().asMessageActions(),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("first item").assertIsDisplayed()
+        val listBounds = composeTestRule.onNodeWithText("first item").fetchSemanticsNode().boundsInRoot
+        val paragraphBounds = composeTestRule.onNodeWithText("Intro paragraph").fetchSemanticsNode().boundsInRoot
+        assertTrue(
+            "The list content must start right of the paragraph text",
+            listBounds.left > paragraphBounds.left,
+        )
     }
 }
 
