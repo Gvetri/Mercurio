@@ -150,7 +150,6 @@ internal object JourneyInvariants {
             "pending-creation" -> JourneySessionCreationInvariants.verifyPendingCreation(telemetry)
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
             "pagination-search" -> verifyPaginationSearch(telemetry)
-            "stale-recoverable" -> verifyStaleRecoverable(telemetry)
             "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
             "offline-session-list" -> {
                 requireConnectionAttempted(telemetry)
@@ -182,6 +181,7 @@ internal object JourneyInvariants {
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
+            "stale-recoverable" -> verifyStaleRecoverable(telemetry)
             else -> error("No journey invariants declared for scenario '$scenarioName'.")
         }
     }
