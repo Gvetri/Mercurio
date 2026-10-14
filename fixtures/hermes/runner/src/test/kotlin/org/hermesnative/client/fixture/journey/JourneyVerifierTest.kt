@@ -1,5 +1,6 @@
 package org.hermesnative.client.fixture.journey
 
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -34,6 +35,21 @@ class JourneyVerifierTest {
         } finally {
             process.stop()
         }
+    }
+
+    @Test
+    fun every_committed_journey_scenario_declares_its_invariants() {
+        val scenarioFiles =
+            scenariosDir.listFiles().orEmpty().filter { file -> file.isFile && file.extension == "json" }
+        val undeclared =
+            scenarioFiles.map { file -> file.nameWithoutExtension }.filter { name ->
+                val failure =
+                    runCatching { JourneyInvariants.verify(name, JsonObject(emptyMap())) }.exceptionOrNull()
+                failure is IllegalStateException &&
+                    failure.message?.startsWith("No journey invariants declared") == true
+            }
+        assertTrue("No journey scenario JSONs found under $scenariosDir.", scenarioFiles.isNotEmpty())
+        assertTrue("Journey scenarios without declared invariants: $undeclared", undeclared.isEmpty())
     }
 
     @Test
