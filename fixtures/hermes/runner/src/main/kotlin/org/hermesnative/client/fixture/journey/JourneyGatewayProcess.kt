@@ -468,6 +468,9 @@ private object JourneyGatewaySse {
         try {
             writeObservationEvents(exchange, behavior, script, runId)
         } catch (_: Exception) {
+            if (script.finalizeOnDisconnect) {
+                behavior.observationDelivered[runId] = true
+            }
         } finally {
             behavior.sseClosed.computeIfAbsent(runId) { AtomicInteger() }.incrementAndGet()
             exchange.close()
@@ -500,6 +503,9 @@ private object JourneyGatewaySse {
         }
         if (script.holdOpen) {
             writeKeepAliveEvents(exchange)
+            if (script.finalizeOnDisconnect) {
+                behavior.observationDelivered[runId] = true
+            }
         } else if (script.finalStatus != null && events.isEmpty()) {
             behavior.observationDelivered[runId] = true
         }

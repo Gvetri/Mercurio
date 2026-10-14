@@ -1,0 +1,48 @@
+{
+    "name": "composer-stop",
+    "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+    "port": 18443,
+    "tls": true,
+    "capabilities": [
+        "sessions",
+        "session_create",
+        "session",
+        "session_update",
+        "session_delete",
+        "session_messages",
+        "runs",
+        "run_status",
+        "run_events"
+    ],
+    "sessions": [
+        {
+            "id": "session-alpha",
+            "title": "Alpha Session",
+            "preview": "Synthetic preview",
+            "pinned": false
+        }
+    ],
+    "runs": [
+        {
+            "run_id": "stop-run",
+            "session_id": "session-alpha",
+            "create_status": "started",
+            "hold_open": true,
+            "finalize_on_disconnect": true,
+            "observation": [
+                {
+                    "type": "message.delta",
+                    "delta": "Stopping partial"
+                }
+            ],
+            "final_status": "completed",
+            "terminal_history": [
+                {
+                    "id": "message-stop",
+                    "role": "assistant",
+                    "content": "Stopping partial"
+                }
+            ]
+        }
+    ]
+}
