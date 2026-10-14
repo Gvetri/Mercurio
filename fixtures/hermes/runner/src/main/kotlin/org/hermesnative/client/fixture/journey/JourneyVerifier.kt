@@ -151,8 +151,17 @@ internal object JourneyInvariants {
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
             "pagination-search" -> requireConnectionAttempted(telemetry)
             "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
+            "offline-session-list" -> {
+                requireConnectionAttempted(telemetry)
+                val paths = recordedRequestPaths(telemetry)
+                check(paths.count { it == "/api/sessions" } >= 2) {
+                    "The client did not retry the Session list while the Gateway was offline."
+                }
+                check(paths.any { it.startsWith("/api/sessions/") }) {
+                    "The client did not attempt to open a Session while the Gateway was offline."
+                }
+            }
             "markdown-links" -> requireConnectionAttempted(telemetry)
-            "markdown-blocks" -> requireConnectionAttempted(telemetry)
             "accessibility-controls" -> requireConnectionAttempted(telemetry)
             "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)
             "capabilities-missing-required" -> requireConnectionAttempted(telemetry)
@@ -173,7 +182,9 @@ internal object JourneyInvariants {
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
             "confirmed-send" -> JourneyRunInvariants.verifyConfirmedSend(telemetry)
+            "markdown-blocks" -> requireConnectionAttempted(telemetry)
             "stale-recoverable" -> requireConnectionAttempted(telemetry)
+            "diagnostics-recording" -> JourneyDiagnosticsInvariants.verifyDiagnosticsRecording(telemetry)
             else -> error("No journey invariants declared for scenario '$scenarioName'.")
         }
     }
@@ -459,6 +470,19 @@ private object JourneyRunInvariants {
     }
 
     private const val OFFLINE_SEND_SESSION_ID = "session-offline"
+}
+
+private object JourneyDiagnosticsInvariants {
+    internal fun verifyDiagnosticsRecording(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        val loadedSessionList =
+            telemetry["requests"]?.jsonArray.orEmpty().any { request ->
+                val fields = request.jsonObject
+                fields["method"]?.jsonPrimitive?.content == "GET" &&
+                    fields["path"]?.jsonPrimitive?.content == "/api/sessions"
+            }
+        check(loadedSessionList) { "The diagnostics journey never loaded the Session list." }
+    }
 }
 
 private const val MIN_ARGUMENT_COUNT = 2

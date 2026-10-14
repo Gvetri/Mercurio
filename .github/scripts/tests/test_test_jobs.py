@@ -367,10 +367,10 @@ class TestJobs(unittest.TestCase):
             self.assertIn("All deterministic journeys passed.", result.stdout)
             self.assertEqual("2", (count_dir / "session-lifecycle").read_text().strip())
             self.assertEqual("1", (count_dir / "connection").read_text().strip())
-            self.assertEqual(22, sum(int((count_dir / name).read_text().strip()) for name in sorted(p.name for p in count_dir.iterdir())))
+            self.assertEqual(24, sum(int((count_dir / name).read_text().strip()) for name in sorted(p.name for p in count_dir.iterdir())))
             curl_calls = (workspace / "curl.calls").read_text().splitlines()
-            self.assertEqual(22, len([call for call in curl_calls if "/health" in call]))
-            self.assertEqual(22, len([call for call in curl_calls if "/v1/capabilities" in call]))
+            self.assertEqual(24, len([call for call in curl_calls if "/health" in call]))
+            self.assertEqual(24, len([call for call in curl_calls if "/v1/capabilities" in call]))
             evidence_dir = workspace / "artifacts/journey-evidence"
             self.assertIn("Element not found: Pin Session", (evidence_dir / "session-lifecycle-maestro-attempt1.log").read_text())
             self.assertIn("COMPLETED", (evidence_dir / "session-lifecycle-maestro.log").read_text())
