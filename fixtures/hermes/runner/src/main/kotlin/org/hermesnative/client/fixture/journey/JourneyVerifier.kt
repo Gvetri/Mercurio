@@ -151,8 +151,17 @@ internal object JourneyInvariants {
             "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
             "pagination-search" -> requireConnectionAttempted(telemetry)
             "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
+            "offline-session-list" -> {
+                requireConnectionAttempted(telemetry)
+                val paths = recordedRequestPaths(telemetry)
+                check(paths.count { it == "/api/sessions" } >= 2) {
+                    "The client did not retry the Session list while the Gateway was offline."
+                }
+                check(paths.any { it.startsWith("/api/sessions/") }) {
+                    "The client did not attempt to open a Session while the Gateway was offline."
+                }
+            }
             "markdown-links" -> requireConnectionAttempted(telemetry)
-            "markdown-blocks" -> requireConnectionAttempted(telemetry)
             "accessibility-controls" -> requireConnectionAttempted(telemetry)
             "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)
             "capabilities-missing-required" -> requireConnectionAttempted(telemetry)
@@ -172,6 +181,7 @@ internal object JourneyInvariants {
             "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
             "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
+            "markdown-blocks" -> requireConnectionAttempted(telemetry)
             "stale-recoverable" -> requireConnectionAttempted(telemetry)
             "diagnostics-recording" -> JourneyDiagnosticsInvariants.verifyDiagnosticsRecording(telemetry)
             else -> error("No journey invariants declared for scenario '$scenarioName'.")
