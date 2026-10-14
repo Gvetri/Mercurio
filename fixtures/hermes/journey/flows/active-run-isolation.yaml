@@ -65,5 +65,11 @@ name: active-run-isolation
 - assertVisible: "Alpha Session"
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
-    visible: "Latest Run: active-run"
+    visible: "Latest Run"
+    timeout: 30000
+- tapOn:
+    text: "Show run ID"
+    index: 0
+- extendedWaitUntil:
+    visible: "Run ID: active-run"
     timeout: 30000

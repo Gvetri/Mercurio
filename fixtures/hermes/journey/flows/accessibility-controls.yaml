@@ -28,3 +28,34 @@ name: accessibility-controls
 - assertVisible: "Message"
 - assertVisible: "Send"
 - assertVisible: "Back to Sessions"
+- back
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Session actions for Alpha Session"
+- tapOn: "Delete Session"
+- assertVisible: "Confirm Delete Session"
+- assertVisible: "Cancel Delete"
+- takeScreenshot: accessibility-controls-delete-confirmation
+- tapOn: "Cancel Delete"
+- assertVisible: "Alpha Session"
+- assertNotVisible: "Confirm Delete Session"
+- tapOn: "Alpha Session"
+- extendedWaitUntil:
+    visible: "Message"
+    timeout: 30000
+- assertVisible:
+    id: "conversation-message-input"
+- assertVisible:
+    id: "conversation-send"
+- tapOn:
+    id: "conversation-send"
+# The composer placeholder ("Write a message") is composed only while the input
+# is focused and empty (M3 placeholder, SessionDetailComposer.kt). Tapping Send
+# on an empty composer is a no-op (Send is disabled while the text is blank), so
+# the input is still empty here; focus it to reveal the placeholder.
+- tapOn:
+    id: "conversation-message-input"
+- assertVisible: "Write a message"
+- assertVisible: "Back to Sessions"
+- takeScreenshot: accessibility-controls-composer-resource-ids
