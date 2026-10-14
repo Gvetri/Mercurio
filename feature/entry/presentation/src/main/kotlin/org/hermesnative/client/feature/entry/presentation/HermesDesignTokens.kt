@@ -34,6 +34,15 @@ data class HermesElevation(
     val raised: Dp,
 )
 
+@Immutable
+data class HermesSyntaxColors(
+    val keyword: Color,
+    val string: Color,
+    val number: Color,
+    val comment: Color,
+    val function: Color,
+)
+
 /**
  * The complete local design-token set for one theme mode: color, typography,
  * spacing, shape, and elevation. [HermesLightTokens] and [HermesDarkTokens] are
@@ -46,6 +55,7 @@ data class HermesDesignTokens(
     val spacing: HermesSpacing,
     val shapes: Shapes,
     val elevation: HermesElevation,
+    val syntaxColors: HermesSyntaxColors,
 )
 
 private val HermesTypography = Typography()
@@ -61,6 +71,16 @@ private const val DARK_ON_PRIMARY_COLOR = 0xFF1F2A58
 private const val DARK_SECONDARY_COLOR = 0xFFC5C5DC
 private const val DARK_BACKGROUND_COLOR = 0xFF121318
 private const val DARK_SURFACE_COLOR = 0xFF121318
+private const val LIGHT_SYNTAX_KEYWORD_COLOR = 0xFF7B1FA2
+private const val LIGHT_SYNTAX_STRING_COLOR = 0xFF1B6B2A
+private const val LIGHT_SYNTAX_NUMBER_COLOR = 0xFF8F4708
+private const val LIGHT_SYNTAX_COMMENT_COLOR = 0xFF5F5F5F
+private const val LIGHT_SYNTAX_FUNCTION_COLOR = 0xFF1055B8
+private const val DARK_SYNTAX_KEYWORD_COLOR = 0xFFD4A5FF
+private const val DARK_SYNTAX_STRING_COLOR = 0xFF9CE38F
+private const val DARK_SYNTAX_NUMBER_COLOR = 0xFFFFD07A
+private const val DARK_SYNTAX_COMMENT_COLOR = 0xFF87D2CA
+private const val DARK_SYNTAX_FUNCTION_COLOR = 0xFF9EC6FF
 
 private val HermesLightColorScheme =
     lightColorScheme(
@@ -94,6 +114,24 @@ private val HermesElevationScale =
         raised = 3.dp,
     )
 
+private val HermesLightSyntaxColors =
+    HermesSyntaxColors(
+        keyword = Color(LIGHT_SYNTAX_KEYWORD_COLOR),
+        string = Color(LIGHT_SYNTAX_STRING_COLOR),
+        number = Color(LIGHT_SYNTAX_NUMBER_COLOR),
+        comment = Color(LIGHT_SYNTAX_COMMENT_COLOR),
+        function = Color(LIGHT_SYNTAX_FUNCTION_COLOR),
+    )
+
+private val HermesDarkSyntaxColors =
+    HermesSyntaxColors(
+        keyword = Color(DARK_SYNTAX_KEYWORD_COLOR),
+        string = Color(DARK_SYNTAX_STRING_COLOR),
+        number = Color(DARK_SYNTAX_NUMBER_COLOR),
+        comment = Color(DARK_SYNTAX_COMMENT_COLOR),
+        function = Color(DARK_SYNTAX_FUNCTION_COLOR),
+    )
+
 val HermesLightTokens: HermesDesignTokens =
     HermesDesignTokens(
         colorScheme = HermesLightColorScheme,
@@ -101,6 +139,7 @@ val HermesLightTokens: HermesDesignTokens =
         spacing = HermesSpacingScale,
         shapes = HermesShapes,
         elevation = HermesElevationScale,
+        syntaxColors = HermesLightSyntaxColors,
     )
 
 val HermesDarkTokens: HermesDesignTokens =
@@ -110,6 +149,7 @@ val HermesDarkTokens: HermesDesignTokens =
         spacing = HermesSpacingScale,
         shapes = HermesShapes,
         elevation = HermesElevationScale,
+        syntaxColors = HermesDarkSyntaxColors,
     )
 
 /**
