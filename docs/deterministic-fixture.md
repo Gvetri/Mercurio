@@ -47,9 +47,9 @@ The hosted `fixture-lifecycle` quality check runs this same command. It is deter
 
 The deterministic emulator journeys ([`docs/deterministic-emulator-journeys.md`](deterministic-emulator-journeys.md)) reuse this pinned provenance as the identity for every journey scenario and for the fake Gateway that serves the emulator layer.
 
-## Live session-matrix acceptance lane
+## Live acceptance lane
 
-The data module owns a test-class acceptance lane that drives the real OkHttp client against the real deterministic journey Gateway over TLS. The lane starts `JourneyGatewayProcess` from a programmatic scenario, wraps it in an http-scheme view for the fixture's loopback guard, and points `DefaultGatewayClient` at the started process's own `https` endpoint with an `OkHttpClient` that trusts only the journey CA and keeps default hostname verification. Bearer authentication is proven over the wire: the scenario requires a bearer credential, so any request without the expected credential fails with `AUTHENTICATION_FAILED`.
+The data module owns test-class acceptance lanes that drive the real OkHttp client against the real deterministic journey Gateway over TLS. Each lane starts `JourneyGatewayProcess` from a programmatic scenario, wraps it in an http-scheme view for the fixture's loopback guard, and points `DefaultGatewayClient` at the started process's own `https` endpoint with an `OkHttpClient` that trusts only the journey CA and keeps default hostname verification. Bearer authentication is proven over the wire: the scenarios require a bearer credential, so any request without the expected credential fails with `AUTHENTICATION_FAILED`.
 
 The one command is:
 
@@ -57,9 +57,9 @@ The one command is:
 ./gradlew :feature:entry:data:liveAcceptanceTest
 ```
 
-The task runs the `LiveGatewaySessionAcceptanceTest` suite. It verifies capability discovery, the paged session list, create, open, rename, pin, unpin, history, and delete against the started process only, and verifies that a failing operation surfaces its `GatewayErrorCategory`. The same tests also run hermetically under the plain `test` task on an ephemeral loopback port.
+The task runs the `LiveGatewaySessionAcceptanceTest` and `LiveGatewayRunAcceptanceTest` suites, which together cover the client capability manifest's eleven endpoint requirements. The session suite verifies capability discovery, the paged session list, create, open, rename, pin, unpin, history, and delete against the started process only, and verifies that a failing operation surfaces its `GatewayErrorCategory`. The run suite creates an ephemeral Session through the lane client and verifies run create (202 admission), run status (the `hermes.run` object with its identity check), and run SSE observation against that Session: the admitted run's delta text is delivered without loss, a `live_framing` stream proves tolerance for `id:` lines and comment lines, an event type outside the client's mapping is silently skipped, a held-open stream is closed by the client after its terminal event, and a refused creation surfaces `GATEWAY_REQUEST_FAILED`. A fake-transport test at the same boundary seam proves that a `message.delta` frame without its delta and a record mixing `data:` with other content both surface `INVALID_RESPONSE`. The same tests also run hermetically under the plain `test` task on an ephemeral loopback port.
 
-Each operation emits one redacted JSON line with the operation name, method, path and query shape, expected and actual status, outcome, envelope key types, and the error category on failure. Values, credentials, bearer tokens, URLs, and workspace paths are redacted. Evidence lands under `feature/entry/data/build/live-session-matrix-evidence/` by default; a different directory can be supplied with the `live.session.matrix.evidenceDir` system property.
+Each operation emits one redacted JSON line with the operation name, method, path and query shape, expected and actual status, outcome, envelope key types, and the error category on failure. Run observation lines carry a per-stream summary: events seen by type, the delta count, the terminal event, skipped unmapped frames, the tolerated framing artifacts (`id:` lines and boundary comments), and whether the stream held open with keep-alive comments. Values, credentials, bearer tokens, delta text, run input, URLs, and workspace paths are redacted. Evidence lands under `feature/entry/data/build/live-session-matrix-evidence/` by default; a different directory can be supplied with the `live.session.matrix.evidenceDir` system property.
 
 ## Compatibility changes
 
