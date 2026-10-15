@@ -4,14 +4,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
-import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.hermesnative.client.feature.entry.domain.Session
 import org.hermesnative.client.feature.entry.domain.SessionId
 import org.hermesnative.client.feature.entry.domain.SessionListRequest
-import org.hermesnative.client.fixture.DeterministicGatewayFixture
-import org.hermesnative.client.fixture.GatewayProcessFactory
-import org.hermesnative.client.fixture.journey.JourneyGatewayProcess
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -62,7 +58,7 @@ class LiveGatewaySessionAcceptanceTest {
     @Test
     fun session_matrix_executes_every_operation_against_the_started_gateway() {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix"), repositoryRoot)
-        val run = liveMatrixRun()
+        val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
 
         run.fixture.execute { context ->
             StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
@@ -101,7 +97,7 @@ class LiveGatewaySessionAcceptanceTest {
     @Test
     fun failing_session_operation_surfaces_its_gateway_error_category() {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-failing-operations"), repositoryRoot)
-        val run = liveMatrixRun()
+        val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
 
         run.fixture.execute { _ ->
             val rejectedCredentials =
@@ -146,7 +142,7 @@ class LiveGatewaySessionAcceptanceTest {
     @Test
     fun evidence_for_failed_operations_never_contains_the_bearer_value() {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-redaction"), repositoryRoot)
-        val run = liveMatrixRun()
+        val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
 
         run.fixture.execute { _ ->
             val client = laneClient(run, LANE_BEARER_TOKEN)
@@ -361,52 +357,6 @@ class LiveGatewaySessionAcceptanceTest {
             expectedStatus = HTTP_OK,
             envelope = SESSION_ENVELOPE,
         )
-
-    private fun laneClient(
-        run: LiveSessionMatrixRun,
-        bearerToken: String,
-    ): DefaultGatewayClient =
-        DefaultGatewayClient(
-            endpoint = run.process.endpoint.toString(),
-            bearerToken = bearerToken,
-            transport = OkHttpGatewayTransport(run.tlsClient),
-        )
-
-    private fun liveMatrixRun(): LiveSessionMatrixRun {
-        var startedProcess: JourneyGatewayProcess? = null
-        val tlsClient = journeyTrustedClient(repositoryRoot.resolve(JOURNEY_CA_PEM_PATH))
-        val fixture =
-            DeterministicGatewayFixture(
-                descriptorFile = repositoryRoot.resolve(PINNED_DESCRIPTOR_PATH),
-                processFactory =
-                    GatewayProcessFactory { descriptor ->
-                        val scenario =
-                            laneScenario(descriptor, port = freeLoopbackPort(), bearerToken = LANE_BEARER_TOKEN)
-                        val process =
-                            JourneyGatewayProcess.start(
-                                scenario,
-                                repositoryRoot.resolve(JOURNEY_KEYSTORE_PATH),
-                                JOURNEY_KEYSTORE_PASSWORD,
-                            )
-                        startedProcess = process
-                        LoopbackHttpViewProcess(process)
-                    },
-                readinessChecker = TlsLoopbackReadinessChecker(tlsClient, LANE_BEARER_TOKEN),
-            )
-        return LiveSessionMatrixRun(fixture, tlsClient) {
-            requireNotNull(startedProcess) { "The lane journey process has not started." }
-        }
-    }
-
-    private fun gatewayFailure(block: () -> Unit): GatewayException =
-        try {
-            block()
-            error("Expected the operation to fail with a GatewayException.")
-        } catch (failure: GatewayException) {
-            failure
-        }
-
-    private fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name.jsonl")
 
     private companion object {
         const val LANE_BEARER_TOKEN = "live-session-matrix-bearer"
