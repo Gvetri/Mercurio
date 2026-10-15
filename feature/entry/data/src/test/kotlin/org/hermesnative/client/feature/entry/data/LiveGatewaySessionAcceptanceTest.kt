@@ -1,5 +1,8 @@
 package org.hermesnative.client.feature.entry.data
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
 import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
@@ -92,6 +95,7 @@ class LiveGatewaySessionAcceptanceTest {
         assertFalse(evidenceText.contains(SEEDED_PINNED_SESSION_ID))
         assertFalse(evidenceText.contains(LANE_CREATED_TITLE))
         assertFalse(evidenceText.contains(SEEDED_FIRST_MESSAGE_CONTENT))
+        assertRecordedMethodsMatch(evidence)
     }
 
     @Test
@@ -136,6 +140,7 @@ class LiveGatewaySessionAcceptanceTest {
         assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
         assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.AUTHENTICATION_FAILED.name}\""))
         assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name}\""))
+        assertRecordedMethodsMatch(evidence)
     }
 
     @Test
@@ -176,6 +181,7 @@ class LiveGatewaySessionAcceptanceTest {
         assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.AUTHENTICATION_FAILED.name}\""))
         assertFalse(evidenceText.contains(LANE_BEARER_TOKEN))
         assertFalse(evidenceText.contains(WRONG_BEARER_TOKEN))
+        assertRecordedMethodsMatch(evidence)
     }
 
     @Test
@@ -201,6 +207,7 @@ class LiveGatewaySessionAcceptanceTest {
         assertFalse(sinkText.contains(repositoryRoot.absolutePath))
         assertTrue(sinkText.contains("\"authorization\":\"<redacted>\""))
         assertTrue(sinkText.contains("\"workspace\":\"<workspace>\""))
+        assertRecordedMethodsMatch(recorder)
     }
 
     private fun verifyPagedSessionList(
@@ -262,21 +269,21 @@ class LiveGatewaySessionAcceptanceTest {
         assertFalse(created.pinned)
 
         val opened = client.openSession(created.id)
-        evidence.record(sessionResourceEvidence("session open"))
+        evidence.record(sessionResourceEvidence("session open", method = "GET"))
         assertEquals(CREATED_SESSION_ID, opened.id.value)
         assertEquals(LANE_CREATED_TITLE, opened.title)
 
         val renamed = client.renameSession(created.id, LANE_RENAMED_TITLE)
-        evidence.record(sessionResourceEvidence("session rename"))
+        evidence.record(sessionResourceEvidence("session rename", method = "PATCH"))
         assertEquals(LANE_RENAMED_TITLE, renamed.title)
 
         val pinned = client.pinSession(created.id)
-        evidence.record(sessionResourceEvidence("session pin"))
+        evidence.record(sessionResourceEvidence("session pin", method = "PATCH"))
         assertEquals(created.id, pinned.sessionId)
         assertTrue(pinned.pinned)
 
         val unpinned = client.unpinSession(created.id)
-        evidence.record(sessionResourceEvidence("session unpin"))
+        evidence.record(sessionResourceEvidence("session unpin", method = "PATCH"))
         assertFalse(unpinned.pinned)
 
         verifySessionHistory(client, created, evidence)
@@ -330,10 +337,26 @@ class LiveGatewaySessionAcceptanceTest {
         assertEquals(SEEDED_SECOND_MESSAGE_CONTENT, seededHistory.messages.last().content)
     }
 
-    private fun sessionResourceEvidence(operation: String): LiveSessionMatrixEvidence =
+    private fun assertRecordedMethodsMatch(evidence: LiveSessionMatrixRecorder) {
+        evidence.file.readLines().filter { it.isNotBlank() }.forEach { line ->
+            val entry = Json.parseToJsonElement(line).jsonObject
+            val operation = entry.getValue("operation").jsonPrimitive.content
+            val recordedMethod = entry.getValue("method").jsonPrimitive.content
+            val boundaryMethod =
+                requireNotNull(OPERATION_METHODS[operation]) {
+                    "Operation $operation is missing from the per-operation method table"
+                }
+            assertEquals("$operation must record the boundary method", boundaryMethod, recordedMethod)
+        }
+    }
+
+    private fun sessionResourceEvidence(
+        operation: String,
+        method: String,
+    ): LiveSessionMatrixEvidence =
         verifiedEvidence(
             operation = operation,
-            method = "PATCH",
+            method = method,
             pathShape = "/api/sessions/{session_id}",
             expectedStatus = HTTP_OK,
             envelope = SESSION_ENVELOPE,
@@ -397,6 +420,20 @@ class LiveGatewaySessionAcceptanceTest {
         const val FAILED_OPERATION_ENTRY_COUNT = 2
         const val HTTP_OK = 200
         const val HTTP_CREATED = 201
+
+        val OPERATION_METHODS =
+            mapOf(
+                "capability discovery" to "GET",
+                "redaction sanity probe" to "GET",
+                "session create" to "POST",
+                "session delete" to "DELETE",
+                "session history" to "GET",
+                "session list" to "GET",
+                "session open" to "GET",
+                "session pin" to "PATCH",
+                "session rename" to "PATCH",
+                "session unpin" to "PATCH",
+            )
 
         val CAPABILITY_DISCOVERY_ENVELOPE =
             mapOf(
