@@ -94,6 +94,50 @@ class CodeSyntaxHighlightTest {
     }
 
     @Test
+    fun yaml_code_tokenizes_hash_line_comments_outside_strings() {
+        val code = "# release\nname: \"a # b\" # note\non: true"
+
+        assertEquals(
+            listOf(
+                CodeTokenKind.Comment to "# release",
+                CodeTokenKind.String to "\"a # b\"",
+                CodeTokenKind.Comment to "# note",
+                CodeTokenKind.Keyword to "on",
+                CodeTokenKind.Keyword to "true",
+            ),
+            tokenTexts("yaml", code),
+        )
+    }
+
+    @Test
+    fun toml_code_tokenizes_hash_line_comments() {
+        val code = "# config\ntitle = \"app\" # label\nport = 8080"
+
+        assertEquals(
+            listOf(
+                CodeTokenKind.Comment to "# config",
+                CodeTokenKind.String to "\"app\"",
+                CodeTokenKind.Comment to "# label",
+                CodeTokenKind.Number to "8080",
+            ),
+            tokenTexts("toml", code),
+        )
+    }
+
+    @Test
+    fun json_produces_no_comment_tokens() {
+        val code = "{\n  \"note\": \"# not a comment\"\n}\n# stray"
+
+        assertEquals(
+            listOf(
+                CodeTokenKind.String to "\"note\"",
+                CodeTokenKind.String to "\"# not a comment\"",
+            ),
+            tokenTexts("json", code),
+        )
+    }
+
+    @Test
     fun javascript_backtick_templates_span_lines_and_line_comments_end_at_the_newline() {
         val code = "const t = `a\nb`; // tail"
 

@@ -218,7 +218,12 @@ private val DataGrammar =
     )
 
 private val YamlGrammar =
-    DataGrammar.copy(keywords = setOf("false", "null", "true", "yes", "no", "on", "off"))
+    DataGrammar.copy(
+        keywords = setOf("false", "null", "true", "yes", "no", "on", "off"),
+        lineComment = "#",
+    )
+
+private val TomlGrammar = DataGrammar.copy(lineComment = "#")
 
 private val LanguageGrammars =
     mapOf(
@@ -248,7 +253,7 @@ private val LanguageGrammars =
         "bash" to ShellGrammar,
         "shell" to ShellGrammar,
         "sql" to SqlGrammar,
-        "toml" to DataGrammar,
+        "toml" to TomlGrammar,
         "ts" to TypeScriptGrammar,
         "tsx" to TypeScriptGrammar,
         "typescript" to TypeScriptGrammar,
