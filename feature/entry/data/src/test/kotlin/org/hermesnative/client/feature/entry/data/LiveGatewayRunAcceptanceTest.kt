@@ -1,16 +1,12 @@
 package org.hermesnative.client.feature.entry.data
 
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
-import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunEvent
 import org.hermesnative.client.feature.entry.domain.RunEventObservation
 import org.hermesnative.client.feature.entry.domain.RunEventType
 import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.SessionId
-import org.hermesnative.client.fixture.DeterministicGatewayFixture
-import org.hermesnative.client.fixture.GatewayProcessFactory
-import org.hermesnative.client.fixture.journey.JourneyGatewayProcess
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -28,7 +24,7 @@ class LiveGatewayRunAcceptanceTest {
     @Test
     fun run_matrix_executes_every_run_operation_against_the_started_gateway() {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-run-matrix"), repositoryRoot)
-        val run = liveRunMatrixRun()
+        val run = laneRun(repositoryRoot, RUN_LANE_BEARER_TOKEN, ::runLaneScenario)
 
         run.fixture.execute { context ->
             StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
@@ -141,16 +137,7 @@ class LiveGatewayRunAcceptanceTest {
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
                 envelope = RUN_OBSERVATION_ENVELOPE,
-                streamSummary =
-                    RunStreamSummary(
-                        eventsByType = eventsByWireName(events),
-                        deltaCount = DELTA_RUN_DELTA_COUNT,
-                        terminalEvent = TERMINAL_EVENT_NAME,
-                        unmappedFramesSkipped = 0,
-                        idLines = 0,
-                        boundaryComments = 0,
-                        keepAliveComments = false,
-                    ),
+                streamSummary = runStreamSummary(RUN_LANE_DELTA_RUN_ID, events),
             ),
         )
 
@@ -174,16 +161,7 @@ class LiveGatewayRunAcceptanceTest {
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
                 envelope = RUN_OBSERVATION_ENVELOPE,
-                streamSummary =
-                    RunStreamSummary(
-                        eventsByType = eventsByWireName(events),
-                        deltaCount = FRAMING_RUN_DELTA_COUNT,
-                        terminalEvent = TERMINAL_EVENT_NAME,
-                        unmappedFramesSkipped = 0,
-                        idLines = FRAMING_RUN_EVENT_COUNT,
-                        boundaryComments = FRAMING_RUN_BOUNDARY_COMMENTS,
-                        keepAliveComments = false,
-                    ),
+                streamSummary = runStreamSummary(RUN_LANE_FRAMING_RUN_ID, events),
             ),
         )
     }
@@ -207,16 +185,7 @@ class LiveGatewayRunAcceptanceTest {
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
                 envelope = RUN_OBSERVATION_ENVELOPE,
-                streamSummary =
-                    RunStreamSummary(
-                        eventsByType = eventsByWireName(events),
-                        deltaCount = HOLD_OPEN_RUN_DELTA_COUNT,
-                        terminalEvent = TERMINAL_EVENT_NAME,
-                        unmappedFramesSkipped = 0,
-                        idLines = 0,
-                        boundaryComments = 0,
-                        keepAliveComments = true,
-                    ),
+                streamSummary = runStreamSummary(RUN_LANE_HOLD_OPEN_RUN_ID, events),
             ),
         )
     }
@@ -238,16 +207,7 @@ class LiveGatewayRunAcceptanceTest {
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
                 envelope = RUN_OBSERVATION_ENVELOPE,
-                streamSummary =
-                    RunStreamSummary(
-                        eventsByType = eventsByWireName(events),
-                        deltaCount = 0,
-                        terminalEvent = TERMINAL_EVENT_NAME,
-                        unmappedFramesSkipped = 1,
-                        idLines = 0,
-                        boundaryComments = 0,
-                        keepAliveComments = false,
-                    ),
+                streamSummary = runStreamSummary(RUN_LANE_UNMAPPED_RUN_ID, events),
             ),
         )
     }
@@ -309,6 +269,35 @@ class LiveGatewayRunAcceptanceTest {
         assertEquals(expectedStatus, status.status)
     }
 
+    private fun runStreamSummary(
+        runId: String,
+        events: List<RunEvent>,
+    ): RunStreamSummary {
+        val script =
+            requireNotNull(runLaneScripts().singleOrNull { laneScript -> laneScript.runId == runId }) {
+                "The run lane scenario has no script for run $runId."
+            }
+        val deltaWireName = RUN_LANE_EVENT_WIRE_NAMES.getValue(RunEventType.MESSAGE_DELTA)
+        val deliveredEventsByType = eventsByWireName(events)
+        val deliveredDeltaCount = deliveredDeltas(events).size
+        val unmappedFramesSkipped =
+            script.observation.count { scriptedEvent -> scriptedEvent.type !in RUN_LANE_EVENT_WIRE_NAMES.values }
+        assertEquals(
+            script.observation.count { scriptedEvent -> scriptedEvent.type == deltaWireName },
+            deliveredDeltaCount,
+        )
+        assertEquals(script.observation.size - unmappedFramesSkipped, deliveredEventsByType.values.sum())
+        return RunStreamSummary(
+            eventsByType = deliveredEventsByType,
+            deltaCount = deliveredDeltaCount,
+            terminalEvent = TERMINAL_EVENT_NAME,
+            unmappedFramesSkipped = unmappedFramesSkipped,
+            idLines = if (script.liveFraming) script.observation.size else 0,
+            boundaryComments = if (script.liveFraming) LIVE_FRAMING_BOUNDARY_COMMENTS else 0,
+            keepAliveComments = script.holdOpen,
+        )
+    }
+
     private fun collectEventsUntilTerminal(observation: RunEventObservation): List<RunEvent> {
         val iterator = observation.iterator()
         val events = mutableListOf<RunEvent>()
@@ -329,58 +318,12 @@ class LiveGatewayRunAcceptanceTest {
             "The run lane observed an event type outside its scenario: $type."
         }
 
-    private fun laneClient(
-        run: LiveSessionMatrixRun,
-        bearerToken: String,
-    ): DefaultGatewayClient =
-        DefaultGatewayClient(
-            endpoint = run.process.endpoint.toString(),
-            bearerToken = bearerToken,
-            transport = OkHttpGatewayTransport(run.tlsClient),
-        )
-
     private fun seamClient(transport: GatewayTransport): DefaultGatewayClient =
         DefaultGatewayClient(
             endpoint = "https://gateway.example",
             bearerToken = "test-token",
             transport = transport,
         )
-
-    private fun liveRunMatrixRun(): LiveSessionMatrixRun {
-        var startedProcess: JourneyGatewayProcess? = null
-        val tlsClient = journeyTrustedClient(repositoryRoot.resolve(JOURNEY_CA_PEM_PATH))
-        val fixture =
-            DeterministicGatewayFixture(
-                descriptorFile = repositoryRoot.resolve(PINNED_DESCRIPTOR_PATH),
-                processFactory =
-                    GatewayProcessFactory { descriptor ->
-                        val scenario =
-                            runLaneScenario(descriptor, port = freeLoopbackPort(), bearerToken = RUN_LANE_BEARER_TOKEN)
-                        val process =
-                            JourneyGatewayProcess.start(
-                                scenario,
-                                repositoryRoot.resolve(JOURNEY_KEYSTORE_PATH),
-                                JOURNEY_KEYSTORE_PASSWORD,
-                            )
-                        startedProcess = process
-                        LoopbackHttpViewProcess(process)
-                    },
-                readinessChecker = TlsLoopbackReadinessChecker(tlsClient, RUN_LANE_BEARER_TOKEN),
-            )
-        return LiveSessionMatrixRun(fixture, tlsClient) {
-            requireNotNull(startedProcess) { "The run lane journey process has not started." }
-        }
-    }
-
-    private fun gatewayFailure(block: () -> Unit): GatewayException =
-        try {
-            block()
-            error("Expected the operation to fail with a GatewayException.")
-        } catch (failure: GatewayException) {
-            failure
-        }
-
-    private fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name.jsonl")
 
     private class SeamedEventStreamTransport(
         private val lines: List<String>,
@@ -408,11 +351,7 @@ class LiveGatewayRunAcceptanceTest {
         const val TERMINAL_EVENT_NAME = "run.completed"
         const val RUN_MATRIX_ENTRY_COUNT = 11
         const val MALFORMED_STREAM_ENTRY_COUNT = 2
-        const val DELTA_RUN_DELTA_COUNT = 3
-        const val FRAMING_RUN_DELTA_COUNT = 1
-        const val FRAMING_RUN_EVENT_COUNT = 2
-        const val FRAMING_RUN_BOUNDARY_COMMENTS = 2
-        const val HOLD_OPEN_RUN_DELTA_COUNT = 1
+        const val LIVE_FRAMING_BOUNDARY_COMMENTS = 2
         const val HTTP_OK = 200
         const val HTTP_ACCEPTED = 202
 
