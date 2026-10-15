@@ -5,10 +5,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.hermesnative.client.fixture.DeterministicGatewayFixture
 import org.hermesnative.client.fixture.FixtureReadinessChecker
 import org.hermesnative.client.fixture.GatewayProcess
+import org.hermesnative.client.fixture.GatewayProcessFactory
 import org.hermesnative.client.fixture.PinnedFixtureDescriptor
 import org.hermesnative.client.fixture.journey.JourneyGatewayProcess
 import org.hermesnative.client.fixture.journey.JourneyMessage
@@ -141,7 +143,7 @@ internal fun runLaneScenario(
         runs = runLaneScripts(),
     )
 
-private fun runLaneScripts(): List<JourneyRunScript> =
+internal fun runLaneScripts(): List<JourneyRunScript> =
     listOf(
         JourneyRunScript(
             runId = RUN_LANE_DELTA_RUN_ID,
@@ -198,6 +200,55 @@ private fun runLaneScripts(): List<JourneyRunScript> =
             refuseCreate = true,
         ),
     )
+
+internal fun laneRun(
+    repositoryRoot: File,
+    bearerToken: String,
+    scenarioFactory: (descriptor: PinnedFixtureDescriptor, port: Int, bearerToken: String) -> JourneyScenario,
+): LiveSessionMatrixRun {
+    var startedProcess: JourneyGatewayProcess? = null
+    val tlsClient = journeyTrustedClient(repositoryRoot.resolve(JOURNEY_CA_PEM_PATH))
+    val fixture =
+        DeterministicGatewayFixture(
+            descriptorFile = repositoryRoot.resolve(PINNED_DESCRIPTOR_PATH),
+            processFactory =
+                GatewayProcessFactory { descriptor ->
+                    val scenario = scenarioFactory(descriptor, freeLoopbackPort(), bearerToken)
+                    val process =
+                        JourneyGatewayProcess.start(
+                            scenario,
+                            repositoryRoot.resolve(JOURNEY_KEYSTORE_PATH),
+                            JOURNEY_KEYSTORE_PASSWORD,
+                        )
+                    startedProcess = process
+                    LoopbackHttpViewProcess(process)
+                },
+            readinessChecker = TlsLoopbackReadinessChecker(tlsClient, bearerToken),
+        )
+    return LiveSessionMatrixRun(fixture, tlsClient) {
+        requireNotNull(startedProcess) { "The lane journey process has not started." }
+    }
+}
+
+internal fun laneClient(
+    run: LiveSessionMatrixRun,
+    bearerToken: String,
+): DefaultGatewayClient =
+    DefaultGatewayClient(
+        endpoint = run.process.endpoint.toString(),
+        bearerToken = bearerToken,
+        transport = OkHttpGatewayTransport(run.tlsClient),
+    )
+
+internal fun gatewayFailure(block: () -> Unit): GatewayException =
+    try {
+        block()
+        error("Expected the operation to fail with a GatewayException.")
+    } catch (failure: GatewayException) {
+        failure
+    }
+
+internal fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name.jsonl")
 
 internal class LiveSessionMatrixRun(
     val fixture: DeterministicGatewayFixture,
