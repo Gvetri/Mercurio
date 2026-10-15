@@ -12,6 +12,8 @@ import org.hermesnative.client.fixture.GatewayProcess
 import org.hermesnative.client.fixture.PinnedFixtureDescriptor
 import org.hermesnative.client.fixture.journey.JourneyGatewayProcess
 import org.hermesnative.client.fixture.journey.JourneyMessage
+import org.hermesnative.client.fixture.journey.JourneyRunEvent
+import org.hermesnative.client.fixture.journey.JourneyRunScript
 import org.hermesnative.client.fixture.journey.JourneyScenario
 import org.hermesnative.client.fixture.journey.JourneySession
 import java.io.File
@@ -114,6 +116,87 @@ internal fun laneScenario(
                     pinned = false,
                 ),
             ),
+    )
+
+internal const val RUN_LANE_CREATED_SESSION_ID = "synthetic-created-session-1"
+internal const val RUN_LANE_DELTA_RUN_ID = "lane-delta-run"
+internal const val RUN_LANE_FRAMING_RUN_ID = "lane-framing-run"
+internal const val RUN_LANE_HOLD_OPEN_RUN_ID = "lane-hold-open-run"
+internal const val RUN_LANE_UNMAPPED_RUN_ID = "lane-unmapped-run"
+internal const val RUN_LANE_REFUSED_RUN_ID = "lane-refused-run"
+internal const val RUN_LANE_UNMAPPED_EVENT_TYPE = "metrics.heartbeat"
+
+internal fun runLaneScenario(
+    descriptor: PinnedFixtureDescriptor,
+    port: Int,
+    bearerToken: String,
+): JourneyScenario =
+    JourneyScenario(
+        name = "live-run-matrix",
+        hermesRevision = descriptor.provenanceValue,
+        port = port,
+        tls = true,
+        capabilities = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys.toList(),
+        requireBearerCredential = bearerToken,
+        runs = runLaneScripts(),
+    )
+
+private fun runLaneScripts(): List<JourneyRunScript> =
+    listOf(
+        JourneyRunScript(
+            runId = RUN_LANE_DELTA_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "started",
+            observation =
+                listOf(
+                    JourneyRunEvent(type = "message.delta", delta = "Hello "),
+                    JourneyRunEvent(type = "message.delta", delta = "from "),
+                    JourneyRunEvent(type = "message.delta", delta = "the lane."),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+            finalStatus = "succeeded",
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_FRAMING_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "started",
+            liveFraming = true,
+            observation =
+                listOf(
+                    JourneyRunEvent(type = "message.delta", delta = "Framed delta"),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+            finalStatus = "succeeded",
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_HOLD_OPEN_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "running",
+            holdOpen = true,
+            finalizeOnDisconnect = true,
+            finalStatus = "succeeded",
+            observation =
+                listOf(
+                    JourneyRunEvent(type = "message.delta", delta = "Held delta"),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_UNMAPPED_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "started",
+            observation =
+                listOf(
+                    JourneyRunEvent(type = RUN_LANE_UNMAPPED_EVENT_TYPE),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+            finalStatus = "succeeded",
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_REFUSED_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            refuseCreate = true,
+        ),
     )
 
 internal class LiveSessionMatrixRun(
