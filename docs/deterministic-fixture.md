@@ -47,6 +47,20 @@ The hosted `fixture-lifecycle` quality check runs this same command. It is deter
 
 The deterministic emulator journeys ([`docs/deterministic-emulator-journeys.md`](deterministic-emulator-journeys.md)) reuse this pinned provenance as the identity for every journey scenario and for the fake Gateway that serves the emulator layer.
 
+## Live session-matrix acceptance lane
+
+The data module owns a test-class acceptance lane that drives the real OkHttp client against the real deterministic journey Gateway over TLS. The lane starts `JourneyGatewayProcess` from a programmatic scenario, wraps it in an http-scheme view for the fixture's loopback guard, and points `DefaultGatewayClient` at the started process's own `https` endpoint with an `OkHttpClient` that trusts only the journey CA and keeps default hostname verification. Bearer authentication is proven over the wire: the scenario requires a bearer credential, so any request without the expected credential fails with `AUTHENTICATION_FAILED`.
+
+The one command is:
+
+```text
+./gradlew :feature:entry:data:liveAcceptanceTest
+```
+
+The task runs the `LiveGatewaySessionAcceptanceTest` suite. It verifies capability discovery, the paged session list, create, open, rename, pin, unpin, history, and delete against the started process only, and verifies that a failing operation surfaces its `GatewayErrorCategory`. The same tests also run hermetically under the plain `test` task on an ephemeral loopback port.
+
+Each operation emits one redacted JSON line with the operation name, method, path and query shape, expected and actual status, outcome, envelope key types, and the error category on failure. Values, credentials, bearer tokens, URLs, and workspace paths are redacted. Evidence lands under `feature/entry/data/build/live-session-matrix-evidence/` by default; a different directory can be supplied with the `live.session.matrix.evidenceDir` system property.
+
 ## Compatibility changes
 
 Changing `hermes_revision` or `image_digest` is a compatibility change. Every such change requires all of the following:

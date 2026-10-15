@@ -1,3 +1,6 @@
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.ktlint)
@@ -21,4 +24,23 @@ dependencies {
 
 tasks.test {
     useJUnit()
+}
+
+tasks.register<Test>("liveAcceptanceTest") {
+    group = "verification"
+    description = "Runs the live session-matrix acceptance lane against the deterministic journey Gateway."
+    dependsOn("testClasses")
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnit()
+    filter {
+        includeTestsMatching("org.hermesnative.client.feature.entry.data.LiveGatewaySessionAcceptanceTest")
+    }
+    systemProperty("fixture.repositoryRoot", rootProject.projectDir.absolutePath)
+    inputs.file(rootProject.file("fixtures/hermes/pinned-fixture.properties"))
+        .withPropertyName("pinnedDescriptor")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file("fixtures/hermes/journey-tls"))
+        .withPropertyName("journeyTls")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
