@@ -37,6 +37,9 @@ tasks.register<Test>("liveAcceptanceTest") {
         includeTestsMatching("org.hermesnative.client.feature.entry.data.LiveGatewaySessionAcceptanceTest")
     }
     systemProperty("fixture.repositoryRoot", rootProject.projectDir.absolutePath)
+    providers.gradleProperty("live.session.matrix.evidenceDir").orNull?.let { evidenceDir ->
+        systemProperty("live.session.matrix.evidenceDir", evidenceDir)
+    }
     inputs.file(rootProject.file("fixtures/hermes/pinned-fixture.properties"))
         .withPropertyName("pinnedDescriptor")
         .withPathSensitivity(PathSensitivity.RELATIVE)
