@@ -28,13 +28,15 @@ tasks.test {
 
 tasks.register<Test>("liveAcceptanceTest") {
     group = "verification"
-    description = "Runs the live session-matrix acceptance lane against the deterministic journey Gateway."
+    description =
+        "Runs the live session-matrix and run-matrix acceptance lanes against the deterministic journey Gateway."
     dependsOn("testClasses")
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnit()
     filter {
         includeTestsMatching("org.hermesnative.client.feature.entry.data.LiveGatewaySessionAcceptanceTest")
+        includeTestsMatching("org.hermesnative.client.feature.entry.data.LiveGatewayRunAcceptanceTest")
     }
     systemProperty("fixture.repositoryRoot", rootProject.projectDir.absolutePath)
     providers.gradleProperty("live.session.matrix.evidenceDir").orNull?.let { evidenceDir ->

@@ -5,13 +5,17 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.hermesnative.client.fixture.DeterministicGatewayFixture
 import org.hermesnative.client.fixture.FixtureReadinessChecker
 import org.hermesnative.client.fixture.GatewayProcess
+import org.hermesnative.client.fixture.GatewayProcessFactory
 import org.hermesnative.client.fixture.PinnedFixtureDescriptor
 import org.hermesnative.client.fixture.journey.JourneyGatewayProcess
 import org.hermesnative.client.fixture.journey.JourneyMessage
+import org.hermesnative.client.fixture.journey.JourneyRunEvent
+import org.hermesnative.client.fixture.journey.JourneyRunScript
 import org.hermesnative.client.fixture.journey.JourneyScenario
 import org.hermesnative.client.fixture.journey.JourneySession
 import java.io.File
@@ -115,6 +119,136 @@ internal fun laneScenario(
                 ),
             ),
     )
+
+internal const val RUN_LANE_CREATED_SESSION_ID = "synthetic-created-session-1"
+internal const val RUN_LANE_DELTA_RUN_ID = "lane-delta-run"
+internal const val RUN_LANE_FRAMING_RUN_ID = "lane-framing-run"
+internal const val RUN_LANE_HOLD_OPEN_RUN_ID = "lane-hold-open-run"
+internal const val RUN_LANE_UNMAPPED_RUN_ID = "lane-unmapped-run"
+internal const val RUN_LANE_REFUSED_RUN_ID = "lane-refused-run"
+internal const val RUN_LANE_UNMAPPED_EVENT_TYPE = "metrics.heartbeat"
+
+internal fun runLaneScenario(
+    descriptor: PinnedFixtureDescriptor,
+    port: Int,
+    bearerToken: String,
+): JourneyScenario =
+    JourneyScenario(
+        name = "live-run-matrix",
+        hermesRevision = descriptor.provenanceValue,
+        port = port,
+        tls = true,
+        capabilities = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys.toList(),
+        requireBearerCredential = bearerToken,
+        runs = runLaneScripts(),
+    )
+
+internal fun runLaneScripts(): List<JourneyRunScript> =
+    listOf(
+        JourneyRunScript(
+            runId = RUN_LANE_DELTA_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "started",
+            observation =
+                listOf(
+                    JourneyRunEvent(type = "message.delta", delta = "Hello "),
+                    JourneyRunEvent(type = "message.delta", delta = "from "),
+                    JourneyRunEvent(type = "message.delta", delta = "the lane."),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+            finalStatus = "succeeded",
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_FRAMING_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "started",
+            liveFraming = true,
+            observation =
+                listOf(
+                    JourneyRunEvent(type = "message.delta", delta = "Framed delta"),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+            finalStatus = "succeeded",
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_HOLD_OPEN_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "running",
+            holdOpen = true,
+            finalizeOnDisconnect = true,
+            finalStatus = "succeeded",
+            observation =
+                listOf(
+                    JourneyRunEvent(type = "message.delta", delta = "Held delta"),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_UNMAPPED_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            createStatus = "started",
+            observation =
+                listOf(
+                    JourneyRunEvent(type = RUN_LANE_UNMAPPED_EVENT_TYPE),
+                    JourneyRunEvent(type = "run.completed"),
+                ),
+            finalStatus = "succeeded",
+        ),
+        JourneyRunScript(
+            runId = RUN_LANE_REFUSED_RUN_ID,
+            sessionId = RUN_LANE_CREATED_SESSION_ID,
+            refuseCreate = true,
+        ),
+    )
+
+internal fun laneRun(
+    repositoryRoot: File,
+    bearerToken: String,
+    scenarioFactory: (descriptor: PinnedFixtureDescriptor, port: Int, bearerToken: String) -> JourneyScenario,
+): LiveSessionMatrixRun {
+    var startedProcess: JourneyGatewayProcess? = null
+    val tlsClient = journeyTrustedClient(repositoryRoot.resolve(JOURNEY_CA_PEM_PATH))
+    val fixture =
+        DeterministicGatewayFixture(
+            descriptorFile = repositoryRoot.resolve(PINNED_DESCRIPTOR_PATH),
+            processFactory =
+                GatewayProcessFactory { descriptor ->
+                    val scenario = scenarioFactory(descriptor, freeLoopbackPort(), bearerToken)
+                    val process =
+                        JourneyGatewayProcess.start(
+                            scenario,
+                            repositoryRoot.resolve(JOURNEY_KEYSTORE_PATH),
+                            JOURNEY_KEYSTORE_PASSWORD,
+                        )
+                    startedProcess = process
+                    LoopbackHttpViewProcess(process)
+                },
+            readinessChecker = TlsLoopbackReadinessChecker(tlsClient, bearerToken),
+        )
+    return LiveSessionMatrixRun(fixture, tlsClient) {
+        requireNotNull(startedProcess) { "The lane journey process has not started." }
+    }
+}
+
+internal fun laneClient(
+    run: LiveSessionMatrixRun,
+    bearerToken: String,
+): DefaultGatewayClient =
+    DefaultGatewayClient(
+        endpoint = run.process.endpoint.toString(),
+        bearerToken = bearerToken,
+        transport = OkHttpGatewayTransport(run.tlsClient),
+    )
+
+internal fun gatewayFailure(block: () -> Unit): GatewayException =
+    try {
+        block()
+        error("Expected the operation to fail with a GatewayException.")
+    } catch (failure: GatewayException) {
+        failure
+    }
+
+internal fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name.jsonl")
 
 internal class LiveSessionMatrixRun(
     val fixture: DeterministicGatewayFixture,
