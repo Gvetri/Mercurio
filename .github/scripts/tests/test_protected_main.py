@@ -336,6 +336,41 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertEqual(1, completed.returncode)
         self.assertIn("GitHub API answered 404", completed.stderr)
 
+    def test_the_checker_validates_the_live_title_from_the_api(self):
+        self.routes["/repos/Gvetri/hermes-native-client/pulls/25"] = {
+            "number": 25,
+            "title": "protect main",
+        }
+        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+            ["feat: protect main"]
+        )
+        completed = self.run_check()
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The squash-merge title", completed.stderr)
+        self.assertIn("'protect main' is not a Conventional Commit", completed.stderr)
+
+    def test_an_unavailable_title_api_falls_back_to_the_payload_title(self):
+        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+            ["feat: protect main"]
+        )
+        completed = self.run_check()
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("/repos/Gvetri/hermes-native-client/pulls/25", self.api.requests)
+        self.assertIn("Commit-message verification passed.", completed.stdout)
+
+    def test_a_payload_title_that_differs_from_the_live_title_passes(self):
+        self.event["pull_request"]["title"] = "protect main"
+        self.routes["/repos/Gvetri/hermes-native-client/pulls/25"] = {
+            "number": 25,
+            "title": "chore: commit-message gate validates the live PR title",
+        }
+        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+            ["feat: protect main"]
+        )
+        completed = self.run_check()
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("Commit-message verification passed.", completed.stdout)
+
     def test_a_push_validates_the_commits_it_introduced(self):
         self.routes["/repos/Gvetri/hermes-native-client/compare/aaa...bbb"] = {
             "total_commits": 2,
