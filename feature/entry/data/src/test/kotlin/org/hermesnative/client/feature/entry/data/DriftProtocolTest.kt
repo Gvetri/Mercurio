@@ -145,6 +145,22 @@ class DriftProtocolTest {
     }
 
     @Test
+    fun a_resolved_identity_that_regresses_reopens_as_a_fresh_record() {
+        val ledgerFile = ledgerFile("resolved-then-regressed")
+        val sink = LocalIssueLedger(ledgerFile, repositoryRoot)
+
+        DriftProtocol.reconcile(mismatchedEntries(), sink)
+        DriftProtocol.reconcile(matchedEntries(), sink)
+        DriftProtocol.reconcile(mismatchedEntries(), sink)
+
+        val records = LocalIssueLedger(ledgerFile, repositoryRoot).openIssues()
+        assertEquals(1, records.size)
+        assertEquals(1, ledgerFile.readLines().filter(String::isNotBlank).size)
+        assertEquals(DRIFT_STATUS_OPEN, records.single().status)
+        assertEquals(1, records.single().occurrences)
+    }
+
+    @Test
     fun a_different_divergence_files_a_new_issue() {
         val ledgerFile = ledgerFile("different-identity")
         val sink = LocalIssueLedger(ledgerFile, repositoryRoot)
@@ -289,12 +305,6 @@ class DriftProtocolTest {
     private companion object {
         const val CREATED_SESSION_PATH = "/api/sessions/synthetic-created-session-1"
         const val SESSION_RENAME_REQUEST_BODY = """{"title":"Live lane renamed session"}"""
-
-        val SESSION_OPEN_ENVELOPE =
-            """
-            {"object":"hermes.session","session":{
-            "id":"synthetic-created-session-1","source":"api_server","title":"Live lane created session","preview":null,"pinned":false,"message_count":0}}
-            """.trimIndent()
 
         val WRONG_OBJECT_ENVELOPE = SESSION_OPEN_ENVELOPE.replace("\"hermes.session\"", "\"hermes.session.wrong\"")
     }

@@ -4,8 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.security.MessageDigest
-import java.util.TreeMap
 
 class DriftProtocolDrillTest {
     private val repositoryRoot =
@@ -18,8 +16,8 @@ class DriftProtocolDrillTest {
 
     @Test
     fun staged_divergence_files_the_issue_and_restoring_resolves_it_without_residue() {
-        val guardedPaths = guardedSourcePaths()
-        val before = digests(guardedPaths)
+        val guardedPaths = guardedSourcePaths(repositoryRoot, contractsRoot)
+        val before = digests(repositoryRoot, guardedPaths)
         val drillDirectory = drillDirectory()
         val drillContractsRoot = File(drillDirectory, "contracts")
         val originalFixtures = drillFixturePaths.associateWith { path -> contractsRoot.resolve(path).readText() }
@@ -74,7 +72,7 @@ class DriftProtocolDrillTest {
         assertTrue(ledgerFile.readLines().single().contains("\"status\":\"resolved\""))
         assertTrue(ledger.openIssues().isEmpty())
         assertTrue(resolvedBytes.contentEquals(ledgerFile.readBytes()))
-        assertEquals(before, digests(guardedPaths))
+        assertEquals(before, digests(repositoryRoot, guardedPaths))
     }
 
     private fun driftPass(
@@ -102,21 +100,6 @@ class DriftProtocolDrillTest {
             ),
         )
 
-    private fun guardedSourcePaths(): List<File> =
-        buildList {
-            addAll(contractsRoot.walkTopDown().filter { it.isFile })
-            add(repositoryRoot.resolve(PARSER_SOURCE_PATH))
-            add(repositoryRoot.resolve(MANIFEST_SOURCE_PATH))
-        }.sortedBy { it.path }
-
-    private fun digests(paths: List<File>) =
-        TreeMap(
-            paths.associate { path ->
-                path.relativeTo(repositoryRoot).path to
-                    MessageDigest.getInstance("SHA-256").digest(path.readBytes()).joinToString("") { "%02x".format(it) }
-            },
-        )
-
     private fun drillDirectory(): File {
         val directory = File(System.getProperty("java.io.tmpdir"), "drift-protocol-drill")
         directory.deleteRecursively()
@@ -126,21 +109,10 @@ class DriftProtocolDrillTest {
 
     private companion object {
         const val DRILL_LOG_FILE_NAME = "drift-protocol-drill.log"
-        const val PARSER_SOURCE_PATH =
-            "feature/entry/data/src/main/kotlin/org/hermesnative/client/feature/entry/data/GatewayJsonParser.kt"
-        const val MANIFEST_SOURCE_PATH =
-            "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain" +
-                "/GatewayCapabilityManifest.kt"
         const val STAGED_FIXTURE_PATH = "sessions/open-response.json"
         const val DRIFT_ENVELOPE_OBJECT = "\"hermes.session\""
         const val STAGED_OBJECT_NAME = "hermes.session.staged"
 
         val drillFixturePaths = listOf("sessions/open-request.json", "sessions/open-response.json")
-
-        val SESSION_OPEN_ENVELOPE =
-            """
-            {"object":"hermes.session","session":{
-            "id":"synthetic-created-session-1","source":"api_server","title":"Live lane created session","preview":null,"pinned":false,"message_count":0}}
-            """.trimIndent()
     }
 }
