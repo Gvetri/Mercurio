@@ -225,7 +225,11 @@ internal fun laneRun(
                 },
             readinessChecker = TlsLoopbackReadinessChecker(tlsClient, bearerToken),
         )
-    return LiveSessionMatrixRun(fixture, tlsClient) {
+    return LiveSessionMatrixRun(
+        fixture,
+        tlsClient,
+        LiveParityCaptureTransport(OkHttpGatewayTransport(tlsClient)),
+    ) {
         requireNotNull(startedProcess) { "The lane journey process has not started." }
     }
 }
@@ -237,7 +241,7 @@ internal fun laneClient(
     DefaultGatewayClient(
         endpoint = run.process.endpoint.toString(),
         bearerToken = bearerToken,
-        transport = OkHttpGatewayTransport(run.tlsClient),
+        transport = run.parityCaptures,
     )
 
 internal fun gatewayFailure(block: () -> Unit): GatewayException =
@@ -250,9 +254,12 @@ internal fun gatewayFailure(block: () -> Unit): GatewayException =
 
 internal fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name.jsonl")
 
+internal fun paritySink(name: String): File = File(parityArtifactDirectory(), "$name.jsonl")
+
 internal class LiveSessionMatrixRun(
     val fixture: DeterministicGatewayFixture,
     val tlsClient: OkHttpClient,
+    val parityCaptures: LiveParityCaptureTransport,
     private val startedProcess: () -> JourneyGatewayProcess,
 ) {
     val process: JourneyGatewayProcess
