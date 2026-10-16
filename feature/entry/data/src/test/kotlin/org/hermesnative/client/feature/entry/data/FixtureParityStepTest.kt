@@ -64,10 +64,35 @@ class FixtureParityStepTest {
         val reported = entries.first { it.operation == "session open" }
         assertEquals(FixtureParity.VERDICT_MISMATCH, reported.verdict)
         assertEquals("sessions/open-response.json", reported.fixture)
+        assertEquals("/api/sessions/{param}", reported.pathShape)
         assertTrue(reported.observedDifference.orEmpty().contains("object"))
         assertEquals(LANE_PARITY_ENTRY_COUNT, entries.size)
         assertEquals(EXPECTED_OPERATION_FIXTURE_PAIRS, operationFixturePairs(entries))
         assertEquals(before, digests(guardedPaths))
+    }
+
+    @Test
+    fun fixture_only_key_is_reported_while_declared_exemptions_are_absorbed() {
+        val missingReportedKey =
+            capture("session open", "GET", CREATED_SESSION_PATH, 200, LIVE_SESSION_OPEN_ENVELOPE)
+                .copy(responseJson = LIVE_SESSION_OPEN_ENVELOPE.replace(",\"message_count\":0}", "}"))
+
+        val reportedEntries = FixtureParity.compare(listOf(missingReportedKey), contractsRoot)
+
+        assertEquals(FixtureParity.VERDICT_MISMATCH, reportedEntries.single().verdict)
+        assertTrue(reportedEntries.single().observedDifference.orEmpty().contains("message_count"))
+
+        val pageOne =
+            capture("session list", "GET", "/api/sessions", 200, LIVE_SESSION_LIST_PAGE_ONE)
+                .copy(queryNames = listOf("limit", "offset"))
+        val pageTwo =
+            capture("session list", "GET", "/api/sessions", 200, LIVE_SESSION_LIST_PAGE_TWO)
+                .copy(queryNames = listOf("limit", "offset"))
+
+        val exemptEntries = FixtureParity.compare(listOf(pageOne, pageTwo), contractsRoot)
+
+        val pageOneEntry = exemptEntries.first { it.fixture == "sessions/list-response-page-1.json" }
+        assertEquals(FixtureParity.VERDICT_MATCH, pageOneEntry.verdict)
     }
 
     @Test
@@ -368,7 +393,7 @@ class FixtureParityStepTest {
         val LIVE_SESSION_HISTORY_POPULATED =
             """
             {"object":"list","session_id":"seeded-pinned-session","data":[
-            {"id":"seeded-message-1","role":"user","content":"Seeded user message for the live lane"},
+            {"id":"seeded-message-1","role":"user","content":"Seeded user message for the live lane","timestamp":"1757325600.0"},
             {"id":"seeded-message-2","role":"assistant","content":"Seeded assistant reply for the live lane","timestamp":"1757325600.0"}],
             "pagination":{"limit":500,"offset":0,"order":"latest","returned":2}}
             """.trimIndent()
