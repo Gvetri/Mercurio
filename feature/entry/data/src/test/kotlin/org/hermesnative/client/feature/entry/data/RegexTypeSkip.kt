@@ -4,16 +4,20 @@ package org.hermesnative.client.feature.entry.data
  * Skips a `val x: SomeType` type annotation without consuming the initializer that follows
  * it. Delimiters nest (generic angle brackets, function-type parentheses) and every boundary
  * is only a boundary at depth zero, so an annotation like `Map<String, Int>` is skipped whole
- * while `Regex?` stops at the initializer's `=`.
+ * while `Regex?` stops at the initializer's `=`. A close delimiter decrements its depth, so
+ * the skip always ends at the annotation's end instead of running to end of file.
  */
 internal class RegexTypeSkip(
     private val cursor: RegexSourceCursor,
     private val lexing: RegexSourceLexing,
 ) {
+    private var angleDepth = 0
+    private var parenDepth = 0
+
     fun skip() {
+        angleDepth = 0
+        parenDepth = 0
         cursor.advance()
-        var angleDepth = 0
-        var parenDepth = 0
         var inside = true
         while (inside && !cursor.atEnd) {
             lexing.skipTrivia()
@@ -21,20 +25,12 @@ internal class RegexTypeSkip(
                 when {
                     cursor.atEnd -> false
                     cursor.startsWith("->") -> skipArrow()
-                    cursor.current() == '<' -> {
-                        cursor.advance()
-                        angleDepth += 1
-                        true
-                    }
-                    cursor.current() == '>' -> advanceAngleClose(angleDepth)
-                    cursor.current() == '(' -> {
-                        cursor.advance()
-                        parenDepth += 1
-                        true
-                    }
-                    cursor.current() == ')' -> advanceParenClose(parenDepth)
+                    cursor.current() == '<' -> openAngle()
+                    cursor.current() == '>' -> closeAngle()
+                    cursor.current() == '(' -> openParen()
+                    cursor.current() == ')' -> closeParen()
                     cursor.current().isIdentifierStart() -> cursor.readIdentifier() != DELEGATE_KEYWORD
-                    else -> consumeTypeTail(angleDepth, parenDepth)
+                    else -> consumeTypeTail()
                 }
         }
     }
@@ -45,26 +41,37 @@ internal class RegexTypeSkip(
         return true
     }
 
-    private fun advanceAngleClose(angleDepth: Int): Boolean {
-        val inside = angleDepth > 0
-        if (inside) {
-            cursor.advance()
-        }
-        return inside
+    private fun openAngle(): Boolean {
+        cursor.advance()
+        angleDepth += 1
+        return true
     }
 
-    private fun advanceParenClose(parenDepth: Int): Boolean {
-        val inside = parenDepth > 0
-        if (inside) {
+    private fun closeAngle(): Boolean {
+        val wasInside = angleDepth > 0
+        if (wasInside) {
             cursor.advance()
+            angleDepth -= 1
         }
-        return inside
+        return wasInside
     }
 
-    private fun consumeTypeTail(
-        angleDepth: Int,
-        parenDepth: Int,
-    ): Boolean {
+    private fun openParen(): Boolean {
+        cursor.advance()
+        parenDepth += 1
+        return true
+    }
+
+    private fun closeParen(): Boolean {
+        val wasInside = parenDepth > 0
+        if (wasInside) {
+            cursor.advance()
+            parenDepth -= 1
+        }
+        return wasInside
+    }
+
+    private fun consumeTypeTail(): Boolean {
         val current = cursor.current()
         val boundary =
             angleDepth == 0 && parenDepth == 0 &&

@@ -105,11 +105,25 @@ internal class RegexPatternScanner(
         val saved = cursor.save()
         val name = cursor.readIdentifier()
         lexing.skipTrivia()
-        if (cursor.atEnd || !cursor.current().isChainContinuation()) {
+        val namedArgument = !cursor.atEnd && cursor.current() == '=' && cursor.peek(1) != '='
+        var element: PatternChainToken? = null
+        if (namedArgument) {
+            cursor.advance()
+            lexing.skipTrivia()
+            if (!cursor.atEnd) {
+                element =
+                    when {
+                        cursor.current() == '\"' -> readLiteralElement()
+                        cursor.current().isIdentifierStart() -> PatternChainToken.Reference(cursor.readIdentifier())
+                        else -> null
+                    }
+            }
+        } else if (cursor.atEnd || !cursor.current().isChainContinuation()) {
             cursor.restore(saved)
-            return null
+        } else {
+            element = PatternChainToken.Reference(name)
         }
-        return PatternChainToken.Reference(name)
+        return element
     }
 
     private fun readChainContinuation(): ChainContinuation {

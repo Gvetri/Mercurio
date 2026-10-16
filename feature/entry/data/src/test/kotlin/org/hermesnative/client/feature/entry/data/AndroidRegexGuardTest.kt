@@ -102,6 +102,58 @@ class AndroidRegexGuardTest {
     }
 
     @Test
+    fun annotated_type_declarations_do_not_hide_later_violations() {
+        val annotatedSource =
+            """
+            private val discover: (endpoint: String) -> GatewayCapabilities = ::discoverCapabilities
+            private val endpointPattern = Regex("((?:/[a-z0-9._~!&'()*+,;=:@%/-]*)?)\\z")
+
+            private val fields: Map<String, String> = emptyMap()
+            private val brokenBrace = Regex("[a-z-]*\\z")
+            """.trimIndent()
+
+        val result = AndroidRegexGuard.scanSource(annotatedSource)
+
+        assertTrue(
+            "both annotated-prefix sites must be checked, got: ${result.checkedPatternSites}",
+            result.checkedPatternSites == 2,
+        )
+        assertTrue(
+            "the violation after a function-type annotation must be reported, got: ${result.violations}",
+            result.violations.count { it.message.contains("\\z") } == 2,
+        )
+    }
+
+    @Test
+    fun named_argument_pattern_is_checked() {
+        val namedSource = "private val endpoint = Regex(pattern = \"\\\\z\")\n"
+
+        val result = AndroidRegexGuard.scanSource(namedSource)
+
+        assertTrue(
+            "the named-argument construction must be checked, got: ${result.violations}",
+            result.violations.any { it.message.contains("\\z") },
+        )
+        assertTrue(
+            "the named-argument construction must count as statically checkable",
+            result.checkedPatternSites == 1,
+        )
+    }
+
+    @Test
+    fun space_only_pattern_literal_stays_checkable() {
+        val spaceSource = "private val space = Regex(\" \")\n"
+
+        val result = AndroidRegexGuard.scanSource(spaceSource)
+
+        assertTrue("expected no violations, got: ${result.violations}", result.violations.isEmpty())
+        assertTrue(
+            "a space-only literal must count as statically checkable text",
+            result.checkedPatternSites == 1,
+        )
+    }
+
+    @Test
     fun repository_main_sources_pass_the_guard() {
         val repositoryRoot = System.getProperty("fixture.repositoryRoot")
         assertTrue(
@@ -116,6 +168,36 @@ class AndroidRegexGuardTest {
             result.violations.isEmpty(),
         )
         assertTrue(result.checkedPatternSites > 0)
+        val uncheckedFiles = result.perFileSites.filterValues { it.checkedSites == 0 }
+        assertTrue(
+            "every main-source file containing a Regex( construction must have at least one " +
+                "checked site, got: $uncheckedFiles",
+            uncheckedFiles.isEmpty(),
+        )
+    }
+
+    @Test
+    fun scanned_roots_cover_the_declared_module_directories() {
+        val repositoryRoot = File(System.getProperty("fixture.repositoryRoot"))
+        assertTrue(
+            "fixture.repositoryRoot must be set for the repository-wide scan",
+            System.getProperty("fixture.repositoryRoot").isNullOrEmpty().not(),
+        )
+
+        val modulePaths =
+            repositoryRoot.resolve("settings.gradle.kts").readLines()
+                .mapNotNull { MODULE_INCLUDE.find(it)?.groupValues[1] }
+                .map { it.removePrefix(":").replace(':', '/') }
+        assertTrue("settings.gradle.kts must declare modules, got none", modulePaths.isNotEmpty())
+
+        val uncovered =
+            modulePaths.filter { path ->
+                AndroidRegexGuard.scannedRoots.none { root -> path == root || path.startsWith("$root/") }
+            }
+        assertTrue(
+            "scanned roots must cover the declared module directories, uncovered: $uncovered",
+            uncovered.isEmpty(),
+        )
     }
 
     @Test
@@ -198,6 +280,8 @@ class AndroidRegexGuardTest {
     }
 
     private companion object {
+        private val MODULE_INCLUDE = Regex("""include\("([^"]+)"\)""")
+
         private val VALID_SAFE_SOURCE =
             """
             private val percentEscape = Regex("%([0-9a-fA-F]{2})")

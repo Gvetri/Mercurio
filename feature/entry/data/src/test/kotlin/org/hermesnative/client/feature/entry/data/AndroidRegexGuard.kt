@@ -17,11 +17,15 @@ import java.io.File
  *   unescaped brace that the JVM engine tolerates as a literal.
  * - Inside a character class both braces are literal and pass.
  *
- * Pattern text is resolved statically: string literals passed to a `Regex(` construction,
- * `+` chains of them, and references to `val`/`const val` declarations whose initializer is
- * the same shape. Template holes (`$x`, `${expr}`), unresolved references, and expression
- * tails decode as opaque text: the static text around them is checked, the injected part is
- * not.
+ * Pattern text is resolved statically: string literals passed to a `Regex(` construction
+ * (positional or named `pattern =`), `+` chains of them, and references to `val`/`const val`
+ * declarations whose initializer is the same shape. Template holes (`$x`, `${expr}`),
+ * unresolved references, and expression tails decode as opaque text: the static text around
+ * them is checked, the injected part is not.
+ *
+ * Out of scope: `toRegex()` extensions, `Pattern.compile(...)`, and pattern text built only
+ * at runtime. The scan sees `Regex(` constructions whose text is statically resolvable; the
+ * dynamic-tail tolerance above bounds what it may miss.
  *
  * The scan is fail-closed: a scanned root that resolves to no Kotlin main source, a scope
  * with no `Regex(` construction, and a scope with no statically checkable pattern text each
@@ -39,10 +43,16 @@ object AndroidRegexGuard {
         override fun toString(): String = "$file:$line: $message"
     }
 
+    data class FileSiteCounts(
+        val regexSites: Int,
+        val checkedSites: Int,
+    )
+
     data class ScanResult(
         val violations: List<Violation>,
         val scannedFiles: Int,
         val checkedPatternSites: Int,
+        val perFileSites: Map<String, FileSiteCounts> = emptyMap(),
     )
 
     fun scanMainSources(repositoryRoot: File): ScanResult {
@@ -58,6 +68,7 @@ object AndroidRegexGuard {
 
         var foundSites = 0
         var checkedSites = 0
+        val perFileSites = mutableMapOf<String, FileSiteCounts>()
         sourceFiles.forEach { file ->
             val source =
                 runCatching { file.readText() }.getOrElse { error ->
@@ -65,6 +76,9 @@ object AndroidRegexGuard {
                     return@forEach
                 }
             val scanned = scanText(source)
+            if (scanned.regexSites > 0) {
+                perFileSites[file.path] = FileSiteCounts(scanned.regexSites, scanned.checkedSites)
+            }
             foundSites += scanned.regexSites
             checkedSites += scanned.checkedSites
             scanned.violations.forEach { violations += Violation(file.path, it.line, it.message) }
@@ -76,7 +90,7 @@ object AndroidRegexGuard {
             violations +=
                 Violation("<scope>", 0, "no static Regex( pattern text was checkable in the scanned main sources")
         }
-        return ScanResult(violations, sourceFiles.size, checkedSites)
+        return ScanResult(violations, sourceFiles.size, checkedSites, perFileSites)
     }
 
     fun scanSource(source: String): ScanResult {

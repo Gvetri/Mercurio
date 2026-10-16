@@ -9,8 +9,12 @@ internal data class PatternLiteral(
     val line: Int,
 )
 
-/** Stands in for template-injected pattern text that no static scan can see through. */
-internal const val REGEX_PATTERN_DYNAMIC_HOLE = ' '
+/**
+ * Stands in for template-injected pattern text that no static scan can see through. The
+ * sentinel is a control character real pattern text never contains, so a literal like a
+ * space stays fully checkable instead of being mistaken for a hole.
+ */
+internal const val REGEX_PATTERN_DYNAMIC_HOLE = '\u0000'
 
 /**
  * Lexes the string-literal and trivia surface of Kotlin source: comments, character literals,
