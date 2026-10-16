@@ -24,4 +24,17 @@ internal object StartedGatewayGuard {
                 "the started process port ${startedProcessEndpoint.port}."
         }
     }
+
+    fun requireConfiguredEndpoint(
+        configuredEndpoint: URI,
+        clientEndpoint: URI,
+    ) {
+        require(clientEndpoint.scheme == "https") {
+            "The environment-configured lane only drives https endpoints, not scheme ${clientEndpoint.scheme}."
+        }
+        require(clientEndpoint == configuredEndpoint) {
+            "The lane must drive the configured environment Gateway endpoint $configuredEndpoint, " +
+                "not $clientEndpoint."
+        }
+    }
 }

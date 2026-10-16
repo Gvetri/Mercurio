@@ -73,7 +73,8 @@ class LiveGatewayRunAcceptanceTest {
         val finishedStreamTransport =
             SeamedEventStreamTransport(
                 listOf(
-                    "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"running\",\"delta\":\"Seam delta\"}",
+                    "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"running\"," +
+                        "\"delta\":\"Seam delta\"}",
                     "",
                     "data: {\"event\":\"run.completed\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"succeeded\"}",
                     "",

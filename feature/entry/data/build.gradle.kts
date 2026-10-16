@@ -45,6 +45,12 @@ tasks.register<Test>("liveAcceptanceTest") {
     providers.gradleProperty("live.fixture.parity.artifactDir").orNull?.let { artifactDir ->
         systemProperty("live.fixture.parity.artifactDir", artifactDir)
     }
+    providers.gradleProperty("live.gateway.endpoint").orNull?.let { endpoint ->
+        systemProperty("live.gateway.endpoint", endpoint)
+    }
+    providers.gradleProperty("live.gateway.bearerToken").orNull?.let { bearerToken ->
+        systemProperty("live.gateway.bearerToken", bearerToken)
+    }
     inputs.file(rootProject.file("fixtures/hermes/pinned-fixture.properties"))
         .withPropertyName("pinnedDescriptor")
         .withPathSensitivity(PathSensitivity.RELATIVE)

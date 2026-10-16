@@ -29,6 +29,8 @@ import javax.net.ssl.X509TrustManager
 
 internal const val LIVE_EVIDENCE_DIR_PROPERTY = "live.session.matrix.evidenceDir"
 internal const val LIVE_EVIDENCE_DEFAULT_DIR = "build/live-session-matrix-evidence"
+internal const val LIVE_GATEWAY_ENDPOINT_PROPERTY = "live.gateway.endpoint"
+internal const val LIVE_GATEWAY_BEARER_TOKEN_PROPERTY = "live.gateway.bearerToken"
 internal const val PINNED_DESCRIPTOR_PATH = "fixtures/hermes/pinned-fixture.properties"
 internal const val JOURNEY_KEYSTORE_PATH = "fixtures/hermes/journey-tls/journey-gateway.p12"
 internal const val JOURNEY_CA_PEM_PATH = "fixtures/hermes/journey-tls/journey-ca.pem"
@@ -259,6 +261,31 @@ internal fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name
 
 internal fun LiveParityCapture.wireStatus(): Int =
     requireNotNull(status) { "The live parity capture for an executed operation records no wire status." }
+
+internal fun laneGatewayEndpoint(): URI? = System.getProperty(LIVE_GATEWAY_ENDPOINT_PROPERTY)?.let(URI::create)
+
+internal fun laneGatewayBearerToken(): String? = System.getProperty(LIVE_GATEWAY_BEARER_TOKEN_PROPERTY)
+
+internal class LiveGatewayEnvironmentRun(
+    val endpoint: URI,
+    val parityCaptures: LiveParityCaptureTransport,
+)
+
+internal fun environmentRun(endpoint: URI): LiveGatewayEnvironmentRun =
+    LiveGatewayEnvironmentRun(
+        endpoint = endpoint,
+        parityCaptures = LiveParityCaptureTransport(OkHttpGatewayTransport()),
+    )
+
+internal fun laneClient(
+    run: LiveGatewayEnvironmentRun,
+    bearerToken: String,
+): DefaultGatewayClient =
+    DefaultGatewayClient(
+        endpoint = run.endpoint.toString(),
+        bearerToken = bearerToken,
+        transport = run.parityCaptures,
+    )
 
 internal fun paritySink(name: String): File = File(parityArtifactDirectory(), "$name.jsonl")
 
