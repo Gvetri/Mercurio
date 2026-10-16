@@ -6,7 +6,7 @@ message that lands on `main`; every commit the pull request carries must also be
 Commit. A push validates the commits it introduced. The checker resolves the squash-merge title live
 from the GitHub API; the event payload title is only a fallback when the API gives no usable answer.
 
-The check fails closed: an unavailable or truncated answer from the GitHub API is an error, never an
+The commit list fails closed: an unavailable or truncated commit-list answer is an error, never an
 accepted message.
 """
 
