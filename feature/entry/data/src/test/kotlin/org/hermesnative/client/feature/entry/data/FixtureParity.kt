@@ -142,7 +142,7 @@ internal object FixtureParity {
             operation = operation,
             fixture = fixture,
             method = requestMethod(mapping, contractsRoot),
-            pathShape = requestPathShape(mapping, contractsRoot),
+            pathShape = normalizedPathShape(requestPathShape(mapping, contractsRoot)),
             expectedStatus = expectedStatus(mapping, contractsRoot),
             observedStatus = captures.firstOrNull()?.status,
             verdict = VERDICT_MISMATCH,
@@ -166,7 +166,7 @@ internal object FixtureParity {
             operation = operation,
             fixture = fixturePath,
             method = requestMethod(mapping, contractsRoot),
-            pathShape = requestPathShape(mapping, contractsRoot),
+            pathShape = normalizedPathShape(requestPathShape(mapping, contractsRoot)),
             expectedStatus = expectedStatus(mapping, contractsRoot),
             observedStatus = captures.first().status,
             verdict = if (firstDifference == null) VERDICT_MATCH else VERDICT_MISMATCH,
@@ -367,14 +367,17 @@ internal object FixtureParity {
     ): String? {
         val liveOnlyKey =
             live.keys.sorted().firstOrNull { key -> fixture[key] == null && !absorbsAbsent(key, live.getValue(key)) }
+        val fixtureOnlyKey =
+            fixture.keys.sorted().firstOrNull { key -> live[key] == null && key !in FIXTURE_ONLY_EXEMPT_FIELDS }
         val nestedDifference =
             live.keys.sorted().firstNotNullOfOrNull { key ->
                 fixture[key]?.let { fixtureValue -> compareShape(live.getValue(key), fixtureValue, "$path.$key", key) }
             }
-        if (liveOnlyKey != null) {
-            return "$path: live-only key '$liveOnlyKey'"
+        return when {
+            liveOnlyKey != null -> "$path: live-only key '$liveOnlyKey'"
+            fixtureOnlyKey != null -> "$path: fixture-only key '$fixtureOnlyKey'"
+            else -> nestedDifference
         }
-        return nestedDifference
     }
 
     private fun compareArrays(
@@ -511,15 +514,6 @@ internal object FixtureParity {
         val comparedResponseKeys: Set<String>? = null,
     )
 
-    private data class PendingExchange(
-        val method: String,
-        val url: String,
-        val requestBody: String?,
-        val status: Int,
-        val responseBody: String?,
-        val sseLines: MutableList<String>,
-    )
-
     private const val SSE_FIXTURE_SUFFIX = ".sse"
     private const val PARITY_OBSERVATION_OPERATION = "fixture parity run observation"
     private const val IDENTITY_PLACEHOLDER = "<id>"
@@ -538,6 +532,8 @@ internal object FixtureParity {
     private val COUNT_FIELDS =
         setOf("limit", "offset", "returned", "message_count", "input_tokens", "output_tokens", "total_tokens")
     private val CONTENT_FIELDS = setOf("title", "preview", "content", "delta", "output", "input", "role", "status")
+    private val FIXTURE_ONLY_EXEMPT_FIELDS =
+        setOf("last_active", "created_at", "output", "usage", "session_id")
 
     private val operationMappings =
         linkedMapOf(
