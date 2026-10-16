@@ -11,6 +11,18 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/quality-gate.yml"
+JOURNEY_RUNNER = ROOT / ".github/scripts/journey-run.sh"
+JOURNEY_RETRY_TARGET = "session-lifecycle"
+JOURNEY_MAX_ATTEMPTS = 2
+
+
+def parse_journeys(runner_text):
+    block = runner_text.split("journeys=(", 1)[1].split("\n)", 1)[0]
+    return [line.strip() for line in block.splitlines() if line.strip()]
+
+
+def journey_attempts(journey, *, retried=JOURNEY_RETRY_TARGET, max_attempts=JOURNEY_MAX_ATTEMPTS):
+    return max_attempts if journey == retried else 1
 
 
 class TestJobs(unittest.TestCase):
@@ -351,9 +363,11 @@ class TestJobs(unittest.TestCase):
         return environment, count_dir
 
     def test_journey_runner_retries_a_failed_journey_once_and_keeps_both_attempts(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        expected_attempts = sum(journey_attempts(journey) for journey in journeys)
         with tempfile.TemporaryDirectory() as directory:
             workspace = Path(directory)
-            environment, count_dir = self._prepare_journey_runner_fixture(workspace, "session-lifecycle", 1)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, JOURNEY_RETRY_TARGET, 1)
             result = subprocess.run(
                 ["bash", str(ROOT / ".github/scripts/journey-run.sh")],
                 cwd=workspace,
@@ -363,15 +377,15 @@ class TestJobs(unittest.TestCase):
                 timeout=120,
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-            self.assertIn("Maestro journey failed on attempt 1: session-lifecycle", result.stdout)
+            self.assertIn(f"Maestro journey failed on attempt 1: {JOURNEY_RETRY_TARGET}", result.stdout)
             self.assertEqual(1, result.stdout.count("Maestro journey failed on attempt 1:"))
             self.assertIn("All deterministic journeys passed.", result.stdout)
-            self.assertEqual("2", (count_dir / "session-lifecycle").read_text().strip())
-            self.assertEqual("1", (count_dir / "connection").read_text().strip())
-            self.assertEqual(25, sum(int((count_dir / name).read_text().strip()) for name in sorted(p.name for p in count_dir.iterdir())))
+            self.assertEqual(str(journey_attempts(JOURNEY_RETRY_TARGET)), (count_dir / JOURNEY_RETRY_TARGET).read_text().strip())
+            self.assertEqual(str(journey_attempts(journeys[0])), (count_dir / journeys[0]).read_text().strip())
+            self.assertEqual(expected_attempts, sum(int((count_dir / name).read_text().strip()) for name in sorted(p.name for p in count_dir.iterdir())))
             curl_calls = (workspace / "curl.calls").read_text().splitlines()
-            self.assertEqual(25, len([call for call in curl_calls if "/health" in call]))
-            self.assertEqual(25, len([call for call in curl_calls if "/v1/capabilities" in call]))
+            self.assertEqual(expected_attempts, len([call for call in curl_calls if "/health" in call]))
+            self.assertEqual(expected_attempts, len([call for call in curl_calls if "/v1/capabilities" in call]))
             evidence_dir = workspace / "artifacts/journey-evidence"
             self.assertIn("Element not found: Pin Session", (evidence_dir / "session-lifecycle-maestro-attempt1.log").read_text())
             self.assertIn("COMPLETED", (evidence_dir / "session-lifecycle-maestro.log").read_text())
@@ -381,9 +395,12 @@ class TestJobs(unittest.TestCase):
             self.assertTrue((evidence_dir / "session-lifecycle-gateway-attempt1.log").is_file())
 
     def test_journey_runner_fails_the_suite_after_a_second_failed_attempt(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        retried_index = journeys.index(JOURNEY_RETRY_TARGET)
+        expected_gateway_runs = sum(journey_attempts(journey) for journey in journeys[: retried_index + 1])
         with tempfile.TemporaryDirectory() as directory:
             workspace = Path(directory)
-            environment, count_dir = self._prepare_journey_runner_fixture(workspace, "session-lifecycle", 99)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, JOURNEY_RETRY_TARGET, 99)
             result = subprocess.run(
                 ["bash", str(ROOT / ".github/scripts/journey-run.sh")],
                 cwd=workspace,
@@ -393,14 +410,14 @@ class TestJobs(unittest.TestCase):
                 timeout=120,
             )
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("Maestro journey failed on attempt 1: session-lifecycle", result.stdout)
-            self.assertIn("Maestro journey failed on both attempts: session-lifecycle", result.stdout)
+            self.assertIn(f"Maestro journey failed on attempt 1: {JOURNEY_RETRY_TARGET}", result.stdout)
+            self.assertIn(f"Maestro journey failed on both attempts: {JOURNEY_RETRY_TARGET}", result.stdout)
             self.assertNotIn("All deterministic journeys passed.", result.stdout)
-            self.assertEqual("2", (count_dir / "session-lifecycle").read_text().strip())
-            self.assertFalse((count_dir / "pagination-search").exists())
+            self.assertEqual(str(journey_attempts(JOURNEY_RETRY_TARGET)), (count_dir / JOURNEY_RETRY_TARGET).read_text().strip())
+            self.assertFalse((count_dir / journeys[retried_index + 1]).exists())
             curl_calls = (workspace / "curl.calls").read_text().splitlines()
-            self.assertEqual(6, len([call for call in curl_calls if "/health" in call]))
-            self.assertEqual(6, len([call for call in curl_calls if "/v1/capabilities" in call]))
+            self.assertEqual(expected_gateway_runs, len([call for call in curl_calls if "/health" in call]))
+            self.assertEqual(expected_gateway_runs, len([call for call in curl_calls if "/v1/capabilities" in call]))
             evidence_dir = workspace / "artifacts/journey-evidence"
             self.assertIn("Element not found: Pin Session", (evidence_dir / "session-lifecycle-maestro-attempt1.log").read_text())
             self.assertIn("Element not found: Pin Session", (evidence_dir / "session-lifecycle-maestro.log").read_text())
@@ -450,6 +467,21 @@ class TestJobs(unittest.TestCase):
         self.assertIn("journey_attempt", runner)
         self.assertIn('"$journey" = "session-lifecycle"', runner)
         self.assertEqual(1, runner.count('test --no-reinstall-driver "$flow_dir/$journey.yaml"'))
+
+    def test_journey_attempt_rule_bounds_the_retried_journey_to_two_attempts(self):
+        self.assertEqual(2, journey_attempts(JOURNEY_RETRY_TARGET))
+        self.assertEqual(1, journey_attempts(JOURNEY_RETRY_TARGET, max_attempts=1))
+
+    def test_journey_attempt_rule_leaves_every_other_journey_at_one_attempt(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        others = [journey for journey in journeys if journey != JOURNEY_RETRY_TARGET]
+        self.assertTrue(others)
+        self.assertEqual([1] * len(others), [journey_attempts(journey) for journey in others])
+
+    def test_parse_journeys_extracts_the_runner_array_without_duplicates(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        self.assertEqual(len(journeys), len(set(journeys)))
+        self.assertEqual(1, journeys.count(JOURNEY_RETRY_TARGET))
 
     def test_shared_report_redaction_preserves_errors_and_rejects_binary_input(self):
         with tempfile.TemporaryDirectory() as directory:
