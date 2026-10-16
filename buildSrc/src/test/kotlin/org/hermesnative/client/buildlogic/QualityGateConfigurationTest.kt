@@ -1301,4 +1301,107 @@ class QualityGateConfigurationTest {
         assertTrue("The script must read the exact issue after publication.", script.contains("gh_api_or_refuse \"${'$'}temporary_directory/verified.json\" read-back \"${'$'}issue_number\" \"${'$'}{issues_endpoint}/${'$'}{issue_number}\""))
         assertTrue("Artifact links must come from the current run metadata.", script.contains("/actions/runs/${'$'}{GITHUB_RUN_ID}/artifacts?per_page=100"))
     }
+
+    @Test
+    fun local_quality_gate_script_runs_one_module_gate_in_the_ci_order() {
+        val scriptPath = repositoryRoot.resolve(".github/scripts/local-quality-gate.sh")
+        assertTrue("The local quality gate entry point must exist.", scriptPath.isFile)
+        assertTrue("The local quality gate entry point must be executable.", Files.isExecutable(scriptPath.toPath()))
+        val script = scriptPath.readText()
+
+        assertEquals(
+            "The local quality gate entry point must be a POSIX bash script.",
+            "#!/usr/bin/env bash",
+            script.lineSequence().firstOrNull(),
+        )
+        assertTrue("The local quality gate must fail closed.", script.contains("set -euo pipefail"))
+        assertTrue("The local quality gate must require a module path.", script.contains("Usage:"))
+        assertTrue(
+            "The local quality gate must refuse a module outside the repository.",
+            script.contains("build.gradle.kts"),
+        )
+
+        listOf(
+            "./gradlew \"${'$'}module:ktlintFormat\" --no-daemon",
+            "./gradlew \"${'$'}module:test\" --no-daemon",
+            "./gradlew \"${'$'}module:ktlintMainSourceSetCheck\" \"${'$'}module:ktlintTestSourceSetCheck\" --no-daemon",
+            "./gradlew \"${'$'}module:detektMain\" \"${'$'}module:detektTest\" detektVerify --no-daemon --console=plain",
+        ).forEach { invocation ->
+            assertTrue("The local quality gate must run: $invocation.", script.contains(invocation))
+        }
+        assertTrue(
+            "The local quality gate must check the test source set with ktlint.",
+            script.contains("ktlintTestSourceSetCheck"),
+        )
+        assertEquals(
+            "Every local quality gate invocation must keep the CI --no-daemon shape.",
+            4,
+            Regex("--no-daemon").findAll(script).count(),
+        )
+        val formatter = script.indexOf("ktlintFormat")
+        val compileAndTest = script.indexOf("\"${'$'}module:test\"")
+        val ktlintCheck = script.indexOf("ktlintMainSourceSetCheck")
+        val detektAnalysis = script.indexOf("detektMain")
+        assertTrue(
+            "The local quality gate must format before the ktlint checks.",
+            formatter != -1 && formatter < ktlintCheck,
+        )
+        assertTrue(
+            "The local quality gate must format before it compiles and tests.",
+            formatter != -1 && formatter < compileAndTest,
+        )
+        assertTrue(
+            "The local quality gate must compile and test before the checks judge the sources.",
+            compileAndTest != -1 && compileAndTest < ktlintCheck,
+        )
+        assertTrue(
+            "The local quality gate must run detekt after any reformat.",
+            ktlintCheck != -1 && ktlintCheck < detektAnalysis,
+        )
+
+        assertPosixWrapperSupport()
+        val syntaxCheck =
+            ProcessBuilder("bash", "-n", scriptPath.absolutePath)
+                .redirectErrorStream(true)
+                .start()
+        val syntaxOutput = syntaxCheck.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(syntaxOutput, 0, syntaxCheck.waitFor())
+    }
+
+    @Test
+    fun local_quality_gate_documentation_states_the_ordering_and_staleness_recipe() {
+        val documentationPath = repositoryRoot.resolve("docs/agents/local-quality-gate.md")
+        assertTrue("The local quality gate recipe must live in the agents-facing docs area.", documentationPath.isFile)
+        val documentation = documentationPath.readText()
+
+        assertTrue(
+            "The recipe must show the one-command entry point for a module.",
+            documentation.contains(".github/scripts/local-quality-gate.sh feature/entry/domain"),
+        )
+        assertTrue(
+            "The recipe must state that the formatter runs before the ktlint checks.",
+            documentation.contains("before the ktlint checks"),
+        )
+        assertTrue(
+            "The recipe must state that detekt runs after any reformat.",
+            documentation.contains("after any reformat"),
+        )
+        assertTrue(
+            "The recipe must state the detekt line limit for main and test sources.",
+            documentation.contains("120") && documentation.contains("import statements exempt"),
+        )
+        assertTrue(
+            "The recipe must state the staleness convergence recipe.",
+            documentation.contains("./gradlew koverXmlReport pitest --rerun-tasks") &&
+                documentation.contains("./gradlew coverageVerify mutationVerify"),
+        )
+        assertTrue(
+            "The recipe must link the declared thresholds.",
+            documentation.contains("../quality-gates.md"),
+        )
+        assertTrue(
+            "The quality gates document must cross-link the local quality gate recipe.",
+            repositoryRoot.resolve("docs/quality-gates.md").readText().contains("agents/local-quality-gate.md"),
+        )
+    }
 }
