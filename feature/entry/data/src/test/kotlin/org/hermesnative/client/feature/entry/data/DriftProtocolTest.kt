@@ -269,6 +269,82 @@ class DriftProtocolTest {
             contractsRoot,
         )
 
+    @Test
+    fun filer_builds_the_tracker_command_for_open_issues() {
+        val ledgerFile = ledgerFile("filer-command")
+        DriftProtocol.reconcile(mismatchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
+        val issue = LocalIssueLedger(ledgerFile, repositoryRoot).openIssues().single()
+
+        val command = DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot)).ghCreateCommand(issue)
+
+        assertEquals(
+            listOf(
+                "gh",
+                "issue",
+                "create",
+                "--repo",
+                "Gvetri/hermes-native-client",
+                "--label",
+                DRIFT_ISSUE_LABEL,
+                "--title",
+                issue.title,
+                "--body",
+                listOf(
+                    issue.evidence,
+                    "Divergent operations: session open",
+                    "Occurrences: 1",
+                    "Evidence reference: $LIVE_PARITY_ARTIFACT_FILE_NAME",
+                    issue.proposedRebaseline,
+                    DRIFT_MANIFEST_VERSION_GUIDANCE,
+                ).joinToString(separator = "\n\n"),
+            ),
+            command,
+        )
+    }
+
+    @Test
+    fun filer_files_exactly_one_issue_per_divergence_across_reruns() {
+        val ledgerFile = ledgerFile("filer-idempotent")
+        val filer = DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot))
+        val commands = mutableListOf<List<String>>()
+
+        DriftProtocol.reconcile(mismatchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
+        val firstUrls =
+            filer.fileOpenIssues { command ->
+                commands += command
+                "https://tracker.invalid/issues/1"
+            }
+        DriftProtocol.reconcile(mismatchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
+        val secondUrls =
+            filer.fileOpenIssues { command ->
+                commands += command
+                "https://tracker.invalid/issues/1"
+            }
+
+        assertEquals(listOf("https://tracker.invalid/issues/1"), firstUrls)
+        assertEquals(emptyList<String>(), secondUrls)
+        assertEquals(1, commands.size)
+        val record = LocalIssueLedger(ledgerFile, repositoryRoot).openIssues().single()
+        assertEquals("<redacted-url>", record.filedIssueUrl)
+        assertEquals(2, record.occurrences)
+        val ledgerLine = ledgerFile.readLines().filter(String::isNotBlank).single()
+        assertTrue(ledgerLine.contains("\"filedIssueUrl\":\"<redacted-url>\""))
+    }
+
+    @Test
+    fun filer_files_nothing_when_no_divergence_is_open() {
+        val ledgerFile = ledgerFile("filer-nothing")
+
+        DriftProtocol.reconcile(matchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
+        val urls =
+            DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot)).fileOpenIssues { commands ->
+                commands
+                "https://tracker.invalid/issues/1"
+            }
+
+        assertEquals(emptyList<String>(), urls)
+    }
+
     private fun mismatchedEntries(): List<FixtureParityEntry> =
         FixtureParity.compare(
             listOf(capture(CREATED_SESSION_PATH).copy(responseJson = WRONG_OBJECT_ENVELOPE)),

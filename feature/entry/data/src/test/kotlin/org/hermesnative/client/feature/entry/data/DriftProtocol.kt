@@ -27,6 +27,7 @@ internal data class DriftIssueRecord(
     val occurrences: Int,
     val proposedRebaseline: String,
     val manifestVersionGuidance: String,
+    val filedIssueUrl: String? = null,
 )
 
 internal interface DriftIssueSink {
@@ -93,6 +94,57 @@ internal object DriftProtocol {
             "the drift protocol changes no fixture and no parser."
 }
 
+internal class DriftIssueFiler(
+    private val repository: String,
+    private val sink: DriftIssueSink,
+) {
+    fun fileOpenIssues(runner: (List<String>) -> String): List<String> =
+        sink
+            .openIssues()
+            .filter { it.filedIssueUrl == null }
+            .map { issue ->
+                val url = runner(ghCreateCommand(issue)).trim()
+                sink.upsert(issue.copy(filedIssueUrl = url))
+                url
+            }
+
+    internal fun ghCreateCommand(issue: DriftIssueRecord): List<String> =
+        listOf(
+            "gh",
+            "issue",
+            "create",
+            "--repo",
+            repository,
+            "--label",
+            issue.label,
+            "--title",
+            issue.title,
+            "--body",
+            issueBody(issue),
+        )
+
+    private fun issueBody(issue: DriftIssueRecord): String =
+        listOf(
+            issue.evidence,
+            "Divergent operations: ${issue.divergentOperations.joinToString(separator = ", ")}",
+            "Occurrences: ${issue.occurrences}",
+            "Evidence reference: ${issue.evidenceReference}",
+            issue.proposedRebaseline,
+            issue.manifestVersionGuidance,
+        ).joinToString(separator = "\n\n")
+}
+
+internal fun ghIssueRunner(command: List<String>): String {
+    val process =
+        ProcessBuilder(command)
+            .redirectErrorStream(true)
+            .start()
+    val output = process.inputStream.bufferedReader().readText()
+    val exited = process.waitFor()
+    require(exited == 0) { "The tracker issue filing command failed with exit code $exited: $output" }
+    return output
+}
+
 internal class LocalIssueLedger(
     private val ledgerFile: File,
     private val workspaceRoot: File,
@@ -137,7 +189,7 @@ internal class LocalIssueLedger(
                     "occurrences" to JsonPrimitive(record.occurrences),
                     "proposedRebaseline" to JsonPrimitive(record.proposedRebaseline),
                     "manifestVersionGuidance" to JsonPrimitive(record.manifestVersionGuidance),
-                ),
+                ) + record.filedIssueUrl?.let { url -> mapOf("filedIssueUrl" to JsonPrimitive(url)) }.orEmpty(),
             ).toString(),
             workspaceRoot,
         ) + "\n"
@@ -155,6 +207,7 @@ internal class LocalIssueLedger(
             occurrences = root.getValue("occurrences").jsonPrimitive.content.toInt(),
             proposedRebaseline = root.getValue("proposedRebaseline").jsonPrimitive.content,
             manifestVersionGuidance = root.getValue("manifestVersionGuidance").jsonPrimitive.content,
+            filedIssueUrl = root["filedIssueUrl"]?.jsonPrimitive?.content,
         )
     }
 }

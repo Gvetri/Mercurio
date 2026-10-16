@@ -16,6 +16,7 @@ import java.net.URI
 internal const val LIVE_PARITY_DIR_PROPERTY = "live.fixture.parity.artifactDir"
 internal const val LIVE_PARITY_DEFAULT_DIR = "build/fixture-parity"
 internal const val LIVE_PARITY_ARTIFACT_FILE_NAME = "fixture-parity.jsonl"
+internal const val DRIFT_ISSUE_REPOSITORY = "Gvetri/hermes-native-client"
 internal const val LIVE_SESSION_PARITY_CAPTURE_SINK = "live-session-matrix-parity-captures"
 internal const val LIVE_RUN_PARITY_CAPTURE_SINK = "live-run-matrix-parity-captures"
 internal const val PARITY_CONTRACTS_ROOT = "fixtures/hermes/contracts"
@@ -40,10 +41,11 @@ internal fun runFixtureParityStep(
         }
     val entries = FixtureParity.compare(captures, repositoryRoot.resolve(PARITY_CONTRACTS_ROOT))
     FixtureParity.writeArtifact(entries, File(artifactDirectory, LIVE_PARITY_ARTIFACT_FILE_NAME))
-    DriftProtocol.reconcile(
-        entries,
-        LocalIssueLedger(File(artifactDirectory, DRIFT_LEDGER_FILE_NAME), repositoryRoot),
-    )
+    val ledger = LocalIssueLedger(File(artifactDirectory, DRIFT_LEDGER_FILE_NAME), repositoryRoot)
+    DriftProtocol.reconcile(entries, ledger)
+    if (System.getProperty(LIVE_FIXTURE_FILE_DRIFT_ISSUES_PROPERTY) == "true") {
+        DriftIssueFiler(DRIFT_ISSUE_REPOSITORY, ledger).fileOpenIssues(::ghIssueRunner)
+    }
     return entries
 }
 

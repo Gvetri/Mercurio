@@ -31,6 +31,7 @@ internal const val LIVE_EVIDENCE_DIR_PROPERTY = "live.session.matrix.evidenceDir
 internal const val LIVE_EVIDENCE_DEFAULT_DIR = "build/live-session-matrix-evidence"
 internal const val LIVE_GATEWAY_ENDPOINT_PROPERTY = "live.gateway.endpoint"
 internal const val LIVE_GATEWAY_BEARER_TOKEN_PROPERTY = "live.gateway.bearerToken"
+internal const val LIVE_FIXTURE_FILE_DRIFT_ISSUES_PROPERTY = "live.fixture.fileDriftIssues"
 internal const val PINNED_DESCRIPTOR_PATH = "fixtures/hermes/pinned-fixture.properties"
 internal const val JOURNEY_KEYSTORE_PATH = "fixtures/hermes/journey-tls/journey-gateway.p12"
 internal const val JOURNEY_CA_PEM_PATH = "fixtures/hermes/journey-tls/journey-ca.pem"

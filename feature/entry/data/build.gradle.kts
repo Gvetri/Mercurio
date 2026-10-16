@@ -51,6 +51,9 @@ tasks.register<Test>("liveAcceptanceTest") {
     providers.gradleProperty("live.gateway.bearerToken").orNull?.let { bearerToken ->
         systemProperty("live.gateway.bearerToken", bearerToken)
     }
+    providers.gradleProperty("live.fixture.fileDriftIssues").orNull?.let { fileDriftIssues ->
+        systemProperty("live.fixture.fileDriftIssues", fileDriftIssues)
+    }
     inputs.file(rootProject.file("fixtures/hermes/pinned-fixture.properties"))
         .withPropertyName("pinnedDescriptor")
         .withPathSensitivity(PathSensitivity.RELATIVE)
