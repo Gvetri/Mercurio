@@ -69,6 +69,25 @@ class LiveGatewayRunAcceptanceTest {
     }
 
     @Test
+    fun run_observation_closes_the_transport_stream_when_the_terminal_event_ends_it() {
+        val finishedStreamTransport =
+            SeamedEventStreamTransport(
+                listOf(
+                    "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"running\",\"delta\":\"Seam delta\"}",
+                    "",
+                    "data: {\"event\":\"run.completed\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"succeeded\"}",
+                    "",
+                ),
+            )
+
+        val events = seamClient(finishedStreamTransport).observeRun(RunId(RUN_LANE_SEAM_RUN_ID)).toList()
+
+        assertEquals(listOf("Seam delta"), deliveredDeltas(events))
+        assertEquals(RunEventType.COMPLETED, events.last().type)
+        assertTrue("The transport stream must be closed after the terminal event ends it", finishedStreamTransport.eventStreamClosed)
+    }
+
+    @Test
     fun malformed_run_streams_surface_invalid_response_at_the_client_seam() {
         val evidence =
             LiveSessionMatrixRecorder(evidenceSink("live-run-matrix-malformed-streams"), repositoryRoot)
@@ -191,6 +210,12 @@ class LiveGatewayRunAcceptanceTest {
         val observation = client.observeRun(admitted.id)
         val events = collectEventsUntilTerminal(observation)
         observation.close()
+        observation.close()
+        val capture = drained("run observation")
+        assertTrue(
+            "The client must consume the terminal event before it closes the held-open stream",
+            capture.sseLines.any { it.contains("\"event\":\"run.completed\"") },
+        )
         assertEquals(listOf(RUN_LANE_HOLD_OPEN_DELTA), deliveredDeltas(events))
         assertEquals(RunEventType.COMPLETED, events.last().type)
         evidence.record(
@@ -199,7 +224,7 @@ class LiveGatewayRunAcceptanceTest {
                 method = "GET",
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
-                actualStatus = drained("run observation").wireStatus(),
+                actualStatus = capture.wireStatus(),
                 envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_HOLD_OPEN_RUN_ID, events),
             ),
