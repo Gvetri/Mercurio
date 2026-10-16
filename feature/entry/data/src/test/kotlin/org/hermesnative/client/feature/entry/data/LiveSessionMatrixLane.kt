@@ -161,7 +161,7 @@ internal fun runLaneScripts(): List<JourneyRunScript> =
                     JourneyRunEvent(type = "message.delta", delta = "the lane."),
                     JourneyRunEvent(type = "run.completed"),
                 ),
-            finalStatus = "succeeded",
+            finalStatus = "completed",
         ),
         JourneyRunScript(
             runId = RUN_LANE_FRAMING_RUN_ID,
@@ -173,15 +173,15 @@ internal fun runLaneScripts(): List<JourneyRunScript> =
                     JourneyRunEvent(type = "message.delta", delta = "Framed delta"),
                     JourneyRunEvent(type = "run.completed"),
                 ),
-            finalStatus = "succeeded",
+            finalStatus = "completed",
         ),
         JourneyRunScript(
             runId = RUN_LANE_HOLD_OPEN_RUN_ID,
             sessionId = RUN_LANE_CREATED_SESSION_ID,
-            createStatus = "running",
+            createStatus = "started",
             holdOpen = true,
             finalizeOnDisconnect = true,
-            finalStatus = "succeeded",
+            finalStatus = "completed",
             observation =
                 listOf(
                     JourneyRunEvent(type = "message.delta", delta = "Held delta"),
@@ -197,7 +197,7 @@ internal fun runLaneScripts(): List<JourneyRunScript> =
                     JourneyRunEvent(type = RUN_LANE_UNMAPPED_EVENT_TYPE),
                     JourneyRunEvent(type = "run.completed"),
                 ),
-            finalStatus = "succeeded",
+            finalStatus = "completed",
         ),
         JourneyRunScript(
             runId = RUN_LANE_REFUSED_RUN_ID,

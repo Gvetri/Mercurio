@@ -183,7 +183,6 @@ class FixtureParityStepTest {
         listOf(
             capture("run create", "POST", "/v1/runs", 202, RUN_DELTA_ADMISSION_ENVELOPE)
                 .copy(requestBodyJson = RUN_LANE_REQUEST_BODY),
-            capture("run status", "GET", "/v1/runs/lane-delta-run", 200, LIVE_RUN_STATUS_STARTED),
             capture("run create", "POST", "/v1/runs", 202, RUN_FRAMING_ADMISSION_ENVELOPE)
                 .copy(requestBodyJson = RUN_LANE_REQUEST_BODY),
             capture("run create", "POST", "/v1/runs", 202, RUN_HOLD_OPEN_ADMISSION_ENVELOPE)
@@ -194,7 +193,7 @@ class FixtureParityStepTest {
 
     private fun runObservationCaptures(): List<LiveParityCapture> =
         listOf(
-            capture("run status", "GET", "/v1/runs/lane-delta-run", 200, LIVE_RUN_STATUS_SUCCEEDED),
+            capture("run status", "GET", "/v1/runs/lane-delta-run", 200, LIVE_RUN_STATUS_COMPLETED),
             capture("run observation", "GET", "/v1/runs/lane-delta-run/events", 200)
                 .copy(
                     sseLines =
@@ -279,7 +278,7 @@ class FixtureParityStepTest {
         const val RUN_FRAMING_ADMISSION_ENVELOPE =
             """{"run_id":"lane-framing-run","status":"started","replayed":false}"""
         const val RUN_HOLD_OPEN_ADMISSION_ENVELOPE =
-            """{"run_id":"lane-hold-open-run","status":"running","replayed":false}"""
+            """{"run_id":"lane-hold-open-run","status":"started","replayed":false}"""
         const val RUN_UNMAPPED_ADMISSION_ENVELOPE =
             """{"run_id":"lane-unmapped-run","status":"started","replayed":false}"""
 
@@ -374,14 +373,9 @@ class FixtureParityStepTest {
             {"object":"hermes.session.deleted","id":"synthetic-created-session-1","deleted":true}
             """.trimIndent()
 
-        val LIVE_RUN_STATUS_STARTED =
+        val LIVE_RUN_STATUS_COMPLETED =
             """
-            {"object":"hermes.run","run_id":"lane-delta-run","session_id":"synthetic-created-session-1","status":"started","updated_at":1757325600.0}
-            """.trimIndent()
-
-        val LIVE_RUN_STATUS_SUCCEEDED =
-            """
-            {"object":"hermes.run","run_id":"lane-delta-run","session_id":"synthetic-created-session-1","status":"succeeded","updated_at":1757325600.0}
+            {"object":"hermes.run","run_id":"lane-delta-run","session_id":"synthetic-created-session-1","status":"completed","updated_at":1757325600.0}
             """.trimIndent()
     }
 }

@@ -156,8 +156,6 @@ class LiveGatewayRunAcceptanceTest {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_DELTA_RUN_ID, admitted.id.value)
 
-        verifyRunStatus(client, admitted, "started", evidence, drained)
-
         val events = client.observeRun(admitted.id).toList()
         assertEquals(RUN_LANE_EXPECTED_RESPONSE, deliveredDeltas(events).joinToString(separator = ""))
         assertEquals(RunEventType.COMPLETED, events.last().type)
@@ -173,7 +171,7 @@ class LiveGatewayRunAcceptanceTest {
             ),
         )
 
-        verifyRunStatus(client, admitted, "succeeded", evidence, drained)
+        verifyRunStatus(client, admitted, "completed", evidence, drained)
     }
 
     private fun verifyLiveFramingRun(
@@ -396,7 +394,7 @@ class LiveGatewayRunAcceptanceTest {
         const val RUN_LANE_HOLD_OPEN_DELTA = "Held delta"
         const val RUN_LANE_SEAM_RUN_ID = "lane-seam-run"
         const val TERMINAL_EVENT_NAME = "run.completed"
-        const val RUN_MATRIX_ENTRY_COUNT = 11
+        const val RUN_MATRIX_ENTRY_COUNT = 10
         const val MALFORMED_STREAM_ENTRY_COUNT = 2
         const val LIVE_FRAMING_BOUNDARY_COMMENTS = 2
 

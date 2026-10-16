@@ -417,6 +417,7 @@ internal object FixtureParity {
     ): Boolean =
         when {
             key in CONTENT_FIELDS -> value is JsonNull || (value is JsonPrimitive && value.isString)
+            key in PROVENANCE_FIELDS -> value is JsonPrimitive && value.isString
             key in IDENTITY_FIELDS -> value is JsonPrimitive
             key in TIMESTAMP_FIELDS -> value is JsonPrimitive
             else -> false
@@ -441,6 +442,7 @@ internal object FixtureParity {
             key in TIMESTAMP_FIELDS -> TIMESTAMP_PLACEHOLDER
             key in COUNT_FIELDS && !element.isString -> COUNT_PLACEHOLDER
             key in CONTENT_FIELDS && (element is JsonNull || element.isString) -> CONTENT_PLACEHOLDER
+            key in PROVENANCE_FIELDS && element.isString -> PROVENANCE_PLACEHOLDER
             else -> element.toString()
         }
 
@@ -528,6 +530,7 @@ internal object FixtureParity {
     private const val TIMESTAMP_PLACEHOLDER = "<timestamp>"
     private const val COUNT_PLACEHOLDER = "<count>"
     private const val CONTENT_PLACEHOLDER = "<text>"
+    private const val PROVENANCE_PLACEHOLDER = "<provenance>"
     private const val BOOLEAN_PLACEHOLDER = "<bool>"
     private const val PATH_PARAMETER_PLACEHOLDER = "{param}"
 
@@ -539,9 +542,21 @@ internal object FixtureParity {
     private val TIMESTAMP_FIELDS = setOf("last_active", "created_at", "updated_at", "timestamp")
     private val COUNT_FIELDS =
         setOf("limit", "offset", "returned", "message_count", "input_tokens", "output_tokens", "total_tokens")
-    private val CONTENT_FIELDS = setOf("title", "preview", "content", "delta", "output", "input", "role", "status")
+    private val CONTENT_FIELDS = setOf("title", "preview", "content", "delta", "output", "input")
     private val FIXTURE_ONLY_EXEMPT_FIELDS =
-        setOf("last_active", "created_at", "output", "usage", "session_id")
+        setOf(
+            "last_active",
+            "created_at",
+            "output",
+            "usage",
+            "session_id",
+            "runtime",
+            "tool_progress_events",
+            "approval_events",
+            "session_continuity_header",
+            "session_key_header",
+        )
+    private val PROVENANCE_FIELDS = setOf("model")
 
     private val operationMappings =
         linkedMapOf(
@@ -549,7 +564,6 @@ internal object FixtureParity {
                 OperationParityMapping(
                     listOf("capabilities/success.json"),
                     "capabilities/request.json",
-                    comparedResponseKeys = setOf("endpoints"),
                 ),
             "session list" to
                 OperationParityMapping(
