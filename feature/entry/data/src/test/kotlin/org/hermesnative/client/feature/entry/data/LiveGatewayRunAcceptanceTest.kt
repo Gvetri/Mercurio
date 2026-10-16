@@ -24,18 +24,21 @@ class LiveGatewayRunAcceptanceTest {
     @Test
     fun run_matrix_executes_every_run_operation_against_the_started_gateway() {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-run-matrix"), repositoryRoot)
+        val parity = LiveParityCaptureRecorder(paritySink(LIVE_RUN_PARITY_CAPTURE_SINK), repositoryRoot)
         val run = laneRun(repositoryRoot, RUN_LANE_BEARER_TOKEN, ::runLaneScenario)
+        val drained: (String) -> Unit = { operation -> parity.record(run.parityCaptures.drain(operation)) }
 
         run.fixture.execute { context ->
             StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
             val client = laneClient(run, RUN_LANE_BEARER_TOKEN)
             val ephemeralSession = client.createSession(RUN_LANE_SESSION_TITLE)
+            run.parityCaptures.drain("run lane session setup")
             assertEquals(RUN_LANE_CREATED_SESSION_ID, ephemeralSession.id.value)
 
-            verifyDeltaRun(client, evidence)
-            verifyLiveFramingRun(client, evidence)
-            verifyHeldOpenRun(client, evidence)
-            verifyUnmappedEventRun(client, evidence)
+            verifyDeltaRun(client, evidence, drained)
+            verifyLiveFramingRun(client, evidence, drained)
+            verifyHeldOpenRun(client, evidence, drained)
+            verifyUnmappedEventRun(client, evidence, drained)
             verifyRefusedRunCreation(client, evidence)
         }
 
@@ -56,6 +59,9 @@ class LiveGatewayRunAcceptanceTest {
         assertFalse(evidenceText.contains(RUN_LANE_EXPECTED_RESPONSE))
         assertFalse(evidenceText.contains(RUN_LANE_FRAMING_DELTA))
         assertFalse(evidenceText.contains(RUN_LANE_HOLD_OPEN_DELTA))
+
+        val parityEntries = runFixtureParityStep(repositoryRoot)
+        FixtureParity.requireMatchVerdicts(parityEntries, RUN_PARITY_PAIRS)
     }
 
     @Test
@@ -121,11 +127,12 @@ class LiveGatewayRunAcceptanceTest {
     private fun verifyDeltaRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
-        val admitted = createRun(client, evidence)
+        val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_DELTA_RUN_ID, admitted.id.value)
 
-        verifyRunStatus(client, admitted, RUN_LANE_CREATED_SESSION_ID, "started", evidence)
+        verifyRunStatus(client, admitted, "started", evidence, drained)
 
         val events = client.observeRun(admitted.id).toList()
         assertEquals(RUN_LANE_EXPECTED_RESPONSE, deliveredDeltas(events).joinToString(separator = ""))
@@ -140,15 +147,17 @@ class LiveGatewayRunAcceptanceTest {
                 streamSummary = runStreamSummary(RUN_LANE_DELTA_RUN_ID, events),
             ),
         )
+        drained("run observation")
 
-        verifyRunStatus(client, admitted, RUN_LANE_CREATED_SESSION_ID, "succeeded", evidence)
+        verifyRunStatus(client, admitted, "succeeded", evidence, drained)
     }
 
     private fun verifyLiveFramingRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
-        val admitted = createRun(client, evidence)
+        val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_FRAMING_RUN_ID, admitted.id.value)
 
         val events = client.observeRun(admitted.id).toList()
@@ -164,13 +173,15 @@ class LiveGatewayRunAcceptanceTest {
                 streamSummary = runStreamSummary(RUN_LANE_FRAMING_RUN_ID, events),
             ),
         )
+        drained("run observation")
     }
 
     private fun verifyHeldOpenRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
-        val admitted = createRun(client, evidence)
+        val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_HOLD_OPEN_RUN_ID, admitted.id.value)
 
         val observation = client.observeRun(admitted.id)
@@ -188,13 +199,15 @@ class LiveGatewayRunAcceptanceTest {
                 streamSummary = runStreamSummary(RUN_LANE_HOLD_OPEN_RUN_ID, events),
             ),
         )
+        drained("run observation")
     }
 
     private fun verifyUnmappedEventRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
-        val admitted = createRun(client, evidence)
+        val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_UNMAPPED_RUN_ID, admitted.id.value)
 
         val events = client.observeRun(admitted.id).toList()
@@ -210,6 +223,7 @@ class LiveGatewayRunAcceptanceTest {
                 streamSummary = runStreamSummary(RUN_LANE_UNMAPPED_RUN_ID, events),
             ),
         )
+        drained("run observation")
     }
 
     private fun verifyRefusedRunCreation(
@@ -233,6 +247,7 @@ class LiveGatewayRunAcceptanceTest {
     private fun createRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ): Run {
         val admitted = client.createRun(SessionId(RUN_LANE_CREATED_SESSION_ID), RUN_LANE_INPUT)
         evidence.record(
@@ -244,15 +259,16 @@ class LiveGatewayRunAcceptanceTest {
                 envelope = RUN_ADMISSION_ENVELOPE,
             ),
         )
+        drained("run create")
         return admitted
     }
 
     private fun verifyRunStatus(
         client: DefaultGatewayClient,
         admitted: Run,
-        sessionId: String,
         expectedStatus: String,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
         val status = client.getRunStatus(admitted.id)
         evidence.record(
@@ -264,8 +280,9 @@ class LiveGatewayRunAcceptanceTest {
                 envelope = RUN_STATUS_ENVELOPE,
             ),
         )
+        drained("run status")
         assertEquals(admitted.id, status.id)
-        assertEquals(sessionId, status.sessionId.value)
+        assertEquals(RUN_LANE_CREATED_SESSION_ID, status.sessionId.value)
         assertEquals(expectedStatus, status.status)
     }
 
@@ -352,6 +369,13 @@ class LiveGatewayRunAcceptanceTest {
         const val RUN_MATRIX_ENTRY_COUNT = 11
         const val MALFORMED_STREAM_ENTRY_COUNT = 2
         const val LIVE_FRAMING_BOUNDARY_COMMENTS = 2
+
+        private val RUN_PARITY_PAIRS =
+            setOf(
+                "run create" to "runs/create-response.json",
+                "run status" to "runs/status-response.json",
+                "run observation" to "runs/observation.sse",
+            )
         const val HTTP_OK = 200
         const val HTTP_ACCEPTED = 202
 

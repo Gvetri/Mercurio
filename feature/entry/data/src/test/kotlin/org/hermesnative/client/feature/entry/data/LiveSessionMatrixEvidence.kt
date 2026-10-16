@@ -91,6 +91,33 @@ internal fun verifiedRunObservationEvidence(
         envelope = envelope,
     ).copy(streamSummary = streamSummary)
 
+internal object EvidenceRedaction {
+    fun redact(
+        line: String,
+        workspaceRoot: File,
+    ): String {
+        val withoutBearerValues =
+            BEARER_TOKEN_PATTERN.replace(line) { match -> "${match.groupValues[1]}<redacted>" }
+        val withoutSensitiveValues =
+            SENSITIVE_KEY_VALUE_PATTERN.replace(withoutBearerValues) { match ->
+                "${match.groupValues[1]}\"<redacted>\""
+            }
+        val withoutUrls = URL_PATTERN.replace(withoutSensitiveValues, "<redacted-url>")
+        return withoutUrls.replace(workspaceRoot.absolutePath, "<workspace>")
+    }
+
+    private val BEARER_TOKEN_PATTERN = Regex("(?i)\\b((?:bearer|basic)\\s+)[^\\s,;\"']+")
+
+    private val SENSITIVE_KEY_VALUE_PATTERN =
+        Regex(
+            "(?i)([\"']?(?:authorization|token|password|secret|api[_-]?key|access[_-]?token|" +
+                "client[_-]?secret|private[_-]?key|input[_-]?text)[\"']?\\s*[:=]\\s*)" +
+                "\"(?:\\\\.|[^\"\\\\\\r\\n])*\"",
+        )
+
+    private val URL_PATTERN = Regex("(?i)https?://[^\\s<>\"']+")
+}
+
 internal class LiveSessionMatrixRecorder(
     sink: File,
     private val workspaceRoot: File,
@@ -139,27 +166,5 @@ internal class LiveSessionMatrixRecorder(
             ),
         )
 
-    private fun redact(line: String): String {
-        val withoutBearerValues =
-            BEARER_TOKEN_PATTERN.replace(line) { match -> "${match.groupValues[1]}<redacted>" }
-        val withoutSensitiveValues =
-            SENSITIVE_KEY_VALUE_PATTERN.replace(withoutBearerValues) { match ->
-                "${match.groupValues[1]}\"<redacted>\""
-            }
-        val withoutUrls = URL_PATTERN.replace(withoutSensitiveValues, "<redacted-url>")
-        return withoutUrls.replace(workspaceRoot.absolutePath, "<workspace>")
-    }
-
-    private companion object {
-        val BEARER_TOKEN_PATTERN = Regex("(?i)\\b((?:bearer|basic)\\s+)[^\\s,;\"']+")
-
-        val SENSITIVE_KEY_VALUE_PATTERN =
-            Regex(
-                "(?i)([\"']?(?:authorization|token|password|secret|api[_-]?key|access[_-]?token|" +
-                    "client[_-]?secret|private[_-]?key|input[_-]?text)[\"']?\\s*[:=]\\s*)" +
-                    "\"(?:\\\\.|[^\"\\\\\\r\\n])*\"",
-            )
-
-        val URL_PATTERN = Regex("(?i)https?://[^\\s<>\"']+")
-    }
+    private fun redact(line: String): String = EvidenceRedaction.redact(line, workspaceRoot)
 }

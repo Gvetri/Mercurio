@@ -42,6 +42,9 @@ tasks.register<Test>("liveAcceptanceTest") {
     providers.gradleProperty("live.session.matrix.evidenceDir").orNull?.let { evidenceDir ->
         systemProperty("live.session.matrix.evidenceDir", evidenceDir)
     }
+    providers.gradleProperty("live.fixture.parity.artifactDir").orNull?.let { artifactDir ->
+        systemProperty("live.fixture.parity.artifactDir", artifactDir)
+    }
     inputs.file(rootProject.file("fixtures/hermes/pinned-fixture.properties"))
         .withPropertyName("pinnedDescriptor")
         .withPathSensitivity(PathSensitivity.RELATIVE)
