@@ -38,6 +38,7 @@ internal fun verifiedEvidence(
     method: String,
     pathShape: String,
     expectedStatus: Int,
+    actualStatus: Int,
     envelope: Map<String, String>,
     queryShape: List<String> = emptyList(),
 ): LiveSessionMatrixEvidence =
@@ -47,7 +48,7 @@ internal fun verifiedEvidence(
         pathShape = pathShape,
         queryShape = queryShape,
         expectedStatus = expectedStatus,
-        actualStatus = expectedStatus,
+        actualStatus = actualStatus,
         outcome = EVIDENCE_OUTCOME_VERIFIED,
         envelope = envelope,
         errorCategory = null,
@@ -80,6 +81,7 @@ internal fun verifiedRunObservationEvidence(
     method: String,
     pathShape: String,
     expectedStatus: Int,
+    actualStatus: Int,
     envelope: Map<String, String>,
     streamSummary: RunStreamSummary,
 ): LiveSessionMatrixEvidence =
@@ -88,6 +90,7 @@ internal fun verifiedRunObservationEvidence(
         method = method,
         pathShape = pathShape,
         expectedStatus = expectedStatus,
+        actualStatus = actualStatus,
         envelope = envelope,
     ).copy(streamSummary = streamSummary)
 

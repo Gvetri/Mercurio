@@ -257,6 +257,9 @@ internal fun gatewayFailure(block: () -> Unit): GatewayException =
 
 internal fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name.jsonl")
 
+internal fun LiveParityCapture.wireStatus(): Int =
+    requireNotNull(status) { "The live parity capture for an executed operation records no wire status." }
+
 internal fun paritySink(name: String): File = File(parityArtifactDirectory(), "$name.jsonl")
 
 internal class LiveSessionMatrixRun(

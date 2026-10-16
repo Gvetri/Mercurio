@@ -26,7 +26,11 @@ class LiveGatewayRunAcceptanceTest {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-run-matrix"), repositoryRoot)
         val parity = LiveParityCaptureRecorder(paritySink(LIVE_RUN_PARITY_CAPTURE_SINK), repositoryRoot)
         val run = laneRun(repositoryRoot, RUN_LANE_BEARER_TOKEN, ::runLaneScenario)
-        val drained: (String) -> Unit = { operation -> parity.record(run.parityCaptures.drain(operation)) }
+        val drained: (String) -> LiveParityCapture = { operation ->
+            val capture = run.parityCaptures.drain(operation)
+            parity.record(capture)
+            capture
+        }
 
         run.fixture.execute { context ->
             StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
@@ -127,7 +131,7 @@ class LiveGatewayRunAcceptanceTest {
     private fun verifyDeltaRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_DELTA_RUN_ID, admitted.id.value)
@@ -143,11 +147,11 @@ class LiveGatewayRunAcceptanceTest {
                 method = "GET",
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("run observation").wireStatus(),
                 envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_DELTA_RUN_ID, events),
             ),
         )
-        drained("run observation")
 
         verifyRunStatus(client, admitted, "succeeded", evidence, drained)
     }
@@ -155,7 +159,7 @@ class LiveGatewayRunAcceptanceTest {
     private fun verifyLiveFramingRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_FRAMING_RUN_ID, admitted.id.value)
@@ -169,17 +173,17 @@ class LiveGatewayRunAcceptanceTest {
                 method = "GET",
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("run observation").wireStatus(),
                 envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_FRAMING_RUN_ID, events),
             ),
         )
-        drained("run observation")
     }
 
     private fun verifyHeldOpenRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_HOLD_OPEN_RUN_ID, admitted.id.value)
@@ -195,17 +199,17 @@ class LiveGatewayRunAcceptanceTest {
                 method = "GET",
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("run observation").wireStatus(),
                 envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_HOLD_OPEN_RUN_ID, events),
             ),
         )
-        drained("run observation")
     }
 
     private fun verifyUnmappedEventRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_UNMAPPED_RUN_ID, admitted.id.value)
@@ -219,11 +223,11 @@ class LiveGatewayRunAcceptanceTest {
                 method = "GET",
                 pathShape = "/v1/runs/{run_id}/events",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("run observation").wireStatus(),
                 envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_UNMAPPED_RUN_ID, events),
             ),
         )
-        drained("run observation")
     }
 
     private fun verifyRefusedRunCreation(
@@ -247,7 +251,7 @@ class LiveGatewayRunAcceptanceTest {
     private fun createRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ): Run {
         val admitted = client.createRun(SessionId(RUN_LANE_CREATED_SESSION_ID), RUN_LANE_INPUT)
         evidence.record(
@@ -256,10 +260,10 @@ class LiveGatewayRunAcceptanceTest {
                 method = "POST",
                 pathShape = "/v1/runs",
                 expectedStatus = HTTP_ACCEPTED,
+                actualStatus = drained("run create").wireStatus(),
                 envelope = RUN_ADMISSION_ENVELOPE,
             ),
         )
-        drained("run create")
         return admitted
     }
 
@@ -268,7 +272,7 @@ class LiveGatewayRunAcceptanceTest {
         admitted: Run,
         expectedStatus: String,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val status = client.getRunStatus(admitted.id)
         evidence.record(
@@ -277,10 +281,10 @@ class LiveGatewayRunAcceptanceTest {
                 method = "GET",
                 pathShape = "/v1/runs/{run_id}",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("run status").wireStatus(),
                 envelope = RUN_STATUS_ENVELOPE,
             ),
         )
-        drained("run status")
         assertEquals(admitted.id, status.id)
         assertEquals(RUN_LANE_CREATED_SESSION_ID, status.sessionId.value)
         assertEquals(expectedStatus, status.status)

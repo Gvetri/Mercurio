@@ -60,7 +60,11 @@ class LiveGatewaySessionAcceptanceTest {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix"), repositoryRoot)
         val parity = LiveParityCaptureRecorder(paritySink(LIVE_SESSION_PARITY_CAPTURE_SINK), repositoryRoot)
         val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
-        val drained: (String) -> Unit = { operation -> parity.record(run.parityCaptures.drain(operation)) }
+        val drained: (String) -> LiveParityCapture = { operation ->
+            val capture = run.parityCaptures.drain(operation)
+            parity.record(capture)
+            capture
+        }
 
         run.fixture.execute { context ->
             StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
@@ -73,10 +77,10 @@ class LiveGatewaySessionAcceptanceTest {
                     method = "GET",
                     pathShape = "/v1/capabilities",
                     expectedStatus = HTTP_OK,
+                    actualStatus = drained("capability discovery").wireStatus(),
                     envelope = CAPABILITY_DISCOVERY_ENVELOPE,
                 ),
             )
-            drained("capability discovery")
             val advertisedEndpoints = capabilities.endpoints.keys
             val requiredEndpoints = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys
             assertTrue(advertisedEndpoints.containsAll(requiredEndpoints))
@@ -159,6 +163,7 @@ class LiveGatewaySessionAcceptanceTest {
                     method = "POST",
                     pathShape = "/api/sessions",
                     expectedStatus = HTTP_CREATED,
+                    actualStatus = HTTP_CREATED,
                     envelope = SESSION_ENVELOPE,
                 ),
             )
@@ -196,6 +201,7 @@ class LiveGatewaySessionAcceptanceTest {
                 method = "GET",
                 pathShape = "/api/sessions",
                 expectedStatus = HTTP_OK,
+                actualStatus = HTTP_CREATED,
                 envelope =
                     mapOf(
                         "authorization" to "Bearer $LANE_BEARER_TOKEN",
@@ -209,13 +215,14 @@ class LiveGatewaySessionAcceptanceTest {
         assertFalse(sinkText.contains(repositoryRoot.absolutePath))
         assertTrue(sinkText.contains("\"authorization\":\"<redacted>\""))
         assertTrue(sinkText.contains("\"workspace\":\"<workspace>\""))
+        assertTrue(sinkText.contains("\"expectedStatus\":200,\"actualStatus\":201"))
         assertRecordedMethodsMatch(recorder)
     }
 
     private fun verifyPagedSessionList(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val firstPage = client.listSessions(SessionListRequest(limit = LANE_PAGE_LIMIT))
         evidence.record(
@@ -224,11 +231,11 @@ class LiveGatewaySessionAcceptanceTest {
                 method = "GET",
                 pathShape = "/api/sessions",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("session list").wireStatus(),
                 envelope = SESSION_LIST_ENVELOPE,
                 queryShape = listOf("limit", "offset"),
             ),
         )
-        drained("session list")
         assertEquals(
             listOf(SEEDED_PINNED_SESSION_ID, SEEDED_OPEN_SESSION_ID),
             firstPage.sessions.map { it.id.value },
@@ -245,11 +252,11 @@ class LiveGatewaySessionAcceptanceTest {
                 method = "GET",
                 pathShape = "/api/sessions",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("session list").wireStatus(),
                 envelope = SESSION_LIST_ENVELOPE,
                 queryShape = listOf("limit", "offset"),
             ),
         )
-        drained("session list")
         assertEquals(listOf(SEEDED_THIRD_SESSION_ID), secondPage.sessions.map { it.id.value })
         assertNull(secondPage.nextOffset)
     }
@@ -257,7 +264,7 @@ class LiveGatewaySessionAcceptanceTest {
     private fun verifyCreatedSessionLifecycle(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val created = client.createSession(LANE_CREATED_TITLE)
         evidence.record(
@@ -266,35 +273,31 @@ class LiveGatewaySessionAcceptanceTest {
                 method = "POST",
                 pathShape = "/api/sessions",
                 expectedStatus = HTTP_CREATED,
+                actualStatus = drained("session create").wireStatus(),
                 envelope = SESSION_ENVELOPE,
             ),
         )
-        drained("session create")
         assertEquals(CREATED_SESSION_ID, created.id.value)
         assertEquals(LANE_CREATED_TITLE, created.title)
         assertNull(created.preview)
         assertFalse(created.pinned)
 
         val opened = client.openSession(created.id)
-        evidence.record(sessionResourceEvidence("session open", method = "GET"))
-        drained("session open")
+        evidence.record(sessionResourceEvidence("session open", method = "GET", actualStatus = drained("session open").wireStatus()))
         assertEquals(CREATED_SESSION_ID, opened.id.value)
         assertEquals(LANE_CREATED_TITLE, opened.title)
 
         val renamed = client.renameSession(created.id, LANE_RENAMED_TITLE)
-        evidence.record(sessionResourceEvidence("session rename", method = "PATCH"))
-        drained("session rename")
+        evidence.record(sessionResourceEvidence("session rename", method = "PATCH", actualStatus = drained("session rename").wireStatus()))
         assertEquals(LANE_RENAMED_TITLE, renamed.title)
 
         val pinned = client.pinSession(created.id)
-        evidence.record(sessionResourceEvidence("session pin", method = "PATCH"))
-        drained("session pin")
+        evidence.record(sessionResourceEvidence("session pin", method = "PATCH", actualStatus = drained("session pin").wireStatus()))
         assertEquals(created.id, pinned.sessionId)
         assertTrue(pinned.pinned)
 
         val unpinned = client.unpinSession(created.id)
-        evidence.record(sessionResourceEvidence("session unpin", method = "PATCH"))
-        drained("session unpin")
+        evidence.record(sessionResourceEvidence("session unpin", method = "PATCH", actualStatus = drained("session unpin").wireStatus()))
         assertFalse(unpinned.pinned)
 
         verifySessionHistory(client, created, evidence, drained)
@@ -306,17 +309,17 @@ class LiveGatewaySessionAcceptanceTest {
                 method = "DELETE",
                 pathShape = "/api/sessions/{session_id}",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("session delete").wireStatus(),
                 envelope = SESSION_DELETED_ENVELOPE,
             ),
         )
-        drained("session delete")
     }
 
     private fun verifySessionHistory(
         client: DefaultGatewayClient,
         created: Session,
         evidence: LiveSessionMatrixRecorder,
-        drained: (String) -> Unit,
+        drained: (String) -> LiveParityCapture,
     ) {
         val createdHistory = client.loadSessionHistory(created.id)
         evidence.record(
@@ -325,10 +328,10 @@ class LiveGatewaySessionAcceptanceTest {
                 method = "GET",
                 pathShape = "/api/sessions/{session_id}/messages",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("session history").wireStatus(),
                 envelope = EMPTY_SESSION_HISTORY_ENVELOPE,
             ),
         )
-        drained("session history")
         assertEquals(created.id, createdHistory.sessionId)
         assertTrue(createdHistory.messages.isEmpty())
 
@@ -339,10 +342,10 @@ class LiveGatewaySessionAcceptanceTest {
                 method = "GET",
                 pathShape = "/api/sessions/{session_id}/messages",
                 expectedStatus = HTTP_OK,
+                actualStatus = drained("session history").wireStatus(),
                 envelope = POPULATED_SESSION_HISTORY_ENVELOPE,
             ),
         )
-        drained("session history")
         assertEquals(SEEDED_PINNED_SESSION_ID, seededHistory.sessionId.value)
         assertEquals(
             listOf(SEEDED_FIRST_MESSAGE_ID, SEEDED_SECOND_MESSAGE_ID),
@@ -368,12 +371,14 @@ class LiveGatewaySessionAcceptanceTest {
     private fun sessionResourceEvidence(
         operation: String,
         method: String,
+        actualStatus: Int,
     ): LiveSessionMatrixEvidence =
         verifiedEvidence(
             operation = operation,
             method = method,
             pathShape = "/api/sessions/{session_id}",
             expectedStatus = HTTP_OK,
+            actualStatus = actualStatus,
             envelope = SESSION_ENVELOPE,
         )
 
