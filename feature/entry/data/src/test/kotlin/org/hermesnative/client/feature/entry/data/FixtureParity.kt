@@ -26,14 +26,24 @@ internal fun parityArtifactDirectory(): File =
         ?.let(::File)
         ?: File(System.getProperty("user.dir"), LIVE_PARITY_DEFAULT_DIR)
 
-internal fun runFixtureParityStep(repositoryRoot: File): List<FixtureParityEntry> {
+internal fun runFixtureParityStep(repositoryRoot: File): List<FixtureParityEntry> =
+    runFixtureParityStep(repositoryRoot, parityArtifactDirectory())
+
+internal fun runFixtureParityStep(
+    repositoryRoot: File,
+    artifactDirectory: File,
+): List<FixtureParityEntry> {
     val captures =
         listOf(LIVE_SESSION_PARITY_CAPTURE_SINK, LIVE_RUN_PARITY_CAPTURE_SINK).flatMap { name ->
-            val captureFile = File(parityArtifactDirectory(), "$name.jsonl")
+            val captureFile = File(artifactDirectory, "$name.jsonl")
             if (captureFile.isFile) FixtureParity.readCaptures(captureFile) else emptyList()
         }
     val entries = FixtureParity.compare(captures, repositoryRoot.resolve(PARITY_CONTRACTS_ROOT))
-    FixtureParity.writeArtifact(entries, FixtureParity.artifactFile())
+    FixtureParity.writeArtifact(entries, File(artifactDirectory, LIVE_PARITY_ARTIFACT_FILE_NAME))
+    DriftProtocol.reconcile(
+        entries,
+        LocalIssueLedger(File(artifactDirectory, DRIFT_LEDGER_FILE_NAME), repositoryRoot),
+    )
     return entries
 }
 
@@ -62,8 +72,6 @@ internal data class FixtureParityEntry(
 internal object FixtureParity {
     const val VERDICT_MATCH = "match"
     const val VERDICT_MISMATCH = "mismatch"
-
-    fun artifactFile(): File = File(parityArtifactDirectory(), LIVE_PARITY_ARTIFACT_FILE_NAME)
 
     fun compare(
         captures: List<LiveParityCapture>,

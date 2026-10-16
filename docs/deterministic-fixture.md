@@ -67,7 +67,23 @@ The lane also proves that the envelopes the client actually exchanges with the s
 
 Normalization makes the comparison deterministic and shape-only: opaque identifiers become `<id>`, timestamps become `<timestamp>`, numeric and boolean leaves that carry server state become `<count>` and `<bool>`, string-valued server-state fields — titles, previews, message content, delta text, run input and output, roles, statuses — are compared for presence and JSON type only, and path parameters collapse to their `{param}` shape. Provenance by design: the SSE `fixture.metadata` event, the capability manifest's descriptive fields outside the `endpoints` table, and the session's `last_active` field are normalized away, not reported as drift. Key-set differences are reported in both directions: a live-only key is reported unless the fixture tolerates it (string-valued or null content fields, identity and timestamp fields), and a fixture-declared key that the live envelope lacks is reported unless its name is in the declared exemption set — `last_active` (the session projection's by-design omission), `created_at`, `output`, and `usage` (the double's reduced `hermes.run` status and `run.completed` projection), and `session_id` (the double's message projection carries no run identity metadata). Outside those tolerance rules, value and type differences, including nullability, are still reported.
 
-The step is report-only: it never writes fixtures, parsers, or the manifest, and a test proves those source hashes are unchanged even when a mismatch is seeded. The artifact lands under `build/fixture-parity/` by default; a different directory can be supplied with the `live.fixture.parity.artifactDir` system property, so the same one command as the acceptance lane produces both the evidence and the parity artifact.
+The step is report-only: it never writes fixtures, parsers, or the manifest, and a test proves those source hashes are unchanged even when a mismatch is seeded. The artifact lands under `build/fixture-parity/` by default; a different directory can be supplied with the `live.fixture.parity.artifactDir` system property, so the same one command as the acceptance lane produces both the evidence and the parity artifact. The step also reconciles the contract drift protocol's issue ledger from the same entries.
+
+## Contract drift protocol
+
+Every parity mismatch is reconciled against an issue ledger so an agent can pick up contract-alignment work. The protocol is report-only like the parity step itself: it never writes fixtures, parsers, or the manifest, and re-baselining a fixture always happens through a reviewed change that cites the filed issue.
+
+The shipped issue sink is a local issue ledger, `contract-drift-issues.jsonl` in the parity artifact directory (the same `live.fixture.parity.artifactDir` override applies). Each ledger line is one issue record: the divergence identity (`operation :: fixture`), the `ready-for-agent` label, the open/resolved status, the title, the divergent operations, the parity artifact reference (`fixture-parity.jsonl`), the redacted parity evidence, an observation count, a proposed fixture re-baseline summary, and the manifest-version guidance. Lines carry references and redacted content only — the same redaction vocabulary as the parity captures (bearer values, URLs, workspace paths) — and a missing capture is stated as missing, never invented or linked.
+
+The reconciliation rules:
+
+- A parity mismatch files exactly one issue for the divergence. Divergence identity is the operation and fixture pair: a repeated mismatch on the same identity updates the existing open issue (its observation count increments), and a different identity files a new issue. The ledger holds at most one record per identity.
+- A green parity run files nothing: an issue can only exist with a real divergence behind it. When there is no mismatch to file and no open issue to resolve, the ledger is left byte-identical, and the only write a green run may perform is resolving an open issue whose divergence now matches; the resolved record stays in the ledger with no duplicate rows.
+- The issue template guidance states the manifest-version rule: the manifest version advances only when a required endpoint's name, method or path changes.
+
+The shipped sink is local to the test-scoped protocol. Wiring a repository tracker is an operational step outside the protocol: one adapter implementing the same two-method sink (list open issues, upsert by divergence identity), with no new mechanism.
+
+A synthetic-divergence drill (`DriftProtocolDrillTest`) stages a fixture mismatch against a scratch copy of the contracts in a temporary directory: the staged divergence files the issue, restoring the scratch fixture resolves it without residue, a green rerun leaves the ledger byte-identical, and the real fixtures, parsers, and manifest stay hash-unchanged throughout.
 
 ## Compatibility changes
 
