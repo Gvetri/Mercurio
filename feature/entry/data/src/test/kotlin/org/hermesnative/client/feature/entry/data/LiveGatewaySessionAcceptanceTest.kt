@@ -58,7 +58,9 @@ class LiveGatewaySessionAcceptanceTest {
     @Test
     fun session_matrix_executes_every_operation_against_the_started_gateway() {
         val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix"), repositoryRoot)
+        val parity = LiveParityCaptureRecorder(paritySink(LIVE_SESSION_PARITY_CAPTURE_SINK), repositoryRoot)
         val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
+        val drained: (String) -> Unit = { operation -> parity.record(run.parityCaptures.drain(operation)) }
 
         run.fixture.execute { context ->
             StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
@@ -74,12 +76,13 @@ class LiveGatewaySessionAcceptanceTest {
                     envelope = CAPABILITY_DISCOVERY_ENVELOPE,
                 ),
             )
+            drained("capability discovery")
             val advertisedEndpoints = capabilities.endpoints.keys
             val requiredEndpoints = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys
             assertTrue(advertisedEndpoints.containsAll(requiredEndpoints))
 
-            verifyPagedSessionList(client, evidence)
-            verifyCreatedSessionLifecycle(client, evidence)
+            verifyPagedSessionList(client, evidence, drained)
+            verifyCreatedSessionLifecycle(client, evidence, drained)
         }
 
         val evidenceText = evidence.file.readText()
@@ -92,6 +95,9 @@ class LiveGatewaySessionAcceptanceTest {
         assertFalse(evidenceText.contains(LANE_CREATED_TITLE))
         assertFalse(evidenceText.contains(SEEDED_FIRST_MESSAGE_CONTENT))
         assertRecordedMethodsMatch(evidence)
+
+        val parityEntries = runFixtureParityStep(repositoryRoot)
+        FixtureParity.requireMatchVerdicts(parityEntries, SESSION_PARITY_PAIRS)
     }
 
     @Test
@@ -209,6 +215,7 @@ class LiveGatewaySessionAcceptanceTest {
     private fun verifyPagedSessionList(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
         val firstPage = client.listSessions(SessionListRequest(limit = LANE_PAGE_LIMIT))
         evidence.record(
@@ -221,6 +228,7 @@ class LiveGatewaySessionAcceptanceTest {
                 queryShape = listOf("limit", "offset"),
             ),
         )
+        drained("session list")
         assertEquals(
             listOf(SEEDED_PINNED_SESSION_ID, SEEDED_OPEN_SESSION_ID),
             firstPage.sessions.map { it.id.value },
@@ -241,6 +249,7 @@ class LiveGatewaySessionAcceptanceTest {
                 queryShape = listOf("limit", "offset"),
             ),
         )
+        drained("session list")
         assertEquals(listOf(SEEDED_THIRD_SESSION_ID), secondPage.sessions.map { it.id.value })
         assertNull(secondPage.nextOffset)
     }
@@ -248,6 +257,7 @@ class LiveGatewaySessionAcceptanceTest {
     private fun verifyCreatedSessionLifecycle(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
         val created = client.createSession(LANE_CREATED_TITLE)
         evidence.record(
@@ -259,6 +269,7 @@ class LiveGatewaySessionAcceptanceTest {
                 envelope = SESSION_ENVELOPE,
             ),
         )
+        drained("session create")
         assertEquals(CREATED_SESSION_ID, created.id.value)
         assertEquals(LANE_CREATED_TITLE, created.title)
         assertNull(created.preview)
@@ -266,23 +277,27 @@ class LiveGatewaySessionAcceptanceTest {
 
         val opened = client.openSession(created.id)
         evidence.record(sessionResourceEvidence("session open", method = "GET"))
+        drained("session open")
         assertEquals(CREATED_SESSION_ID, opened.id.value)
         assertEquals(LANE_CREATED_TITLE, opened.title)
 
         val renamed = client.renameSession(created.id, LANE_RENAMED_TITLE)
         evidence.record(sessionResourceEvidence("session rename", method = "PATCH"))
+        drained("session rename")
         assertEquals(LANE_RENAMED_TITLE, renamed.title)
 
         val pinned = client.pinSession(created.id)
         evidence.record(sessionResourceEvidence("session pin", method = "PATCH"))
+        drained("session pin")
         assertEquals(created.id, pinned.sessionId)
         assertTrue(pinned.pinned)
 
         val unpinned = client.unpinSession(created.id)
         evidence.record(sessionResourceEvidence("session unpin", method = "PATCH"))
+        drained("session unpin")
         assertFalse(unpinned.pinned)
 
-        verifySessionHistory(client, created, evidence)
+        verifySessionHistory(client, created, evidence, drained)
 
         client.deleteSession(created.id)
         evidence.record(
@@ -294,12 +309,14 @@ class LiveGatewaySessionAcceptanceTest {
                 envelope = SESSION_DELETED_ENVELOPE,
             ),
         )
+        drained("session delete")
     }
 
     private fun verifySessionHistory(
         client: DefaultGatewayClient,
         created: Session,
         evidence: LiveSessionMatrixRecorder,
+        drained: (String) -> Unit,
     ) {
         val createdHistory = client.loadSessionHistory(created.id)
         evidence.record(
@@ -311,6 +328,7 @@ class LiveGatewaySessionAcceptanceTest {
                 envelope = EMPTY_SESSION_HISTORY_ENVELOPE,
             ),
         )
+        drained("session history")
         assertEquals(created.id, createdHistory.sessionId)
         assertTrue(createdHistory.messages.isEmpty())
 
@@ -324,6 +342,7 @@ class LiveGatewaySessionAcceptanceTest {
                 envelope = POPULATED_SESSION_HISTORY_ENVELOPE,
             ),
         )
+        drained("session history")
         assertEquals(SEEDED_PINNED_SESSION_ID, seededHistory.sessionId.value)
         assertEquals(
             listOf(SEEDED_FIRST_MESSAGE_ID, SEEDED_SECOND_MESSAGE_ID),
@@ -367,6 +386,21 @@ class LiveGatewaySessionAcceptanceTest {
         const val LANE_RENAMED_TITLE = "Live lane renamed session"
         const val CREATED_SESSION_ID = "synthetic-created-session-1"
         private const val MATRIX_ENTRY_COUNT = 11
+
+        private val SESSION_PARITY_PAIRS =
+            setOf(
+                "capability discovery" to "capabilities/success.json",
+                "session list" to "sessions/list-response-page-1.json",
+                "session list" to "sessions/list-response-page-2.json",
+                "session create" to "sessions/create-response.json",
+                "session open" to "sessions/open-response.json",
+                "session rename" to "sessions/rename-response.json",
+                "session pin" to "sessions/pin-response.json",
+                "session unpin" to "sessions/unpin-response.json",
+                "session history" to "sessions/history-response.json",
+                "session history" to "sessions/history-response-populated.json",
+                "session delete" to "sessions/delete-response.json",
+            )
         const val FAILED_OPERATION_ENTRY_COUNT = 2
         const val HTTP_OK = 200
         const val HTTP_CREATED = 201

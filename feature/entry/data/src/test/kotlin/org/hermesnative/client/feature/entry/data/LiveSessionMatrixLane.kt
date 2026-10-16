@@ -42,6 +42,8 @@ internal const val SEEDED_FIRST_MESSAGE_CONTENT = "Seeded user message for the l
 internal const val SEEDED_SECOND_MESSAGE_CONTENT = "Seeded assistant reply for the live lane"
 private const val LANE_SESSION_PAGE_SIZE = 2
 private const val JOURNEY_CA_ALIAS = "journey-ca"
+private val LANE_ADVERTISED_CAPABILITIES =
+    PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys + "health"
 
 internal fun freeLoopbackPort(): Int = ServerSocket(0).use { it.localPort }
 
@@ -80,7 +82,7 @@ internal fun laneScenario(
         hermesRevision = descriptor.provenanceValue,
         port = port,
         tls = true,
-        capabilities = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys.toList(),
+        capabilities = LANE_ADVERTISED_CAPABILITIES.toList(),
         requireBearerCredential = bearerToken,
         sessionPageSize = LANE_SESSION_PAGE_SIZE,
         sessions =
@@ -96,6 +98,7 @@ internal fun laneScenario(
                                 id = SEEDED_FIRST_MESSAGE_ID,
                                 role = "user",
                                 content = SEEDED_FIRST_MESSAGE_CONTENT,
+                                timestamp = "1757325600.0",
                             ),
                             JourneyMessage(
                                 id = SEEDED_SECOND_MESSAGE_ID,
@@ -138,7 +141,7 @@ internal fun runLaneScenario(
         hermesRevision = descriptor.provenanceValue,
         port = port,
         tls = true,
-        capabilities = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys.toList(),
+        capabilities = LANE_ADVERTISED_CAPABILITIES.toList(),
         requireBearerCredential = bearerToken,
         runs = runLaneScripts(),
     )
@@ -225,7 +228,11 @@ internal fun laneRun(
                 },
             readinessChecker = TlsLoopbackReadinessChecker(tlsClient, bearerToken),
         )
-    return LiveSessionMatrixRun(fixture, tlsClient) {
+    return LiveSessionMatrixRun(
+        fixture,
+        tlsClient,
+        LiveParityCaptureTransport(OkHttpGatewayTransport(tlsClient)),
+    ) {
         requireNotNull(startedProcess) { "The lane journey process has not started." }
     }
 }
@@ -237,7 +244,7 @@ internal fun laneClient(
     DefaultGatewayClient(
         endpoint = run.process.endpoint.toString(),
         bearerToken = bearerToken,
-        transport = OkHttpGatewayTransport(run.tlsClient),
+        transport = run.parityCaptures,
     )
 
 internal fun gatewayFailure(block: () -> Unit): GatewayException =
@@ -250,9 +257,12 @@ internal fun gatewayFailure(block: () -> Unit): GatewayException =
 
 internal fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name.jsonl")
 
+internal fun paritySink(name: String): File = File(parityArtifactDirectory(), "$name.jsonl")
+
 internal class LiveSessionMatrixRun(
     val fixture: DeterministicGatewayFixture,
     val tlsClient: OkHttpClient,
+    val parityCaptures: LiveParityCaptureTransport,
     private val startedProcess: () -> JourneyGatewayProcess,
 ) {
     val process: JourneyGatewayProcess
