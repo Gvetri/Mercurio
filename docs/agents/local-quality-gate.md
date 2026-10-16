@@ -1,7 +1,7 @@
 # Local quality gate for one module
 
-Run what the `quality-gate` CI jobs run for a single module, in the order CI runs it, with one
-command:
+Run what the `quality-gate` CI jobs run for a single module, in the order the checks must judge the
+sources, with one command:
 
 ```text
 .github/scripts/local-quality-gate.sh feature/entry/domain
@@ -12,8 +12,8 @@ four Gradle invocations:
 
 1. `ktlintFormat` — the formatter rewrites what it can fix, and the formatter runs before the ktlint checks.
 2. the module `test` task — this compiles the main and test sources and runs the unit tests.
-3. `ktlintMainSourceSetCheck` and `ktlintTestSourceSetCheck` — the check behind the `formatting` required status.
-4. `detektMain` and `detektTest` for the module, then the aggregate `detektVerify` — the check behind the `detekt` required status. Detekt analyzes main and test sources with a line limit of 120, import statements exempt. `detektVerify` fails closed unless the analysis executed in the same invocation and no baseline file exists, so a skipped or narrowed analysis cannot report a pass.
+3. `ktlintMainSourceSetCheck` and `ktlintTestSourceSetCheck` — the module's main and test source-set checks behind the `formatting` required status.
+4. `detektMain` and `detektTest` for the module, then the fail-closed `detektVerify`, which pulls the root `detekt` aggregate — the check behind the `detekt` required status. Detekt analyzes main and test sources with a line limit of 120, import statements exempt. `detektVerify` fails closed unless the analysis executed in the same invocation and no baseline file exists, so a skipped or narrowed analysis cannot report a pass.
 
 ## Ordering rules
 

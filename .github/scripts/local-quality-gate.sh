@@ -13,6 +13,11 @@ module_directory="${module_directory//:/\/}"
 module=":${module_directory//\//:}"
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+if [[ -z "$module_directory" ]]; then
+  printf 'Unknown module: %s\n' "$1" >&2
+  exit 2
+fi
+
 if [[ ! -f "$repository_root/$module_directory/build.gradle.kts" ]]; then
   printf 'Unknown module: %s\n' "$1" >&2
   exit 2

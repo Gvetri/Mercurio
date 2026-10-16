@@ -1347,6 +1347,10 @@ class QualityGateConfigurationTest {
             formatter != -1 && formatter < ktlintCheck,
         )
         assertTrue(
+            "The local quality gate must format before it compiles and tests.",
+            formatter != -1 && formatter < compileAndTest,
+        )
+        assertTrue(
             "The local quality gate must compile and test before the checks judge the sources.",
             compileAndTest != -1 && compileAndTest < ktlintCheck,
         )
