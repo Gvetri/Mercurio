@@ -11,15 +11,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 class LiveGatewayRunAcceptanceTest {
-    private val repositoryRoot =
-        File(
-            requireNotNull(System.getProperty("fixture.repositoryRoot")) {
-                "fixture.repositoryRoot must identify the repository root"
-            },
-        )
+    private val repositoryRoot = laneRepositoryRoot()
 
     @Test
     fun run_matrix_executes_every_run_operation_against_the_started_gateway() {
@@ -48,6 +42,7 @@ class LiveGatewayRunAcceptanceTest {
 
         val evidenceText = evidence.file.readText()
         assertEquals(RUN_MATRIX_ENTRY_COUNT, evidence.file.readLines().size)
+        assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
         assertTrue(evidenceText.contains("\"outcome\":\"verified\""))
         assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
         assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name}\""))
@@ -85,7 +80,10 @@ class LiveGatewayRunAcceptanceTest {
 
         assertEquals(listOf("Seam delta"), deliveredDeltas(events))
         assertEquals(RunEventType.COMPLETED, events.last().type)
-        assertTrue("The transport stream must be closed after the terminal event ends it", finishedStreamTransport.eventStreamClosed)
+        assertTrue(
+            "The transport stream must be closed after the terminal event ends it",
+            finishedStreamTransport.eventStreamClosed,
+        )
     }
 
     @Test
@@ -106,11 +104,7 @@ class LiveGatewayRunAcceptanceTest {
         assertTrue(missingDeltaTransport.eventStreamClosed)
         evidence.record(
             failedEvidence(
-                operation = "run observation",
-                method = "GET",
-                pathShape = "/v1/runs/{run_id}/events",
-                expectedStatus = HTTP_OK,
-                envelope = RUN_OBSERVATION_ENVELOPE,
+                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
                 errorCategory = GatewayErrorCategory.INVALID_RESPONSE.name,
             ),
         )
@@ -129,11 +123,7 @@ class LiveGatewayRunAcceptanceTest {
         assertTrue(mixedRecordTransport.eventStreamClosed)
         evidence.record(
             failedEvidence(
-                operation = "run observation",
-                method = "GET",
-                pathShape = "/v1/runs/{run_id}/events",
-                expectedStatus = HTTP_OK,
-                envelope = RUN_OBSERVATION_ENVELOPE,
+                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
                 errorCategory = GatewayErrorCategory.INVALID_RESPONSE.name,
             ),
         )
@@ -161,12 +151,8 @@ class LiveGatewayRunAcceptanceTest {
         assertEquals(RunEventType.COMPLETED, events.last().type)
         evidence.record(
             verifiedRunObservationEvidence(
-                operation = "run observation",
-                method = "GET",
-                pathShape = "/v1/runs/{run_id}/events",
-                expectedStatus = HTTP_OK,
+                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
                 actualStatus = drained("run observation").wireStatus(),
-                envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_DELTA_RUN_ID, events),
             ),
         )
@@ -187,12 +173,8 @@ class LiveGatewayRunAcceptanceTest {
         assertEquals(RunEventType.COMPLETED, events.last().type)
         evidence.record(
             verifiedRunObservationEvidence(
-                operation = "run observation",
-                method = "GET",
-                pathShape = "/v1/runs/{run_id}/events",
-                expectedStatus = HTTP_OK,
+                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
                 actualStatus = drained("run observation").wireStatus(),
-                envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_FRAMING_RUN_ID, events),
             ),
         )
@@ -219,12 +201,8 @@ class LiveGatewayRunAcceptanceTest {
         assertEquals(RunEventType.COMPLETED, events.last().type)
         evidence.record(
             verifiedRunObservationEvidence(
-                operation = "run observation",
-                method = "GET",
-                pathShape = "/v1/runs/{run_id}/events",
-                expectedStatus = HTTP_OK,
+                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
                 actualStatus = capture.wireStatus(),
-                envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_HOLD_OPEN_RUN_ID, events),
             ),
         )
@@ -243,12 +221,8 @@ class LiveGatewayRunAcceptanceTest {
         assertEquals(TERMINAL_EVENT_NAME, wireEventName(events.single().type))
         evidence.record(
             verifiedRunObservationEvidence(
-                operation = "run observation",
-                method = "GET",
-                pathShape = "/v1/runs/{run_id}/events",
-                expectedStatus = HTTP_OK,
+                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
                 actualStatus = drained("run observation").wireStatus(),
-                envelope = RUN_OBSERVATION_ENVELOPE,
                 streamSummary = runStreamSummary(RUN_LANE_UNMAPPED_RUN_ID, events),
             ),
         )
@@ -262,11 +236,7 @@ class LiveGatewayRunAcceptanceTest {
         assertEquals(GatewayErrorCategory.GATEWAY_REQUEST_FAILED, refused.category)
         evidence.record(
             failedEvidence(
-                operation = "run create",
-                method = "POST",
-                pathShape = "/v1/runs",
-                expectedStatus = HTTP_ACCEPTED,
-                envelope = RUN_ADMISSION_ENVELOPE,
+                OperationSpec("run create", "POST", "/v1/runs", HTTP_ACCEPTED, RUN_ADMISSION_ENVELOPE),
                 errorCategory = GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name,
             ),
         )
@@ -280,12 +250,8 @@ class LiveGatewayRunAcceptanceTest {
         val admitted = client.createRun(SessionId(RUN_LANE_CREATED_SESSION_ID), RUN_LANE_INPUT)
         evidence.record(
             verifiedEvidence(
-                operation = "run create",
-                method = "POST",
-                pathShape = "/v1/runs",
-                expectedStatus = HTTP_ACCEPTED,
+                OperationSpec("run create", "POST", "/v1/runs", HTTP_ACCEPTED, RUN_ADMISSION_ENVELOPE),
                 actualStatus = drained("run create").wireStatus(),
-                envelope = RUN_ADMISSION_ENVELOPE,
             ),
         )
         return admitted
@@ -301,12 +267,8 @@ class LiveGatewayRunAcceptanceTest {
         val status = client.getRunStatus(admitted.id)
         evidence.record(
             verifiedEvidence(
-                operation = "run status",
-                method = "GET",
-                pathShape = "/v1/runs/{run_id}",
-                expectedStatus = HTTP_OK,
+                OperationSpec("run status", "GET", "/v1/runs/{run_id}", HTTP_OK, RUN_STATUS_ENVELOPE),
                 actualStatus = drained("run status").wireStatus(),
-                envelope = RUN_STATUS_ENVELOPE,
             ),
         )
         assertEquals(admitted.id, status.id)
@@ -395,6 +357,12 @@ class LiveGatewayRunAcceptanceTest {
         const val RUN_LANE_SEAM_RUN_ID = "lane-seam-run"
         const val TERMINAL_EVENT_NAME = "run.completed"
         const val RUN_MATRIX_ENTRY_COUNT = 10
+        val OPERATION_METHODS =
+            mapOf(
+                "run create" to "POST",
+                "run observation" to "GET",
+                "run status" to "GET",
+            )
         const val MALFORMED_STREAM_ENTRY_COUNT = 2
         const val LIVE_FRAMING_BOUNDARY_COMMENTS = 2
 

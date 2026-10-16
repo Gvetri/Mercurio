@@ -42,7 +42,10 @@ class LiveGatewayEnvironmentRunTest {
 
         val insecureFailure =
             assertThrows(IllegalArgumentException::class.java) {
-                StartedGatewayGuard.requireConfiguredEndpoint(configuredEndpoint, URI("http://gateway.example.internal"))
+                StartedGatewayGuard.requireConfiguredEndpoint(
+                    configuredEndpoint,
+                    URI("http://gateway.example.internal"),
+                )
             }
         assertTrue(insecureFailure.message.orEmpty().contains("https"))
 

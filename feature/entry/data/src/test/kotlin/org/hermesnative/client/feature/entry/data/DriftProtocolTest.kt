@@ -7,12 +7,7 @@ import org.junit.Test
 import java.io.File
 
 class DriftProtocolTest {
-    private val repositoryRoot =
-        File(
-            requireNotNull(System.getProperty("fixture.repositoryRoot")) {
-                "fixture.repositoryRoot must identify the repository root"
-            },
-        )
+    private val repositoryRoot = laneRepositoryRoot()
     private val contractsRoot = repositoryRoot.resolve("fixtures/hermes/contracts")
 
     @Test
@@ -275,7 +270,9 @@ class DriftProtocolTest {
         DriftProtocol.reconcile(mismatchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
         val issue = LocalIssueLedger(ledgerFile, repositoryRoot).openIssues().single()
 
-        val command = DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot)).ghCreateCommand(issue)
+        val command =
+            DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot))
+                .ghCreateCommand(issue)
 
         assertEquals(
             listOf(
@@ -337,10 +334,11 @@ class DriftProtocolTest {
 
         DriftProtocol.reconcile(matchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
         val urls =
-            DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot)).fileOpenIssues { commands ->
-                commands
-                "https://tracker.invalid/issues/1"
-            }
+            DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot))
+                .fileOpenIssues { commands ->
+                    commands
+                    "https://tracker.invalid/issues/1"
+                }
 
         assertEquals(emptyList<String>(), urls)
     }

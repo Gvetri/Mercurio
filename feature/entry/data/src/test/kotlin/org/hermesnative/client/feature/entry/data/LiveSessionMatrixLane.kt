@@ -18,6 +18,7 @@ import org.hermesnative.client.fixture.journey.JourneyRunEvent
 import org.hermesnative.client.fixture.journey.JourneyRunScript
 import org.hermesnative.client.fixture.journey.JourneyScenario
 import org.hermesnative.client.fixture.journey.JourneySession
+import org.junit.Assert.assertEquals
 import java.io.File
 import java.net.ServerSocket
 import java.net.URI
@@ -262,6 +263,29 @@ internal fun evidenceSink(name: String): File = File(evidenceDirectory(), "$name
 
 internal fun LiveParityCapture.wireStatus(): Int =
     requireNotNull(status) { "The live parity capture for an executed operation records no wire status." }
+
+internal fun laneRepositoryRoot(): File =
+    File(
+        requireNotNull(System.getProperty("fixture.repositoryRoot")) {
+            "fixture.repositoryRoot must identify the repository root"
+        },
+    )
+
+internal fun assertRecordedMethodsMatch(
+    recorder: LiveSessionMatrixRecorder,
+    operationMethods: Map<String, String>,
+) {
+    recorder.file.readLines().filter { it.isNotBlank() }.forEach { line ->
+        val entry = Json.parseToJsonElement(line).jsonObject
+        val operation = entry.getValue("operation").jsonPrimitive.content
+        val recordedMethod = entry.getValue("method").jsonPrimitive.content
+        val boundaryMethod =
+            requireNotNull(operationMethods[operation]) {
+                "Operation $operation is missing from the per-operation method table"
+            }
+        assertEquals("$operation must record the boundary method", boundaryMethod, recordedMethod)
+    }
+}
 
 internal fun laneGatewayEndpoint(): URI? = System.getProperty(LIVE_GATEWAY_ENDPOINT_PROPERTY)?.let(URI::create)
 

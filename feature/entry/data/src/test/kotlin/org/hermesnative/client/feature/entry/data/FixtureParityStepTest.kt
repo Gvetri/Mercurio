@@ -6,12 +6,7 @@ import org.junit.Test
 import java.io.File
 
 class FixtureParityStepTest {
-    private val repositoryRoot =
-        File(
-            requireNotNull(System.getProperty("fixture.repositoryRoot")) {
-                "fixture.repositoryRoot must identify the repository root"
-            },
-        )
+    private val repositoryRoot = laneRepositoryRoot()
     private val contractsRoot = repositoryRoot.resolve("fixtures/hermes/contracts")
 
     @Test

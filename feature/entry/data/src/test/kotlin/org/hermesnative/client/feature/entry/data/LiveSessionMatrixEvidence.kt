@@ -32,67 +32,52 @@ internal data class LiveSessionMatrixEvidence(
     val streamSummary: RunStreamSummary? = null,
 )
 
-@Suppress("LongParameterList")
+internal data class OperationSpec(
+    val operation: String,
+    val method: String,
+    val pathShape: String,
+    val expectedStatus: Int,
+    val envelope: Map<String, String>,
+    val queryShape: List<String> = emptyList(),
+)
+
 internal fun verifiedEvidence(
-    operation: String,
-    method: String,
-    pathShape: String,
-    expectedStatus: Int,
+    spec: OperationSpec,
     actualStatus: Int,
-    envelope: Map<String, String>,
-    queryShape: List<String> = emptyList(),
 ): LiveSessionMatrixEvidence =
     LiveSessionMatrixEvidence(
-        operation = operation,
-        method = method,
-        pathShape = pathShape,
-        queryShape = queryShape,
-        expectedStatus = expectedStatus,
+        operation = spec.operation,
+        method = spec.method,
+        pathShape = spec.pathShape,
+        queryShape = spec.queryShape,
+        expectedStatus = spec.expectedStatus,
         actualStatus = actualStatus,
         outcome = EVIDENCE_OUTCOME_VERIFIED,
-        envelope = envelope,
+        envelope = spec.envelope,
         errorCategory = null,
     )
 
-@Suppress("LongParameterList")
 internal fun failedEvidence(
-    operation: String,
-    method: String,
-    pathShape: String,
-    expectedStatus: Int,
-    envelope: Map<String, String>,
+    spec: OperationSpec,
     errorCategory: String,
 ): LiveSessionMatrixEvidence =
     LiveSessionMatrixEvidence(
-        operation = operation,
-        method = method,
-        pathShape = pathShape,
-        queryShape = emptyList(),
-        expectedStatus = expectedStatus,
+        operation = spec.operation,
+        method = spec.method,
+        pathShape = spec.pathShape,
+        queryShape = spec.queryShape,
+        expectedStatus = spec.expectedStatus,
         actualStatus = null,
         outcome = EVIDENCE_OUTCOME_FAILED,
-        envelope = envelope,
+        envelope = spec.envelope,
         errorCategory = errorCategory,
     )
 
-@Suppress("LongParameterList")
 internal fun verifiedRunObservationEvidence(
-    operation: String,
-    method: String,
-    pathShape: String,
-    expectedStatus: Int,
+    spec: OperationSpec,
     actualStatus: Int,
-    envelope: Map<String, String>,
     streamSummary: RunStreamSummary,
-): LiveSessionMatrixEvidence =
-    verifiedEvidence(
-        operation = operation,
-        method = method,
-        pathShape = pathShape,
-        expectedStatus = expectedStatus,
-        actualStatus = actualStatus,
-        envelope = envelope,
-    ).copy(streamSummary = streamSummary)
+): LiveSessionMatrixEvidence = verifiedEvidence(spec, actualStatus).copy(streamSummary = streamSummary)
 
 internal object EvidenceRedaction {
     fun redact(

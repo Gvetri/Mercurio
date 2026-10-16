@@ -154,7 +154,7 @@ internal object FixtureParity {
             method = requestMethod(mapping, contractsRoot),
             pathShape = normalizedPathShape(requestPathShape(mapping, contractsRoot)),
             expectedStatus = expectedStatus(mapping, contractsRoot),
-            observedStatus = captures.firstOrNull()?.status,
+            observedStatus = null,
             verdict = VERDICT_MISMATCH,
             observedDifference =
                 "capture count ${captures.size} does not match the " +
@@ -376,7 +376,9 @@ internal object FixtureParity {
         path: String,
     ): String? {
         val liveOnlyKey =
-            live.keys.sorted().firstOrNull { key -> fixture[key] == null && !absorbsAbsent(key, live.getValue(key)) }
+            live.keys.sorted().firstOrNull { key ->
+                fixture[key] == null && !toleratesMissingFixtureKey(key, live.getValue(key))
+            }
         val fixtureOnlyKey =
             fixture.keys.sorted().firstOrNull { key -> live[key] == null && key !in FIXTURE_ONLY_EXEMPT_FIELDS }
         val nestedDifference =
@@ -413,7 +415,7 @@ internal object FixtureParity {
         return difference
     }
 
-    private fun absorbsAbsent(
+    private fun toleratesMissingFixtureKey(
         key: String,
         value: JsonElement,
     ): Boolean =
