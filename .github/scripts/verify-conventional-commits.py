@@ -3,7 +3,8 @@
 
 The squash merge writes the pull-request title onto the protected branch, so the title is the commit
 message that lands on `main`; every commit the pull request carries must also be a valid Conventional
-Commit. A push validates the commits it introduced.
+Commit. A push validates the commits it introduced. The checker resolves the squash-merge title live
+from the GitHub API; the event payload title is only a fallback when the API gives no usable answer.
 
 The check fails closed: an unavailable or truncated answer from the GitHub API is an error, never an
 accepted message.
@@ -122,8 +123,16 @@ def validate_pull_request(payload):
     if not isinstance(pull_request, dict) or "number" not in pull_request:
         raise VerificationError("The event payload carries no pull request")
 
+    try:
+        answer = api_get(f"/repos/{repository}/pulls/{pull_request['number']}")
+    except VerificationError:
+        answer = None
+    if isinstance(answer, dict):
+        title = str(answer.get("title", ""))
+    else:
+        title = str(pull_request.get("title", ""))
     violations = validate_message(
-        str(pull_request.get("title", "")),
+        title,
         "The squash-merge title",
     )
 
