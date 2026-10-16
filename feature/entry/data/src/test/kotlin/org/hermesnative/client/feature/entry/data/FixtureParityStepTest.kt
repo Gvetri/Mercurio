@@ -4,8 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.security.MessageDigest
-import java.util.TreeMap
 
 class FixtureParityStepTest {
     private val repositoryRoot =
@@ -46,13 +44,13 @@ class FixtureParityStepTest {
 
     @Test
     fun seeded_mismatch_is_reported_and_changes_no_fixture_parser_or_manifest() {
-        val guardedPaths = guardedSourcePaths()
-        val before = digests(guardedPaths)
+        val guardedPaths = guardedSourcePaths(repositoryRoot, contractsRoot)
+        val before = digests(repositoryRoot, guardedPaths)
         val mismatched =
             laneCaptureSet().map { capture ->
                 if (capture.operation == "session open") {
                     val wrongObject =
-                        LIVE_SESSION_OPEN_ENVELOPE.replace("\"hermes.session\"", "\"hermes.session.wrong\"")
+                        SESSION_OPEN_ENVELOPE.replace("\"hermes.session\"", "\"hermes.session.wrong\"")
                     capture.copy(responseJson = wrongObject)
                 } else {
                     capture
@@ -68,14 +66,14 @@ class FixtureParityStepTest {
         assertTrue(reported.observedDifference.orEmpty().contains("object"))
         assertEquals(LANE_PARITY_ENTRY_COUNT, entries.size)
         assertEquals(EXPECTED_OPERATION_FIXTURE_PAIRS, operationFixturePairs(entries))
-        assertEquals(before, digests(guardedPaths))
+        assertEquals(before, digests(repositoryRoot, guardedPaths))
     }
 
     @Test
     fun fixture_only_key_is_reported_while_declared_exemptions_are_absorbed() {
         val missingReportedKey =
-            capture("session open", "GET", CREATED_SESSION_PATH, 200, LIVE_SESSION_OPEN_ENVELOPE)
-                .copy(responseJson = LIVE_SESSION_OPEN_ENVELOPE.replace(",\"message_count\":0}", "}"))
+            capture("session open", "GET", CREATED_SESSION_PATH, 200, SESSION_OPEN_ENVELOPE)
+                .copy(responseJson = SESSION_OPEN_ENVELOPE.replace(",\"message_count\":0}", "}"))
 
         val reportedEntries = FixtureParity.compare(listOf(missingReportedKey), contractsRoot)
 
@@ -105,7 +103,7 @@ class FixtureParityStepTest {
                 queryNames = emptyList(),
                 requestBodyJson = null,
                 status = 200,
-                responseJson = LIVE_SESSION_OPEN_ENVELOPE,
+                responseJson = SESSION_OPEN_ENVELOPE,
                 sseLines = emptyList(),
             )
 
@@ -120,7 +118,7 @@ class FixtureParityStepTest {
                 queryNames = emptyList(),
                 requestBodyJson = null,
                 status = 200,
-                responseJson = LIVE_SESSION_OPEN_ENVELOPE.replace("\"pinned\":false", "\"pinned\":\"false\""),
+                responseJson = SESSION_OPEN_ENVELOPE.replace("\"pinned\":false", "\"pinned\":\"false\""),
                 sseLines = emptyList(),
             )
         val mismatchEntries = FixtureParity.compare(listOf(typedMismatch), contractsRoot)
@@ -143,21 +141,6 @@ class FixtureParityStepTest {
 
     private fun operationFixturePairs(entries: List<FixtureParityEntry>): Set<Pair<String, String>> =
         entries.map { it.operation to it.fixture }.toSet()
-
-    private fun guardedSourcePaths(): List<File> =
-        buildList {
-            addAll(contractsRoot.walkTopDown().filter { it.isFile })
-            add(repositoryRoot.resolve(PARSER_SOURCE_PATH))
-            add(repositoryRoot.resolve(MANIFEST_SOURCE_PATH))
-        }.sortedBy { it.path }
-
-    private fun digests(paths: List<File>) =
-        TreeMap(
-            paths.associate { path ->
-                path.relativeTo(repositoryRoot).path to
-                    MessageDigest.getInstance("SHA-256").digest(path.readBytes()).joinToString("") { "%02x".format(it) }
-            },
-        )
 
     private fun scratchDirectory(): File {
         val directory = File(System.getProperty("java.io.tmpdir"), "fixture-parity-step-test")
@@ -182,7 +165,7 @@ class FixtureParityStepTest {
         listOf(
             capture("session create", "POST", "/api/sessions", 201, LIVE_SESSION_CREATED_ENVELOPE)
                 .copy(requestBodyJson = SESSION_CREATE_REQUEST_BODY),
-            capture("session open", "GET", CREATED_SESSION_PATH, 200, LIVE_SESSION_OPEN_ENVELOPE),
+            capture("session open", "GET", CREATED_SESSION_PATH, 200, SESSION_OPEN_ENVELOPE),
             capture("session rename", "PATCH", CREATED_SESSION_PATH, 200, LIVE_SESSION_RENAMED_ENVELOPE)
                 .copy(requestBodyJson = """{"title":"Live lane renamed session"}"""),
             capture("session pin", "PATCH", CREATED_SESSION_PATH, 200, LIVE_SESSION_PINNED_ENVELOPE)
@@ -282,12 +265,6 @@ class FixtureParityStepTest {
 
     private companion object {
         const val LANE_PARITY_ENTRY_COUNT = 14
-        const val PARSER_SOURCE_PATH =
-            "feature/entry/data/src/main/kotlin/org/hermesnative/client/feature/entry/data/GatewayJsonParser.kt"
-        const val MANIFEST_SOURCE_PATH =
-            "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain" +
-                "/GatewayCapabilityManifest.kt"
-
         const val SESSION_CREATE_REQUEST_BODY = """{"title":"Live lane created session"}"""
 
         const val CREATED_SESSION_PATH = "/api/sessions/synthetic-created-session-1"
@@ -355,12 +332,6 @@ class FixtureParityStepTest {
             """.trimIndent()
 
         val LIVE_SESSION_CREATED_ENVELOPE =
-            """
-            {"object":"hermes.session","session":{
-            "id":"synthetic-created-session-1","source":"api_server","title":"Live lane created session","preview":null,"pinned":false,"message_count":0}}
-            """.trimIndent()
-
-        val LIVE_SESSION_OPEN_ENVELOPE =
             """
             {"object":"hermes.session","session":{
             "id":"synthetic-created-session-1","source":"api_server","title":"Live lane created session","preview":null,"pinned":false,"message_count":0}}

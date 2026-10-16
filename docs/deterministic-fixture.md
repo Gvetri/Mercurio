@@ -77,7 +77,7 @@ The shipped issue sink is a local issue ledger, `contract-drift-issues.jsonl` in
 
 The reconciliation rules:
 
-- A parity mismatch files exactly one issue for the divergence. Divergence identity is the operation and fixture pair: a repeated mismatch on the same identity updates the existing open issue (its observation count increments), and a different identity files a new issue. The ledger holds at most one record per identity.
+- A parity mismatch files exactly one issue for the divergence. Divergence identity is the operation and fixture pair: a repeated mismatch on the same identity updates the existing open issue (its observation count increments), and a different identity files a new issue. The ledger holds at most one record per identity. A resolved identity that regresses reopens as a fresh open record whose observation count restarts at one; the resolved row it replaces is history.
 - A green parity run files nothing: an issue can only exist with a real divergence behind it. When there is no mismatch to file and no open issue to resolve, the ledger is left byte-identical, and the only write a green run may perform is resolving an open issue whose divergence now matches; the resolved record stays in the ledger with no duplicate rows.
 - The issue template guidance states the manifest-version rule: the manifest version advances only when a required endpoint's name, method or path changes.
 
