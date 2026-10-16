@@ -151,7 +151,7 @@ class LiveGatewaySessionAcceptanceTest {
             evidence.record(
                 verifiedEvidence(
                     OperationSpec("session create", "POST", "/api/sessions", HTTP_CREATED, SESSION_ENVELOPE),
-                    actualStatus = HTTP_CREATED,
+                    actualStatus = run.parityCaptures.drain("session create").wireStatus(),
                 ),
             )
 

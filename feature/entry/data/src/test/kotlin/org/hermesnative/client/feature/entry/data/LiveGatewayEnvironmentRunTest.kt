@@ -34,6 +34,8 @@ class LiveGatewayEnvironmentRunTest {
 
         assertEquals(configuredEndpoint, run.endpoint)
         StartedGatewayGuard.requireConfiguredEndpoint(configuredEndpoint, run.endpoint)
+        assertTrue(run.parityCaptures.delegate is OkHttpGatewayTransport)
+        laneClient(run, "environment-bearer")
     }
 
     @Test

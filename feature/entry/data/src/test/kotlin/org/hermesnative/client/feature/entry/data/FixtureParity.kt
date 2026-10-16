@@ -194,7 +194,7 @@ internal object FixtureParity {
             compareRequest(capture, requestFixtureObject(mapping, contractsRoot), mapping.requestPathShape)
         val statusDifference = statusDifference(capture, mapping, contractsRoot).takeIf { requestDifference == null }
         val bodyDifference =
-            responseDifference(capture, mapping, fixturePath, contractsRoot)
+            responseDifference(capture, fixturePath, contractsRoot)
                 .takeIf { requestDifference == null && statusDifference == null }
         return requestDifference ?: statusDifference ?: bodyDifference
     }
@@ -210,21 +210,19 @@ internal object FixtureParity {
 
     private fun responseDifference(
         capture: LiveParityCapture,
-        mapping: OperationParityMapping,
         fixturePath: String,
         contractsRoot: File,
     ): String? =
         if (fixturePath.endsWith(SSE_FIXTURE_SUFFIX)) {
             compareStreamShapes(capture.sseLines, contractsRoot.resolve(fixturePath).readLines())
         } else {
-            compareJsonResponse(capture, fixturePath, contractsRoot, mapping.comparedResponseKeys)
+            compareJsonResponse(capture, fixturePath, contractsRoot)
         }
 
     private fun compareJsonResponse(
         capture: LiveParityCapture,
         fixturePath: String,
         contractsRoot: File,
-        comparedKeys: Set<String>?,
     ): String? {
         val fixtureBody =
             Json
@@ -240,23 +238,13 @@ internal object FixtureParity {
             liveBody == null -> "response.body: live body is not a JSON object"
             else ->
                 compareShape(
-                    comparableBody(liveBody, comparedKeys),
-                    comparableBody(fixtureBody, comparedKeys),
+                    liveBody,
+                    fixtureBody,
                     "response.body",
                     "",
                 )
         }
     }
-
-    private fun comparableBody(
-        body: JsonElement,
-        comparedKeys: Set<String>?,
-    ): JsonElement =
-        if (comparedKeys == null || body !is JsonObject) {
-            body
-        } else {
-            JsonObject(body.filterKeys { key -> key in comparedKeys })
-        }
 
     private fun compareRequest(
         capture: LiveParityCapture,
@@ -525,7 +513,6 @@ internal object FixtureParity {
         val requestFixture: String?,
         val requestPathShape: String? = null,
         val expectedStatus: Int? = null,
-        val comparedResponseKeys: Set<String>? = null,
     )
 
     private const val SSE_FIXTURE_SUFFIX = ".sse"
@@ -630,7 +617,7 @@ internal object FixtureParity {
 }
 
 internal class LiveParityCaptureTransport(
-    private val delegate: GatewayTransport,
+    internal val delegate: GatewayTransport,
 ) : GatewayTransport {
     private val pending = ArrayDeque<PendingExchange>()
 
