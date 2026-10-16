@@ -11,6 +11,9 @@ Run the whole gate locally:
 ./gradlew qualityGate
 ```
 
+To run the same checks for a single module, see
+[Local quality gate for one module](agents/local-quality-gate.md).
+
 ## Required checks
 
 `quality-gate` is the single required GitHub status. It fails unless every declared check below
