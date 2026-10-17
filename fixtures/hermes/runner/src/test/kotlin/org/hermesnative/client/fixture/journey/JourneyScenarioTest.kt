@@ -1,5 +1,7 @@
 package org.hermesnative.client.fixture.journey
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -8,6 +10,49 @@ import org.junit.Test
 import java.io.File
 
 class JourneyScenarioTest {
+    @Test
+    fun every_committed_journey_scenario_declares_the_pinned_contract_endpoints() {
+        val requiredEndpoints = pinnedContractEndpointNames() - "health"
+        val exemptScenarios = setOf("capabilities-missing-required")
+        val scenarioFiles =
+            scenariosDir.listFiles().orEmpty().filter { file -> file.isFile && file.extension == "json" }
+        assertTrue(
+            "Scanned ${scenarioFiles.size} journey scenario JSONs under $scenariosDir; " +
+                "the pinned contract requires ${requiredEndpoints.size} endpoints.",
+            scenarioFiles.isNotEmpty() && requiredEndpoints.isNotEmpty(),
+        )
+        val uncovered =
+            scenarioFiles
+                .filter { file -> file.nameWithoutExtension !in exemptScenarios }
+                .mapNotNull { file ->
+                    val declared = JourneyScenarioParser.parse(file, pinnedDescriptor.provenance.value).capabilities
+                    (requiredEndpoints - declared.toSet()).takeIf { absent -> absent.isNotEmpty() }?.let { absent ->
+                        "${file.nameWithoutExtension}: missing ${absent.sorted()}"
+                    }
+                }
+        assertTrue("Journey scenarios without the pinned contract endpoints: $uncovered", uncovered.isEmpty())
+    }
+
+    @Test
+    fun capabilities_missing_required_keeps_its_deliberate_endpoint_omission() {
+        val scenario =
+            JourneyScenarioParser.parse(
+                File(scenariosDir, "capabilities-missing-required.json"),
+                pinnedDescriptor.provenance.value,
+            )
+        val absent = (pinnedContractEndpointNames() - "health") - scenario.capabilities.toSet()
+        assertTrue("capabilities-missing-required must keep omitting required endpoints: $absent", absent.isNotEmpty())
+    }
+
+    private fun pinnedContractEndpointNames(): Set<String> =
+        Json.parseToJsonElement(
+            File(repositoryRoot, "fixtures/hermes/contracts/capabilities/success.json").readText(),
+        ).jsonObject
+            .getValue("response").jsonObject
+            .getValue("body").jsonObject
+            .getValue("endpoints").jsonObject
+            .keys
+
     @Test
     fun every_checked_in_scenario_parses_with_the_pinned_revision() {
         val scenarioFiles = scenariosDir.listFiles { file -> file.extension == "json" }.orEmpty()
