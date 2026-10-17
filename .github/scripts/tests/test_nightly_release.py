@@ -1024,11 +1024,20 @@ class NightlyPreparationTest(unittest.TestCase):
     def test_retained_draft_and_tag_are_read_back_even_for_an_older_version(self):
         self.signed_publication_fixture()
         tag = f"nightly-6001-{self.selected}"
-        retained = {"id": 1, "tag_name": tag, "target_commitish": self.selected, "draft": True, "assets": []}
+        retained = {
+            "id": 1, "tag_name": tag, "name": "Nightly", "prerelease": True,
+            "draft": True, "target_commitish": self.selected, "assets": [],
+        }
         self.release_file.write_text(json.dumps(retained))
         self.routes[f"/repos/{self.repository}/git/matching-refs/tags/{tag}"] = [{"ref": f"refs/tags/{tag}"}]
+        self.routes[f"/repos/{self.repository}/git/matching-refs/tags/{self.tag}"] = [
+            {"ref": f"refs/tags/{self.tag}", "object": {"sha": self.selected, "type": "commit"}},
+        ]
         before = self.release_file.read_bytes()
-        self.assertNotEqual(0, self.publish().returncode)
+        result = self.publish()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Nightly tag already exists; operator recovery is required", result.stderr)
+        self.assertEqual([], self.api.deletes)
         self.assertEqual(before, self.release_file.read_bytes())
         self.assertFalse((self.provider / "operations").exists())
         self.report_fixture()
@@ -1037,6 +1046,24 @@ class NightlyPreparationTest(unittest.TestCase):
         body = json.loads((self.report_store / "issue.json").read_text())["body"]
         for text in ("Version code: `6001`", tag, "Release id: `1`", "Incomplete draft: `yes`", "Tag exists: `yes`", "Orphan tag: `no`"):
             self.assertIn(text, body)
+        self.assertEqual(before, self.release_file.read_bytes())
+
+    def test_a_published_release_for_the_source_refuses_the_retry_without_any_delete(self):
+        self.signed_publication_fixture()
+        published = {
+            "id": 1, "tag_name": f"nightly-6001-{self.selected}", "name": "Nightly",
+            "prerelease": True, "draft": False, "target_commitish": self.selected,
+        }
+        self.release_file.write_text(json.dumps(published))
+        self.routes[f"/repos/{self.repository}/git/matching-refs/tags/{published['tag_name']}"] = [
+            {"ref": f"refs/tags/{published['tag_name']}", "object": {"sha": self.selected, "type": "commit"}},
+        ]
+        before = self.release_file.read_bytes()
+        result = self.publish()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("This source already has a published Nightly", result.stderr)
+        self.assertEqual([], self.api.deletes)
+        self.assertFalse((self.provider / "operations").exists())
         self.assertEqual(before, self.release_file.read_bytes())
 
     def test_failure_observation_uses_created_id_even_when_release_listing_is_unavailable(self):
@@ -1130,11 +1157,31 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual("no", observation["orphan_tag"])
         self.assertIn(f"/repos/{self.repository}/releases/1", self.api.requests)
         (self.provider / "fail-upload").unlink()
+        root = Path(self.directory.name)
+        retry = make_signing_fixture(root / "signing-retry", 7003, f"nightly-7003-{self.selected[:12]}")
+        retry_environment = {
+            **self.environment, **{k: v for k, v in retry.environment.items() if k != "PATH"},
+            "GITHUB_RUN_ATTEMPT": "3", "HOME": str(root),
+            "RELEASE_SOURCE_SHA": self.selected, "RELEASE_VERSION_CODE": "7003",
+            "RELEASE_GENERATION_ATTEMPT": "3", "RELEASE_VALIDATION_RUN_ID": "123",
+            "RELEASE_VALIDATION_RUN_ATTEMPT": "1",
+        }
+        self.signed = root / "signed-retry"
+        result = subprocess.run([
+            "python3", str(ROOT / ".github/scripts/sign-release-apk.py"), str(retry.apk),
+            str(self.signed), str(retry.certificate_file),
+        ], env=retry_environment, capture_output=True, text=True, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.environment = {key: value for key, value in retry_environment.items() if not key.startswith("ANDROID_RELEASE_KEYSTORE_")}
+        self.certificate = retry.certificate_file
+        retry_tag = f"nightly-7003-{self.selected}"
+        self.routes[f"/repos/{self.repository}/git/matching-refs/tags/{retry_tag}"] = []
+        self.routes[f"/repos/{self.repository}/git/ref/tags/{retry_tag}"] = {"object": {"type": "commit", "sha": self.selected}}
         result = self.publish()
         self.assertEqual(0, result.returncode, result.stderr)
         release = json.loads(self.release_file.read_text())
         self.assertIs(False, release["draft"])
-        self.assertEqual(self.tag, release["tag_name"])
+        self.assertEqual(retry_tag, release["tag_name"])
         self.assertEqual(["create", "upload", "delete", "create", "upload", "download", "edit"],
                          (self.provider / "operations").read_text().splitlines())
         self.assertEqual({"hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json"},

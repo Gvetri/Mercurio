@@ -263,6 +263,7 @@ def discard_retained_draft(retained, sha):
             and retained.get("target_commitish") == sha, "Retained Nightly draft identity is inconsistent")
     release_id = retained.get("id")
     require(type(release_id) is int and release_id > 0, "Retained Nightly draft identity is inconsistent")
+    print(f"Discarded retained Nightly draft {release_id} ({retained['tag_name']})", flush=True)
     gh_command(["api", "--method", "DELETE", f"repos/{REPOSITORY}/releases/{release_id}"])
     require(not any(source == sha for _, source, _ in release_history()),
             "Retained Nightly draft survived deletion")
@@ -280,11 +281,11 @@ def publish(directory, certificate, failure_context=None):
     history = release_history()
     retained = [release for _, source, release in history if source == sha]
     require(len(retained) <= 1, "Multiple Nightlies already identify this source")
+    require(code > max((value for value, _, _ in history), default=1), "Nightly version is not newer than release history")
     if retained:
         discard_retained_draft(retained[0], sha)
         history = release_history()
     require(not any(source == sha for _, source, _ in history), "This source already has a Nightly or a draft")
-    require(code > max((value for value, _, _ in history), default=1), "Nightly version is not newer than release history")
     body = POLICY["nightly_notes"](metadata)
 
     def read_release(draft, expected_id):
