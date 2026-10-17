@@ -165,6 +165,59 @@ The `journeyScenarioTest` task declares the checked-in journey fixtures as
 Gradle inputs, so a scenario-only edit re-runs the scenario parse and
 validation instead of reporting up to date and never parsing it.
 
+## Flow authoring pitfalls
+
+Two flow-authoring traps have lost journey rounds on device. Both are flow-design
+errors, not app bugs, and each has a discriminating check to run on device before
+a flow change is pushed.
+
+### Focus-gated placeholder text
+
+The composer placeholder (`Write a message`) is the Material3 `placeholder` of the
+input field and composes only while that field is focused and empty. A flow that
+taps Send, or never taps the field, and then asserts the placeholder fails on
+device: it queries a node the app has not composed, because an empty, unfocused
+composer exposes the input's resource id, not its placeholder text.
+
+The discriminating check is a hierarchy-dump pair: unfocused, the accessibility
+hierarchy holds zero `Write a message` nodes; after tapping the input, it holds
+one. Tap the input by its resource id (`conversation-message-input`) immediately
+before any placeholder assertion. In a journey that sends first, focus after the
+reply has landed: the composer input can be transiently disabled while the
+post-terminal history refresh lands, and a focus tap inside that window no-ops.
+
+### Full-text selector matching
+
+Maestro matches the FULL rendered text of an element. A partial string such as
+`Diagnostics stay on this device.` cannot match the longer rendered subtitle
+(`Diagnostics stay on this device. They hold redacted operational metadata only:
+...`), so the assertion fails on device while the text is on screen.
+
+The discriminating check is the full-text regex form: read the exact rendered
+string from the screen or the hierarchy dump, then assert the full text or a
+regex that covers it, such as `assertVisible: "Diagnostics stay on this device\\..*"`,
+which fullmatches the rendered subtitle. An `assertNotVisible` selector stays
+exact when it asserts the absence of a whole string, such as the empty state
+`No diagnostics available`.
+
+### Verifier arm placement and capability declaration
+
+Every journey needs a declared verifier arm: the verifier fails closed on an
+unknown journey name, and the `JourneyVerifierTest` consistency guard enumerates
+every committed scenario, so an undeclared scenario fails the suite. Declare new
+arms on level 2 (`verifyAdditionalScenario`), not in the level 1 `when`: level 1
+is the arm set the detekt `CyclomaticComplexMethod` limit constrains, so the new
+arm's verifier lives in a new private sub-object beside the existing ones, as
+`JourneyDiagnosticsInvariants` does. The verifier runs only after a passing flow,
+so a missing arm is masked by any earlier failure: declare the arm in the same
+change as the journey.
+
+Every journey's scenario must also serve the pinned contract's required capability
+set: before any flow starts, the runner probes `/health` and `/v1/capabilities`
+and checks the served endpoint set for every journey (the endpoint contract is
+checked even for `capabilities-missing-required`, which alone may omit a required
+capability). A scenario that omits a required endpoint fails before its flow runs.
+
 ## Failure evidence
 
 When a journey fails, CI preserves non-sensitive evidence as the
@@ -268,7 +321,7 @@ Gateway/state holder to compensate for a window-policy defect.
 The [historical A/B report on PR #71](https://github.com/Gvetri/hermes-native-client/pull/71#issuecomment-5848540026)
 found an API 24 arm64 Rename failure after adding resize to an older shell.
 That report is a regression warning, not proof that the current shell fails.
-Changing this contract requires all 17 deterministic API 24 journeys, including
+Changing this contract requires all 24 deterministic API 24 journeys, including
 `session-lifecycle` Rename, plus real-keyboard checks on API 35. Preserve the
 existing journey flows; their keyboard-hidden streaming check is not evidence
 that the old transcript layout is fully readable with the keyboard open.
