@@ -17,14 +17,19 @@ not package an application APK, create a release, or generate a product version.
 Pull-request APK builds and scheduled/manual device tests keep their existing roles.
 
 Before dispatch, a published Nightly for the captured SHA makes the run succeed
-without validation, building, signing, or publishing another one. A visible draft
-still stops preparation for recovery; duplicate or inconsistent source identities
-fail closed. The history check uses the existing release listing, not workflow history.
+without validation, building, signing, or publishing another one. A retained draft
+does not stop preparation: preparation validates the tip again, and only the
+publication job decides the retry. A draft with an inconsistent identity, or more
+than one release for the source, fails closed before any dispatch. The history check
+uses the existing release listing, not workflow history.
 
 For an unreleased tip, preparation dispatches the existing full gate and waits for
 its result. It correlates new workflow-dispatch runs by `main`, the captured SHA,
-and creation time, excludes runs present before dispatch, and refuses ambiguous
-matches. Discovery is limited to five minutes; the entire validation wait is
+and creation time, excludes runs present before dispatch, and never substitutes a
+historical run. Several matching runs are allowed: a completed successful match is
+selected at once, and the newest one by creation time and then by run id wins. While
+no match has succeeded, preparation waits until every match reaches a terminal state,
+then fails closed on the newest completed match and reports that run. Discovery is limited to five minutes; the entire validation wait is
 limited to **three hours** (`10800` seconds), within a **190-minute** preparation
 job. This leaves room for the full gate, including its sequential device stages,
 without an unbounded wait. Dispatch errors, missing runs, cancellation, failed
@@ -132,9 +137,9 @@ environment or signing secrets. Before writing it rechecks validation, trusted
 Nightly caller and environment, run/attempt, version, source, certificate, APK checksum, and the exact
 three-file artifact allowlist. Workflow concurrency serializes daily/manual runs,
 and the publisher rechecks duplicate history.
-It refuses an existing tag or source, including a draft visible to its write token.
-The contents-read-only preparation token may not see drafts; the publication check remains
-authoritative and refuses a second write.
+It refuses an existing tag, a published release for the source, and every source state
+other than one well-formed retained draft. That one draft is discarded only after the
+new artifact is verified, then recreated; the section below gives the exact rule.
 
 Publication proceeds in this order:
 
@@ -149,13 +154,17 @@ Publication proceeds in this order:
    ID, flags, title, notes, and exact source tag before reporting success.
 
 An upload or download-verification failure leaves a draft, not a public partial
-release. A retry refuses the retained draft rather than overwriting assets or
-creating another release for the source. The operator must inspect the failed run,
-exact release ID/tag/source and uploaded assets before removing an incomplete,
-unpublished draft (and an orphaned tag, if present), then start a new full run with
-a new version. Never delete an already published release to force a retry. If the
-final publication succeeded but its read-back failed, inspect and verify that
-existing release instead of publishing again. No automatic cleanup hides failures.
+release. A retry discards **one well-formed retained draft for the same source** — a
+draft prerelease named `Nightly` whose target commit is that source — and then
+creates its replacement. It acts only after the new artifact passes verification and
+the new tag is confirmed absent, and it proves the discard by re-listing the release
+history. Everything else refuses and needs operator recovery: a published release for
+the source, a draft with an inconsistent identity, several releases for one source, a
+draft for another source, and an existing tag. A tag attached to a discarded draft is
+not removed. Never delete an already published release to force a retry. If the final
+publication succeeded but its read-back failed, inspect and verify that existing
+release instead of publishing again. This bounded discard is the only automatic
+release-state change; it never hides a failure.
 
 A failed signing or publication stage files or updates one `ready-for-agent` issue
 per Nightly run. The reporter reads the exact run attempt and failed jobs, lists
@@ -177,8 +186,11 @@ must verify that identity and the retained state again before and after removal.
 It may not touch a published release or an asset, overwrite or re-publish release
 state, or recover a partially published release. Unknown state requires inspection,
 not guessed cleanup. After deliberate recovery, start a **new full Nightly run**
-with a new version; never retry only signing or publication. This is an explicit
-agent action, never a workflow step or automatic repair.
+with a new version; never retry only signing or publication. Operator removal covers every state that the workflow refuses, and any tag that a
+discarded draft leaves behind. The workflow's own discard of one well-formed
+same-source draft is the only automatic release-state change, and it never covers a
+published release, an inconsistent identity, several releases for one source, or a
+draft for another source.
 
 The supported command is [clear-nightly-draft.py](../.github/scripts/clear-nightly-draft.py),
 run locally from the repository root after inspecting the failure issue. Supply its
