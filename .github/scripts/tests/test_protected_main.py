@@ -146,8 +146,9 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         first = concurrency_group(self.workflow, "pull_request", 100, pull_request=25, action="labeled", label="bug")
         second = concurrency_group(self.workflow, "pull_request", 101, pull_request=25, action="labeled", label="bug")
         maestro = concurrency_group(self.workflow, "pull_request", 102, pull_request=25, action="labeled", label="run-maestro")
+        self.assertEqual("quality-gate-quality-gate-noop-100", first)
+        self.assertEqual("quality-gate-quality-gate-noop-101", second)
         self.assertNotEqual(first, second)
-        self.assertNotEqual(first, "quality-gate-quality-gate-25")
         self.assertEqual(maestro, "quality-gate-quality-gate-25")
 
     def test_dispatched_validations_group_only_with_their_own_run(self):
@@ -224,6 +225,121 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         self.assertIn('if [ "$EVENT_BASE_REF" != main ]', aggregate)
         self.assertIn('if [ "$EVENT_FORK" = true ]', aggregate)
         self.assertIn('if [ "$EVENT_DRAFT" = true ]', aggregate)
+
+    def test_the_aggregate_gate_runs_on_non_maestro_label_runs_and_mirrors_the_last_completed_gate(self):
+        aggregate = job_block(self.workflow, "quality-gate")
+        self.assertEqual(
+            "${{ always() }}",
+            job_key(aggregate, "if"),
+            "the aggregate must also run on non-maestro label runs so it can re-report the last completed gate",
+        )
+        self.assertIn(
+            "    permissions:\n      contents: read\n      checks: read\n",
+            aggregate,
+            "the mirror reads check runs with a read-only token scope",
+        )
+        mirror = aggregate.split("      - name: Mirror the newest completed quality-gate decision\n", 1)[1].split("      - name: ", 1)[0]
+        self.assertEqual(
+            "        if: ${{ github.event.action == 'labeled' && github.event.label.name != 'run-maestro' }}\n",
+            mirror.split("        env:\n", 1)[0],
+            "the mirror belongs to non-maestro label runs only",
+        )
+        self.assertEqual(1, aggregate.count("curl "), "the mirror makes exactly one API call")
+        self.assertIn(
+            '"${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=quality-gate&per_page=100"',
+            mirror,
+        )
+        self.assertIn("Bearer ${GH_TOKEN}", mirror)
+        self.assertIn("details_url", mirror)
+        self.assertIn(
+            "      - name: Verify declared checks and results\n"
+            "        if: ${{ github.event.action != 'labeled' || github.event.label.name == 'run-maestro' }}\n",
+            aggregate,
+            "the declared-check verification stays a real-run step",
+        )
+
+    def mirror_python(self):
+        aggregate = job_block(self.workflow, "quality-gate")
+        mirror = aggregate.split("      - name: Mirror the newest completed quality-gate decision\n", 1)[1].split("      - name: ", 1)[0]
+        start = mirror.index("python3 -c '") + len("python3 -c '")
+        raw = mirror[start : mirror.index("\n          '\n", start)]
+        return "\n".join(line[10:] if line.startswith(" " * 10) else line for line in raw.splitlines())
+
+    def mirror_decision(self, check_runs, current_run_id="424242"):
+        environment = dict(os.environ)
+        environment["MIRROR_CURRENT_RUN_ID"] = current_run_id
+        return subprocess.run(
+            ["python3", "-c", self.mirror_python()],
+            input=json.dumps({"total_count": len(check_runs), "check_runs": check_runs}),
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+
+    def check_run(self, identifier, conclusion=None, status="completed", run_id=None, completed_at="2026-10-17T12:00:00Z"):
+        check = {
+            "id": identifier,
+            "status": status,
+            "completed_at": completed_at,
+            "details_url": (
+                f"https://github.com/Gvetri/hermes-native-client/actions/runs/{run_id}"
+                if run_id
+                else "https://example.com/not-an-actions-run"
+            ),
+        }
+        if conclusion is not None:
+            check["conclusion"] = conclusion
+        return check
+
+    def test_a_green_head_stays_passing_when_a_label_arrives(self):
+        completed = self.mirror_decision([self.check_run(7, conclusion="success", run_id=39027900483)])
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("Mirrored the newest completed quality-gate check run", completed.stdout)
+
+    def test_a_failed_head_stays_blocked_when_a_label_arrives(self):
+        completed = self.mirror_decision([self.check_run(7, conclusion="failure", run_id=39027891206)])
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("concluded 'failure'", completed.stderr)
+
+    def test_an_external_fork_head_stays_blocked_when_a_label_arrives(self):
+        completed = self.mirror_decision([self.check_run(7, conclusion="failure", run_id=39027891206)])
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("the head is not validated", completed.stderr)
+
+    def test_a_head_without_a_completed_gate_fails_closed_when_a_label_arrives(self):
+        for check_runs in (
+            [],
+            [self.check_run(7, status="in_progress", run_id=39027900483)],
+            [self.check_run(7, conclusion="success", run_id=424242)],
+        ):
+            completed = self.mirror_decision(check_runs)
+            self.assertEqual(1, completed.returncode, completed.stderr)
+            self.assertIn("failing closed", completed.stderr)
+
+    def test_the_mirror_takes_the_newest_completed_gate_from_another_run(self):
+        older_success = self.check_run(7, conclusion="success", run_id=39027900483, completed_at="2026-10-17T12:01:43Z")
+        newer_failure = self.check_run(8, conclusion="failure", run_id=39027891206, completed_at="2026-10-17T13:00:00Z")
+        older_failure = self.check_run(7, conclusion="failure", run_id=39027891206, completed_at="2026-10-17T12:01:43Z")
+        newer_success = self.check_run(8, conclusion="success", run_id=39027900483, completed_at="2026-10-17T13:00:00Z")
+        self.assertEqual(1, self.mirror_decision([older_success, newer_failure]).returncode)
+        self.assertEqual(1, self.mirror_decision([newer_failure, older_success]).returncode)
+        self.assertEqual(0, self.mirror_decision([older_failure, newer_success]).returncode)
+        same_time_success = self.check_run(9, conclusion="success", run_id=39027900483, completed_at="2026-10-17T13:00:00Z")
+        same_time_failure = self.check_run(10, conclusion="failure", run_id=39027891206, completed_at="2026-10-17T13:00:00Z")
+        self.assertEqual(1, self.mirror_decision([same_time_success, same_time_failure]).returncode)
+        self.assertEqual(
+            1,
+            self.mirror_decision([self.check_run(7, conclusion="success")]).returncode,
+            "a check run that cannot be attributed to another run must not satisfy the mirror",
+        )
+
+    def test_the_mirror_accepts_the_documented_pass_conclusions(self):
+        for conclusion in ("success", "neutral", "skipped"):
+            completed = self.mirror_decision([self.check_run(7, conclusion=conclusion, run_id=39027900483)])
+            self.assertEqual(0, completed.returncode, completed.stderr)
+        for conclusion in ("failure", "cancelled", "timed_out", "action_required"):
+            self.assertEqual(1, self.mirror_decision([self.check_run(7, conclusion=conclusion, run_id=39027900483)]).returncode)
 
     def test_the_commit_message_check_runs_for_a_ready_in_repository_pull_request(self):
         commit_message = job_block(self.workflow, "commit_message")

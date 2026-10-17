@@ -618,7 +618,7 @@ jobs:
 
   quality-gate:
     name: quality-gate
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}
+    if: ${{ always() }}
     needs:
       - fork_guard
       - draft_validation
@@ -638,11 +638,53 @@ jobs:
       - api24_instrumentation
       - maestro_journeys
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Mirror the newest completed quality-gate decision
+        if: ${{ github.event.action == 'labeled' && github.event.label.name != 'run-maestro' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MIRROR_CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 60 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=quality-gate&per_page=100" \
+            | python3 -c '
+          import json, os, sys
+          from urllib.parse import urlsplit
+          payload = json.load(sys.stdin)
+          current_run_id = os.environ.get("MIRROR_CURRENT_RUN_ID")
+          candidates = []
+          for check_run in payload.get("check_runs", []):
+              if check_run.get("status") != "completed":
+                  continue
+              details_path = urlsplit(check_run.get("details_url") or "").path
+              if "/runs/" not in details_path:
+                  continue
+              run_id = details_path.split("/runs/", 1)[1].split("/", 1)[0]
+              if not run_id.isdigit() or run_id == current_run_id:
+                  continue
+              candidates.append(((check_run.get("completed_at") or "", int(check_run.get("id") or 0)), check_run.get("conclusion")))
+          if not candidates:
+              print("No completed quality-gate check run from another run exists on this head; failing closed.", file=sys.stderr)
+              sys.exit(1)
+          (completed_at, check_run_id), conclusion = max(candidates)
+          if conclusion not in ("success", "neutral", "skipped"):
+              print("The newest completed quality-gate check run (run %s, completed %s) concluded %r; the head is not validated." % (check_run_id, completed_at, conclusion), file=sys.stderr)
+              sys.exit(1)
+          print("Mirrored the newest completed quality-gate check run (run %s, completed %s): %s." % (check_run_id, completed_at, conclusion))
+          '
       - name: Verify declared checks and results
+        if: ${{ github.event.action != 'labeled' || github.event.label.name == 'run-maestro' }}
         env:
           FORMATTING_RESULT: ${{ needs.formatting.result }}
           STATIC_ANALYSIS_RESULT: ${{ needs.static_analysis.result }}

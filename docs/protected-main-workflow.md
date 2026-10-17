@@ -30,12 +30,14 @@ Use one issue-scoped branch per change, in the form `<type>/<issue>-<short-descr
 
 `.github/workflows/quality-gate.yml` runs on a pull request, a push to `main`, a nightly schedule at
 02:00 UTC, and a manual dispatch. A pull request triggers on `opened`, `synchronize`, `reopened`,
-`ready_for_review`, and `labeled`: every head-changing activity re-evaluates the head, so a result
-from an earlier state of a pull request never stands for the current one, and adding the
-`run-maestro` label starts the labeled emulator suites on an open pull request. A title edit and a
-draft transition change no code, so they start no run; adding any other label starts only a no-op
-run whose every job reports `skipped`, and the checks of the last run on the same head stay
-authoritative.
+`ready_for_review`, and `labeled`: each listed activity except a non-`run-maestro` label starts a run
+that re-evaluates the head as it is at that moment, so a result from an earlier state of a pull
+request never stands for the current one, and adding the `run-maestro` label starts the labeled
+emulator suites on an open pull request. A title edit and a draft transition change no code, so they
+start no run; adding any other label starts only a no-op run whose validation jobs report `skipped`
+while its aggregate re-reports the decision of the newest completed `quality-gate` check run on that
+same head, so the last completed gate stays authoritative and a label can neither clear a failed
+gate nor block a green one.
 
 With `cancel-in-progress: true`, pull-request runs group per pull-request number and push runs group
 per ref: a newer run supersedes the obsolete run of the same pull request or ref. Scheduled runs
@@ -44,8 +46,11 @@ cancel a validation the Nightly started, and separate hand starts cannot cancel 
 `labeled` run without the `run-maestro` label groups on its own run id too, so its no-op result never
 cancels an in-flight gate.
 Results are published per check, and only the aggregate job named
-`quality-gate` is a required status. The aggregate fails unless every check declared in
-`.github/quality-gate/required-checks.txt` reports the outcome the event expects.
+`quality-gate` is a required status. On a run that validates the head, the aggregate fails unless
+every check declared in `.github/quality-gate/required-checks.txt` reports the outcome the event
+expects; on a non-maestro label run it instead fails unless the newest completed `quality-gate`
+check run on the same head carries a pass conclusion, so a no-op result is never more permissive
+than the gate it mirrors.
 
 | Run | Checks that execute | Checks that stay skipped |
 | --- | --- | --- |
@@ -60,7 +65,8 @@ The emulator suites are opt-in on pull requests. A ready in-repository pull requ
 with the `run-maestro` label: `api24-instrumentation` runs first, and `maestro-journeys` starts only
 after it passes, so a build or device-suite failure never reaches the journey lane. An unlabeled
 pull request reports both suites as `skipped`, and the aggregate requires exactly that routing; the
-label on a draft or an external-fork pull request starts nothing.
+label on a draft or an external-fork pull request starts no validation, and its aggregate still
+reports the decision that exact head holds.
 
 On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`, or
 `maestro-journeys` does not succeed, the `create-nightly-failure-issue` job creates or updates one

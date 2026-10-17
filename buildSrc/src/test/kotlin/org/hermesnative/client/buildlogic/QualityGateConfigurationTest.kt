@@ -1057,7 +1057,7 @@ class QualityGateConfigurationTest {
             "The detekt job must run for a ready in-repository pull request and every non-pull-request run.",
             detektJob.contains(
                 "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || " +
-                    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }",
+                    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}",
             ),
         )
         assertTrue(
