@@ -34,11 +34,15 @@ DECLARED_CHECKS = tuple(
     line.strip() for line in REQUIRED_CHECKS.read_text().splitlines() if line.strip()
 )
 HEAVY_JOBS_RUN = (
-    "${{ always() && (github.event_name != 'pull_request' || "
+    "${{ always() && (github.event.action != 'labeled' || "
+    "github.event.label.name == 'run-maestro') && "
+    "(github.event_name != 'pull_request' || "
     "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}"
 )
 CONFORMANCE_RUN = (
-    "${{ !cancelled() && (github.event_name != 'pull_request' || "
+    "${{ !cancelled() && (github.event.action != 'labeled' || "
+    "github.event.label.name == 'run-maestro') && "
+    "(github.event_name != 'pull_request' || "
     "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}"
 )
 
@@ -73,7 +77,7 @@ def jobs_of(workflow):
     return jobs
 
 
-def concurrency_group(workflow, event_name, run_id, ref="refs/heads/main", pull_request=None):
+def concurrency_group(workflow, event_name, run_id, ref="refs/heads/main", pull_request=None, action=None, label=None):
     group = workflow.split("\nconcurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
     declaration = re.search(r"^  group: (.+)$", group, re.MULTILINE)
     assert declaration is not None, "The workflow must declare a single-line concurrency group"
@@ -84,6 +88,8 @@ def concurrency_group(workflow, event_name, run_id, ref="refs/heads/main", pull_
         "github.run_id": run_id,
         "github.ref": ref,
         "github.event.pull_request.number": pull_request,
+        "github.event.action": action,
+        "github.event.label.name": label,
     }
 
     def evaluate(match):
@@ -136,6 +142,15 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         pushed = concurrency_group(self.workflow, "push", 101)
         self.assertNotEqual(dispatched, pushed)
 
+    def test_a_non_maestro_label_run_groups_only_with_itself(self):
+        first = concurrency_group(self.workflow, "pull_request", 100, pull_request=25, action="labeled", label="bug")
+        second = concurrency_group(self.workflow, "pull_request", 101, pull_request=25, action="labeled", label="bug")
+        maestro = concurrency_group(self.workflow, "pull_request", 102, pull_request=25, action="labeled", label="run-maestro")
+        self.assertEqual("quality-gate-quality-gate-noop-100", first)
+        self.assertEqual("quality-gate-quality-gate-noop-101", second)
+        self.assertNotEqual(first, second)
+        self.assertEqual(maestro, "quality-gate-quality-gate-25")
+
     def test_dispatched_validations_group_only_with_their_own_run(self):
         dispatched = concurrency_group(self.workflow, "workflow_dispatch", 100)
         self.assertEqual(dispatched, concurrency_group(self.workflow, "workflow_dispatch", 100))
@@ -153,7 +168,11 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_the_fork_guard_reports_the_read_only_policy_for_every_pull_request(self):
         fork_guard = job_block(self.workflow, "fork_guard")
         self.assertEqual("fork-guard", jobs_of(self.workflow)["fork_guard"][0])
-        self.assertEqual("${{ always() && github.event_name == 'pull_request' }}", job_key(fork_guard, "if"))
+        self.assertEqual(
+            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
+            "|| github.event.label.name == 'run-maestro') }}",
+            job_key(fork_guard, "if"),
+        )
         self.assertIn("github.event.pull_request.head.repo.full_name", fork_guard)
         self.assertIn("read-only and secret-free", fork_guard)
         self.assertIn("must carry the change onto an in-repository branch", fork_guard)
@@ -163,7 +182,8 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         draft = job_block(self.workflow, "draft_validation")
         self.assertEqual("draft-validation", jobs_of(self.workflow)["draft_validation"][0])
         self.assertEqual(
-            "${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}",
+            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
+            "|| github.event.label.name == 'run-maestro') && !github.event.pull_request.head.repo.fork }}",
             job_key(draft, "if"),
             "the lightweight validation belongs to every in-repository pull request",
         )
@@ -178,6 +198,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             self.assertEqual(HEAVY_JOBS_RUN, jobs[job][1], f"{job} must run for a ready in-repository pull request")
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn('expected_state=success', aggregate)
+        label_guard = "(github.event.action != 'labeled' || github.event.label.name == 'run-maestro')"
         emulator_gate = (
             "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
             "(github.event_name == 'pull_request' && !github.event.pull_request.draft && "
@@ -185,11 +206,15 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "contains(github.event.pull_request.labels.*.name, 'run-maestro'))"
         )
         self.assertEqual(
-            "${{ always() && (" + emulator_gate + ") }}",
+            "${{ always() && " + label_guard + " && (" + emulator_gate + ") }}",
             job_key(job_block(self.workflow, "api24_instrumentation"), "if"),
         )
         self.assertEqual(
-            "${{ always() && needs.api24_instrumentation.result == 'success' && (" + emulator_gate + ") }}",
+            "${{ always() && needs.api24_instrumentation.result == 'success' && "
+            + label_guard
+            + " && ("
+            + emulator_gate
+            + ") }}",
             job_key(job_block(self.workflow, "maestro_journeys"), "if"),
         )
         self.assertEqual(
@@ -200,6 +225,121 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         self.assertIn('if [ "$EVENT_BASE_REF" != main ]', aggregate)
         self.assertIn('if [ "$EVENT_FORK" = true ]', aggregate)
         self.assertIn('if [ "$EVENT_DRAFT" = true ]', aggregate)
+
+    def test_the_aggregate_gate_runs_on_non_maestro_label_runs_and_mirrors_the_last_completed_gate(self):
+        aggregate = job_block(self.workflow, "quality-gate")
+        self.assertEqual(
+            "${{ always() }}",
+            job_key(aggregate, "if"),
+            "the aggregate must also run on non-maestro label runs so it can re-report the last completed gate",
+        )
+        self.assertIn(
+            "    permissions:\n      contents: read\n      checks: read\n",
+            aggregate,
+            "the mirror reads check runs with a read-only token scope",
+        )
+        mirror = aggregate.split("      - name: Mirror the newest completed quality-gate decision\n", 1)[1].split("      - name: ", 1)[0]
+        self.assertEqual(
+            "        if: ${{ github.event.action == 'labeled' && github.event.label.name != 'run-maestro' }}\n",
+            mirror.split("        env:\n", 1)[0],
+            "the mirror belongs to non-maestro label runs only",
+        )
+        self.assertEqual(1, aggregate.count("curl "), "the mirror makes exactly one API call")
+        self.assertIn(
+            '"${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?check_name=quality-gate&per_page=100"',
+            mirror,
+        )
+        self.assertIn("Bearer ${GH_TOKEN}", mirror)
+        self.assertIn("details_url", mirror)
+        self.assertIn(
+            "      - name: Verify declared checks and results\n"
+            "        if: ${{ github.event.action != 'labeled' || github.event.label.name == 'run-maestro' }}\n",
+            aggregate,
+            "the declared-check verification stays a real-run step",
+        )
+
+    def mirror_python(self):
+        aggregate = job_block(self.workflow, "quality-gate")
+        mirror = aggregate.split("      - name: Mirror the newest completed quality-gate decision\n", 1)[1].split("      - name: ", 1)[0]
+        start = mirror.index("python3 -c '") + len("python3 -c '")
+        raw = mirror[start : mirror.index("\n          '\n", start)]
+        return "\n".join(line[10:] if line.startswith(" " * 10) else line for line in raw.splitlines())
+
+    def mirror_decision(self, check_runs, current_run_id="424242"):
+        environment = dict(os.environ)
+        environment["MIRROR_CURRENT_RUN_ID"] = current_run_id
+        return subprocess.run(
+            ["python3", "-c", self.mirror_python()],
+            input=json.dumps({"total_count": len(check_runs), "check_runs": check_runs}),
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+
+    def check_run(self, identifier, conclusion=None, status="completed", run_id=None, completed_at="2026-10-17T12:00:00Z"):
+        check = {
+            "id": identifier,
+            "status": status,
+            "completed_at": completed_at,
+            "details_url": (
+                f"https://github.com/Gvetri/hermes-native-client/actions/runs/{run_id}"
+                if run_id
+                else "https://example.com/not-an-actions-run"
+            ),
+        }
+        if conclusion is not None:
+            check["conclusion"] = conclusion
+        return check
+
+    def test_a_green_head_stays_passing_when_a_label_arrives(self):
+        completed = self.mirror_decision([self.check_run(7, conclusion="success", run_id=39027900483)])
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("Mirrored the newest completed quality-gate check run", completed.stdout)
+
+    def test_a_failed_head_stays_blocked_when_a_label_arrives(self):
+        completed = self.mirror_decision([self.check_run(7, conclusion="failure", run_id=39027891206)])
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("concluded 'failure'", completed.stderr)
+
+    def test_an_external_fork_head_stays_blocked_when_a_label_arrives(self):
+        completed = self.mirror_decision([self.check_run(7, conclusion="failure", run_id=39027891206)])
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("the head is not validated", completed.stderr)
+
+    def test_a_head_without_a_completed_gate_fails_closed_when_a_label_arrives(self):
+        for check_runs in (
+            [],
+            [self.check_run(7, status="in_progress", run_id=39027900483)],
+            [self.check_run(7, conclusion="success", run_id=424242)],
+        ):
+            completed = self.mirror_decision(check_runs)
+            self.assertEqual(1, completed.returncode, completed.stderr)
+            self.assertIn("failing closed", completed.stderr)
+
+    def test_the_mirror_takes_the_newest_completed_gate_from_another_run(self):
+        older_success = self.check_run(7, conclusion="success", run_id=39027900483, completed_at="2026-10-17T12:01:43Z")
+        newer_failure = self.check_run(8, conclusion="failure", run_id=39027891206, completed_at="2026-10-17T13:00:00Z")
+        older_failure = self.check_run(7, conclusion="failure", run_id=39027891206, completed_at="2026-10-17T12:01:43Z")
+        newer_success = self.check_run(8, conclusion="success", run_id=39027900483, completed_at="2026-10-17T13:00:00Z")
+        self.assertEqual(1, self.mirror_decision([older_success, newer_failure]).returncode)
+        self.assertEqual(1, self.mirror_decision([newer_failure, older_success]).returncode)
+        self.assertEqual(0, self.mirror_decision([older_failure, newer_success]).returncode)
+        same_time_success = self.check_run(9, conclusion="success", run_id=39027900483, completed_at="2026-10-17T13:00:00Z")
+        same_time_failure = self.check_run(10, conclusion="failure", run_id=39027891206, completed_at="2026-10-17T13:00:00Z")
+        self.assertEqual(1, self.mirror_decision([same_time_success, same_time_failure]).returncode)
+        self.assertEqual(
+            1,
+            self.mirror_decision([self.check_run(7, conclusion="success")]).returncode,
+            "a check run that cannot be attributed to another run must not satisfy the mirror",
+        )
+
+    def test_the_mirror_accepts_the_documented_pass_conclusions(self):
+        for conclusion in ("success", "neutral", "skipped"):
+            completed = self.mirror_decision([self.check_run(7, conclusion=conclusion, run_id=39027900483)])
+            self.assertEqual(0, completed.returncode, completed.stderr)
+        for conclusion in ("failure", "cancelled", "timed_out", "action_required"):
+            self.assertEqual(1, self.mirror_decision([self.check_run(7, conclusion=conclusion, run_id=39027900483)]).returncode)
 
     def test_the_commit_message_check_runs_for_a_ready_in_repository_pull_request(self):
         commit_message = job_block(self.workflow, "commit_message")
@@ -213,7 +353,8 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         self.assertIn("      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n", commit_message)
         self.assertIn("          persist-credentials: false\n", commit_message)
         self.assertEqual(
-            "${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork "
+            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
+            "|| github.event.label.name == 'run-maestro') && !github.event.pull_request.head.repo.fork "
             "&& !github.event.pull_request.draft }}",
             job_key(commit_message, "if"),
         )
@@ -229,8 +370,14 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_the_pull_request_triggers_re_evaluate_the_head_on_every_declared_activity(self):
         triggers = self.workflow.split("\non:\n", 1)[1].split("\npermissions:\n", 1)[0]
         self.assertIn("  pull_request:\n    types:\n", triggers)
-        for activity in ("opened", "synchronize", "reopened", "ready_for_review", "converted_to_draft", "edited", "labeled"):
+        for activity in ("opened", "synchronize", "reopened", "ready_for_review", "labeled"):
             self.assertIn(f"      - {activity}\n", triggers, f"{activity} must trigger the workflow")
+        for inactive in ("converted_to_draft", "edited"):
+            self.assertNotIn(
+                f"      - {inactive}\n",
+                triggers,
+                f"{inactive} must not re-run the gate on an unchanged head",
+            )
 
     def test_every_declared_token_scope_is_a_documented_one(self):
         documented = {
