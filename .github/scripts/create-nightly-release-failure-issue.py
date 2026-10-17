@@ -140,7 +140,11 @@ def report():
             lines.extend(f"- [{name}]({url}/artifacts/{artifact['id']})" for artifact in available)
         else:
             lines.append(f"- {name}: missing or expired; inspect the failed job logs.")
-    lines.extend(["", "No workflow repairs, retries, deletes, overwrites or re-publishes release state. "
+    lines.extend(["", "Release state changes: at most one well-formed retained draft for this exact "
+                  "source is discarded per publish attempt, after a fresh validation; this attempt "
+                  "may have discarded the draft of an earlier attempt before it created the draft "
+                  "above. No workflow deletes a published release or an asset, overwrites an asset, "
+                  "or re-publishes a release. "
                   "Follow the agent recovery rule in [Development Nightly releases]"
                   f"(https://github.com/{REPOSITORY}/blob/main/docs/nightly-releases.md). "
                   "Never touch a published release or an asset; unknown state requires inspection."])
