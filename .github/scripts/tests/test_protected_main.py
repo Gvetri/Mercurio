@@ -34,11 +34,15 @@ DECLARED_CHECKS = tuple(
     line.strip() for line in REQUIRED_CHECKS.read_text().splitlines() if line.strip()
 )
 HEAVY_JOBS_RUN = (
-    "${{ always() && (github.event_name != 'pull_request' || "
+    "${{ always() && (github.event.action != 'labeled' || "
+    "github.event.label.name == 'run-maestro') && "
+    "(github.event_name != 'pull_request' || "
     "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}"
 )
 CONFORMANCE_RUN = (
-    "${{ !cancelled() && (github.event_name != 'pull_request' || "
+    "${{ !cancelled() && (github.event.action != 'labeled' || "
+    "github.event.label.name == 'run-maestro') && "
+    "(github.event_name != 'pull_request' || "
     "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}"
 )
 
@@ -73,7 +77,7 @@ def jobs_of(workflow):
     return jobs
 
 
-def concurrency_group(workflow, event_name, run_id, ref="refs/heads/main", pull_request=None):
+def concurrency_group(workflow, event_name, run_id, ref="refs/heads/main", pull_request=None, action=None, label=None):
     group = workflow.split("\nconcurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
     declaration = re.search(r"^  group: (.+)$", group, re.MULTILINE)
     assert declaration is not None, "The workflow must declare a single-line concurrency group"
@@ -84,6 +88,8 @@ def concurrency_group(workflow, event_name, run_id, ref="refs/heads/main", pull_
         "github.run_id": run_id,
         "github.ref": ref,
         "github.event.pull_request.number": pull_request,
+        "github.event.action": action,
+        "github.event.label.name": label,
     }
 
     def evaluate(match):
@@ -136,6 +142,14 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         pushed = concurrency_group(self.workflow, "push", 101)
         self.assertNotEqual(dispatched, pushed)
 
+    def test_a_non_maestro_label_run_groups_only_with_itself(self):
+        first = concurrency_group(self.workflow, "pull_request", 100, pull_request=25, action="labeled", label="bug")
+        second = concurrency_group(self.workflow, "pull_request", 101, pull_request=25, action="labeled", label="bug")
+        maestro = concurrency_group(self.workflow, "pull_request", 102, pull_request=25, action="labeled", label="run-maestro")
+        self.assertNotEqual(first, second)
+        self.assertNotEqual(first, "quality-gate-quality-gate-25")
+        self.assertEqual(maestro, "quality-gate-quality-gate-25")
+
     def test_dispatched_validations_group_only_with_their_own_run(self):
         dispatched = concurrency_group(self.workflow, "workflow_dispatch", 100)
         self.assertEqual(dispatched, concurrency_group(self.workflow, "workflow_dispatch", 100))
@@ -153,7 +167,11 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_the_fork_guard_reports_the_read_only_policy_for_every_pull_request(self):
         fork_guard = job_block(self.workflow, "fork_guard")
         self.assertEqual("fork-guard", jobs_of(self.workflow)["fork_guard"][0])
-        self.assertEqual("${{ always() && github.event_name == 'pull_request' }}", job_key(fork_guard, "if"))
+        self.assertEqual(
+            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
+            "|| github.event.label.name == 'run-maestro') }}",
+            job_key(fork_guard, "if"),
+        )
         self.assertIn("github.event.pull_request.head.repo.full_name", fork_guard)
         self.assertIn("read-only and secret-free", fork_guard)
         self.assertIn("must carry the change onto an in-repository branch", fork_guard)
@@ -163,7 +181,8 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         draft = job_block(self.workflow, "draft_validation")
         self.assertEqual("draft-validation", jobs_of(self.workflow)["draft_validation"][0])
         self.assertEqual(
-            "${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}",
+            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
+            "|| github.event.label.name == 'run-maestro') && !github.event.pull_request.head.repo.fork }}",
             job_key(draft, "if"),
             "the lightweight validation belongs to every in-repository pull request",
         )
@@ -178,6 +197,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             self.assertEqual(HEAVY_JOBS_RUN, jobs[job][1], f"{job} must run for a ready in-repository pull request")
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn('expected_state=success', aggregate)
+        label_guard = "(github.event.action != 'labeled' || github.event.label.name == 'run-maestro')"
         emulator_gate = (
             "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
             "(github.event_name == 'pull_request' && !github.event.pull_request.draft && "
@@ -185,11 +205,15 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "contains(github.event.pull_request.labels.*.name, 'run-maestro'))"
         )
         self.assertEqual(
-            "${{ always() && (" + emulator_gate + ") }}",
+            "${{ always() && " + label_guard + " && (" + emulator_gate + ") }}",
             job_key(job_block(self.workflow, "api24_instrumentation"), "if"),
         )
         self.assertEqual(
-            "${{ always() && needs.api24_instrumentation.result == 'success' && (" + emulator_gate + ") }}",
+            "${{ always() && needs.api24_instrumentation.result == 'success' && "
+            + label_guard
+            + " && ("
+            + emulator_gate
+            + ") }}",
             job_key(job_block(self.workflow, "maestro_journeys"), "if"),
         )
         self.assertEqual(
@@ -213,7 +237,8 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         self.assertIn("      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n", commit_message)
         self.assertIn("          persist-credentials: false\n", commit_message)
         self.assertEqual(
-            "${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork "
+            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
+            "|| github.event.label.name == 'run-maestro') && !github.event.pull_request.head.repo.fork "
             "&& !github.event.pull_request.draft }}",
             job_key(commit_message, "if"),
         )
@@ -229,8 +254,14 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_the_pull_request_triggers_re_evaluate_the_head_on_every_declared_activity(self):
         triggers = self.workflow.split("\non:\n", 1)[1].split("\npermissions:\n", 1)[0]
         self.assertIn("  pull_request:\n    types:\n", triggers)
-        for activity in ("opened", "synchronize", "reopened", "ready_for_review", "converted_to_draft", "edited", "labeled"):
+        for activity in ("opened", "synchronize", "reopened", "ready_for_review", "labeled"):
             self.assertIn(f"      - {activity}\n", triggers, f"{activity} must trigger the workflow")
+        for inactive in ("converted_to_draft", "edited"):
+            self.assertNotIn(
+                f"      - {inactive}\n",
+                triggers,
+                f"{inactive} must not re-run the gate on an unchanged head",
+            )
 
     def test_every_declared_token_scope_is_a_documented_one(self):
         documented = {

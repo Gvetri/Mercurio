@@ -226,7 +226,7 @@ class QualityGateConfigurationTest {
         assertTrue(
             "The API 24 job must combine always() with its label-gated event filter for cancellation finalization.",
             emulatorJob.contains(
-                "    if: \${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}",
+                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}",
             ),
         )
         assertTrue(
@@ -771,7 +771,7 @@ class QualityGateConfigurationTest {
         val api24Job = workflow.substringAfter("  api24_instrumentation:").substringBefore("  maestro_journeys:")
 
         assertTrue(
-            "The workflow must run for pull requests, including a draft transition and a title edit.",
+            "The workflow must run for pull requests.",
             workflow.contains("  pull_request:\n    types:\n"),
         )
         assertTrue("The workflow must run for main pushes.", workflow.contains("  push:\n    branches:\n      - main\n"))
@@ -963,7 +963,7 @@ class QualityGateConfigurationTest {
         val architectureJobHeader =
             "  architecture_check:\n" +
                 "    name: architecture-check\n" +
-                "    if: \${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}\n" +
+                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}\n" +
                 "    runs-on: ubuntu-latest\n" +
                 "    timeout-minutes: 30\n"
         assertTrue(
@@ -1056,8 +1056,8 @@ class QualityGateConfigurationTest {
         assertTrue(
             "The detekt job must run for a ready in-repository pull request and every non-pull-request run.",
             detektJob.contains(
-                "    if: \${{ always() && (github.event_name != 'pull_request' || " +
-                    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}",
+                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || " +
+                    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }",
             ),
         )
         assertTrue(

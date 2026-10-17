@@ -30,15 +30,19 @@ Use one issue-scoped branch per change, in the form `<type>/<issue>-<short-descr
 
 `.github/workflows/quality-gate.yml` runs on a pull request, a push to `main`, a nightly schedule at
 02:00 UTC, and a manual dispatch. A pull request triggers on `opened`, `synchronize`, `reopened`,
-`ready_for_review`, `converted_to_draft`, `edited`, and `labeled`: a draft transition, a title edit,
-and a label edit all re-evaluate the head, so a result from an earlier state of a pull request never
-stands for the current one, and adding the `run-maestro` label starts the labeled emulator suites on
-an open pull request.
+`ready_for_review`, and `labeled`: every head-changing activity re-evaluates the head, so a result
+from an earlier state of a pull request never stands for the current one, and adding the
+`run-maestro` label starts the labeled emulator suites on an open pull request. A title edit and a
+draft transition change no code, so they start no run; adding any other label starts only a no-op
+run whose every job reports `skipped`, and the checks of the last run on the same head stay
+authoritative.
 
 With `cancel-in-progress: true`, pull-request runs group per pull-request number and push runs group
 per ref: a newer run supersedes the obsolete run of the same pull request or ref. Scheduled runs
 keep sharing the per-ref group. A hand-started run instead groups on its own run id, so a push cannot
-cancel a validation the Nightly started, and separate hand starts cannot cancel one another.
+cancel a validation the Nightly started, and separate hand starts cannot cancel one another; a
+`labeled` run without the `run-maestro` label groups on its own run id too, so its no-op result never
+cancels an in-flight gate.
 Results are published per check, and only the aggregate job named
 `quality-gate` is a required status. The aggregate fails unless every check declared in
 `.github/quality-gate/required-checks.txt` reports the outcome the event expects.

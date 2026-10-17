@@ -7,8 +7,6 @@ on:
       - synchronize
       - reopened
       - ready_for_review
-      - converted_to_draft
-      - edited
       - labeled
   push:
     branches:
@@ -21,13 +19,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-gate-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  group: quality-gate-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'run-maestro' && format('noop-{0}', github.run_id)) || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   fork_guard:
     name: fork-guard
-    if: ${{ always() && github.event_name == 'pull_request' }}
+    if: ${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -42,7 +40,7 @@ jobs:
 
   draft_validation:
     name: draft-validation
-    if: ${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}
+    if: ${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -59,7 +57,7 @@ jobs:
 
   formatting:
     name: formatting
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -74,7 +72,7 @@ jobs:
 
   static_analysis:
     name: static-analysis
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -89,7 +87,7 @@ jobs:
 
   detekt:
     name: detekt
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -105,7 +103,7 @@ jobs:
 
   unit_tests:
     name: unit-tests
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -133,7 +131,7 @@ jobs:
 
   fixture_descriptor:
     name: fixture-descriptor
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -148,7 +146,7 @@ jobs:
 
   fixture_lifecycle:
     name: fixture-lifecycle
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -163,7 +161,7 @@ jobs:
 
   fixture_contract:
     name: fixture-contract
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -178,7 +176,7 @@ jobs:
 
   android_build:
     name: android-build
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -198,7 +196,7 @@ jobs:
 
   architecture_check:
     name: architecture-check
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -226,7 +224,7 @@ jobs:
 
   coverage_mutation:
     name: coverage-mutation
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -243,7 +241,7 @@ jobs:
 
   commit_message:
     name: commit-message
-    if: ${{ always() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork && !github.event.pull_request.draft }}
+    if: ${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.head.repo.fork && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -260,7 +258,7 @@ jobs:
 
   compose_test:
     name: compose-jvm-tests
-    if: ${{ always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -296,7 +294,7 @@ jobs:
 
   conformance:
     name: conformance
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    if: ${{ !cancelled() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -323,7 +321,7 @@ jobs:
 
   api24_instrumentation:
     name: api24-instrumentation
-    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -507,7 +505,7 @@ jobs:
   maestro_journeys:
     name: maestro-journeys
     needs: [api24_instrumentation]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 80
     env:
@@ -620,7 +618,7 @@ jobs:
 
   quality-gate:
     name: quality-gate
-    if: ${{ always() }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}
     needs:
       - fork_guard
       - draft_validation
