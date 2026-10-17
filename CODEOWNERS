@@ -1,0 +1,4 @@
+# Default owner for everything. The local reviewer's trigger policy keys off
+# this file: PRs authored by a listed owner are reviewed automatically; any
+# other PR needs a listed owner to post the @reviewerbot review command.
+* @Gvetri
