@@ -76,7 +76,7 @@ private object GatewayEndpointValidator {
     private val endpointPattern =
         Regex(
             """(?i)^https://([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::([0-9]{1,5}))?""" +
-                """((?:/[a-z0-9._~!&'()*+,;=:@%/-]*)?)\z""",
+                """((?:/[a-z0-9._~!&'()*+,;=:@%/-]*)?)""",
         )
 
     fun normalize(endpoint: String): String {
