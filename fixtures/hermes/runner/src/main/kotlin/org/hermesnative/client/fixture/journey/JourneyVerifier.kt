@@ -139,54 +139,50 @@ private fun recordedRequestMethods(telemetry: JsonObject): List<String> =
     }
 
 internal object JourneyInvariants {
+    private val scenarioVerifiers: Map<String, (JsonObject) -> Unit> =
+        mapOf(
+            "connection" to ::requireConnectionAttempted,
+            "session-list-first" to ::requireConnectionAttempted,
+            "empty-sessions" to JourneySessionCreationInvariants::verifyEmptySessions,
+            "pending-creation" to JourneySessionCreationInvariants::verifyPendingCreation,
+            "session-lifecycle" to JourneySessionLifecycleInvariants::verifySessionLifecycle,
+            "pagination-search" to ::requireConnectionAttempted,
+            "failed-offline-send" to JourneyRunInvariants::verifyFailedOfflineSend,
+            "offline-session-list" to JourneyInvariants::verifyOfflineSessionList,
+            "markdown-links" to ::requireConnectionAttempted,
+            "accessibility-controls" to ::requireConnectionAttempted,
+            "capabilities-additive" to JourneyInvariants::verifyCapabilitiesAdditive,
+            "capabilities-missing-required" to ::requireConnectionAttempted,
+            "active-run-isolation" to JourneyRunInvariants::verifyActiveRunIsolation,
+            "streaming" to JourneyRunInvariants::verifyStreaming,
+            "live-streaming" to JourneyRunInvariants::verifyLiveStreaming,
+            "interrupted-sse-refetch" to JourneyRunInvariants::verifyInterruptedSseRefetch,
+            "composer-stop" to JourneyRunInvariants::verifyComposerStop,
+            "terminal-success" to JourneyRunInvariants::verifyTerminal,
+            "terminal-failure" to JourneyRunInvariants::verifyTerminal,
+            "explicit-retry" to JourneyRunInvariants::verifyExplicitRetry,
+            "confirmed-send" to JourneyRunInvariants::verifyConfirmedSend,
+            "markdown-blocks" to ::requireConnectionAttempted,
+            "stale-recoverable" to ::requireConnectionAttempted,
+            "diagnostics-recording" to JourneyDiagnosticsInvariants::verifyDiagnosticsRecording,
+        )
+
     fun verify(
         scenarioName: String,
         telemetry: JsonObject,
     ) {
-        when (scenarioName) {
-            "connection" -> requireConnectionAttempted(telemetry)
-            "session-list-first" -> requireConnectionAttempted(telemetry)
-            "empty-sessions" -> JourneySessionCreationInvariants.verifyEmptySessions(telemetry)
-            "pending-creation" -> JourneySessionCreationInvariants.verifyPendingCreation(telemetry)
-            "session-lifecycle" -> JourneySessionLifecycleInvariants.verifySessionLifecycle(telemetry)
-            "pagination-search" -> requireConnectionAttempted(telemetry)
-            "failed-offline-send" -> JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
-            "offline-session-list" -> {
-                requireConnectionAttempted(telemetry)
-                val paths = recordedRequestPaths(telemetry)
-                check(paths.count { it == "/api/sessions" } >= 2) {
-                    "The client did not retry the Session list while the Gateway was offline."
-                }
-                check(paths.any { it.startsWith("/api/sessions/") }) {
-                    "The client did not attempt to open a Session while the Gateway was offline."
-                }
-            }
-            "markdown-links" -> requireConnectionAttempted(telemetry)
-            "accessibility-controls" -> requireConnectionAttempted(telemetry)
-            "capabilities-additive" -> verifyCapabilitiesAdditive(telemetry)
-            "capabilities-missing-required" -> requireConnectionAttempted(telemetry)
-            else -> verifyAdditionalScenario(scenarioName, telemetry)
-        }
+        scenarioVerifiers[scenarioName]?.invoke(telemetry)
+            ?: error("No journey invariants declared for scenario '$scenarioName'.")
     }
 
-    private fun verifyAdditionalScenario(
-        scenarioName: String,
-        telemetry: JsonObject,
-    ) {
-        when (scenarioName) {
-            "active-run-isolation" -> JourneyRunInvariants.verifyActiveRunIsolation(telemetry)
-            "streaming" -> JourneyRunInvariants.verifyStreaming(telemetry)
-            "live-streaming" -> JourneyRunInvariants.verifyLiveStreaming(telemetry)
-            "interrupted-sse-refetch" -> JourneyRunInvariants.verifyInterruptedSseRefetch(telemetry)
-            "composer-stop" -> JourneyRunInvariants.verifyComposerStop(telemetry)
-            "terminal-success" -> JourneyRunInvariants.verifyTerminal(telemetry)
-            "terminal-failure" -> JourneyRunInvariants.verifyTerminal(telemetry)
-            "explicit-retry" -> JourneyRunInvariants.verifyExplicitRetry(telemetry)
-            "confirmed-send" -> JourneyRunInvariants.verifyConfirmedSend(telemetry)
-            "markdown-blocks" -> requireConnectionAttempted(telemetry)
-            "stale-recoverable" -> requireConnectionAttempted(telemetry)
-            "diagnostics-recording" -> JourneyDiagnosticsInvariants.verifyDiagnosticsRecording(telemetry)
-            else -> error("No journey invariants declared for scenario '$scenarioName'.")
+    private fun verifyOfflineSessionList(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        val paths = recordedRequestPaths(telemetry)
+        check(paths.count { it == "/api/sessions" } >= 2) {
+            "The client did not retry the Session list while the Gateway was offline."
+        }
+        check(paths.any { it.startsWith("/api/sessions/") }) {
+            "The client did not attempt to open a Session while the Gateway was offline."
         }
     }
 

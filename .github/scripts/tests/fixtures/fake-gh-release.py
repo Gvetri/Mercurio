@@ -12,11 +12,16 @@ state = root / "release.json"
 arguments = sys.argv[1:]
 payload = None
 if arguments[0] == "api":
-    assert arguments == ["api", "--method", "POST", "repos/Gvetri/hermes-native-client/releases", "--input", "-"]
-    payload = json.load(sys.stdin)
-    assert set(payload) == {"tag_name", "target_commitish", "name", "body", "draft", "prerelease", "make_latest"}
-    assert payload["draft"] is True and payload["prerelease"] is True and payload["make_latest"] == "false"
-    operation, tag = "create", payload["tag_name"]
+    if arguments[1:3] == ["--method", "DELETE"]:
+        release = json.loads(state.read_text())
+        operation, tag = "delete", release["tag_name"]
+        assert arguments == ["api", "--method", "DELETE", f"repos/Gvetri/hermes-native-client/releases/{release['id']}"]
+    else:
+        assert arguments == ["api", "--method", "POST", "repos/Gvetri/hermes-native-client/releases", "--input", "-"]
+        payload = json.load(sys.stdin)
+        assert set(payload) == {"tag_name", "target_commitish", "name", "body", "draft", "prerelease", "make_latest"}
+        assert payload["draft"] is True and payload["prerelease"] is True and payload["make_latest"] == "false"
+        operation, tag = "create", payload["tag_name"]
 else:
     assert arguments[0] == "release"
     operation, tag = arguments[1:3]
@@ -51,7 +56,7 @@ elif operation == "upload":
     release = json.loads(state.read_text())
     assert release["draft"] is True
     store = root / "assets"
-    store.mkdir()
+    store.mkdir(exist_ok=True)
     for filename in arguments[3:arguments.index("--repo")]:
         source = Path(filename)
         shutil.copyfile(source, store / source.name)
@@ -83,5 +88,8 @@ elif operation == "edit":
     release = json.loads(state.read_text())
     release.update(draft=False, prerelease=True, name=value("--title"))
     state.write_text(json.dumps(release))
+elif operation == "delete":
+    assert state.read_text() and json.loads(state.read_text())["draft"] is True
+    state.unlink()
 else:
     raise SystemExit("Unexpected gh fixture operation")

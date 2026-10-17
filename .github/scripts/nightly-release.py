@@ -55,47 +55,60 @@ def validate_tip(sha, clock=time):
     before = {run["id"] for run in pages(path, "workflow_runs", discovery_deadline, clock)}
     started = datetime.fromtimestamp(clock.time(), timezone.utc).replace(microsecond=0)
     dispatch_validation()
+
+    def dispatched(runs):
+        return {run["id"]: run for run in runs if run["id"] not in before
+                and run.get("event") == "workflow_dispatch"
+                and run.get("head_branch") == "main" and run.get("head_sha") == sha
+                and datetime.fromisoformat(run["created_at"]) >= started}
+
+    candidates = {}
+    while clock.monotonic() < discovery_deadline and not candidates:
+        candidates.update(dispatched(pages(path, "workflow_runs", discovery_deadline, clock)))
+        if not candidates:
+            clock.sleep(min(interval, max(0, discovery_deadline - clock.monotonic())))
+    require(candidates, "Dispatched validation did not appear within the discovery bound")
+    for run_id in sorted(candidates):
+        print(f"Validating main tip {sha}: run {run_id}, attempt {candidates[run_id]['run_attempt']}", flush=True)
     selected = None
-    while clock.monotonic() < discovery_deadline:
-        runs = pages(path, "workflow_runs", discovery_deadline, clock)
-        candidates = [run for run in runs if run["id"] not in before
-                      and run.get("event") == "workflow_dispatch"
-                      and run.get("head_branch") == "main" and run.get("head_sha") == sha
-                      and datetime.fromisoformat(run["created_at"]) >= started]
-        require(len(candidates) <= 1, "Dispatched validation is ambiguous; no Nightly was published")
-        if candidates:
-            selected = candidates[0]
-            break
-        clock.sleep(min(interval, max(0, discovery_deadline - clock.monotonic())))
-    require(selected is not None, "Dispatched validation did not appear within the discovery bound")
+    while clock.monotonic() < deadline and selected is None:
+        if clock.monotonic() < discovery_deadline:
+            candidates.update(dispatched(pages(path, "workflow_runs", discovery_deadline, clock)))
+        identities = sorted(candidates)
+        states = [api_get(f"actions/runs/{run_id}") for run_id in identities]
+        for candidate_id, state in zip(identities, states):
+            require(state.get("id") == candidate_id and state.get("head_sha") == sha
+                    and state.get("run_attempt") == candidates[candidate_id]["run_attempt"]
+                    and state.get("event") == "workflow_dispatch",
+                    "Dispatched validation identity changed")
+            require(state.get("status") in {"queued", "in_progress", "waiting", "pending", "requested", "completed"},
+                    "Unknown validation state; no Nightly was published")
+        completed = [state for state in states if state.get("status") == "completed"]
+        succeeded = [state for state in completed if state.get("conclusion") == "success"]
+        if succeeded:
+            selected = max(succeeded, key=lambda state: (state["created_at"], state["id"]))
+        elif len(completed) == len(states):
+            selected = max(completed, key=lambda state: (state["created_at"], state["id"]))
+        else:
+            clock.sleep(min(interval, max(0, deadline - clock.monotonic())))
+    if selected is None:
+        raise ReleaseError("Dispatched validation did not finish within the time bound")
     run_id, attempt = selected["id"], selected["run_attempt"]
     require(type(run_id) is int and run_id > 0 and type(attempt) is int and attempt > 0,
             "Invalid dispatched validation identity")
     os.environ.update(RELEASE_SOURCE_SHA=sha, RELEASE_VALIDATION_RUN_ID=str(run_id),
                       RELEASE_VALIDATION_RUN_ATTEMPT=str(attempt))
-    print(f"Validating main tip {sha}: run {run_id}, attempt {attempt}", flush=True)
-    while clock.monotonic() < deadline:
-        run = api_get(f"actions/runs/{run_id}")
-        require(run.get("id") == run_id and run.get("head_sha") == sha
-                and run.get("run_attempt") == attempt and run.get("event") == "workflow_dispatch",
-                "Dispatched validation identity changed")
-        status = run.get("status")
-        if status == "completed":
-            if run.get("conclusion") in {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}:
-                verify_dispatched_identity(run, run_id, attempt, sha)
-                write_outputs({
-                    "validation_failed": "true", "failed_validation_run_id": run_id,
-                    "failed_validation_run_attempt": attempt, "failed_validation_sha": sha,
-                })
-            require(run.get("conclusion") == "success",
-                    f"Dispatched validation {run_id} did not succeed; no Nightly was published")
-            evidence = POLICY["verify_source"]()
-            require(clock.monotonic() < deadline, "Dispatched validation did not finish within the time bound")
-            return evidence
-        require(status in {"queued", "in_progress", "waiting", "pending", "requested"},
-                "Unknown validation state; no Nightly was published")
-        clock.sleep(min(interval, max(0, deadline - clock.monotonic())))
-    raise ReleaseError("Dispatched validation did not finish within the time bound")
+    if selected.get("conclusion") != "success":
+        if selected.get("conclusion") in {"failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}:
+            verify_dispatched_identity(selected, run_id, attempt, sha)
+            write_outputs({
+                "validation_failed": "true", "failed_validation_run_id": run_id,
+                "failed_validation_run_attempt": attempt, "failed_validation_sha": sha,
+            })
+        raise ReleaseError(f"Dispatched validation {run_id} did not succeed; no Nightly was published")
+    evidence = POLICY["verify_source"]()
+    require(clock.monotonic() < deadline, "Dispatched validation did not finish within the time bound")
+    return evidence
 
 
 def write_outputs(values):
@@ -184,10 +197,10 @@ def prepare(clock=time):
     if existing:
         require(len(existing) == 1, "Multiple Nightlies already identify this source")
         release = existing[0]
-        require(release.get("draft") is False, "Existing Nightly draft needs operator recovery")
         require(release.get("prerelease") is True and release.get("name") == "Nightly"
                 and release.get("target_commitish") == sha, "Existing Nightly identity is inconsistent")
-        return {"publish": "false", "source_sha": sha}
+        if release.get("draft") is not True:
+            return {"publish": "false", "source_sha": sha}
     code = POLICY["generation_code"]()
     require(code > max((code for code, _, _ in history), default=1), "Version code is not newer; start a new workflow run")
     evidence = validate_tip(sha, clock)
@@ -244,6 +257,18 @@ def gh_release(arguments):
     return gh_command(["release", *arguments, "--repo", REPOSITORY])
 
 
+def discard_retained_draft(retained, sha):
+    require(retained.get("draft") is True, "This source already has a published Nightly")
+    require(retained.get("prerelease") is True and retained.get("name") == "Nightly"
+            and retained.get("target_commitish") == sha, "Retained Nightly draft identity is inconsistent")
+    release_id = retained.get("id")
+    require(type(release_id) is int and release_id > 0, "Retained Nightly draft identity is inconsistent")
+    print(f"Discarded retained Nightly draft {release_id} ({retained['tag_name']})", flush=True)
+    gh_command(["api", "--method", "DELETE", f"repos/{REPOSITORY}/releases/{release_id}"])
+    require(not any(source == sha for _, source, _ in release_history()),
+            "Retained Nightly draft survived deletion")
+
+
 def publish(directory, certificate, failure_context=None):
     POLICY["verify_generation"]()
     evidence = POLICY["verify_source"]()
@@ -251,11 +276,16 @@ def publish(directory, certificate, failure_context=None):
     code = POLICY["generation_code"]()
     metadata = verify_artifact(directory, certificate, evidence, code)
     sha = evidence["source_sha"]
-    history = release_history()
-    require(not any(source == sha for _, source, _ in history), "This source already has a Nightly or a draft")
-    require(code > max((value for value, _, _ in history), default=1), "Nightly version is not newer than release history")
     tag = f"nightly-{code}-{sha}"
     require(api_get(f"git/matching-refs/tags/{tag}") == [], "Nightly tag already exists; operator recovery is required")
+    history = release_history()
+    retained = [release for _, source, release in history if source == sha]
+    require(len(retained) <= 1, "Multiple Nightlies already identify this source")
+    require(code > max((value for value, _, _ in history), default=1), "Nightly version is not newer than release history")
+    if retained:
+        discard_retained_draft(retained[0], sha)
+        history = release_history()
+    require(not any(source == sha for _, source, _ in history), "This source already has a Nightly or a draft")
     body = POLICY["nightly_notes"](metadata)
 
     def read_release(draft, expected_id):
