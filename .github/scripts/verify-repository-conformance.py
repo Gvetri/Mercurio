@@ -247,7 +247,9 @@ def verify_workflow_declaration():
     concurrency = text.split("\nconcurrency:\n", 1)[-1].split("\njobs:\n", 1)[0]
     expected_group = (
         "  group: quality-gate-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' "
-        "&& format('dispatch-{0}', github.run_id) || github.event.pull_request.number || github.ref }}"
+        "&& format('dispatch-{0}', github.run_id) || (github.event_name == 'pull_request' "
+        "&& github.event.action == 'labeled' && github.event.label.name != 'run-maestro' "
+        "&& format('noop-{0}', github.run_id)) || github.event.pull_request.number || github.ref }}"
     )
     if expected_group not in concurrency.splitlines():
         violations.append(
