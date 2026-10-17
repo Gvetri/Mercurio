@@ -528,9 +528,29 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual([], self.api.deletes)
         self.releases[0]["draft"] = True
         result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("true", values["publish"])
+        self.assertEqual(f"nightly-7002-{self.selected}", values["tag"])
+        self.assertEqual([], self.api.deletes)
+
+    def test_a_malformed_retained_draft_still_needs_operator_recovery(self):
+        self.releases.append({"id": 1, "tag_name": f"nightly-6001-{self.selected}", "draft": True})
+        result, values = self.prepare()
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("draft", result.stderr)
+        self.assertIn("Existing Nightly identity is inconsistent", result.stderr)
         self.assertEqual({}, values)
+        self.assertEqual([], self.api.posts)
+        self.assertEqual([], self.api.deletes)
+
+    def test_a_draft_for_another_source_does_not_block_the_nightly(self):
+        self.releases.append({
+            "id": 1, "tag_name": f"nightly-6001-{self.old}", "name": "Nightly",
+            "prerelease": True, "draft": True, "target_commitish": self.old,
+        })
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("true", values["publish"])
+        self.assertEqual([], self.api.deletes)
 
     def test_codes_increase_across_full_reruns_and_new_runs(self):
         for number, attempt, expected in (("7", "2", "7002"), ("7", "3", "7003"), ("8", "1", "8001")):
@@ -649,25 +669,65 @@ class NightlyPreparationTest(unittest.TestCase):
     def test_waits_for_delayed_discovery(self):
         endpoint = f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"
         responses = [[], [], [self.selected_run]]
-        self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0)}
+        self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0) if len(responses) > 1 else responses[0]}
         result, values = self.prepare()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("123", values["validation_run_id"])
 
-    def test_historical_and_ambiguous_runs_are_not_substitutes_for_the_dispatch(self):
-        endpoint = f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"
+    def test_historical_runs_are_not_substitutes_for_the_dispatch(self):
         historical = {**self.selected_run, "created_at": "2026-01-01T00:00:00Z"}
         self.runs.append(historical)
         result, values = self.prepare()
         self.assertNotEqual(0, result.returncode)
         self.assertIn("did not appear", result.stderr)
         self.assertEqual({}, values)
-        responses = [[], [historical, {**historical, "id": 124}]]
-        self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0)}
+
+    def twin_dispatch(self, twin):
+        prefix = f"/repos/{self.repository}"
+        self.routes.update({
+            f"{prefix}/actions/runs/124": twin,
+            f"{prefix}/actions/runs/124/attempts/1": twin,
+            f"{prefix}/actions/runs/124/attempts/1/jobs": {"total_count": len(self.jobs), "jobs": self.jobs},
+        })
+
+        def dispatch(payload):
+            self.selected_run["created_at"] = "2026-01-01T00:00:00Z"
+            twin.setdefault("created_at", "2026-01-01T00:00:00Z")
+            self.runs[:] = [self.selected_run, twin]
+            return 204
+        self.runs.clear()
+        self.routes[("POST", f"{prefix}/actions/workflows/quality-gate.yml/dispatches")] = dispatch
+
+    def test_twin_dispatches_select_the_newest_successful_completed_run(self):
+        for conclusions, expected in ((("success", "cancelled"), "123"), (("cancelled", "success"), "124"),
+                                      (("success", "success"), "124")):
+            with self.subTest(conclusions=conclusions):
+                twin = {**self.selected_run, "id": 124, "conclusion": conclusions[1]}
+                self.selected_run["conclusion"] = conclusions[0]
+                self.twin_dispatch(twin)
+                result, values = self.prepare()
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("true", values["publish"])
+                self.assertEqual(expected, values["validation_run_id"])
+
+    def test_the_newest_successful_twin_wins_even_with_a_later_created_at(self):
+        twin = {**self.selected_run, "id": 124, "conclusion": "success", "created_at": "2026-01-01T00:01:00Z"}
+        self.twin_dispatch(twin)
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("124", values["validation_run_id"])
+
+    def test_unsuccessful_twin_dispatches_fail_closed_on_the_newest_completed_run(self):
+        twin = {**self.selected_run, "id": 124, "conclusion": "cancelled"}
+        self.selected_run["conclusion"] = "failure"
+        self.twin_dispatch(twin)
         result, values = self.prepare()
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("ambiguous", result.stderr)
-        self.assertEqual({}, values)
+        self.assertIn("Dispatched validation 124 did not succeed", result.stderr)
+        self.assertEqual({
+            "validation_failed": "true", "failed_validation_run_id": "124",
+            "failed_validation_run_attempt": "1", "failed_validation_sha": self.selected,
+        }, values)
 
     def test_old_creation_time_or_moved_dispatch_source_cannot_match(self):
         endpoint = f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"
@@ -818,7 +878,6 @@ class NightlyPreparationTest(unittest.TestCase):
         (self.provider / "fail-upload").touch()
         self.assertNotEqual(0, self.publish().returncode)
         before = {path.relative_to(self.provider): path.read_bytes() for path in self.provider.rglob("*") if path.is_file()}
-        self.assertNotEqual(0, self.publish().returncode)
         self.report_fixture()
         result = self.report()
         self.assertEqual(0, result.returncode, result.stderr)
@@ -1051,7 +1110,7 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual(["create"], (self.provider / "operations").read_text().splitlines())
         self.assertIs(True, json.loads(self.release_file.read_text())["draft"])
 
-    def test_partial_upload_leaves_a_draft_and_retry_does_not_write_again(self):
+    def test_partial_upload_leaves_a_draft_that_a_retry_replaces(self):
         self.signed_publication_fixture()
         (self.provider / "fail-upload").touch()
         result = self.publish()
@@ -1070,11 +1129,16 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual("no", observation["tag_exists"])
         self.assertEqual("no", observation["orphan_tag"])
         self.assertIn(f"/repos/{self.repository}/releases/1", self.api.requests)
-        before = self.release_file.read_bytes()
         (self.provider / "fail-upload").unlink()
-        self.assertNotEqual(0, self.publish().returncode)
-        self.assertEqual(before, self.release_file.read_bytes())
-        self.assertEqual(["create", "upload"], (self.provider / "operations").read_text().splitlines())
+        result = self.publish()
+        self.assertEqual(0, result.returncode, result.stderr)
+        release = json.loads(self.release_file.read_text())
+        self.assertIs(False, release["draft"])
+        self.assertEqual(self.tag, release["tag_name"])
+        self.assertEqual(["create", "upload", "delete", "create", "upload", "download", "edit"],
+                         (self.provider / "operations").read_text().splitlines())
+        self.assertEqual({"hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json"},
+                         {item["name"] for item in release["assets"]})
 
     def test_download_mismatch_never_publishes_the_draft(self):
         self.signed_publication_fixture()
@@ -1084,6 +1148,21 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertIn("checksum mismatch", result.stderr)
         self.assertIs(True, json.loads(self.release_file.read_text())["draft"])
         self.assertEqual(["create", "upload", "download"], (self.provider / "operations").read_text().splitlines())
+
+    def test_a_retained_draft_from_an_older_version_is_replaced_on_retry(self):
+        self.signed_publication_fixture()
+        older = f"nightly-6001-{self.selected}"
+        self.release_file.write_text(json.dumps({
+            "id": 1, "tag_name": older, "target_commitish": self.selected,
+            "name": "Nightly", "prerelease": True, "draft": True, "assets": [],
+        }))
+        result = self.publish()
+        self.assertEqual(0, result.returncode, result.stderr)
+        release = json.loads(self.release_file.read_text())
+        self.assertIs(False, release["draft"])
+        self.assertEqual(self.tag, release["tag_name"])
+        self.assertEqual(["delete", "create", "upload", "download", "edit"],
+                         (self.provider / "operations").read_text().splitlines())
 
     def test_required_evidence_and_metadata_are_checked_before_any_write(self):
         self.signed_publication_fixture()
