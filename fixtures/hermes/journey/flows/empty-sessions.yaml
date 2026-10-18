@@ -49,6 +49,9 @@ name: empty-sessions
 - assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
 - takeScreenshot: empty-sessions-05-removal-confirmation
 - tapOn: "Cancel"
-- assertVisible: "Untitled Session"
+- assertVisible: "Change Gateway credential"
 - assertNotVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- takeScreenshot: empty-sessions-05-removal-cancelled-on-settings
+- tapOn: "Back to Sessions"
+- assertVisible: "Untitled Session"
 - takeScreenshot: empty-sessions-06-removal-cancelled
