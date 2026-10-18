@@ -965,7 +965,8 @@ class QualityGateConfigurationTest {
         val architectureJobHeader =
             "  architecture_check:\n" +
                 "    name: architecture-check\n" +
-                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}\n" +
+                "    needs: [ui_paths]\n" +
+                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}\n" +
                 "    runs-on: ubuntu-latest\n" +
                 "    timeout-minutes: 30\n"
         assertTrue(
@@ -1059,7 +1060,7 @@ class QualityGateConfigurationTest {
             "The detekt job must run for a ready in-repository pull request and every non-pull-request run.",
             detektJob.contains(
                 "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || " +
-                    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}",
+                    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}",
             ),
         )
         assertTrue(
@@ -1328,6 +1329,79 @@ class QualityGateConfigurationTest {
             ) &&
                 workflow.contains("UI path detection must report true or false for this run"),
         )
+    }
+
+    @Test
+    fun docs_only_detection_skips_the_heavy_lanes_for_a_documentation_head() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val documentation = repositoryRoot.resolve("docs/quality-gates.md").readText()
+        val routing = repositoryRoot.resolve("docs/protected-main-workflow.md").readText()
+        val uiPathsJob = workflow.substringAfter("  ui_paths:").substringBefore("  api24_instrumentation:")
+
+        assertTrue(
+            "The decision job must expose the docs-only decision to the heavy lanes and the aggregate.",
+            uiPathsJob.contains("      docs_only_changed: \${{ steps.docs_only.outputs.docs_only }}\n"),
+        )
+        assertTrue(
+            "The docs-only classification must enumerate every changed file with the pinned paths-filter revision.",
+            Regex("uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad")
+                .findAll(uiPathsJob)
+                .count() == 2 &&
+                uiPathsJob.contains("          list-files: json\n") &&
+                uiPathsJob.contains("            all:\n              - '**'\n"),
+        )
+        val classifier = uiPathsJob.substringAfter("      - name: Classify the docs-only decision\n").substringBefore("      - name: ")
+        assertTrue(
+            "The classifier must accept only Markdown outside the control plane or files under docs/ and fail closed otherwise.",
+            classifier.contains("if \"/.github/\" in \"/\" + path:") &&
+                classifier.contains("path.startswith(\"docs/\")") &&
+                classifier.contains("path.endswith(\".md\")") &&
+                classifier.contains("bool(changed_files) and all(") &&
+                classifier.contains("failing closed to the full gate"),
+        )
+
+        val heavyGate =
+            "    needs: [ui_paths]\n" +
+                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}\n"
+        listOf(
+            "formatting",
+            "static_analysis",
+            "detekt",
+            "unit_tests",
+            "fixture_descriptor",
+            "fixture_lifecycle",
+            "fixture_contract",
+            "android_build",
+            "architecture_check",
+            "coverage_mutation",
+            "compose_test",
+        ).forEach { job ->
+            assertTrue(
+                "The $job lane must skip an unlabeled docs-only pull request and keep the run-maestro precedence.",
+                workflow.contains("  $job:\n") && workflow.substringAfter("  $job:\n").substringBefore("runs-on:").contains(heavyGate),
+            )
+        }
+        val aggregate = workflow.substringAfter("  quality-gate:\n")
+        assertTrue(
+            "The aggregate must read the docs-only decision and fail closed on an unreadable one.",
+            aggregate.contains("DOCS_ONLY_CHANGED: \${{ needs.ui_paths.outputs.docs_only_changed }}") &&
+                aggregate.contains("Docs-only detection must report true or false for this run"),
+        )
+        assertTrue(
+            "The aggregate must expect the heavy lanes to skip exactly on an unlabeled docs-only head.",
+            aggregate.contains(
+                "if [ \"\$docs_only_decision\" = true ] && [[ \"\${EVENT_LABELS:-}\" != *'\"run-maestro\"'* ]]; then\n" +
+                    "                expected_state=skipped",
+            ),
+        )
+        listOf(
+            "`docs/**`",
+            "outside `.github/`",
+            "`run-maestro` label keeps precedence",
+        ).forEach { declared ->
+            assertTrue("quality-gates.md must declare the docs-only rule $declared.", documentation.contains(declared))
+            assertTrue("protected-main-workflow.md must declare the docs-only rule $declared.", routing.contains(declared))
+        }
     }
 
     @Test

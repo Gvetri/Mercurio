@@ -56,6 +56,7 @@ than the gate it mirrors.
 | --- | --- | --- |
 | Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `api24-instrumentation`, `maestro-journeys`, unless the pull request carries the `run-maestro` label or modifies a declared UI path (next row) |
 | Ready in-repository pull request labeled `run-maestro` or modifying a declared UI path | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | None |
+| Ready in-repository pull request whose every changed file is documentation | `draft-validation`, `conformance`, `commit-message`, `fork-guard`, `ui-paths` | Every heavy check and both emulator suites, unless the pull request carries the `run-maestro` label |
 | Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard`, `ui-paths` | Every other check |
 | External-fork pull request | `fork-guard`, `ui-paths` | Every other check |
 | Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
@@ -70,6 +71,16 @@ reaches the journey lane. A pull request with neither the label nor a modified U
 suites as `skipped`, and the aggregate requires exactly that routing; the label on a draft or an
 external-fork pull request starts no validation, and its aggregate still reports the decision that
 exact head holds.
+
+A documentation-only pull request takes a fast path from the opened event. When the `ui-paths` job's
+changed-file answer shows that every changed file of the head is a Markdown file outside `.github/`
+or a file under `docs/**`, the heavy lanes report `skipped` and the aggregate requires exactly that
+routing; the `run-maestro` label keeps precedence and starts the heavy and emulator lanes on a
+documentation-only head too. The classification is deliberately conservative — code, resources,
+build files, and especially `.github/**` route the full gate — and a push, a nightly schedule, and a
+manual dispatch never consult the decision, so the Nightly signing chain always validates the exact
+`main` tip with the complete gate. An unreadable changed-file answer fails closed: the detector job
+fails, the heavy lanes run, and the aggregate reports the failure.
 
 On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`, or
 `maestro-journeys` does not succeed, the `create-nightly-failure-issue` job creates or updates one
