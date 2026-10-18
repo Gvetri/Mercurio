@@ -41,8 +41,8 @@ name: empty-sessions
     timeout: 30000
 - takeScreenshot: empty-sessions-04-unnamed-result
 - tapOn: "Back to Sessions"
-- tapOn: "More options"
-- assertVisible: "Change credential"
+- tapOn: "Settings"
+- assertVisible: "Change Gateway credential"
 - assertVisible: "Local diagnostics"
 - assertVisible: "Remove Gateway Connection"
 - tapOn: "Remove Gateway Connection"

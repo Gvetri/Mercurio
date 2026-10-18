@@ -57,11 +57,20 @@ Press **Verify Gateway Connection**. The client verifies authentication and the 
 manifest first. While it works, it shows **Verifying Gateway connection…**. The credential is
 saved securely on this device after verification: it is encrypted with an AndroidKeyStore key and
 stored in application-private storage that is excluded from Android backup, so you can reopen the
-connection without retyping the credential, and **Change credential** replaces it. The client shows
+connection without retyping the credential, and **Change Gateway credential** in **Settings**
+replaces it. The client shows
 **Gateway verified.** / **Saving credential securely…** while the secure save finishes and then
 reports **Connected** / **Gateway connected**. If the secure save fails, it keeps your inputs,
 reports **Could not save the Gateway credential securely. Try again.** and offers **Try again**,
 which verifies and saves the connection again. The credential is never stored in plain text.
+
+## Settings
+
+The **Settings** button in the Session list header opens the Settings surface. It holds the
+installed app version, the **Run status notifications** opt-in, **Local diagnostics**,
+**Change Gateway credential**, and **Remove Gateway Connection**. Opening Settings keeps the
+Session list in memory: returning with **Back to Sessions** restores your search query and the
+loaded Sessions.
 
 **Remove Gateway Connection** removes the saved endpoint and credential from this device. It is a
 local removal only: the client does not delete or cancel remote Sessions and Runs.
@@ -96,7 +105,8 @@ submission preserves your draft so you can **Try again**.
 action you take; the client never retries silently, and it refuses a response that reuses a failed
 Run identity (**Retry response reused the failed Run identity.**).
 
-**Notifications (optional).** **Run status notifications** report terminal Run status only. If
+**Notifications (optional).** In **Settings**, **Run status notifications** report terminal Run
+status only. If
 Android has blocked them, the client states that notifications are blocked and points you to the
 Android settings.
 

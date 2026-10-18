@@ -1,0 +1,57 @@
+appId: org.hermesnative.client
+name: settings
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- assertVisible: "Alpha Session"
+- assertNotVisible: "Local diagnostics"
+- tapOn: "Search Sessions"
+- inputText: "Alpha"
+- hideKeyboard
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: ".*App version.*"
+    timeout: 30000
+- takeScreenshot: settings-surface
+- assertVisible: "Run status notifications"
+- assertVisible: "Local diagnostics"
+- assertVisible: "Change Gateway credential"
+- assertVisible: "Remove Gateway Connection"
+- assertVisible: "Back to Sessions"
+- tapOn: "Change Gateway credential"
+- assertVisible: "Verify Gateway Connection"
+- assertVisible: "The previous connection is unchanged."
+- takeScreenshot: settings-credential-rotation
+- tapOn: "Cancel"
+- assertVisible: ".*App version.*"
+- tapOn: "Local diagnostics"
+- extendedWaitUntil:
+    visible: "Diagnostics stay on this device"
+    timeout: 30000
+- takeScreenshot: settings-local-diagnostics
+- tapOn: "Back to Sessions"
+- assertVisible: ".*App version.*"
+- tapOn: "Remove Gateway Connection"
+- assertVisible: "Remove Gateway Connection?"
+- assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- takeScreenshot: settings-remove-confirmation
+- tapOn: "Cancel"
+- assertVisible: ".*App version.*"
+- tapOn: "Back to Sessions"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- assertVisible: "Alpha Session"
+- assertVisible: "Create Session"
+- takeScreenshot: settings-returned-to-sessions

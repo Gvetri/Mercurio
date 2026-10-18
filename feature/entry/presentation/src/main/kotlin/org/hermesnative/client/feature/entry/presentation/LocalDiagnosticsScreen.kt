@@ -45,7 +45,13 @@ internal fun LocalDiagnosticsContent(
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    DiagnosticsBackHandler { onEvent(EntryUiEvent.CloseLocalDiagnosticsClicked) }
+    DiagnosticsBackHandler {
+        if (state.isClearConfirmationOpen) {
+            onEvent(EntryUiEvent.CancelClearDiagnosticsClicked)
+        } else {
+            onEvent(EntryUiEvent.CloseLocalDiagnosticsClicked)
+        }
+    }
     Column(
         modifier =
             modifier

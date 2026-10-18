@@ -55,6 +55,58 @@ class JourneyVerifierTest {
     }
 
     @Test
+    fun settings_verifier_requires_a_session_read_and_rejects_any_mutation() {
+        val telemetry =
+            buildJsonObject {
+                put(
+                    "requests",
+                    buildJsonArray {
+                        listOf(
+                            "GET" to "/v1/capabilities",
+                            "GET" to "/api/sessions",
+                        ).forEach { (method, path) ->
+                            add(
+                                buildJsonObject {
+                                    put("method", method)
+                                    put("path", path)
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        JourneyInvariants.verify("settings", telemetry)
+
+        val mutated =
+            buildJsonObject {
+                put(
+                    "requests",
+                    buildJsonArray {
+                        listOf(
+                            "GET" to "/v1/capabilities",
+                            "GET" to "/api/sessions",
+                            "POST" to "/api/sessions",
+                        ).forEach { (method, path) ->
+                            add(
+                                buildJsonObject {
+                                    put("method", method)
+                                    put("path", path)
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+        val error =
+            runCatching { JourneyInvariants.verify("settings", mutated) }
+                .exceptionOrNull()
+        checkNotNull(error) { "The Settings verifier accepted a Session mutation." }
+        check(error.message!!.contains("mutated Gateway state")) {
+            "Unexpected Settings verifier failure: ${error.message}"
+        }
+    }
+
+    @Test
     fun every_committed_journey_scenario_declares_its_invariants() {
         val scenarioFiles =
             scenariosDir.listFiles().orEmpty().filter { file -> file.isFile && file.extension == "json" }

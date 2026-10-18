@@ -159,6 +159,12 @@ sealed interface EntryUiEvent {
         val runId: RunId,
     ) : Run
 
+    sealed interface Settings : EntryUiEvent
+
+    data object OpenSettingsClicked : Settings
+
+    data object CloseSettingsClicked : Settings
+
     sealed interface Diagnostics : EntryUiEvent
 
     data object OpenLocalDiagnosticsClicked : Diagnostics
@@ -230,6 +236,8 @@ data class EntryUiState(
     val isConnected: Boolean = false,
     val errorCategory: EntryErrorCategory? = null,
     val isRemoveConfirmationOpen: Boolean = false,
+    val isSettingsOpen: Boolean = false,
+    val clientVersion: String = "unknown",
     val sessionList: SessionListUiState? = null,
     val runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
@@ -410,6 +418,7 @@ class EntryStateHolder(
             is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
             is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
             is EntryUiEvent.Run -> dispatchRunEvent(event)
+            is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
             is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
         }
     }
@@ -476,6 +485,13 @@ class EntryStateHolder(
             is EntryUiEvent.ConfirmDiscardUnresolvedSendClicked -> confirmDiscardUnresolvedSend()
             is EntryUiEvent.CancelDiscardUnresolvedSendClicked -> cancelDiscardUnresolvedSend()
             is EntryUiEvent.RetryRunClicked -> retryRun(event.runId)
+        }
+    }
+
+    private fun dispatchSettingsEvent(event: EntryUiEvent.Settings) {
+        when (event) {
+            is EntryUiEvent.OpenSettingsClicked -> openSettings()
+            is EntryUiEvent.CloseSettingsClicked -> closeSettings()
         }
     }
 
@@ -767,11 +783,13 @@ internal fun EntryState.toUiState(): EntryUiState =
             endpoint = configuredEndpoint.orEmpty(),
             bearerCredential = configuredCredential.orEmpty(),
             isGatewayConnectionConfigured = true,
+            clientVersion = clientVersion,
         )
     } else {
         EntryUiState(
             title = "Connect to a Hermes Gateway",
             supportingText = "Use an existing compatible gateway. This app does not run Hermes on your device.",
             actionLabel = "Add Gateway Connection",
+            clientVersion = clientVersion,
         )
     }

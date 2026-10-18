@@ -44,11 +44,13 @@ name: connection
     visible: "Sessions"
     timeout: 30000
 - takeScreenshot: connection-sessions-after-restart
-- tapOn: "More options"
+- tapOn: "Settings"
 - tapOn: "Remove Gateway Connection"
 - assertVisible: "Remove Gateway Connection?"
 - assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
 - takeScreenshot: connection-remove-confirm
 - tapOn: "Cancel"
+- assertVisible: ".*App version.*"
+- tapOn: "Back to Sessions"
 - assertVisible: "Sessions"
 - takeScreenshot: connection-remove-cancelled

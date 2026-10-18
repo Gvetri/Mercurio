@@ -15,7 +15,7 @@ name: diagnostics-recording
     timeout: 30000
 - assertVisible: "Alpha Session"
 - takeScreenshot: diagnostics-before-opening
-- tapOn: "More options"
+- tapOn: "Settings"
 - tapOn: "Local diagnostics"
 - assertVisible: "Diagnostics stay on this device\\..*"
 - extendedWaitUntil:
