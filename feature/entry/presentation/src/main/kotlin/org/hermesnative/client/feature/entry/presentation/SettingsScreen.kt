@@ -25,10 +25,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
-/**
- * The Settings surface: app build information and the global Gateway,
- * notification and diagnostics controls that do not belong on the Session list.
- */
 @Composable
 internal fun SettingsContent(
     state: EntryUiState,

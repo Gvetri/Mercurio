@@ -111,7 +111,7 @@ Markdown rendering contracts.
 | `empty_session_list` | Session list | Valid empty Gateway response |
 | `populated_session_list` | Session list | Pinned and unpinned server metadata |
 | `session_list_unavailable` | Session list | Stale data, unavailable state, and retry |
-| `session_list_menu_open` | Session list | Screen administration menu open over the list |
+| `session_list_settings_open` | Session list | The Settings surface open over the list |
 | `session_list_row_menu_open` | Session list | Row action menu open over the list |
 | `gateway_removal_confirmation` | Session list | D-02 Gateway-removal confirmation dialog |
 | `create_session` | Session list | In-memory title draft before confirmation |

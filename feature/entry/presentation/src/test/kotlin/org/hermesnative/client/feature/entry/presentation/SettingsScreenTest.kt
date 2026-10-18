@@ -237,6 +237,26 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun system_back_cancels_removal_confirmation_before_closing_settings() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).copy(isRemoveConfirmationOpen = true),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.runOnUiThread {
+            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeTestRule.waitForIdle()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.CancelRemoveGatewayConnectionClicked), events)
+    }
+
+    @Test
     fun settings_controls_remain_reachable_at_twice_the_font_scale() {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {

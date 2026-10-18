@@ -150,7 +150,7 @@ verification, a Session-list load, or a Run submission succeeded, failed, or was
 | --- | --- | --- |
 | **Invalid Gateway address. Enter one HTTPS Gateway endpoint.** | The endpoint is not a single valid HTTPS address. | Correct the endpoint. Only an `https://` address is accepted. |
 | **Secure connection failed. Check the Gateway certificate and hostname.** | The TLS connection could not be trusted, or the hostname does not match the certificate. | Use the certificate the Gateway actually serves, and check that the endpoint host matches it. |
-| **Authentication failed. Check the Gateway credential.** | The Gateway rejected the bearer credential. | Retype the credential carefully; if it was saved, use **Change credential** to replace it. |
+| **Authentication failed. Check the Gateway credential.** | The Gateway rejected the bearer credential. | Retype the credential carefully; if it was saved, use **Change Gateway credential** to replace it. |
 | **Required feature unavailable. This Gateway does not support the client contract.** | The Gateway does not expose the capability manifest the client requires. | Connect to a compatible Gateway. This client cannot add a Gateway feature. |
 | **Gateway request failed. Try again.** | A request failed after the connection was established. | Retry the action. Use **Refresh** to reload the Session list, and verify the Gateway if it persists. |
 
