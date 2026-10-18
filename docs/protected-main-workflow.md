@@ -165,3 +165,5 @@ the workflow contracts, and `.github/scripts/tests/test_protected_main.py` and
 check, and the conformance check. Both suites run in the `architecture-check` job, so a change to the
 workflow that contradicts a documented rule fails the gate. See
 [Quality gates](quality-gates.md) for the declared checks and thresholds.
+
+A probe pull request may re-fire non-informative re-trigger events to verify this routing end to end; probe pull requests are closed without merging.
