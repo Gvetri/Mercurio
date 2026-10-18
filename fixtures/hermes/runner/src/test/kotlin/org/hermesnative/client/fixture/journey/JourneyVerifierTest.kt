@@ -56,87 +56,30 @@ class JourneyVerifierTest {
 
     @Test
     fun settings_verifier_requires_a_session_read_and_rejects_any_mutation() {
-        val telemetry =
-            buildJsonObject {
-                put(
-                    "requests",
-                    buildJsonArray {
-                        listOf(
-                            "GET" to "/v1/capabilities",
-                            "GET" to "/api/sessions",
-                        ).forEach { (method, path) ->
-                            add(
-                                buildJsonObject {
-                                    put("method", method)
-                                    put("path", path)
-                                },
-                            )
-                        }
-                    },
-                )
-                put(
-                    "run_creates",
-                    buildJsonObject {
-                        put("session-alpha", 0)
-                        put("session-beta", 0)
-                    },
-                )
-            }
+        val telemetry = settingsTelemetry(runCreates = mapOf("session-alpha" to 0, "session-beta" to 0))
         JourneyInvariants.verify("settings", telemetry)
 
-        val runCreated =
-            buildJsonObject {
-                put(
-                    "requests",
-                    buildJsonArray {
-                        listOf(
-                            "GET" to "/v1/capabilities",
-                            "GET" to "/api/sessions",
-                        ).forEach { (method, path) ->
-                            add(
-                                buildJsonObject {
-                                    put("method", method)
-                                    put("path", path)
-                                },
-                            )
-                        }
-                    },
-                )
-                put(
-                    "run_creates",
-                    buildJsonObject {
-                        put("session-alpha", 1)
-                    },
-                )
-            }
         val runCreateError =
-            runCatching { JourneyInvariants.verify("settings", runCreated) }
-                .exceptionOrNull()
+            runCatching {
+                JourneyInvariants.verify(
+                    "settings",
+                    settingsTelemetry(runCreates = mapOf("session-alpha" to 1)),
+                )
+            }.exceptionOrNull()
         checkNotNull(runCreateError) { "The Settings verifier accepted a Run creation." }
         check(runCreateError.message!!.contains("recorded a Run creation")) {
             "Unexpected Settings verifier failure: ${runCreateError.message}"
         }
 
         val mutated =
-            buildJsonObject {
-                put(
-                    "requests",
-                    buildJsonArray {
-                        listOf(
-                            "GET" to "/v1/capabilities",
-                            "GET" to "/api/sessions",
-                            "POST" to "/api/sessions",
-                        ).forEach { (method, path) ->
-                            add(
-                                buildJsonObject {
-                                    put("method", method)
-                                    put("path", path)
-                                },
-                            )
-                        }
-                    },
-                )
-            }
+            settingsTelemetry(
+                requests =
+                    listOf(
+                        "GET" to "/v1/capabilities",
+                        "GET" to "/api/sessions",
+                        "POST" to "/api/sessions",
+                    ),
+            )
         val error =
             runCatching { JourneyInvariants.verify("settings", mutated) }
                 .exceptionOrNull()
@@ -145,6 +88,38 @@ class JourneyVerifierTest {
             "Unexpected Settings verifier failure: ${error.message}"
         }
     }
+
+    private fun settingsTelemetry(
+        runCreates: Map<String, Int> = emptyMap(),
+        requests: List<Pair<String, String>> =
+            listOf(
+                "GET" to "/v1/capabilities",
+                "GET" to "/api/sessions",
+            ),
+    ): JsonObject =
+        buildJsonObject {
+            put(
+                "requests",
+                buildJsonArray {
+                    requests.forEach { (method, path) ->
+                        add(
+                            buildJsonObject {
+                                put("method", method)
+                                put("path", path)
+                            },
+                        )
+                    }
+                },
+            )
+            if (runCreates.isNotEmpty()) {
+                put(
+                    "run_creates",
+                    buildJsonObject {
+                        runCreates.forEach { (session, count) -> put(session, count) }
+                    },
+                )
+            }
+        }
 
     @Test
     fun every_committed_journey_scenario_declares_its_invariants() {
