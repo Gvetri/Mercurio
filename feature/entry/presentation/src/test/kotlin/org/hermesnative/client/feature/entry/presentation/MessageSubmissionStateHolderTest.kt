@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.hermesnative.client.feature.entry.application.EntryState
 import org.hermesnative.client.feature.entry.application.RemoveGatewayConnection
@@ -453,63 +455,72 @@ class MessageSubmissionStateHolderTest {
     }
 
     @Test
-    fun a_late_completion_cannot_replace_a_newer_attempt_or_its_draft() {
-        val session = session("session-late-attempt")
-        val run = Run(RunId("run-late-attempt"), session.id, "starting")
-        val gateway =
-            FakeGateway(listOf(session)).apply {
-                enqueueRun(run)
-                blockRunCreation = true
-            }
-        val store = ProcessRunSubmissionUncertaintyStore
-        val key = PendingRunSubmissionKey("https://gateway.example/profile", session.id)
-        store.remove(key)
-        val holder = holder(gateway, Dispatchers.Default, uncertaintyStore = store)
-
-        try {
-            open(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Original attempt"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
-            val oldAttemptId = requireNotNull(store.attemptId(key))
-            assertTrue(store.remove(key, oldAttemptId))
-            assertTrue(store.add(key, emptySet(), "new-attempt"))
-
-            gateway.releaseRun.countDown()
-            awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
-
-            val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals("Newer draft", opened.composerText)
-            assertTrue(opened.hasUnresolvedSubmission)
-            assertEquals("new-attempt", store.attemptId(key))
-            assertNull(store.boundRunId(key))
-            assertEquals(1, gateway.runRequests.size)
-
-            gateway.setRunStatus(run.copy(status = "succeeded"))
-            gateway.setHistory(
-                SessionHistory(
-                    session.id,
-                    listOf(GatewayHistoryMessage("late-result", "assistant", "Late result", run.id, "succeeded")),
-                ),
-            )
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            awaitState(holder) {
-                it.sessionList?.openedSession?.let { refreshed ->
-                    refreshed.latestRun?.id == run.id &&
-                        refreshed.latestRun?.status == "succeeded" &&
-                        !refreshed.isRefreshing
-                } == true
-            }
-            assertEquals("new-attempt", store.attemptId(key))
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession!!.hasUnresolvedSubmission)
-        } finally {
-            gateway.releaseRun.countDown()
+    fun a_late_completion_cannot_replace_a_newer_attempt_or_its_draft() =
+        runTest {
+            val session = session("session-late-attempt")
+            val run = Run(RunId("run-late-attempt"), session.id, "starting")
+            val gateway = FakeGateway(listOf(session)).apply { enqueueRun(run) }
+            val store = ProcessRunSubmissionUncertaintyStore
+            val key = PendingRunSubmissionKey("https://gateway.example/profile", session.id)
             store.remove(key)
-            holder.close()
+            val holder = holder(gateway, StandardTestDispatcher(testScheduler), uncertaintyStore = store)
+
+            try {
+                holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
+                holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
+                holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+                testScheduler.advanceUntilIdle()
+                assertEquals(
+                    gateway.sessions.map { listed -> listed.toSessionItemUiState() },
+                    requireNotNull(holder.uiState.value.sessionList).sessions,
+                )
+                holder.onEvent(EntryUiEvent.SessionClicked(session.id))
+                testScheduler.advanceUntilIdle()
+                assertEquals(
+                    session.id,
+                    requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).session.id,
+                )
+
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Original attempt"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                val staleAttemptId = requireNotNull(store.attemptId(key))
+
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
+                assertTrue(store.remove(key, staleAttemptId))
+                assertTrue(store.add(key, emptySet(), "new-attempt"))
+
+                testScheduler.advanceUntilIdle()
+
+                val settled = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals("Newer draft", settled.composerText)
+                assertFalse(settled.isSending)
+                assertTrue(settled.hasUnresolvedSubmission)
+                assertEquals(listOf(session.id to "Original attempt"), gateway.runRequests)
+                assertEquals("new-attempt", store.attemptId(key))
+                assertNull(store.boundRunId(key))
+
+                gateway.setRunStatus(run.copy(status = "succeeded"))
+                gateway.setHistory(
+                    SessionHistory(
+                        session.id,
+                        listOf(GatewayHistoryMessage("late-result", "assistant", "Late result", run.id, "succeeded")),
+                    ),
+                )
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                testScheduler.advanceUntilIdle()
+
+                val refreshed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals(run.id, refreshed.latestRun?.id)
+                assertEquals("succeeded", refreshed.latestRun?.status)
+                assertFalse(refreshed.isRefreshing)
+                assertEquals("new-attempt", store.attemptId(key))
+                assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession!!.hasUnresolvedSubmission)
+            } finally {
+                store.remove(key)
+                holder.close()
+            }
         }
-    }
 
     @Test
     fun an_active_run_in_one_session_does_not_disable_a_different_session() {
