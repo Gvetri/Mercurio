@@ -57,7 +57,8 @@ jobs:
 
   formatting:
     name: formatting
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -72,7 +73,8 @@ jobs:
 
   static_analysis:
     name: static-analysis
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -87,7 +89,8 @@ jobs:
 
   detekt:
     name: detekt
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -103,7 +106,8 @@ jobs:
 
   unit_tests:
     name: unit-tests
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -131,7 +135,8 @@ jobs:
 
   fixture_descriptor:
     name: fixture-descriptor
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -146,7 +151,8 @@ jobs:
 
   fixture_lifecycle:
     name: fixture-lifecycle
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -161,7 +167,8 @@ jobs:
 
   fixture_contract:
     name: fixture-contract
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -176,7 +183,8 @@ jobs:
 
   android_build:
     name: android-build
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -196,7 +204,8 @@ jobs:
 
   architecture_check:
     name: architecture-check
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -222,7 +231,8 @@ jobs:
 
   coverage_mutation:
     name: coverage-mutation
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -256,7 +266,8 @@ jobs:
 
   compose_test:
     name: compose-jvm-tests
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -327,6 +338,7 @@ jobs:
       pull-requests: read
     outputs:
       ui_paths_changed: ${{ steps.ui_paths.outputs.ui_paths }}
+      docs_only_changed: ${{ steps.docs_only.outputs.docs_only }}
     steps:
       - name: Detect modified UI paths
         id: ui_paths
@@ -338,6 +350,39 @@ jobs:
               - 'feature/entry/presentation/**'
               - 'feature/entry/wiring/src/main/res/**'
               - 'fixtures/hermes/journey/**'
+      - name: Detect the changed files of the pull request
+        id: changed_files
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        with:
+          list-files: json
+          filters: |
+            all:
+              - '**'
+      - name: Classify the docs-only decision
+        id: docs_only
+        env:
+          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
+        run: |
+          set -euo pipefail
+          decision="$(python3 -c '
+          import json, os, sys
+          try:
+              changed_files = json.loads(os.environ["CHANGED_FILES"])
+          except (KeyError, ValueError, TypeError) as error:
+              print("The changed-file answer is unreadable (%s); failing closed to the full gate." % error, file=sys.stderr)
+              sys.exit(1)
+          if not isinstance(changed_files, list) or not all(isinstance(path, str) for path in changed_files):
+              print("The changed-file answer is not a list of file paths; failing closed to the full gate.", file=sys.stderr)
+              sys.exit(1)
+          def is_documentation(path):
+              if "/.github/" in "/" + path:
+                  return False
+              return path.startswith("docs/") or path.endswith(".md")
+          decision = bool(changed_files) and all(is_documentation(path) for path in changed_files)
+          print("true" if decision else "false")
+          print("Classified %d changed file(s) against the documentation surface: docs-only=%s." % (len(changed_files), decision), file=sys.stderr)
+          ')"
+          printf '%s\n' "docs_only=$decision" >> "$GITHUB_OUTPUT"
       - name: Report the UI path decision
         run: |
           printf '%s\n' "UI paths changed: ${{ steps.ui_paths.outputs.ui_paths }}."
@@ -730,6 +775,7 @@ jobs:
           CONFORMANCE_RESULT: ${{ needs.conformance.result }}
           UI_PATHS_RESULT: ${{ needs.ui_paths.result }}
           UI_PATHS_CHANGED: ${{ needs.ui_paths.outputs.ui_paths_changed }}
+          DOCS_ONLY_CHANGED: ${{ needs.ui_paths.outputs.docs_only_changed }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_DRAFT: ${{ github.event.pull_request.draft }}
           EVENT_FORK: ${{ github.event.pull_request.head.repo.fork }}
@@ -787,6 +833,14 @@ jobs:
                 exit 1
                 ;;
             esac
+            docs_only_decision="$DOCS_ONLY_CHANGED"
+            case "$docs_only_decision" in
+              true|false) ;;
+              *)
+                printf 'Docs-only detection must report true or false for this run, but reported %s.\n' "${docs_only_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
             if [ "$EVENT_FORK" = true ]; then
               expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
@@ -799,7 +853,11 @@ jobs:
             else
               require draft_validation "$DRAFT_VALIDATION_RESULT"
               require commit_message "$COMMIT_MESSAGE_RESULT"
-              expected_state=success
+              if [ "$docs_only_decision" = true ] && [[ "${EVENT_LABELS:-}" != *'"run-maestro"'* ]]; then
+                expected_state=skipped
+              else
+                expected_state=success
+              fi
             fi
             for result in \
               "$FORMATTING_RESULT" \

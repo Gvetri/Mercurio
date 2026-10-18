@@ -37,7 +37,9 @@ HEAVY_JOBS_RUN = (
     "${{ always() && (github.event.action != 'labeled' || "
     "github.event.label.name == 'run-maestro') && "
     "(github.event_name != 'pull_request' || "
-    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork)) }}"
+    "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && "
+    "(contains(github.event.pull_request.labels.*.name, 'run-maestro') || "
+    "needs.ui_paths.outputs.docs_only_changed != 'true'))) }}"
 )
 CONFORMANCE_RUN = (
     "${{ !cancelled() && (github.event.action != 'labeled' || "
@@ -196,6 +198,11 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         for job in HEAVY_JOBS:
             self.assertIn(job, jobs, f"{job} must have a job")
             self.assertEqual(HEAVY_JOBS_RUN, jobs[job][1], f"{job} must run for a ready in-repository pull request")
+            self.assertEqual(
+                "[ui_paths]",
+                job_key(job_block(self.workflow, job), "needs"),
+                f"{job} must wait for the pull-request decisions",
+            )
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn('expected_state=success', aggregate)
         label_guard = "(github.event.action != 'labeled' || github.event.label.name == 'run-maestro')"
@@ -266,6 +273,112 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         self.assertIn("UI_PATHS_RESULT: ${{ needs.ui_paths.result }}", aggregate)
         self.assertIn("UI_PATHS_CHANGED: ${{ needs.ui_paths.outputs.ui_paths_changed }}", aggregate)
         self.assertIn('|| "$ui_paths_decision" == true ]]; then', aggregate)
+
+    def test_the_docs_only_detector_skips_the_heavy_lanes_for_a_documentation_head(self):
+        ui_paths = job_block(self.workflow, "ui_paths")
+        self.assertEqual(
+            2,
+            ui_paths.count("uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad"),
+            "the changed-file detector must reuse the same pinned paths-filter revision",
+        )
+        self.assertIn("      docs_only_changed: ${{ steps.docs_only.outputs.docs_only }}\n", ui_paths)
+        changed_files = ui_paths.split("      - name: Detect the changed files of the pull request\n", 1)[1].split("      - name: ", 1)[0]
+        self.assertIn("          list-files: json\n", changed_files, "the changed-file answer must be a file list, not a filter match")
+        self.assertIn(
+            "            all:\n              - '**'\n",
+            changed_files,
+            "the detector must enumerate every changed file so an unknown path cannot pass as documentation",
+        )
+        classifier = ui_paths.split("      - name: Classify the docs-only decision\n", 1)[1].split("      - name: ", 1)[0]
+        self.assertIn(
+            "CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}",
+            classifier,
+            "the classifier must consume the file-list output, not the boolean filter match",
+        )
+        self.assertIn('if "/.github/" in "/" + path:', classifier, "a control-plane change must never classify as documentation")
+        self.assertIn('path.startswith("docs/")', classifier)
+        self.assertIn('path.endswith(".md")', classifier)
+        self.assertIn("bool(changed_files) and all(", classifier, "an empty changed-file answer must fail closed to the full gate")
+        self.assertIn("failing closed to the full gate", classifier)
+        self.assertIn('printf \'%s\\n\' "docs_only=$decision" >> "$GITHUB_OUTPUT"', classifier)
+        for job in HEAVY_JOBS:
+            block = job_block(self.workflow, job)
+            condition = job_key(block, "if")
+            assert condition is not None, f"{job} must declare a condition"
+            self.assertIn(
+                "(contains(github.event.pull_request.labels.*.name, 'run-maestro') || "
+                "needs.ui_paths.outputs.docs_only_changed != 'true')",
+                condition,
+                f"{job} must skip a docs-only head unless the run-maestro label keeps precedence",
+            )
+        aggregate = job_block(self.workflow, "quality-gate")
+        self.assertIn("DOCS_ONLY_CHANGED: ${{ needs.ui_paths.outputs.docs_only_changed }}", aggregate)
+        self.assertIn('Docs-only detection must report true or false for this run', aggregate)
+        self.assertIn(
+            'if [ "$docs_only_decision" = true ] && [[ "${EVENT_LABELS:-}" != *\'"run-maestro"\'* ]]; then',
+            aggregate,
+            "the aggregate must expect the heavy lanes to skip exactly on an unlabeled docs-only head",
+        )
+        self.assertIn("expected_state=skipped", aggregate)
+        self.assertIn("expected_state=success", aggregate)
+        documentation = (ROOT / "docs/quality-gates.md").read_text()
+        routing = (ROOT / "docs/protected-main-workflow.md").read_text()
+        for declared in ("`docs/**`", "outside `.github/`", "`run-maestro` label keeps precedence"):
+            self.assertIn(declared, documentation, f"quality-gates.md must declare the docs-only rule: {declared}")
+            self.assertIn(declared, routing, f"protected-main-workflow.md must declare the docs-only rule: {declared}")
+
+    def docs_only_python(self):
+        classifier = (
+            job_block(self.workflow, "ui_paths")
+            .split("      - name: Classify the docs-only decision\n", 1)[1]
+            .split("      - name: ", 1)[0]
+        )
+        start = classifier.index("python3 -c '") + len("python3 -c '")
+        raw = classifier[start : classifier.index("\n          ')", start)]
+        return "\n".join(line[10:] if line.startswith(" " * 10) else line for line in raw.splitlines())
+
+    def docs_only_decision(self, changed_files):
+        environment = dict(os.environ)
+        environment["CHANGED_FILES"] = (
+            changed_files if isinstance(changed_files, str) else json.dumps(changed_files)
+        )
+        return subprocess.run(
+            ["python3", "-c", self.docs_only_python()],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+
+    def test_the_docs_only_classifier_accepts_only_the_declared_documentation_surface(self):
+        for changed in (
+            ["docs/quality-gates.md"],
+            ["README.md"],
+            ["a.md", "docs/img.png", "deep/nested/guide.md"],
+        ):
+            completed = self.docs_only_decision(changed)
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertEqual("true", completed.stdout.strip())
+
+    def test_the_docs_only_classifier_fails_closed_on_every_non_documentation_head(self):
+        for changed in (
+            ["docs/quality-gates.md", "app/src/main/EntryViewModel.kt"],
+            [".github/workflows/quality-gate.yml"],
+            [".github/PULL_REQUEST_TEMPLATE.md"],
+            ["docs/nested/.github/trap.md"],
+            ["build.gradle.kts"],
+            ["gradle/libs.versions.toml"],
+            [],
+        ):
+            completed = self.docs_only_decision(changed)
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertEqual("false", completed.stdout.strip(), f"{changed} must route the full gate")
+
+    def test_the_docs_only_classifier_fails_closed_on_an_unreadable_changed_file_answer(self):
+        for raw in ("not json", "", "[42]", '{"path": "docs/x.md"}'):
+            completed = self.docs_only_decision(raw)
+            self.assertEqual(1, completed.returncode, f"an unreadable answer {raw!r} must fail the detector")
+            self.assertIn("failing closed to the full gate", completed.stderr)
 
     def test_the_aggregate_gate_runs_on_non_maestro_label_runs_and_mirrors_the_last_completed_gate(self):
         aggregate = job_block(self.workflow, "quality-gate")
