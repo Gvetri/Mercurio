@@ -74,8 +74,48 @@ class JourneyVerifierTest {
                         }
                     },
                 )
+                put(
+                    "run_creates",
+                    buildJsonObject {
+                        put("session-alpha", 0)
+                        put("session-beta", 0)
+                    },
+                )
             }
         JourneyInvariants.verify("settings", telemetry)
+
+        val runCreated =
+            buildJsonObject {
+                put(
+                    "requests",
+                    buildJsonArray {
+                        listOf(
+                            "GET" to "/v1/capabilities",
+                            "GET" to "/api/sessions",
+                        ).forEach { (method, path) ->
+                            add(
+                                buildJsonObject {
+                                    put("method", method)
+                                    put("path", path)
+                                },
+                            )
+                        }
+                    },
+                )
+                put(
+                    "run_creates",
+                    buildJsonObject {
+                        put("session-alpha", 1)
+                    },
+                )
+            }
+        val runCreateError =
+            runCatching { JourneyInvariants.verify("settings", runCreated) }
+                .exceptionOrNull()
+        checkNotNull(runCreateError) { "The Settings verifier accepted a Run creation." }
+        check(runCreateError.message!!.contains("recorded a Run creation")) {
+            "Unexpected Settings verifier failure: ${runCreateError.message}"
+        }
 
         val mutated =
             buildJsonObject {

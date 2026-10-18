@@ -191,7 +191,9 @@ internal object JourneyInvariants {
             "The Settings journey never loaded the Session list."
         }
         val runCreates = telemetry["run_creates"]?.jsonObject.orEmpty()
-        check(runCreates.isEmpty()) { "The Settings journey recorded a Run creation: $runCreates" }
+        check(runCreates.values.all { it.jsonPrimitive.int == 0 }) {
+            "The Settings journey recorded a Run creation: $runCreates"
+        }
     }
 
     private fun verifyOfflineSessionList(telemetry: JsonObject) {
