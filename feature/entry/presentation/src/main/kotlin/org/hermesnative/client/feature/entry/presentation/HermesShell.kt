@@ -53,14 +53,13 @@ internal fun SessionListUiState.shellMode(): SessionShellMode =
 @Composable
 internal fun SessionShell(
     state: SessionListUiState,
-    runStatusNotifications: RunStatusNotificationsUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (LocalConfiguration.current.screenWidthDp >= TWO_PANE_MIN_WIDTH_DP) {
-        TwoPaneSessionContent(state, runStatusNotifications, onEvent, modifier)
+        TwoPaneSessionContent(state, onEvent, modifier)
     } else {
-        SinglePaneSessionContent(state, runStatusNotifications, onEvent, modifier)
+        SinglePaneSessionContent(state, onEvent, modifier)
     }
 }
 
@@ -95,7 +94,6 @@ private fun SessionShellBackHandling(
 @Composable
 private fun SinglePaneSessionContent(
     state: SessionListUiState,
-    runStatusNotifications: RunStatusNotificationsUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier,
 ) {
@@ -104,14 +102,12 @@ private fun SinglePaneSessionContent(
         state = state,
         onEvent = onEvent,
         modifier = modifier,
-        runStatusNotifications = runStatusNotifications,
     )
 }
 
 @Composable
 private fun TwoPaneSessionContent(
     state: SessionListUiState,
-    runStatusNotifications: RunStatusNotificationsUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier,
 ) {
@@ -121,7 +117,6 @@ private fun TwoPaneSessionContent(
             state = state,
             onEvent = onEvent,
             modifier = Modifier.weight(SESSION_LIST_PANE_WEIGHT).fillMaxHeight(),
-            runStatusNotifications = runStatusNotifications,
             selectedSessionId = state.openedSession?.session?.id,
         )
         VerticalDivider(modifier = Modifier.fillMaxHeight())
@@ -180,7 +175,7 @@ private fun SessionPlaceholderPane(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ShellBackHandler(onBack: () -> Unit) {
+internal fun ShellBackHandler(onBack: () -> Unit) {
     if (LocalOnBackPressedDispatcherOwner.current != null) {
         BackHandler(onBack = onBack)
     }

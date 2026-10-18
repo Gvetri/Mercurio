@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -35,14 +33,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
@@ -57,7 +53,6 @@ internal fun SessionListPane(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
-    runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
     selectedSessionId: SessionId? = null,
 ) {
     var searchFocused by remember { mutableStateOf(false) }
@@ -68,7 +63,6 @@ internal fun SessionListPane(
         val density = LocalDensity.current
         val pinnedHeaderMaxHeight = panePinnedHeaderMaxHeight(maxHeight)
         var pinnedHeaderHeight by remember { mutableStateOf(0.dp) }
-        val pinnedTailMaxHeight = paneTailMaxHeight(maxHeight - pinnedHeaderHeight)
         Column(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier =
@@ -95,17 +89,6 @@ internal fun SessionListPane(
                 selectedSessionId = selectedSessionId,
                 listState = listState,
             )
-            Column(
-                modifier =
-                    Modifier
-                        .heightIn(max = pinnedTailMaxHeight)
-                        .verticalScroll(rememberScrollState()),
-            ) {
-                RunStatusNotificationSettingsContent(
-                    state = runStatusNotifications,
-                    onEvent = onEvent,
-                )
-            }
         }
     }
 }
@@ -196,42 +179,6 @@ private fun LazyListScope.sessionListItems(
         item {
             SessionPaginationFooter(state = state, onEvent = onEvent)
         }
-    }
-}
-
-@Composable
-private fun RunStatusNotificationSettingsContent(
-    state: RunStatusNotificationsUiState,
-    onEvent: (EntryUiEvent) -> Unit,
-) {
-    Spacer(modifier = Modifier.height(16.dp))
-    HorizontalDivider()
-    Spacer(modifier = Modifier.height(8.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Run status notifications",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            state.explanation?.let { explanation ->
-                Text(
-                    text = explanation.safeMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-        Switch(
-            checked = state.enabled,
-            onCheckedChange = { onEvent(EntryUiEvent.RunStatusNotificationsToggleClicked) },
-            modifier =
-                Modifier.semantics {
-                    contentDescription = "Run status notifications"
-                },
-        )
     }
 }
 

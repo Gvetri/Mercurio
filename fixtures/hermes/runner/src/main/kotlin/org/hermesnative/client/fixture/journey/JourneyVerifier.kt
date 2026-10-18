@@ -165,6 +165,7 @@ internal object JourneyInvariants {
             "markdown-blocks" to ::requireConnectionAttempted,
             "stale-recoverable" to ::requireConnectionAttempted,
             "diagnostics-recording" to JourneyDiagnosticsInvariants::verifyDiagnosticsRecording,
+            "settings" to JourneyInvariants::verifySettings,
         )
 
     fun verify(
@@ -173,6 +174,26 @@ internal object JourneyInvariants {
     ) {
         scenarioVerifiers[scenarioName]?.invoke(telemetry)
             ?: error("No journey invariants declared for scenario '$scenarioName'.")
+    }
+
+    private fun verifySettings(telemetry: JsonObject) {
+        requireConnectionAttempted(telemetry)
+        val requests =
+            telemetry.getValue("requests").jsonArray.map { request ->
+                val fields = request.jsonObject
+                fields.getValue("method").jsonPrimitive.content to fields.getValue("path").jsonPrimitive.content
+            }
+        val writes = requests.filter { (method, _) -> method != "GET" }
+        check(writes.isEmpty()) {
+            "The Settings journey mutated Gateway state: $writes"
+        }
+        check(requests.any { (method, path) -> method == "GET" && path == "/api/sessions" }) {
+            "The Settings journey never loaded the Session list."
+        }
+        val runCreates = telemetry["run_creates"]?.jsonObject.orEmpty()
+        check(runCreates.values.all { it.jsonPrimitive.int == 0 }) {
+            "The Settings journey recorded a Run creation: $runCreates"
+        }
     }
 
     private fun verifyOfflineSessionList(telemetry: JsonObject) {

@@ -150,6 +150,7 @@ journeys=(
     capabilities-additive
     capabilities-missing-required
     accessibility-controls
+    settings
     diagnostics-recording
     confirmed-send
 )

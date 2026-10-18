@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -83,27 +84,23 @@ class EntryScreenSessionListTest {
     }
 
     @Test
-    fun screen_more_menu_holds_connection_administration_without_dispatching_on_open() {
+    fun screen_settings_entry_point_replaces_the_more_options_menu() {
         val events = mutableListOf<EntryUiEvent>()
         setConnectedListScreen(events)
 
-        composeTestRule.onNodeWithText("Change credential").assertDoesNotExist()
-        composeTestRule.onNodeWithContentDescription("More options").assertHasClickAction().performClick()
-        composeTestRule.onNodeWithText("Change credential").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Local diagnostics").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Remove Gateway Connection").assertIsDisplayed()
-        assertTrue(events.isEmpty())
+        composeTestRule.onNodeWithContentDescription("More options").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Settings").assertIsEnabled().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.OpenSettingsClicked), events)
     }
 
     @Test
-    fun screen_more_menu_routes_change_credential_and_local_diagnostics() {
+    fun screen_settings_routes_change_credential_and_local_diagnostics() {
         val events = mutableListOf<EntryUiEvent>()
-        setConnectedListScreen(events)
+        setConnectedListScreen(events, isSettingsOpen = true)
 
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.onNodeWithText("Change credential").performClick()
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.onNodeWithText("Local diagnostics").performClick()
+        composeTestRule.onNodeWithText("Change Gateway credential").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("Local diagnostics").assertIsEnabled().performClick()
 
         assertEquals(
             listOf(
@@ -124,6 +121,8 @@ class EntryScreenSessionListTest {
                     supportingText = "The Gateway contract was verified successfully.",
                     actionLabel = "Connected",
                     isConnected = true,
+                    isSettingsOpen = true,
+                    clientVersion = "demo-build.1",
                     sessionList = SessionListUiState(),
                 ),
             )
@@ -141,7 +140,6 @@ class EntryScreenSessionListTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
         composeTestRule.onNodeWithText("Remove Gateway Connection").performClick()
 
         assertEquals(listOf(EntryUiEvent.RemoveGatewayConnectionClicked), events)
@@ -173,6 +171,8 @@ class EntryScreenSessionListTest {
                     supportingText = "The Gateway contract was verified successfully.",
                     actionLabel = "Connected",
                     isConnected = true,
+                    isSettingsOpen = true,
+                    clientVersion = "demo-build.1",
                     sessionList = SessionListUiState(),
                     isRemoveConfirmationOpen = true,
                 ),
@@ -197,7 +197,10 @@ class EntryScreenSessionListTest {
         composeTestRule.onNodeWithText("Remove").assertDoesNotExist()
     }
 
-    private fun setConnectedListScreen(events: MutableList<EntryUiEvent>) {
+    private fun setConnectedListScreen(
+        events: MutableList<EntryUiEvent>,
+        isSettingsOpen: Boolean = false,
+    ) {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
@@ -207,6 +210,8 @@ class EntryScreenSessionListTest {
                             supportingText = "The Gateway contract was verified successfully.",
                             actionLabel = "Connected",
                             isConnected = true,
+                            isSettingsOpen = isSettingsOpen,
+                            clientVersion = "demo-build.1",
                             sessionList = SessionListUiState(),
                         ),
                     onEvent = events::add,

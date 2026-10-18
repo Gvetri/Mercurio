@@ -97,6 +97,8 @@ class RunStatusNotificationScreenTest {
             supportingText = "The Gateway contract was verified successfully.",
             actionLabel = "Connected",
             isConnected = true,
+            isSettingsOpen = true,
+            clientVersion = "demo-build.1",
             sessionList =
                 SessionListUiState(
                     sessions =

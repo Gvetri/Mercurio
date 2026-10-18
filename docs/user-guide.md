@@ -57,11 +57,20 @@ Press **Verify Gateway Connection**. The client verifies authentication and the 
 manifest first. While it works, it shows **Verifying Gateway connection…**. The credential is
 saved securely on this device after verification: it is encrypted with an AndroidKeyStore key and
 stored in application-private storage that is excluded from Android backup, so you can reopen the
-connection without retyping the credential, and **Change credential** replaces it. The client shows
+connection without retyping the credential, and **Change Gateway credential** in **Settings**
+replaces it. The client shows
 **Gateway verified.** / **Saving credential securely…** while the secure save finishes and then
 reports **Connected** / **Gateway connected**. If the secure save fails, it keeps your inputs,
 reports **Could not save the Gateway credential securely. Try again.** and offers **Try again**,
 which verifies and saves the connection again. The credential is never stored in plain text.
+
+## Settings
+
+The **Settings** button in the Session list header opens the Settings surface. It holds the
+installed app version, the **Run status notifications** opt-in, **Local diagnostics**,
+**Change Gateway credential**, and **Remove Gateway Connection**. Opening Settings keeps the
+Session list in memory: returning with **Back to Sessions** restores your search query and the
+loaded Sessions.
 
 **Remove Gateway Connection** removes the saved endpoint and credential from this device. It is a
 local removal only: the client does not delete or cancel remote Sessions and Runs.
@@ -96,7 +105,8 @@ submission preserves your draft so you can **Try again**.
 action you take; the client never retries silently, and it refuses a response that reuses a failed
 Run identity (**Retry response reused the failed Run identity.**).
 
-**Notifications (optional).** **Run status notifications** report terminal Run status only. If
+**Notifications (optional).** In **Settings**, **Run status notifications** report terminal Run
+status only. If
 Android has blocked them, the client states that notifications are blocked and points you to the
 Android settings.
 
@@ -140,7 +150,7 @@ verification, a Session-list load, or a Run submission succeeded, failed, or was
 | --- | --- | --- |
 | **Invalid Gateway address. Enter one HTTPS Gateway endpoint.** | The endpoint is not a single valid HTTPS address. | Correct the endpoint. Only an `https://` address is accepted. |
 | **Secure connection failed. Check the Gateway certificate and hostname.** | The TLS connection could not be trusted, or the hostname does not match the certificate. | Use the certificate the Gateway actually serves, and check that the endpoint host matches it. |
-| **Authentication failed. Check the Gateway credential.** | The Gateway rejected the bearer credential. | Retype the credential carefully; if it was saved, use **Change credential** to replace it. |
+| **Authentication failed. Check the Gateway credential.** | The Gateway rejected the bearer credential. | Retype the credential carefully; if it was saved, use **Change Gateway credential** to replace it. |
 | **Required feature unavailable. This Gateway does not support the client contract.** | The Gateway does not expose the capability manifest the client requires. | Connect to a compatible Gateway. This client cannot add a Gateway feature. |
 | **Gateway request failed. Try again.** | A request failed after the connection was established. | Retry the action. Use **Refresh** to reload the Session list, and verify the Gateway if it persists. |
 
