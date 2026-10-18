@@ -159,7 +159,7 @@ def report_validation():
         if key in stages:
             results[key] = conclusion if conclusion in {"success", "skipped", "cancelled"} else "failure"
         elif conclusion != "success" and not (
-            key in {"fork_guard", "draft_validation", "commit_message"} and conclusion == "skipped"
+            key in {"fork_guard", "draft_validation", "commit_message", "ui_paths"} and conclusion == "skipped"
         ):
             additional.append(name)
     environment = {

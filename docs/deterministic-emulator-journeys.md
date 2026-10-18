@@ -18,8 +18,11 @@ public-network dependency, real provider credentials, or live model execution.
 | CI lane | `maestro_journeys` in `.github/workflows/quality-gate.yml` | GitHub-hosted emulator execution of every journey against the exact candidate APK |
 
 The lane runs on the nightly schedule and on manual dispatch. A ready in-repository pull request
-can opt in with the `run-maestro` label: the job then waits for a passing `api24-instrumentation`
-run, so a build or device-suite failure never reaches the journey lane.
+runs it when the head carries the `run-maestro` label or when the `ui-paths` detector reports that
+the head modifies a declared UI path (`app/src/main/**`, `feature/entry/presentation/**`,
+`feature/entry/wiring/src/main/res/**`, `fixtures/hermes/journey/**`): the job then waits for a
+passing `api24-instrumentation` run, so a build or device-suite failure never reaches the journey
+lane.
 
 ## Guarantees
 

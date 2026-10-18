@@ -224,9 +224,9 @@ class QualityGateConfigurationTest {
                 emulatorJob.contains("        if: \${{ always() }}"),
         )
         assertTrue(
-            "The API 24 job must combine always() with its label-gated event filter for cancellation finalization.",
+            "The API 24 job must combine always() with its label- and UI-path-gated event filter for cancellation finalization.",
             emulatorJob.contains(
-                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}",
+                "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) }}",
             ),
         )
         assertTrue(
@@ -765,7 +765,7 @@ class QualityGateConfigurationTest {
     }
 
     @Test
-    fun api24_instrumentation_is_nightly_manual_and_label_gated_on_pull_requests() {
+    fun api24_instrumentation_is_nightly_manual_and_label_or_ui_path_gated_on_pull_requests() {
         val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
         val composeJob = workflow.substringAfter("  compose_test:").substringBefore("  api24_instrumentation:")
         val api24Job = workflow.substringAfter("  api24_instrumentation:").substringBefore("  maestro_journeys:")
@@ -778,14 +778,16 @@ class QualityGateConfigurationTest {
         assertTrue("The workflow must schedule the API 24 suite nightly.", workflow.contains("  schedule:\n    - cron:"))
         assertTrue("The workflow must support manual API 24 execution.", workflow.contains("  workflow_dispatch:"))
         assertTrue(
-            "The API 24 suite must run on scheduled and manual validation and on a labeled, ready, in-repository pull request, never on main pushes.",
+            "The API 24 suite must run on scheduled and manual validation and on a ready, in-repository pull request that carries the run-maestro label or modifies a UI path, never on main pushes.",
             !api24Job.contains("github.event_name == 'push'") &&
                 api24Job.contains("github.event_name == 'schedule'") &&
                 api24Job.contains("github.event_name == 'workflow_dispatch'") &&
                 api24Job.contains("github.event_name == 'pull_request'") &&
                 api24Job.contains("!github.event.pull_request.draft") &&
                 api24Job.contains("!github.event.pull_request.head.repo.fork") &&
-                api24Job.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')"),
+                api24Job.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')") &&
+                api24Job.contains("needs: [ui_paths]") &&
+                api24Job.contains("needs.ui_paths.outputs.ui_paths_changed == 'true'"),
         )
         assertTrue(
             "The pull-request Compose job must use the JVM replacement.",
@@ -1237,13 +1239,14 @@ class QualityGateConfigurationTest {
         assertTrue("The workflow must define a Maestro journey job.", workflow.contains("  maestro_journeys:"))
         assertTrue("The Maestro journey job must be named explicitly.", workflow.contains("    name: maestro-journeys"))
         assertTrue(
-            "The Maestro journey job must wait for a passing API 24 suite and run on scheduled, manual, or labeled ready pull requests.",
-            maestroJob.contains("    needs: [api24_instrumentation]") &&
+            "The Maestro journey job must wait for a passing API 24 suite and run on scheduled, manual, or ready pull requests that carry the run-maestro label or modify a UI path.",
+            maestroJob.contains("    needs: [api24_instrumentation, ui_paths]") &&
                 maestroJob.contains("needs.api24_instrumentation.result == 'success'") &&
                 maestroJob.contains("github.event_name == 'schedule'") &&
                 maestroJob.contains("github.event_name == 'workflow_dispatch'") &&
                 maestroJob.contains("github.event_name == 'pull_request'") &&
-                maestroJob.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')"),
+                maestroJob.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')") &&
+                maestroJob.contains("needs.ui_paths.outputs.ui_paths_changed == 'true'"),
         )
         assertTrue(
             "The Maestro journey job must run the pinned runner script.",
@@ -1264,6 +1267,67 @@ class QualityGateConfigurationTest {
                 workflow.contains("test \"\$MAESTRO_JOURNEYS_RESULT\" = success"),
         )
         assertTrue("The aggregate declaration must include maestro_journeys.", requiredChecks.contains("maestro_journeys"))
+    }
+
+    @Test
+    fun ui_path_detection_gates_the_emulator_lanes_on_the_declared_ui_surface() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val requiredChecks = repositoryRoot.resolve(".github/quality-gate/required-checks.txt").readLines()
+        val documentation = repositoryRoot.resolve("docs/quality-gates.md").readText()
+        val uiPathsJob = workflow.substringAfter("  ui_paths:").substringBefore("  api24_instrumentation:")
+
+        assertTrue("The workflow must define a UI path detection job.", workflow.contains("  ui_paths:\n    name: ui-paths\n"))
+        assertTrue(
+            "The UI path job must run on the same pull-request guard as the fork guard.",
+            uiPathsJob.contains(
+                "    if: \${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}",
+            ),
+        )
+        assertTrue(
+            "The UI path job must read the pull request files with a read-only token.",
+            uiPathsJob.contains("    permissions:\n      contents: read\n      pull-requests: read\n"),
+        )
+        assertTrue(
+            "The UI path job must pin the paths filter action to the repository-approved commit.",
+            uiPathsJob.contains("uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad"),
+        )
+        assertTrue(
+            "The UI path job must expose its decision to the emulator lanes and the aggregate.",
+            workflow.contains("      ui_paths_changed: \${{ steps.ui_paths.outputs.ui_paths }}\n") &&
+                workflow.contains("    needs: [ui_paths]\n") &&
+                workflow.contains("needs.ui_paths.outputs.ui_paths_changed == 'true'"),
+        )
+        assertEquals(
+            "The detected UI surface must be the documented one.",
+            "            ui_paths:\n" +
+                "              - 'app/src/main/**'\n" +
+                "              - 'feature/entry/presentation/**'\n" +
+                "              - 'feature/entry/wiring/src/main/res/**'\n" +
+                "              - 'fixtures/hermes/journey/**'",
+            uiPathsJob.substringAfter("          filters: |\n").substringBefore("\n      - name:"),
+        )
+        listOf(
+            "app/src/main/**",
+            "feature/entry/presentation/**",
+            "feature/entry/wiring/src/main/res/**",
+            "fixtures/hermes/journey/**",
+        ).forEach { path ->
+            assertTrue("Documentation must declare the UI path $path.", documentation.contains(path))
+        }
+        assertTrue("The aggregate declaration must include ui_paths.", requiredChecks.contains("ui_paths"))
+        assertTrue("The aggregate gate must require the UI path job.", workflow.contains("      - ui_paths\n"))
+        assertTrue(
+            "The aggregate gate must receive the UI path result and decision.",
+            workflow.contains("UI_PATHS_RESULT: \${{ needs.ui_paths.result }}") &&
+                workflow.contains("UI_PATHS_CHANGED: \${{ needs.ui_paths.outputs.ui_paths_changed }}"),
+        )
+        assertTrue(
+            "The aggregate gate must route the emulator lanes on the label or the UI path decision and fail closed on an unreadable decision.",
+            workflow.contains(
+                "[ \"\$EVENT_DRAFT\" != true ] && [[ \"\${EVENT_LABELS:-}\" == *'\"run-maestro\"'* || \"\$ui_paths_decision\" == true ]]; then",
+            ) &&
+                workflow.contains("UI path detection must report true or false for this run"),
+        )
     }
 
     @Test

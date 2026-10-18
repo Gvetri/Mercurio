@@ -199,11 +199,12 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn('expected_state=success', aggregate)
         label_guard = "(github.event.action != 'labeled' || github.event.label.name == 'run-maestro')"
+        ui_path_gate = "needs.ui_paths.outputs.ui_paths_changed == 'true'"
         emulator_gate = (
             "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
             "(github.event_name == 'pull_request' && !github.event.pull_request.draft && "
             "!github.event.pull_request.head.repo.fork && "
-            "contains(github.event.pull_request.labels.*.name, 'run-maestro'))"
+            "(contains(github.event.pull_request.labels.*.name, 'run-maestro') || " + ui_path_gate + "))"
         )
         self.assertEqual(
             "${{ always() && " + label_guard + " && (" + emulator_gate + ") }}",
@@ -218,13 +219,53 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             job_key(job_block(self.workflow, "maestro_journeys"), "if"),
         )
         self.assertEqual(
-            "[api24_instrumentation]",
+            "[ui_paths]",
+            job_key(job_block(self.workflow, "api24_instrumentation"), "needs"),
+        )
+        self.assertEqual(
+            "[api24_instrumentation, ui_paths]",
             job_key(job_block(self.workflow, "maestro_journeys"), "needs"),
         )
         self.assertIn('expected_state=skipped', aggregate)
         self.assertIn('if [ "$EVENT_BASE_REF" != main ]', aggregate)
         self.assertIn('if [ "$EVENT_FORK" = true ]', aggregate)
         self.assertIn('if [ "$EVENT_DRAFT" = true ]', aggregate)
+
+    def test_the_ui_path_detector_routes_the_emulator_suites_on_the_declared_ui_surface(self):
+        ui_paths = job_block(self.workflow, "ui_paths")
+        self.assertEqual("ui-paths", jobs_of(self.workflow)["ui_paths"][0])
+        self.assertEqual(
+            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
+            "|| github.event.label.name == 'run-maestro') }}",
+            job_key(ui_paths, "if"),
+            "the detector belongs to the same pull-request activities as the fork guard",
+        )
+        self.assertIn(
+            "    permissions:\n      contents: read\n      pull-requests: read\n",
+            ui_paths,
+            "the detector reads the pull request files with a read-only token",
+        )
+        self.assertIn(
+            "uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad",
+            ui_paths,
+            "the detector action must be pinned to an immutable revision",
+        )
+        self.assertIn("      ui_paths_changed: ${{ steps.ui_paths.outputs.ui_paths }}\n", ui_paths)
+        filters = ui_paths.split("          filters: |\n", 1)[1].split("\n      - name:", 1)[0]
+        self.assertEqual(
+            [
+                "app/src/main/**",
+                "feature/entry/presentation/**",
+                "feature/entry/wiring/src/main/res/**",
+                "fixtures/hermes/journey/**",
+            ],
+            re.findall(r"^              - '(.+)'$", filters, re.MULTILINE),
+        )
+        aggregate = job_block(self.workflow, "quality-gate")
+        self.assertIn("      - ui_paths\n", aggregate)
+        self.assertIn("UI_PATHS_RESULT: ${{ needs.ui_paths.result }}", aggregate)
+        self.assertIn("UI_PATHS_CHANGED: ${{ needs.ui_paths.outputs.ui_paths_changed }}", aggregate)
+        self.assertIn('|| "$ui_paths_decision" == true ]]; then', aggregate)
 
     def test_the_aggregate_gate_runs_on_non_maestro_label_runs_and_mirrors_the_last_completed_gate(self):
         aggregate = job_block(self.workflow, "quality-gate")
@@ -392,7 +433,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_checkout_steps_stay_immutable_and_credential_free(self):
         jobs = jobs_of(self.workflow)
         with_checkout = [job for job in jobs if "actions/checkout@" in job_block(self.workflow, job)]
-        self.assertEqual(sorted(set(jobs) - {"fork_guard"}), sorted(with_checkout))
+        self.assertEqual(sorted(set(jobs) - {"fork_guard", "ui_paths"}), sorted(with_checkout))
         self.assertEqual(len(DECLARED_CHECKS) + 2, len(jobs))
         self.assertIn("quality-gate", with_checkout)
         for job, block in ((job, job_block(self.workflow, job)) for job in jobs):
