@@ -9,14 +9,12 @@ internal fun SessionListContent(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
-    runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
 ) {
     SessionModeContent(state = state, onEvent = onEvent, modifier = modifier) {
         SessionListPane(
             state = state,
             onEvent = onEvent,
             modifier = modifier,
-            runStatusNotifications = runStatusNotifications,
         )
     }
 }

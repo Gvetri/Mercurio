@@ -2,10 +2,13 @@ package org.hermesnative.client.feature.entry.application
 
 import org.hermesnative.client.feature.entry.domain.GatewayConnectionRepository
 
+const val UNKNOWN_CLIENT_VERSION = "unknown"
+
 data class EntryState(
     val isGatewayConnectionConfigured: Boolean = false,
     val configuredEndpoint: String? = null,
     val configuredCredential: String? = null,
+    val clientVersion: String = UNKNOWN_CLIENT_VERSION,
 )
 
 class LoadEntryState(

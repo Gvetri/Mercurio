@@ -1,9 +1,7 @@
 package org.hermesnative.client.feature.entry.wiring
 
 import android.content.Context
-
-/** Fallback client version for an installation without a version name. */
-const val UNKNOWN_CLIENT_VERSION = "unknown"
+import org.hermesnative.client.feature.entry.application.UNKNOWN_CLIENT_VERSION
 
 /** Installed client version recorded in an export's metadata record. */
 @Suppress("DEPRECATION")

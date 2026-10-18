@@ -20,7 +20,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.Density
@@ -111,7 +110,7 @@ class SessionShellTest {
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun gateway_removal_is_disabled_while_creation_is_open() {
+    fun settings_entry_is_disabled_while_creation_is_open() {
         setShellContent(
             sessionList =
                 SessionListUiState(
@@ -120,8 +119,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.onNodeWithText("Remove Gateway Connection").assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription("Settings").assertIsNotEnabled()
     }
 
     @Test
@@ -238,7 +236,7 @@ class SessionShellTest {
 
     @Test
     @Config(qualifiers = "w891dp-h288dp")
-    fun very_short_list_pane_with_a_notification_explanation_still_reaches_rows() {
+    fun very_short_list_pane_still_reaches_rows() {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
                 HermesTheme {
@@ -251,10 +249,6 @@ class SessionShellTest {
                                         isStale = true,
                                         isUnavailable = true,
                                         errorCategory = SessionListErrorCategory.GATEWAY_UNAVAILABLE,
-                                    ),
-                                runStatusNotifications =
-                                    RunStatusNotificationsUiState(
-                                        explanation = RunStatusNotificationExplanation.PERMISSION_DENIED,
                                     ),
                             ),
                         onEvent = {},

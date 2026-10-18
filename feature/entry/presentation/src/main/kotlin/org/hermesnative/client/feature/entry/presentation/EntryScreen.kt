@@ -51,16 +51,24 @@ fun EntryScreen(
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
         ) {
             val sessionList = state.sessionList
+            if (state.isSettingsOpen) {
+                SettingsBackHandling(state, onEvent)
+            }
             if (state.localDiagnostics.isOpen) {
                 LocalDiagnosticsContent(
                     state = state.localDiagnostics,
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize(),
                 )
+            } else if (state.isSettingsOpen && !state.isChangingCredential) {
+                SettingsContent(
+                    state = state,
+                    onEvent = onEvent,
+                    modifier = Modifier.fillMaxSize(),
+                )
             } else if (sessionList != null && !state.isChangingCredential) {
                 SessionShell(
                     state = sessionList,
-                    runStatusNotifications = state.runStatusNotifications,
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.xl),
                 )

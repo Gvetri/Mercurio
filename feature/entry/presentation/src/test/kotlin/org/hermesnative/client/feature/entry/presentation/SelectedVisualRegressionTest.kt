@@ -218,10 +218,10 @@ class SelectedVisualRegressionTest {
      */
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
-    fun session_list_menu_open() {
-        setContent(sessionListMenuState())
-
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
+    fun session_list_settings_open() {
+        setContent(
+            sessionListMenuState().copy(isSettingsOpen = true, clientVersion = "demo-build.1"),
+        )
 
         captureScreen()
     }
