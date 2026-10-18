@@ -290,6 +290,11 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "the detector must enumerate every changed file so an unknown path cannot pass as documentation",
         )
         classifier = ui_paths.split("      - name: Classify the docs-only decision\n", 1)[1].split("      - name: ", 1)[0]
+        self.assertIn(
+            "CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}",
+            classifier,
+            "the classifier must consume the file-list output, not the boolean filter match",
+        )
         self.assertIn('if "/.github/" in "/" + path:', classifier, "a control-plane change must never classify as documentation")
         self.assertIn('path.startswith("docs/")', classifier)
         self.assertIn('path.endswith(".md")', classifier)

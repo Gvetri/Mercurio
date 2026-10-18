@@ -1353,7 +1353,8 @@ class QualityGateConfigurationTest {
         val classifier = uiPathsJob.substringAfter("      - name: Classify the docs-only decision\n").substringBefore("      - name: ")
         assertTrue(
             "The classifier must accept only Markdown outside the control plane or files under docs/ and fail closed otherwise.",
-            classifier.contains("if \"/.github/\" in \"/\" + path:") &&
+            classifier.contains("          CHANGED_FILES: \${{ steps.changed_files.outputs.all_files }}") &&
+                classifier.contains("if \"/.github/\" in \"/\" + path:") &&
                 classifier.contains("path.startswith(\"docs/\")") &&
                 classifier.contains("path.endswith(\".md\")") &&
                 classifier.contains("bool(changed_files) and all(") &&

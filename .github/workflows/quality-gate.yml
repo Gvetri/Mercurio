@@ -361,7 +361,7 @@ jobs:
       - name: Classify the docs-only decision
         id: docs_only
         env:
-          CHANGED_FILES: ${{ steps.changed_files.outputs.all }}
+          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
         run: |
           set -euo pipefail
           decision="$(python3 -c '
