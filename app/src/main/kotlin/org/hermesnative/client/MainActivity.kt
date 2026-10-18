@@ -48,3 +48,5 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+/** Issue #239 probe B: non-documentation change; closed without merging. */
