@@ -655,6 +655,7 @@ redact_file "$runner_output" || status=$?
                 env["EVENT_FORK"] = "false"
                 env["EVENT_DRAFT"] = "false"
                 env["UI_PATHS_CHANGED"] = "false"
+                env["DOCS_ONLY_CHANGED"] = "false"
             result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(0, result.returncode, result.stderr)
@@ -687,6 +688,7 @@ redact_file "$runner_output" || status=$?
             "FORK_GUARD_RESULT": "success",
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
+            "DOCS_ONLY_CHANGED": "false",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
         }
@@ -737,6 +739,106 @@ redact_file "$runner_output" || status=$?
                                     capture_output=True, timeout=10)
             self.assertNotEqual(0, result.returncode)
 
+    def test_aggregate_routes_a_docs_only_pull_request(self):
+        block = WORKFLOW.read_text().split(
+            "      - name: Verify declared checks and results", 1
+        )[1].split("        run: |\n", 1)[1]
+        script = textwrap.dedent(block)
+        core = [
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
+            "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
+        ]
+        ready = {
+            **os.environ,
+            "EVENT_NAME": "pull_request",
+            "EVENT_BASE_REF": "main",
+            "EVENT_FORK": "false",
+            "EVENT_DRAFT": "false",
+            "EVENT_LABELS": "[]",
+            "FORK_GUARD_RESULT": "success",
+            "UI_PATHS_RESULT": "success",
+            "UI_PATHS_CHANGED": "false",
+            "DRAFT_VALIDATION_RESULT": "success",
+            "COMMIT_MESSAGE_RESULT": "success",
+            "API24_INSTRUMENTATION_RESULT": "skipped",
+            "MAESTRO_JOURNEYS_RESULT": "skipped",
+            **{f"{job}_RESULT": "success" for job in core},
+        }
+        docs_only = {
+            **ready,
+            "DOCS_ONLY_CHANGED": "true",
+            **{f"{job}_RESULT": "skipped" for job in core},
+        }
+        scenarios = {
+            "documentation head": (docs_only, 0),
+            "code head": ({**ready, "DOCS_ONLY_CHANGED": "false"}, 0),
+            "unreadable decision": ({**ready, "DOCS_ONLY_CHANGED": "TRUE"}, 1),
+            "missing decision": ({**ready, "DOCS_ONLY_CHANGED": ""}, 1),
+            "drifted heavy lane ran": ({**docs_only, "FORMATTING_RESULT": "success"}, 1),
+            "drifted heavy lane failed": ({**docs_only, "DETEKT_RESULT": "failure"}, 1),
+            "drifted emulator lane ran": ({**docs_only, "API24_INSTRUMENTATION_RESULT": "success"}, 1),
+        }
+        for name, (env, expected) in scenarios.items():
+            with self.subTest(mode=name):
+                result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(expected, result.returncode, result.stderr)
+        for name, env in (("code head", {**ready, "DOCS_ONLY_CHANGED": "false"}),):
+            with self.subTest(mode=name, drifted="heavy lane skipped"):
+                result = subprocess.run(["bash", "-c", script], cwd=ROOT,
+                                        env={**env, "FORMATTING_RESULT": "skipped"},
+                                        capture_output=True, timeout=10)
+                self.assertNotEqual(0, result.returncode)
+
+    def test_aggregate_keeps_the_run_maestro_label_over_a_docs_only_head(self):
+        block = WORKFLOW.read_text().split(
+            "      - name: Verify declared checks and results", 1
+        )[1].split("        run: |\n", 1)[1]
+        script = textwrap.dedent(block)
+        core = [
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
+            "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
+        ]
+        labeled_docs_only = {
+            **os.environ,
+            "EVENT_NAME": "pull_request",
+            "EVENT_BASE_REF": "main",
+            "EVENT_FORK": "false",
+            "EVENT_DRAFT": "false",
+            "EVENT_LABELS": '["ready-for-agent", "run-maestro"]',
+            "DOCS_ONLY_CHANGED": "true",
+            "FORK_GUARD_RESULT": "success",
+            "UI_PATHS_RESULT": "success",
+            "UI_PATHS_CHANGED": "false",
+            "DRAFT_VALIDATION_RESULT": "success",
+            "COMMIT_MESSAGE_RESULT": "success",
+            "API24_INSTRUMENTATION_RESULT": "success",
+            "MAESTRO_JOURNEYS_RESULT": "success",
+            **{f"{job}_RESULT": "success" for job in core},
+        }
+
+        def run(env):
+            return subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
+                                  capture_output=True, text=True, timeout=10)
+
+        self.assertEqual(0, run(labeled_docs_only).returncode,
+                         "the run-maestro label must keep the heavy and emulator lanes over a docs-only head")
+        for job in (*("API24_INSTRUMENTATION_RESULT", "MAESTRO_JOURNEYS_RESULT", "FORMATTING_RESULT"),):
+            for outcome in ("skipped", "failure", "cancelled", ""):
+                with self.subTest(job=job, outcome=outcome):
+                    self.assertNotEqual(0, run({**labeled_docs_only, job: outcome}).returncode)
+        with self.subTest(labels="lookalike label"):
+            lookalike = {
+                **labeled_docs_only,
+                "EVENT_LABELS": '["run-maestro-extra"]',
+                **{f"{job}_RESULT": "skipped" for job in core},
+                "API24_INSTRUMENTATION_RESULT": "skipped",
+                "MAESTRO_JOURNEYS_RESULT": "skipped",
+            }
+            self.assertEqual(0, run(lookalike).returncode)
+
     def test_aggregate_gates_the_emulator_suites_on_the_run_maestro_label(self):
         block = WORKFLOW.read_text().split(
             "      - name: Verify declared checks and results", 1
@@ -759,6 +861,7 @@ redact_file "$runner_output" || status=$?
             "COMMIT_MESSAGE_RESULT": "success",
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
+            "DOCS_ONLY_CHANGED": "false",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
         }
@@ -786,6 +889,13 @@ redact_file "$runner_output" || status=$?
         unlabeled = {**base, "EVENT_LABELS": "[]",
                      "API24_INSTRUMENTATION_RESULT": "skipped", "MAESTRO_JOURNEYS_RESULT": "skipped"}
         self.assertEqual(0, run(unlabeled).returncode)
+        docs_only_unlabeled = {
+            **unlabeled,
+            "DOCS_ONLY_CHANGED": "true",
+            **{f"{job}_RESULT": "skipped" for job in core},
+        }
+        self.assertEqual(0, run(docs_only_unlabeled).returncode,
+                         "an unlabeled docs-only head must keep both emulator suites skipped")
         ui_changed = {**unlabeled, "UI_PATHS_CHANGED": "true",
                       "API24_INSTRUMENTATION_RESULT": "success", "MAESTRO_JOURNEYS_RESULT": "success"}
         self.assertEqual(0, run(ui_changed).returncode)
