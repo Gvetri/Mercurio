@@ -319,9 +319,35 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/release-signing.py nightly-environment
 
+  ui_paths:
+    name: ui-paths
+    if: ${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      ui_paths_changed: ${{ steps.ui_paths.outputs.ui_paths }}
+    steps:
+      - name: Detect modified UI paths
+        id: ui_paths
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        with:
+          filters: |
+            ui_paths:
+              - 'app/src/main/**'
+              - 'feature/entry/presentation/**'
+              - 'feature/entry/wiring/src/main/res/**'
+              - 'fixtures/hermes/journey/**'
+      - name: Report the UI path decision
+        run: |
+          printf '%s\n' "UI paths changed: ${{ steps.ui_paths.outputs.ui_paths }}."
+
   api24_instrumentation:
     name: api24-instrumentation
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}
+    needs: [ui_paths]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -504,8 +530,8 @@ jobs:
 
   maestro_journeys:
     name: maestro-journeys
-    needs: [api24_instrumentation]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) }}
+    needs: [api24_instrumentation, ui_paths]
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 80
     env:
@@ -635,6 +661,7 @@ jobs:
       - commit_message
       - compose_test
       - conformance
+      - ui_paths
       - api24_instrumentation
       - maestro_journeys
     runs-on: ubuntu-latest
@@ -703,6 +730,8 @@ jobs:
           DRAFT_VALIDATION_RESULT: ${{ needs.draft_validation.result }}
           COMMIT_MESSAGE_RESULT: ${{ needs.commit_message.result }}
           CONFORMANCE_RESULT: ${{ needs.conformance.result }}
+          UI_PATHS_RESULT: ${{ needs.ui_paths.result }}
+          UI_PATHS_CHANGED: ${{ needs.ui_paths.outputs.ui_paths_changed }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_DRAFT: ${{ github.event.pull_request.draft }}
           EVENT_FORK: ${{ github.event.pull_request.head.repo.fork }}
@@ -726,6 +755,7 @@ jobs:
           commit_message
           draft_validation
           fork_guard
+          ui_paths
           api24_instrumentation
           maestro_journeys'
           if [ "$expected" != "$expected_declaration" ]; then
@@ -750,6 +780,15 @@ jobs:
               exit 1
             fi
             require fork_guard "$FORK_GUARD_RESULT"
+            require ui_paths "$UI_PATHS_RESULT"
+            ui_paths_decision="$UI_PATHS_CHANGED"
+            case "$ui_paths_decision" in
+              true|false) ;;
+              *)
+                printf 'UI path detection must report true or false for this run, but reported %s.\n' "${ui_paths_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
             if [ "$EVENT_FORK" = true ]; then
               expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
@@ -782,7 +821,7 @@ jobs:
                 exit 1
               fi
             done
-            if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* ]]; then
+            if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* || "$ui_paths_decision" == true ]]; then
               test "$API24_INSTRUMENTATION_RESULT" = success
               test "$MAESTRO_JOURNEYS_RESULT" = success
             else
@@ -811,6 +850,7 @@ jobs:
             expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
             expect fork_guard "$FORK_GUARD_RESULT" skipped
             expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
+            expect ui_paths "$UI_PATHS_RESULT" skipped
             if [ "$EVENT_NAME" = push ]; then
               test "$API24_INSTRUMENTATION_RESULT" = skipped
               test "$MAESTRO_JOURNEYS_RESULT" = skipped

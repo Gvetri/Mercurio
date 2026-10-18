@@ -168,7 +168,7 @@ def verify_validation_run(run_id):
         require(len(batch) == 100, "Truncated validation jobs")
         page += 1
     expected = {
-        name: "skipped" if job in {"fork_guard", "draft_validation", "commit_message"} else "success"
+        name: "skipped" if job in {"fork_guard", "draft_validation", "commit_message", "ui_paths"} else "success"
         for job, name in required_check_names().items()
     }
     expected["quality-gate"] = "success"

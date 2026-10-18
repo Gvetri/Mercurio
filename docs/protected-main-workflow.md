@@ -54,19 +54,22 @@ than the gate it mirrors.
 
 | Run | Checks that execute | Checks that stay skipped |
 | --- | --- | --- |
-| Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard` | `api24-instrumentation`, `maestro-journeys`, unless the pull request carries the `run-maestro` label (next row) |
-| Ready in-repository pull request labeled `run-maestro` | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | None |
-| Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard` | Every other check |
-| External-fork pull request | `fork-guard` | Every other check |
+| Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `api24-instrumentation`, `maestro-journeys`, unless the pull request carries the `run-maestro` label or modifies a declared UI path (next row) |
+| Ready in-repository pull request labeled `run-maestro` or modifying a declared UI path | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | None |
+| Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard`, `ui-paths` | Every other check |
+| External-fork pull request | `fork-guard`, `ui-paths` | Every other check |
 | Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
 | Nightly validation, manual validation | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | `draft-validation`, `commit-message`, `fork-guard` |
 
-The emulator suites are opt-in on pull requests. A ready in-repository pull request runs them only
-with the `run-maestro` label: `api24-instrumentation` runs first, and `maestro-journeys` starts only
-after it passes, so a build or device-suite failure never reaches the journey lane. An unlabeled
-pull request reports both suites as `skipped`, and the aggregate requires exactly that routing; the
-label on a draft or an external-fork pull request starts no validation, and its aggregate still
-reports the decision that exact head holds.
+The emulator suites are opt-in on pull requests. A ready in-repository pull request runs them when
+the `run-maestro` label is present or when the `ui-paths` detector reports that the head modifies a
+declared UI path (`app/src/main/**`, `feature/entry/presentation/**`,
+`feature/entry/wiring/src/main/res/**`, `fixtures/hermes/journey/**`): `api24-instrumentation` runs
+first, and `maestro-journeys` starts only after it passes, so a build or device-suite failure never
+reaches the journey lane. A pull request with neither the label nor a modified UI path reports both
+suites as `skipped`, and the aggregate requires exactly that routing; the label on a draft or an
+external-fork pull request starts no validation, and its aggregate still reports the decision that
+exact head holds.
 
 On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`, or
 `maestro-journeys` does not succeed, the `create-nightly-failure-issue` job creates or updates one
