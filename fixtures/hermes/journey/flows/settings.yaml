@@ -37,7 +37,7 @@ name: settings
 - assertVisible: ".*App version.*"
 - tapOn: "Local diagnostics"
 - extendedWaitUntil:
-    visible: "Diagnostics stay on this device"
+    visible: ".*Diagnostics stay on this device.*"
     timeout: 30000
 - takeScreenshot: settings-local-diagnostics
 - tapOn: "Back to Sessions"
