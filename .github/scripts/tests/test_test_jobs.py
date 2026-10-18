@@ -634,7 +634,7 @@ redact_file "$runner_output" || status=$?
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
             "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST",
             "CONFORMANCE", "COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD",
-            "API24_INSTRUMENTATION", "MAESTRO_JOURNEYS",
+            "API24_INSTRUMENTATION", "MAESTRO_JOURNEYS", "UI_PATHS",
         ]
         for event in ("pull_request", "push", "schedule", "workflow_dispatch"):
             expected = {job: "success" for job in required}
@@ -642,7 +642,7 @@ redact_file "$runner_output" || status=$?
                 expected["API24_INSTRUMENTATION"] = "skipped"
                 expected["MAESTRO_JOURNEYS"] = "skipped"
             else:
-                for job in ("COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD"):
+                for job in ("COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD", "UI_PATHS"):
                     expected[job] = "skipped"
                 if event == "push":
                     expected["API24_INSTRUMENTATION"] = "skipped"
@@ -653,6 +653,7 @@ redact_file "$runner_output" || status=$?
                 env["EVENT_BASE_REF"] = "main"
                 env["EVENT_FORK"] = "false"
                 env["EVENT_DRAFT"] = "false"
+                env["UI_PATHS_CHANGED"] = "false"
             result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(0, result.returncode, result.stderr)
@@ -683,6 +684,8 @@ redact_file "$runner_output" || status=$?
             "EVENT_NAME": "pull_request",
             "EVENT_BASE_REF": "main",
             "FORK_GUARD_RESULT": "success",
+            "UI_PATHS_RESULT": "success",
+            "UI_PATHS_CHANGED": "false",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
         }
@@ -753,6 +756,8 @@ redact_file "$runner_output" || status=$?
             "FORK_GUARD_RESULT": "success",
             "DRAFT_VALIDATION_RESULT": "success",
             "COMMIT_MESSAGE_RESULT": "success",
+            "UI_PATHS_RESULT": "success",
+            "UI_PATHS_CHANGED": "false",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
         }
@@ -780,6 +785,26 @@ redact_file "$runner_output" || status=$?
         unlabeled = {**base, "EVENT_LABELS": "[]",
                      "API24_INSTRUMENTATION_RESULT": "skipped", "MAESTRO_JOURNEYS_RESULT": "skipped"}
         self.assertEqual(0, run(unlabeled).returncode)
+        ui_changed = {**unlabeled, "UI_PATHS_CHANGED": "true",
+                      "API24_INSTRUMENTATION_RESULT": "success", "MAESTRO_JOURNEYS_RESULT": "success"}
+        self.assertEqual(0, run(ui_changed).returncode)
+        for job in ("API24_INSTRUMENTATION_RESULT", "MAESTRO_JOURNEYS_RESULT"):
+            for outcome in ("skipped", "failure", "cancelled", ""):
+                with self.subTest(routing="changed ui paths", job=job, outcome=outcome):
+                    self.assertNotEqual(0, run({**ui_changed, job: outcome}).returncode)
+        with self.subTest(routing="changed ui paths on a draft"):
+            self.assertEqual(0, run({**ui_changed, "EVENT_DRAFT": "true",
+                                     "COMMIT_MESSAGE_RESULT": "skipped",
+                                     "API24_INSTRUMENTATION_RESULT": "skipped",
+                                     "MAESTRO_JOURNEYS_RESULT": "skipped",
+                                     **{f"{job}_RESULT": "skipped" for job in core}}).returncode)
+        for decision in ("TRUE", "1", "yes", "", "unknown"):
+            with self.subTest(routing="unreadable ui path decision", decision=decision):
+                self.assertNotEqual(0, run({**unlabeled, "UI_PATHS_CHANGED": decision}).returncode)
+        with self.subTest(routing="failed ui path detection"):
+            self.assertNotEqual(0, run({**unlabeled, "UI_PATHS_RESULT": "failure"}).returncode)
+        with self.subTest(routing="skipped ui path detection on a pull request"):
+            self.assertNotEqual(0, run({**unlabeled, "UI_PATHS_RESULT": "skipped"}).returncode)
 
 
 class IssueAdapterContractTest(unittest.TestCase):
