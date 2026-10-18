@@ -230,3 +230,5 @@ change as the code that needs it:
 
 Raising a threshold is never a side effect of an unrelated change, and lowering one requires the
 same review as raising it.
+
+<!-- issue #239 probe A: one documentation line change; closed without merging -->
