@@ -26,4 +26,6 @@ tasks.test {
     useJUnit()
     maxParallelForks = 1
     systemProperty("architecture.projectDir", projectDir.parentFile.absolutePath)
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
 }

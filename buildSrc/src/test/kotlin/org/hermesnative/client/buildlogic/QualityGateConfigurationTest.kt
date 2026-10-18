@@ -1468,4 +1468,56 @@ class QualityGateConfigurationTest {
             repositoryRoot.resolve("docs/quality-gates.md").readText().contains("agents/local-quality-gate.md"),
         )
     }
+
+    @Test
+    fun gradle_caching_is_declared_and_the_architecture_self_tests_stay_consolidated_and_fresh() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val architectureJob = workflow.substringAfter("  architecture_check:").substringBefore("  coverage_mutation:")
+        val rootProperties = repositoryRoot.resolve("gradle.properties").readText()
+        val buildSrcProperties = repositoryRoot.resolve("buildSrc/gradle.properties").readText()
+        val buildSrcScript = repositoryRoot.resolve("buildSrc/build.gradle.kts").readText()
+
+        assertTrue(
+            "The root build must NOT enable the Gradle build cache: cache-restored class files " +
+                "are rewritten at restore time, which would trip the fail-closed staleness contract " +
+                "in ReportEvidence.kt (a report older than the newest compiled class).",
+            !rootProperties.contains("org.gradle.caching=true"),
+        )
+        assertTrue(
+            "The standalone buildSrc build must enable the Gradle build cache.",
+            buildSrcProperties.contains("org.gradle.caching=true"),
+        )
+        assertTrue(
+            "The standalone buildSrc build must enable the configuration cache; the root build cannot, " +
+                "because its fail-closed verifiers read the project and task graph at execution time.",
+            buildSrcProperties.contains("org.gradle.configuration-cache=true"),
+        )
+        assertTrue(
+            "The buildSrc self-tests must execute on every CI invocation instead of restoring cached evidence.",
+            buildSrcScript.contains("outputs.upToDateWhen { false }") &&
+                buildSrcScript.contains("outputs.cacheIf { false }"),
+        )
+        assertEquals(
+            "The architecture job must consolidate the buildSrc self-tests into one Gradle invocation.",
+            1,
+            Regex("./gradlew -p buildSrc test").findAll(architectureJob).count(),
+        )
+        assertTrue(
+            "The consolidated buildSrc invocation must keep the CI --no-daemon shape.",
+            architectureJob.contains("--no-daemon"),
+        )
+        listOf(
+            "QualityGateConfigurationTest",
+            "QualityVerificationFailClosedTest",
+            "CoverageEvidenceTest",
+            "MutationEvidenceTest",
+            "BoundaryDoubleVerifierTest",
+            "ReportEvidenceTest",
+        ).forEach { testClass ->
+            assertTrue(
+                "The consolidated invocation must select $testClass.",
+                architectureJob.contains("--tests org.hermesnative.client.buildlogic.$testClass"),
+            )
+        }
+    }
 }
