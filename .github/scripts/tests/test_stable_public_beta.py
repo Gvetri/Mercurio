@@ -81,7 +81,7 @@ class StableBetaTest(unittest.TestCase):
             for name in REQUIRED_JOBS
         ] + [
             {"name": name, "head_sha": self.source, "status": "completed", "conclusion": "skipped"}
-            for name in ("fork-guard", "draft-validation", "commit-message")
+            for name in ("fork-guard", "draft-validation", "commit-message", "ui-paths")
         ]
         self.nightly = {
             "id": 7, "tag_name": f"nightly-7002-{self.source}", "name": "Nightly",

@@ -135,7 +135,7 @@ class NightlyPreparationTest(unittest.TestCase):
             for name in REQUIRED_JOBS
         ] + [
             {"name": name, "head_sha": self.selected, "status": "completed", "conclusion": "skipped"}
-            for name in ("fork-guard", "draft-validation", "commit-message")
+            for name in ("fork-guard", "draft-validation", "commit-message", "ui-paths")
         ]
         self.releases = []
         self.routes = {

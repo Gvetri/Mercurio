@@ -37,7 +37,7 @@ class ReleaseSourceTest(unittest.TestCase):
             for name in REQUIRED_JOBS
         ] + [
             {"name": name, "head_sha": SOURCE, "status": "completed", "conclusion": "skipped"}
-            for name in ("fork-guard", "draft-validation", "commit-message")
+            for name in ("fork-guard", "draft-validation", "commit-message", "ui-paths")
         ]
         prefix = f"/repos/{REPOSITORY}"
         self.routes = {
