@@ -30,8 +30,8 @@ name: settings
 - assertVisible: "Remove Gateway Connection"
 - assertVisible: "Back to Sessions"
 - tapOn: "Change Gateway credential"
-- assertVisible: "Verify Gateway Connection"
-- assertVisible: "The previous connection is unchanged."
+- assertVisible: "Verify and save credential"
+- assertVisible: "The current connection stays in place until the replacement is verified and saved securely."
 - takeScreenshot: settings-credential-rotation
 - tapOn: "Cancel"
 - assertVisible: ".*App version.*"
