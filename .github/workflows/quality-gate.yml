@@ -209,13 +209,11 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon
-      - name: Verify CI test job contracts
-        run: ./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest --no-daemon
-      - name: Verify fail-closed quality verification
-        run: ./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityVerificationFailClosedTest --no-daemon
-      - name: Verify the coverage, mutation, and boundary evidence rules
+      - name: Verify the buildSrc quality self-test contracts
         run: >-
           ./gradlew -p buildSrc test
+          --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
+          --tests org.hermesnative.client.buildlogic.QualityVerificationFailClosedTest
           --tests org.hermesnative.client.buildlogic.CoverageEvidenceTest
           --tests org.hermesnative.client.buildlogic.MutationEvidenceTest
           --tests org.hermesnative.client.buildlogic.BoundaryDoubleVerifierTest
