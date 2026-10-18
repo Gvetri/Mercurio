@@ -1,6 +1,7 @@
 """Execute the checked-in CI shell with controlled job outcomes."""
 import os
 import json
+import re
 import signal
 from pathlib import Path
 import shutil
@@ -805,6 +806,24 @@ redact_file "$runner_output" || status=$?
             self.assertNotEqual(0, run({**unlabeled, "UI_PATHS_RESULT": "failure"}).returncode)
         with self.subTest(routing="skipped ui path detection on a pull request"):
             self.assertNotEqual(0, run({**unlabeled, "UI_PATHS_RESULT": "skipped"}).returncode)
+
+    def test_the_pull_request_trigger_starts_only_on_head_informative_events(self):
+        triggers = WORKFLOW.read_text().split("\non:\n", 1)[1].split("\npermissions:\n", 1)[0]
+        pull_request = triggers.split("  pull_request:\n", 1)[1].split("\n  push:", 1)[0]
+        self.assertEqual(
+            ["opened", "synchronize", "reopened", "ready_for_review", "labeled"],
+            re.findall(r"^      - (\S+)$", pull_request, re.MULTILINE),
+            "only head-informative activities may start a pull-request run",
+        )
+        for inactive in ("edited", "converted_to_draft", "unlabeled"):
+            self.assertNotIn(
+                f"      - {inactive}\n",
+                triggers,
+                f"{inactive} cannot change the head SHA and must not start a run",
+            )
+        self.assertIn("  push:\n    branches:\n      - main\n", triggers)
+        self.assertIn("  schedule:\n    - cron: '0 2 * * *'\n", triggers)
+        self.assertIn("  workflow_dispatch:\n", triggers)
 
 
 class IssueAdapterContractTest(unittest.TestCase):
