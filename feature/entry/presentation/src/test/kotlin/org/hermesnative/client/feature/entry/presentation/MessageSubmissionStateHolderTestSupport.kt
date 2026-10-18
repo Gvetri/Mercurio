@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.withTimeout
 import org.hermesnative.client.feature.entry.application.EntryState
 import org.hermesnative.client.feature.entry.application.RemoveGatewayConnection
@@ -28,6 +29,7 @@ import org.hermesnative.client.feature.entry.domain.SessionId
 import org.hermesnative.client.feature.entry.domain.SessionListRequest
 import org.hermesnative.client.feature.entry.domain.SessionPage
 import org.hermesnative.client.feature.entry.domain.SessionPinResult
+import org.junit.Assert.assertEquals
 import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -75,6 +77,35 @@ internal fun open(
     connect(holder, gateway)
     holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
     awaitState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
+}
+
+internal fun TestScope.connectWithVirtualTime(
+    holder: EntryStateHolder,
+    gateway: FakeGateway,
+) {
+    holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+    holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
+    holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
+    holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+    testScheduler.advanceUntilIdle()
+    assertEquals(
+        gateway.sessions.map { listed -> listed.toSessionItemUiState() },
+        requireNotNull(holder.uiState.value.sessionList).sessions,
+    )
+}
+
+internal fun TestScope.openWithVirtualTime(
+    holder: EntryStateHolder,
+    gateway: FakeGateway,
+    sessionId: SessionId,
+) {
+    connectWithVirtualTime(holder, gateway)
+    holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+    testScheduler.advanceUntilIdle()
+    assertEquals(
+        sessionId,
+        requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).session.id,
+    )
 }
 
 internal fun awaitState(
