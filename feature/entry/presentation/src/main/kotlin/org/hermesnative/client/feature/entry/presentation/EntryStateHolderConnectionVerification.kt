@@ -165,7 +165,10 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
         mutableUiState.value =
             EntryState()
                 .toUiState()
-                .copy(runStatusNotifications = restoredRunStatusNotificationState())
+                .copy(
+                    clientVersion = mutableUiState.value.clientVersion,
+                    runStatusNotifications = restoredRunStatusNotificationState(),
+                )
         released
     }
 

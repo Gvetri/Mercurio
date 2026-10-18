@@ -15,10 +15,10 @@ name: accessibility-controls
 - extendedWaitUntil:
     visible: "Sessions"
     timeout: 30000
+- tapOn: "Settings"
 - assertVisible: "Run status notifications"
-- tapOn:
-    text: "Run status notifications"
-    index: 1
+- assertVisible: ".*App version.*"
+- tapOn: "Back to Sessions"
 - assertVisible: "Search Sessions"
 - assertVisible: "Create Session"
 - tapOn: "Alpha Session"

@@ -6,7 +6,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -250,11 +250,7 @@ class SessionShellNavigationTest {
 
         val keyboardTop = composeTestRule.activity.window.decorView.height - imeInset + 1
         val refreshBottom = composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
-        val notificationsBottom =
-            composeTestRule.onNodeWithContentDescription("Run status notifications")
-                .fetchSemanticsNode().boundsInWindow.bottom
         assertTrue("Refresh must stay above the keyboard", refreshBottom <= keyboardTop)
-        assertTrue("notification controls must stay above the keyboard", notificationsBottom <= keyboardTop)
     }
 
     @Test
@@ -265,8 +261,8 @@ class SessionShellNavigationTest {
         )
         val imeInset = 320
         val windowHeight = composeTestRule.activity.window.decorView.height.toFloat()
-        val notificationsBottomBefore =
-            composeTestRule.onNodeWithContentDescription("Run status notifications")
+        val listBottomBefore =
+            composeTestRule.onNodeWithTag("session-list")
                 .fetchSemanticsNode().boundsInWindow.bottom
         composeTestRule.onNodeWithText("Search Sessions").performClick()
 
@@ -284,20 +280,20 @@ class SessionShellNavigationTest {
         }
 
         dispatchImeInsets(isVisible = true)
-        val notificationsBottomWhileVisible =
-            composeTestRule.onNodeWithContentDescription("Run status notifications")
+        val listBottomWhileVisible =
+            composeTestRule.onNodeWithTag("session-list")
                 .fetchSemanticsNode().boundsInWindow.bottom
-        assertTrue(notificationsBottomWhileVisible <= windowHeight - imeInset + 1f)
+        assertTrue(listBottomWhileVisible <= windowHeight - imeInset + 1f)
 
         dispatchImeInsets(isVisible = false)
-        val notificationsBottomAfterHidden =
-            composeTestRule.onNodeWithContentDescription("Run status notifications")
+        val listBottomAfterHidden =
+            composeTestRule.onNodeWithTag("session-list")
                 .fetchSemanticsNode().boundsInWindow.bottom
         assertTrue(
             "the controls must return to the full pane when the IME is hidden",
-            notificationsBottomAfterHidden - notificationsBottomWhileVisible >= imeInset * 0.75f,
+            listBottomAfterHidden - listBottomWhileVisible >= imeInset * 0.75f,
         )
-        assertEquals(notificationsBottomBefore, notificationsBottomAfterHidden, 1f)
+        assertEquals(listBottomBefore, listBottomAfterHidden, 1f)
     }
 
     @Test

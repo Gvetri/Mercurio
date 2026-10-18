@@ -1,11 +1,12 @@
 package org.hermesnative.client.feature.entry.presentation
 
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -21,7 +22,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
 class LocalDiagnosticsScreenTest {
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun empty_buffer_shows_no_diagnostics_available_and_disables_export() {
@@ -147,19 +148,20 @@ class LocalDiagnosticsScreenTest {
     }
 
     @Test
-    fun the_session_list_pane_offers_the_local_diagnostics_entry_point() {
+    fun the_settings_surface_offers_the_local_diagnostics_entry_point() {
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
-                    state = entryState(SessionListUiState(sessions = listOf(session("session-one", "Session one")))),
+                    state =
+                        entryState(SessionListUiState(sessions = listOf(session("session-one", "Session one"))))
+                            .copy(isSettingsOpen = true),
                     onEvent = events::add,
                 )
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.onNodeWithText("Local diagnostics").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("Local diagnostics").performScrollTo().assertIsEnabled().performClick()
 
         assertEquals(listOf<EntryUiEvent>(EntryUiEvent.OpenLocalDiagnosticsClicked), events)
     }
@@ -177,6 +179,62 @@ class LocalDiagnosticsScreenTest {
         }
 
         composeTestRule.onNodeWithText("Back to Sessions").performScrollTo().assertIsEnabled().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.CloseLocalDiagnosticsClicked), events)
+    }
+
+    @Test
+    fun system_back_cancels_the_clear_confirmation_before_closing_diagnostics() {
+        val events = mutableListOf<EntryUiEvent>()
+        val state =
+            mutableStateOf(
+                diagnosticsState(
+                    LocalDiagnosticsUiState(isOpen = true, recordCount = 1, isClearConfirmationOpen = true),
+                ),
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = state.value,
+                    onEvent = { event ->
+                        events.add(event)
+                        if (event == EntryUiEvent.CancelClearDiagnosticsClicked) {
+                            state.value =
+                                state.value.copy(
+                                    localDiagnostics =
+                                        state.value.localDiagnostics.copy(isClearConfirmationOpen = false),
+                                )
+                        }
+                    },
+                )
+            }
+        }
+
+        composeTestRule.runOnUiThread {
+            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeTestRule.waitForIdle()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.CancelClearDiagnosticsClicked), events)
+        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
+    }
+
+    @Test
+    fun system_back_closes_diagnostics_when_no_nested_action_is_open() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = diagnosticsState(LocalDiagnosticsUiState(isOpen = true, recordCount = 1)),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.runOnUiThread {
+            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeTestRule.waitForIdle()
 
         assertEquals(listOf<EntryUiEvent>(EntryUiEvent.CloseLocalDiagnosticsClicked), events)
     }
