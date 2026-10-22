@@ -92,7 +92,7 @@ enum class RunFailureCategory(
     val safeMessage: String,
 ) {
     GATEWAY_REPORTED("This Run failed. Your conversation is preserved."),
-    MODEL_REFUSED("The Run could not use the selected model. Your conversation is preserved. Try another model."),
+    MODEL_REFUSED("This Run failed with the selected model. Your conversation is preserved. Try another model."),
 }
 
 data class OpenSessionUiState(
