@@ -11,11 +11,17 @@ interface GatewayCapabilityPort {
  * discovered capabilities advertise the `run_models` row ([supportsModelCatalog]); a
  * transport or non-200 failure surfaces as `GATEWAY_REQUEST_FAILED` and a malformed
  * response as `INVALID_RESPONSE`. Both mean "catalog unavailable, selection hidden" and
- * never block connection verification. Ports that do not implement the catalog fail
+ * never block connection verification. Catalog availability is exposed by
+ * [GatewayCapabilities.supportsModelCatalog] on the discovered endpoints table; callers consult it and
+ * never fetch when it is false. Ports that do not implement the catalog fail
  * closed instead of returning an empty catalog.
  */
 interface ModelGatewayPort {
-    fun fetchModelCatalog(): ModelCatalog = throw GatewayException(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE)
+    fun fetchModelCatalog(): ModelCatalog =
+        throw GatewayException(
+            GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE,
+            "Model catalog unavailable on this Gateway port.",
+        )
 }
 
 interface SessionGatewayPort {
