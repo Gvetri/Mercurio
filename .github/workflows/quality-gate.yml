@@ -853,6 +853,7 @@ jobs:
             else
               require draft_validation "$DRAFT_VALIDATION_RESULT"
               require commit_message "$COMMIT_MESSAGE_RESULT"
+              require conformance "$CONFORMANCE_RESULT"
               if [ "$docs_only_decision" = true ] && [[ "${EVENT_LABELS:-}" != *'"run-maestro"'* ]]; then
                 expected_state=skipped
               else
@@ -870,8 +871,7 @@ jobs:
               "$ANDROID_BUILD_RESULT" \
               "$ARCHITECTURE_CHECK_RESULT" \
               "$COVERAGE_MUTATION_RESULT" \
-              "$COMPOSE_TEST_RESULT" \
-              "$CONFORMANCE_RESULT"; do
+              "$COMPOSE_TEST_RESULT"; do
               if [ "$result" != "$expected_state" ]; then
                 printf 'Required quality check result: %s\n' "$result" >&2
                 exit 1
