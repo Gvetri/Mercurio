@@ -37,6 +37,7 @@ object JourneyEndpointCatalog {
             "runs" to Endpoint("POST", "/v1/runs"),
             "run_status" to Endpoint("GET", "/v1/runs/{run_id}"),
             "run_events" to Endpoint("GET", "/v1/runs/{run_id}/events"),
+            "run_models" to Endpoint("GET", "/api/models"),
             "gateway_future_endpoint" to Endpoint("GET", "/v1/future"),
         )
 }
