@@ -84,12 +84,15 @@ enum class MessageSendErrorCategory(
 ) {
     GATEWAY_REQUEST_FAILED("Message was not sent. Your draft is preserved. Try again."),
     UNCERTAIN("Message outcome is uncertain. The Gateway may have received it. No automatic retry was made."),
+    MODEL_REFUSED("Message was not sent. The selected model was refused. Choose another model, then try again."),
+    EFFORT_REFUSED("Message was not sent. The selected effort was refused. Choose another effort, then try again."),
 }
 
 enum class RunFailureCategory(
     val safeMessage: String,
 ) {
     GATEWAY_REPORTED("This Run failed. Your conversation is preserved."),
+    MODEL_REFUSED("The Run could not use the selected model. Your conversation is preserved. Try another model."),
 }
 
 data class OpenSessionUiState(
@@ -196,7 +199,10 @@ internal fun Session.toSessionItemUiState(): SessionItemUiState =
         pinned = pinned,
     )
 
-internal fun GatewayHistoryMessage.toSessionMessageUiState(retryInput: String? = null): SessionMessageUiState {
+internal fun GatewayHistoryMessage.toSessionMessageUiState(
+    retryInput: String? = null,
+    modelRefused: Boolean = false,
+): SessionMessageUiState {
     val failed = runStatus?.toRunPresentationState() == RunPresentationState.FAILED
     return SessionMessageUiState(
         id = id,
@@ -206,10 +212,16 @@ internal fun GatewayHistoryMessage.toSessionMessageUiState(retryInput: String? =
         runStatus = runStatus,
         runResult = runResult,
         timestamp = timestamp?.let { runCatching { Instant.parse(it) }.getOrNull() },
-        failureSafeMessage = if (failed) RunFailureCategory.GATEWAY_REPORTED.safeMessage else null,
+        failureSafeMessage = if (failed) runFailureMessageFor(modelRefused) else null,
         retryAvailable = isRunRetryEligible(if (failed) RunPresentationState.FAILED else null, retryInput),
     )
 }
+
+internal fun runFailureMessageFor(modelRefused: Boolean): String =
+    when {
+        modelRefused -> RunFailureCategory.MODEL_REFUSED.safeMessage
+        else -> RunFailureCategory.GATEWAY_REPORTED.safeMessage
+    }
 
 internal fun List<SessionMessageUiState>.chronological(): List<SessionMessageUiState> {
     val timestamped =

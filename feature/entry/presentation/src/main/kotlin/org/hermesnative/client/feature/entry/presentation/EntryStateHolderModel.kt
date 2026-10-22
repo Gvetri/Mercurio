@@ -34,7 +34,10 @@ internal fun EntryStateHolder.historyRunIdToReconcile(
 
 internal fun EntryStateHolder.observedMessageUiState(observation: RunObservationState?): SessionMessageUiState? =
     observation?.let { current ->
-        current.toSessionMessageUiState(retryInput = submittedRunInputs[current.run.id])
+        current.toSessionMessageUiState(
+            retryInput = submittedRunInputs[current.run.id],
+            modelRefused = submittedRunModelSelections.containsKey(current.run.id),
+        )
     }
 
 internal fun EntryStateHolder.toMessageUiStates(history: SessionHistory): List<SessionMessageUiState> {
@@ -47,7 +50,10 @@ internal fun EntryStateHolder.toMessageUiStates(history: SessionHistory): List<S
                         ?.content
                         ?.takeIf { it.isNotBlank() }
             }
-        message.toSessionMessageUiState(retryInput = original)
+        message.toSessionMessageUiState(
+            retryInput = original,
+            modelRefused = message.runId?.let(submittedRunModelSelections::containsKey) == true,
+        )
     }.chronological()
 }
 

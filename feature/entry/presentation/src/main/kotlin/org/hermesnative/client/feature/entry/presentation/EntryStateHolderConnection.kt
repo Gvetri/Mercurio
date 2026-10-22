@@ -69,6 +69,7 @@ internal fun EntryStateHolder.clearSessionStateForClose() {
     pendingRunDrafts.clear()
     sessionRuns.clear()
     submittedRunInputs.clear()
+    submittedRunModelSelections.clear()
     authoritativeSessionHistoryGenerations.clear()
     authoritativeSessionRuns.clear()
 }

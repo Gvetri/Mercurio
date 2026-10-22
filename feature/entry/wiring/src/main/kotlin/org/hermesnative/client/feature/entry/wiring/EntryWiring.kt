@@ -35,6 +35,7 @@ object EntryWiring {
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
+        val modelSelectionStore = SharedPreferencesModelSelectionStore(context)
         val localDiagnosticsBuffer =
             RollingLocalDiagnosticsBuffer(
                 FileLocalDiagnosticsStorage(context),
@@ -60,13 +61,16 @@ object EntryWiring {
                         buildConnectionRemovalUseCase(
                             repository,
                             runRecoveryRegistry,
-                            runSubmissionUncertaintyStore,
-                            sessionDraftStore,
                             localDiagnosticsBuffer,
-                        ),
+                        ) { endpoint ->
+                            endpoint?.let(runSubmissionUncertaintyStore::clearEndpoint)
+                            endpoint?.let(sessionDraftStore::clearEndpoint)
+                            endpoint?.let(modelSelectionStore::clearEndpoint)
+                        },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
+                    modelSelectionStore = modelSelectionStore,
                     runStatusNotificationSettingsStore = SharedPreferencesRunStatusNotificationSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
@@ -103,14 +107,12 @@ private fun buildVerifyGatewayConnection(
 private fun buildConnectionRemovalUseCase(
     repository: GatewayConnectionRepository,
     runRecoveryRegistry: EndpointScopedRunRecoveryRegistry,
-    runSubmissionUncertaintyStore: SharedPreferencesRunSubmissionUncertaintyStore,
-    sessionDraftStore: SharedPreferencesSessionDraftStore,
     localDiagnosticsBuffer: RollingLocalDiagnosticsBuffer,
+    onEndpointRemoved: (String?) -> Unit,
 ): RemoveGatewayConnection =
     RemoveGatewayConnection(repository) { endpoint ->
         runRecoveryRegistry.clearForEndpoint(endpoint)
-        endpoint?.let(runSubmissionUncertaintyStore::clearEndpoint)
-        endpoint?.let(sessionDraftStore::clearEndpoint)
+        onEndpointRemoved(endpoint)
         localDiagnosticsBuffer.clear()
     }
 
