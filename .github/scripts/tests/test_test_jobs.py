@@ -768,7 +768,8 @@ redact_file "$runner_output" || status=$?
         docs_only = {
             **ready,
             "DOCS_ONLY_CHANGED": "true",
-            **{f"{job}_RESULT": "skipped" for job in core},
+            **{f"{job}_RESULT": "skipped" for job in core if job != "CONFORMANCE"},
+            "CONFORMANCE_RESULT": "success",
         }
         scenarios = {
             "documentation head": (docs_only, 0),
@@ -833,7 +834,8 @@ redact_file "$runner_output" || status=$?
             lookalike = {
                 **labeled_docs_only,
                 "EVENT_LABELS": '["run-maestro-extra"]',
-                **{f"{job}_RESULT": "skipped" for job in core},
+                **{f"{job}_RESULT": "skipped" for job in core if job != "CONFORMANCE"},
+                "CONFORMANCE_RESULT": "success",
                 "API24_INSTRUMENTATION_RESULT": "skipped",
                 "MAESTRO_JOURNEYS_RESULT": "skipped",
             }
@@ -892,7 +894,8 @@ redact_file "$runner_output" || status=$?
         docs_only_unlabeled = {
             **unlabeled,
             "DOCS_ONLY_CHANGED": "true",
-            **{f"{job}_RESULT": "skipped" for job in core},
+            **{f"{job}_RESULT": "skipped" for job in core if job != "CONFORMANCE"},
+            "CONFORMANCE_RESULT": "success",
         }
         self.assertEqual(0, run(docs_only_unlabeled).returncode,
                          "an unlabeled docs-only head must keep both emulator suites skipped")
