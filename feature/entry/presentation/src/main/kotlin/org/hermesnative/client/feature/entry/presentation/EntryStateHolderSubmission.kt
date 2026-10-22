@@ -158,6 +158,7 @@ internal fun EntryStateHolder.prepareRunSubmission(
                 pendingCreate = pendingCreate,
                 attemptId = attemptId,
                 knownRunIds = knownRunIds,
+                selection = modelSelectionStore.read(requestEndpoint),
             )
         PreparedRunSubmission(
             job = createRunJob(sessionId) { submitRun(work) },

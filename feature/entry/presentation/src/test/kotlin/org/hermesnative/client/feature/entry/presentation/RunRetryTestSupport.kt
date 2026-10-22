@@ -18,9 +18,12 @@ import org.hermesnative.client.feature.entry.data.RunSubmissionUncertaintyStorag
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilities
 import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.GatewayHistoryMessage
+import org.hermesnative.client.feature.entry.domain.ModelSelectionStore
+import org.hermesnative.client.feature.entry.domain.NoOpModelSelectionStore
 import org.hermesnative.client.feature.entry.domain.PendingRunSubmissionKey
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.hermesnative.client.feature.entry.domain.Run
+import org.hermesnative.client.feature.entry.domain.RunCreateRequest
 import org.hermesnative.client.feature.entry.domain.RunEvent
 import org.hermesnative.client.feature.entry.domain.RunEventObservation
 import org.hermesnative.client.feature.entry.domain.RunGatewayPort
@@ -54,6 +57,7 @@ internal class RetryHolderSettings(
 internal fun retryHolder(
     gateway: RetryFakeGateway,
     settings: RetryHolderSettings = RetryHolderSettings(),
+    modelSelectionStore: ModelSelectionStore = NoOpModelSelectionStore,
 ): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
@@ -77,6 +81,7 @@ internal fun retryHolder(
                 persistRunRecoveryEntry = settings.persistRunRecoveryEntry,
                 removeRunRecoveryEntry = settings.removeRunRecoveryEntry,
                 onRunSubmissionSettled = settings.onRunSubmissionSettled,
+                modelSelectionStore = modelSelectionStore,
             ),
     )
 
@@ -193,6 +198,7 @@ internal class RetryFakeGateway(
     private val mutableRunStatuses = runStatuses.toMutableMap()
     private val runObservations = mutableMapOf<RunId, List<RunEvent>>()
     val runRequests = mutableListOf<Pair<SessionId, String>>()
+    val runCreateRequests = mutableListOf<RunCreateRequest>()
     private val runResults = ArrayDeque<Result<Run>>()
     val runStarted = CountDownLatch(1)
     val runFinished = CountDownLatch(1)
@@ -254,6 +260,11 @@ internal class RetryFakeGateway(
             }
         }
         return runResults.removeFirst().getOrThrow()
+    }
+
+    override fun createRun(request: RunCreateRequest): Run {
+        runCreateRequests += request
+        return createRun(request.sessionId, request.input)
     }
 
     override fun getRunStatus(runId: RunId): Run = mutableRunStatuses[runId] ?: error("not used")

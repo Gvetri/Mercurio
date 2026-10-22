@@ -9,6 +9,8 @@ enum class GatewayErrorCategory(
     REQUIRED_FEATURE_UNAVAILABLE("Required feature unavailable. This Gateway does not support the client contract."),
     GATEWAY_REQUEST_FAILED("Gateway request failed. Try again."),
     INVALID_RESPONSE("Gateway returned an invalid response. Try again or contact the Gateway administrator."),
+    MODEL_REFUSED("Model refused. The Gateway did not accept the selected model. Choose another model."),
+    EFFORT_REFUSED("Effort refused. The Gateway did not accept the selected effort. Choose another effort."),
 }
 
 class GatewayException(

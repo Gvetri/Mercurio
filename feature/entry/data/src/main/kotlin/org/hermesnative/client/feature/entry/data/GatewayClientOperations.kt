@@ -1,14 +1,20 @@
 package org.hermesnative.client.feature.entry.data
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilities
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilityManifest
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilityPort
 import org.hermesnative.client.feature.entry.domain.GatewayContractPort
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
 import org.hermesnative.client.feature.entry.domain.GatewayException
+import org.hermesnative.client.feature.entry.domain.ModelCatalog
+import org.hermesnative.client.feature.entry.domain.ModelGatewayPort
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunCreateRequest
 import org.hermesnative.client.feature.entry.domain.RunEventObservation
@@ -23,6 +29,7 @@ import org.hermesnative.client.feature.entry.domain.SessionPage
 import org.hermesnative.client.feature.entry.domain.SessionPinResult
 import org.hermesnative.client.feature.entry.domain.satisfies
 import java.security.GeneralSecurityException
+import java.util.Locale
 import javax.net.ssl.SSLException
 
 private const val HTTP_UNAUTHORIZED = 401
@@ -36,6 +43,7 @@ internal data class GatewayOperationRequest(
     val expectedStatus: Int,
     val query: Map<String, String?> = emptyMap(),
     val body: String? = null,
+    val statusFailure: ((Int, String) -> GatewayException?)? = null,
 )
 
 internal class GatewayClientCalls(
@@ -69,7 +77,7 @@ internal class GatewayClientCalls(
             throw GatewayException(GatewayErrorCategory.AUTHENTICATION_FAILED)
         }
         if (response.statusCode != call.expectedStatus) {
-            throw requestFailure(call.operation)
+            throw call.statusFailure?.invoke(response.statusCode, response.body) ?: requestFailure(call.operation)
         }
         return response
     }
@@ -350,6 +358,7 @@ internal class GatewayRunOperations(
                     path = "/v1/runs",
                     body = body,
                     expectedStatus = 202,
+                    statusFailure = if (request.model != null) ::selectionRefusal else null,
                 ),
             )
         val admitted =
@@ -400,13 +409,34 @@ internal class GatewayRunOperations(
     }
 }
 
+internal class GatewayModelCatalogOperations(
+    private val calls: GatewayClientCalls,
+) : ModelGatewayPort {
+    override fun fetchModelCatalog(): ModelCatalog {
+        val response =
+            calls.execute(
+                GatewayOperationRequest(
+                    operation = "model catalog",
+                    method = "GET",
+                    path = "/api/models",
+                    expectedStatus = HTTP_OK,
+                ),
+            )
+        return GatewayJsonParser.parseModelCatalog(
+            operation = "model catalog",
+            root = GatewayJsonParser.parseObject("model catalog", response.body),
+        )
+    }
+}
+
 internal class GatewayClientOperations(
     calls: GatewayClientCalls,
     manifest: GatewayCapabilityManifest,
 ) : GatewayContractPort,
     GatewayCapabilityPort by GatewayCapabilityOperations(calls, manifest),
     SessionGatewayPort by GatewaySessionOperations(calls),
-    RunGatewayPort by GatewayRunOperations(calls)
+    RunGatewayPort by GatewayRunOperations(calls),
+    ModelGatewayPort by GatewayModelCatalogOperations(calls)
 
 private fun sessionPathSegment(
     value: String,
@@ -441,3 +471,34 @@ private fun requestFailure(operation: String): GatewayException =
         GatewayErrorCategory.GATEWAY_REQUEST_FAILED,
         "Gateway request failed during $operation. Try again.",
     )
+
+private fun selectionRefusal(
+    statusCode: Int,
+    body: String,
+): GatewayException? {
+    val code = if (statusCode in HTTP_CLIENT_ERROR_RANGE) admissionErrorCode(body) else null
+    val category =
+        when {
+            code == null -> null
+            "model" in code -> GatewayErrorCategory.MODEL_REFUSED
+            "effort" in code -> GatewayErrorCategory.EFFORT_REFUSED
+            else -> null
+        }
+    return category?.let { GatewayException(it) }
+}
+
+private fun admissionErrorCode(body: String): String? =
+    runCatching {
+        Json
+            .parseToJsonElement(body)
+            .jsonObject["error"]
+            ?.jsonObject
+            ?.get("code")
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.lowercase(Locale.ROOT)
+    }.getOrNull()
+
+private const val HTTP_CLIENT_ERROR_FIRST = 400
+private const val HTTP_CLIENT_ERROR_LAST = 499
+private val HTTP_CLIENT_ERROR_RANGE = HTTP_CLIENT_ERROR_FIRST..HTTP_CLIENT_ERROR_LAST

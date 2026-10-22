@@ -14,6 +14,9 @@ import org.hermesnative.client.feature.entry.application.VerifyGatewayConnection
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsExporter
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsStore
+import org.hermesnative.client.feature.entry.domain.ModelSelection
+import org.hermesnative.client.feature.entry.domain.ModelSelectionStore
+import org.hermesnative.client.feature.entry.domain.NoOpModelSelectionStore
 import org.hermesnative.client.feature.entry.domain.NoOpSessionDraftStore
 import org.hermesnative.client.feature.entry.domain.PendingRunSubmissionKey
 import org.hermesnative.client.feature.entry.domain.Run
@@ -310,6 +313,7 @@ data class EntryStateHolderDependencies(
     val removeGatewayConnectionUseCase: RemoveGatewayConnection? = null,
     val runSubmissionUncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
     val sessionDraftStore: SessionDraftStore = NoOpSessionDraftStore,
+    val modelSelectionStore: ModelSelectionStore = NoOpModelSelectionStore,
     val onRunSubmissionCompleted: (() -> Unit)? = null,
     val onRunSubmissionSettled: (() -> Unit)? = null,
     val runStatusNotificationSettingsStore: RunStatusNotificationSettingsStore? = null,
@@ -334,6 +338,7 @@ class EntryStateHolder(
     internal val removeGatewayConnectionUseCase = dependencies.removeGatewayConnectionUseCase
     internal val runSubmissionUncertaintyStore = dependencies.runSubmissionUncertaintyStore
     internal val sessionDraftStore = dependencies.sessionDraftStore
+    internal val modelSelectionStore = dependencies.modelSelectionStore
     internal val onRunSubmissionCompleted = dependencies.onRunSubmissionCompleted
     internal val onRunSubmissionSettled = dependencies.onRunSubmissionSettled
     internal val runStatusNotificationSettingsStore = dependencies.runStatusNotificationSettingsStore
@@ -391,6 +396,7 @@ class EntryStateHolder(
 
     internal val sessionRuns = mutableMapOf<SessionId, List<Run>>()
     internal val submittedRunInputs = mutableMapOf<RunId, String>()
+    internal val submittedRunModelSelections = mutableMapOf<RunId, ModelSelection>()
     internal val unresolvedLocalRunIds = mutableMapOf<RecoverySessionKey, MutableSet<RunId>>()
     internal val unresolvedLocalRunAttempts = mutableMapOf<RecoverySessionKey, MutableMap<RunId, String>>()
     internal val authoritativeSessionHistoryGenerations = mutableMapOf<SessionId, Long>()
@@ -646,6 +652,7 @@ internal data class RunSubmissionWork(
     val pendingCreate: PendingCreateState,
     val attemptId: String,
     val knownRunIds: Set<RunId>,
+    val selection: ModelSelection?,
 )
 
 internal data class PreparedRunSubmission(
