@@ -10,6 +10,7 @@ import org.hermesnative.client.feature.entry.domain.GatewayContractPort
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
 import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.Run
+import org.hermesnative.client.feature.entry.domain.RunCreateRequest
 import org.hermesnative.client.feature.entry.domain.RunEventObservation
 import org.hermesnative.client.feature.entry.domain.RunGatewayPort
 import org.hermesnative.client.feature.entry.domain.RunId
@@ -329,13 +330,17 @@ internal class GatewayRunOperations(
     override fun createRun(
         sessionId: SessionId,
         input: String,
-    ): Run {
+    ): Run = createRun(RunCreateRequest(sessionId = sessionId, input = input))
+
+    override fun createRun(request: RunCreateRequest): Run {
         val body =
             JsonObject(
-                mapOf(
-                    "input" to JsonPrimitive(input),
-                    "session_id" to JsonPrimitive(sessionId.value),
-                ),
+                buildMap {
+                    put("input", JsonPrimitive(request.input))
+                    put("session_id", JsonPrimitive(request.sessionId.value))
+                    request.model?.let { put("model", JsonPrimitive(it)) }
+                    request.effort?.let { put("effort", JsonPrimitive(it)) }
+                },
             ).toString()
         val response =
             calls.execute(
@@ -352,7 +357,7 @@ internal class GatewayRunOperations(
                 operation = "run create",
                 root = GatewayJsonParser.parseObject("run create", response.body),
             )
-        return Run(id = admitted.runId, sessionId = sessionId, status = admitted.status)
+        return Run(id = admitted.runId, sessionId = request.sessionId, status = admitted.status)
     }
 
     override fun getRunStatus(runId: RunId): Run {
