@@ -153,6 +153,10 @@ journeys=(
     settings
     diagnostics-recording
     confirmed-send
+    model-picker-advertised
+    model-picker-absent
+    model-picker-refusal
+    model-catalog-row-mismatch
 )
 
 for journey in "${journeys[@]}"; do

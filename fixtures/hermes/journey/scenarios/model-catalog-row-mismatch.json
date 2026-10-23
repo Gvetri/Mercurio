@@ -1,0 +1,68 @@
+{
+  "name": "model-catalog-row-mismatch",
+  "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+  "port": 18443,
+  "tls": true,
+  "capabilities": [
+    "sessions",
+    "session_create",
+    "session",
+    "session_update",
+    "session_delete",
+    "session_messages",
+    "runs",
+    "run_status",
+    "run_events",
+    "run_models"
+  ],
+  "model_catalog_row": {
+    "method": "GET",
+    "path": "/v1/models"
+  },
+  "sessions": [
+    {
+      "id": "session-alpha",
+      "title": "Mismatch Session",
+      "preview": "Synthetic preview",
+      "pinned": false
+    }
+  ],
+  "model_catalog": {
+    "default_model": "deepseek-v4-flash",
+    "models": [
+      {
+        "id": "deepseek-v4-flash",
+        "display_name": "DeepSeek V4 Flash",
+        "provider": "opencode-go",
+        "effort": {
+          "supported": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "medium"
+        }
+      }
+    ]
+  },
+  "runs": [
+    {
+      "run_id": "run-mismatch",
+      "session_id": "session-alpha",
+      "create_status": "started",
+      "observation": [
+        {
+          "type": "run.completed"
+        }
+      ],
+      "final_status": "completed",
+      "terminal_history": [
+        {
+          "id": "message-mismatch",
+          "role": "assistant",
+          "content": "Stable mismatch composer"
+        }
+      ]
+    }
+  ]
+}

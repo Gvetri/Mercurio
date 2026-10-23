@@ -1,0 +1,79 @@
+appId: org.hermesnative.client
+name: model-picker-refusal
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: model-picker-refusal-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Refusal Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Server default"
+    timeout: 30000
+- tapOn:
+    text: "Server default"
+    index: 0
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "DeepSeek V4 Flash"
+    commands:
+      - back
+      - tapOn:
+          text: "Server default"
+          index: 0
+- tapOn: "DeepSeek V4 Flash"
+- extendedWaitUntil:
+    visible: "Reasoning effort"
+    timeout: 30000
+- tapOn: "high"
+- back
+- assertVisible: "DeepSeek V4 Flash"
+- takeScreenshot: model-picker-refusal-selected
+- tapOn: "Message"
+- inputText: "Refuse this"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Message was not sent. The selected model was refused. Choose another model, then try again."
+    timeout: 30000
+- assertVisible: "Refuse this"
+- takeScreenshot: model-picker-refusal-copy
+- tapOn: "DeepSeek V4 Flash"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "Server default"
+    commands:
+      - back
+      - tapOn:
+          text: "DeepSeek V4 Flash"
+          index: 0
+- tapOn: "Server default"
+- back
+- assertVisible: "Server default"
+- tapOn: "Refresh history to resolve"
+- extendedWaitUntil:
+    visible: "Send"
+    timeout: 30000
+- assertNotVisible: "Message outcome is uncertain. The Gateway may have received it. No automatic retry was made."
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Stable refusal recovery"
+    timeout: 30000
+- assertVisible: "Run state: Succeeded"
+- assertNotVisible: "Message was not sent. The selected model was refused. Choose another model, then try again."
