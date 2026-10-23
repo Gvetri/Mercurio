@@ -101,6 +101,14 @@ class ModelSelectionSubmissionTest {
 
     @Test
     fun an_async_failure_of_a_selected_run_uses_the_refused_model_run_copy() {
+        assertSelectedRunFailureCopy(ModelSelection("deepseek-v4-flash", "medium"), RunFailureCategory.EFFORT_REFUSED)
+        assertSelectedRunFailureCopy(ModelSelection("deepseek-v4-flash"), RunFailureCategory.MODEL_REFUSED)
+    }
+
+    private fun assertSelectedRunFailureCopy(
+        selection: ModelSelection,
+        expected: RunFailureCategory,
+    ) {
         val session = retrySession("session-1")
         val failedRunId = RunId("run-async-failed")
         val gateway =
@@ -116,7 +124,7 @@ class ModelSelectionSubmissionTest {
             ),
         )
         gateway.enqueueRun(Run(failedRunId, session.id, "failed"))
-        val store = FakeModelSelectionStore(selection = ModelSelection("deepseek-v4-flash", "medium"))
+        val store = FakeModelSelectionStore(selection = selection)
         val holder = retryHolder(gateway, modelSelectionStore = store)
 
         try {
@@ -130,7 +138,7 @@ class ModelSelectionSubmissionTest {
 
             val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
             val failedMessage = opened.messages.single { it.runId == failedRunId && it.isFailedRun }
-            assertEquals(RunFailureCategory.MODEL_REFUSED.safeMessage, failedMessage.failureSafeMessage)
+            assertEquals(expected.safeMessage, failedMessage.failureSafeMessage)
             assertTrue(failedMessage.retryAvailable)
         } finally {
             holder.close()

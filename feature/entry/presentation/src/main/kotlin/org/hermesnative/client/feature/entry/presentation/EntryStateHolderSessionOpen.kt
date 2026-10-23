@@ -76,6 +76,7 @@ internal suspend fun EntryStateHolder.openSessionJob(
                 openedSession = openedSession,
                 replacedSessionId = replacedSessionId,
             )
+            maybeFetchModelCatalog()
         }
     } catch (error: CancellationException) {
         throw error

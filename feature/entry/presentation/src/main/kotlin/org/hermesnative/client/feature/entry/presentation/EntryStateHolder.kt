@@ -14,6 +14,7 @@ import org.hermesnative.client.feature.entry.application.VerifyGatewayConnection
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsExporter
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticsStore
+import org.hermesnative.client.feature.entry.domain.ModelGatewayPort
 import org.hermesnative.client.feature.entry.domain.ModelSelection
 import org.hermesnative.client.feature.entry.domain.ModelSelectionStore
 import org.hermesnative.client.feature.entry.domain.NoOpModelSelectionStore
@@ -161,6 +162,27 @@ sealed interface EntryUiEvent {
     data class RetryRunClicked(
         val runId: RunId,
     ) : Run
+
+    sealed interface ModelPicker : EntryUiEvent
+
+    data object ModelPickerClicked : ModelPicker
+
+    data object ModelPickerDismissed : ModelPicker
+
+    data object ServerDefaultModelClicked : ModelPicker
+
+    data class ModelRowClicked(
+        val modelId: String,
+    ) : ModelPicker
+
+    data class ModelEffortClicked(
+        val effort: String,
+    ) : ModelPicker
+
+    data class ModelFavoriteClicked(
+        val modelId: String,
+        val favorite: Boolean,
+    ) : ModelPicker
 
     sealed interface Settings : EntryUiEvent
 
@@ -367,6 +389,7 @@ class EntryStateHolder(
     internal var recoveryJob: Job? = null
     internal var sessionGateway: SessionGatewayPort? = null
     internal var runGateway: RunGatewayPort? = null
+    internal var catalogGateway: ModelGatewayPort? = null
     internal val sessionRequestLock = Any()
     internal val recoveryPersistenceLock = Any()
     internal val connectionPersistenceLock = Any()
@@ -424,6 +447,7 @@ class EntryStateHolder(
             is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
             is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
             is EntryUiEvent.Run -> dispatchRunEvent(event)
+            is EntryUiEvent.ModelPicker -> dispatchModelPickerEvent(event)
             is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
             is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
         }
@@ -653,6 +677,16 @@ internal data class RunSubmissionWork(
     val attemptId: String,
     val knownRunIds: Set<RunId>,
     val selection: ModelSelection?,
+)
+
+/**
+ * A launched model-catalog fetch bound to the connection it was started for; a result is
+ * applied only while that connection is still current.
+ */
+internal data class ModelCatalogFetchRequest(
+    val port: ModelGatewayPort,
+    val endpoint: String,
+    val connectionGeneration: Long,
 )
 
 internal data class PreparedRunSubmission(

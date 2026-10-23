@@ -6,13 +6,16 @@ import kotlinx.coroutines.cancel
 import org.hermesnative.client.feature.entry.application.EntryState
 import org.hermesnative.client.feature.entry.application.VerifyGatewayConnection
 import org.hermesnative.client.feature.entry.application.normalizeGatewayEndpoint
+import org.hermesnative.client.feature.entry.domain.GatewayCapabilities
 import org.hermesnative.client.feature.entry.domain.GatewayConnectionPersistenceException
 import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticEventType
 import org.hermesnative.client.feature.entry.domain.LocalDiagnosticStatus
+import org.hermesnative.client.feature.entry.domain.ModelGatewayPort
 import org.hermesnative.client.feature.entry.domain.RunEventObservation
 import org.hermesnative.client.feature.entry.domain.RunGatewayPort
 import org.hermesnative.client.feature.entry.domain.SessionGatewayPort
+import org.hermesnative.client.feature.entry.domain.supportsModelCatalog
 
 internal fun EntryUiState.blocksVerification(): Boolean {
     return !connectionSetupRequested || isVerifying || isSaving || (isConnected && !isChangingCredential)
@@ -24,13 +27,14 @@ internal fun EntryStateHolder.runVerification(
     requestConnectionGeneration: Long,
 ) {
     try {
-        verifier.executeWithoutPersistence(
-            endpoint = state.endpoint,
-            bearerCredential = state.bearerCredential,
-        )
+        val capabilities =
+            verifier.executeWithoutPersistence(
+                endpoint = state.endpoint,
+                bearerCredential = state.bearerCredential,
+            )
         val normalizedEndpoint = normalizeGatewayEndpoint(state.endpoint)
         if (!persistVerifiedCredential(verifier, state, requestConnectionGeneration, normalizedEndpoint)) return
-        val gateway = connectVerifiedGateway(state, normalizedEndpoint, requestConnectionGeneration)
+        val gateway = connectVerifiedGateway(state, normalizedEndpoint, requestConnectionGeneration, capabilities)
         recordDiagnostic(
             LocalDiagnosticEventType.GATEWAY_CONNECTION_VERIFICATION,
             LocalDiagnosticStatus.SUCCEEDED,
@@ -89,6 +93,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
     state: EntryUiState,
     normalizedEndpoint: String,
     requestConnectionGeneration: Long,
+    capabilities: GatewayCapabilities,
 ): SessionGatewayPort? =
     synchronized(sessionRequestLock) {
         if (connectionGeneration != requestConnectionGeneration) {
@@ -106,6 +111,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                     normalizedEndpoint,
                     state.bearerCredential,
                 ) ?: (gateway as? RunGatewayPort)
+            catalogGateway = (runGateway as? ModelGatewayPort) ?: (gateway as? ModelGatewayPort)
             mutableUiState.value =
                 mutableUiState.value.copy(
                     endpoint = normalizedEndpoint,
@@ -124,6 +130,11 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                             SessionListUiState(
                                 isLoading = true,
                                 showFirstUseGuidance = true,
+                                modelPicker =
+                                    ModelPickerUiState(
+                                        capabilityKnown = true,
+                                        capabilityAdvertised = capabilities.supportsModelCatalog(),
+                                    ),
                             )
                         },
                 )
@@ -186,6 +197,7 @@ internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnecti
         pendingCreateSessions.clear()
         sessionGateway = null
         runGateway = null
+        catalogGateway = null
         mutationOwners.clear()
         val connectionRecoveryJobsToCancel = connectionRecoveryJobs.toList()
         clearRecoveryState()
