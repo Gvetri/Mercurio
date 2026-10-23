@@ -12,6 +12,7 @@ internal fun EntryStateHolder.releaseConnectionState(): ReleasedConnectionState 
             connectionGeneration += 1
             sessionGateway = null
             runGateway = null
+            catalogGateway = null
             val supersededJobs = listOfNotNull(verificationJob, sessionJob, recoveryJob)
             verificationJob = null
             sessionJob = null

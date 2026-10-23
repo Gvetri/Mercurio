@@ -36,7 +36,7 @@ internal fun EntryStateHolder.observedMessageUiState(observation: RunObservation
     observation?.let { current ->
         current.toSessionMessageUiState(
             retryInput = submittedRunInputs[current.run.id],
-            modelRefused = submittedRunModelSelections.containsKey(current.run.id),
+            modelSelection = submittedRunModelSelections[current.run.id],
         )
     }
 
@@ -52,7 +52,7 @@ internal fun EntryStateHolder.toMessageUiStates(history: SessionHistory): List<S
             }
         message.toSessionMessageUiState(
             retryInput = original,
-            modelRefused = message.runId?.let(submittedRunModelSelections::containsKey) == true,
+            modelSelection = message.runId?.let(submittedRunModelSelections::get),
         )
     }.chronological()
 }

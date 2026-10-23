@@ -2,6 +2,7 @@ package org.hermesnative.client.feature.entry.presentation
 
 import org.hermesnative.client.feature.entry.application.OpenedSession
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
+import org.hermesnative.client.feature.entry.domain.ModelSelection
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunObservationState
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
@@ -28,7 +29,7 @@ internal fun OpenedSession.toOpenSessionUiState(overlay: OpenSessionOverlay): Op
 
 internal fun RunObservationState.toSessionMessageUiState(
     retryInput: String? = null,
-    modelRefused: Boolean = false,
+    modelSelection: ModelSelection? = null,
 ): SessionMessageUiState =
     SessionMessageUiState(
         id = "active-response:${run.id.value}",
@@ -39,7 +40,7 @@ internal fun RunObservationState.toSessionMessageUiState(
         isStreaming = isStreaming,
         streamInterrupted = isStreamInterrupted,
         failureSafeMessage =
-            if (state == RunPresentationState.FAILED) runFailureMessageFor(modelRefused) else null,
+            if (state == RunPresentationState.FAILED) runFailureMessageFor(modelSelection) else null,
         retryAvailable = isRunRetryEligible(state, retryInput),
     )
 
