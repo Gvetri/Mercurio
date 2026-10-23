@@ -1,6 +1,7 @@
 package org.hermesnative.client.feature.entry.presentation
 
 import org.hermesnative.client.feature.entry.domain.GatewayHistoryMessage
+import org.hermesnative.client.feature.entry.domain.ModelSelection
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.RunPresentationState
@@ -84,12 +85,19 @@ enum class MessageSendErrorCategory(
 ) {
     GATEWAY_REQUEST_FAILED("Message was not sent. Your draft is preserved. Try again."),
     UNCERTAIN("Message outcome is uncertain. The Gateway may have received it. No automatic retry was made."),
+    MODEL_REFUSED("Message was not sent. The selected model was refused. Choose another model, then try again."),
+    EFFORT_REFUSED("Message was not sent. The selected effort was refused. Choose another effort, then try again."),
 }
 
 enum class RunFailureCategory(
     val safeMessage: String,
 ) {
     GATEWAY_REPORTED("This Run failed. Your conversation is preserved."),
+    MODEL_REFUSED("This Run failed with the selected model. Your conversation is preserved. Try another model."),
+    EFFORT_REFUSED(
+        "This Run failed with the selected model and effort. " +
+            "Your conversation is preserved. Try another effort or model.",
+    ),
 }
 
 data class OpenSessionUiState(
@@ -151,6 +159,7 @@ data class SessionListUiState(
     val isLoadingMore: Boolean = false,
     val isSearching: Boolean = false,
     val sessionMutations: Map<SessionId, SessionMutationUiState> = emptyMap(),
+    val modelPicker: ModelPickerUiState = ModelPickerUiState(),
 ) {
     val hasPendingMutation: Boolean
         get() = sessionMutations.values.any { it.pendingAction != null }
@@ -196,7 +205,10 @@ internal fun Session.toSessionItemUiState(): SessionItemUiState =
         pinned = pinned,
     )
 
-internal fun GatewayHistoryMessage.toSessionMessageUiState(retryInput: String? = null): SessionMessageUiState {
+internal fun GatewayHistoryMessage.toSessionMessageUiState(
+    retryInput: String? = null,
+    modelSelection: ModelSelection? = null,
+): SessionMessageUiState {
     val failed = runStatus?.toRunPresentationState() == RunPresentationState.FAILED
     return SessionMessageUiState(
         id = id,
@@ -206,9 +218,19 @@ internal fun GatewayHistoryMessage.toSessionMessageUiState(retryInput: String? =
         runStatus = runStatus,
         runResult = runResult,
         timestamp = timestamp?.let { runCatching { Instant.parse(it) }.getOrNull() },
-        failureSafeMessage = if (failed) RunFailureCategory.GATEWAY_REPORTED.safeMessage else null,
+        failureSafeMessage = if (failed) runFailureMessageFor(modelSelection) else null,
         retryAvailable = isRunRetryEligible(if (failed) RunPresentationState.FAILED else null, retryInput),
     )
+}
+
+internal fun runFailureMessageFor(modelSelection: ModelSelection?): String {
+    val category =
+        when {
+            modelSelection == null -> RunFailureCategory.GATEWAY_REPORTED
+            modelSelection.effort != null -> RunFailureCategory.EFFORT_REFUSED
+            else -> RunFailureCategory.MODEL_REFUSED
+        }
+    return category.safeMessage
 }
 
 internal fun List<SessionMessageUiState>.chronological(): List<SessionMessageUiState> {
@@ -234,6 +256,7 @@ internal fun List<SessionMessageUiState>.chronological(): List<SessionMessageUiS
 internal data class SessionDetailState(
     val content: OpenSessionUiState,
     val mutation: SessionMutationUiState?,
+    val modelPicker: ModelPickerUiState = ModelPickerUiState(),
     val actionsEnabled: Boolean,
     val listRequestActive: Boolean,
     val listIsStale: Boolean,

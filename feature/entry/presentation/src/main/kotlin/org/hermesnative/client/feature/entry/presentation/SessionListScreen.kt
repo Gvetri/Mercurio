@@ -61,6 +61,7 @@ internal fun OpenedSessionContent(
             SessionDetailState(
                 content = openedSession,
                 mutation = state.sessionMutations[openedSession.session.id],
+                modelPicker = state.modelPicker,
                 actionsEnabled = state.allowsSessionMutation(),
                 listRequestActive = state.hasActiveRequest,
                 listIsStale = state.isStale,

@@ -12,6 +12,7 @@ enum class GatewayContractOperation {
     RUN_CREATE,
     RUN_STATUS,
     RUN_SSE,
+    MODEL_CATALOG,
 }
 
 /**
@@ -53,14 +54,30 @@ data class GatewayCapabilityManifest(
  */
 fun GatewayCapabilities.satisfies(manifest: GatewayCapabilityManifest): Boolean =
     manifest.requiredEndpoints.all { (name, required) ->
-        val advertised = endpoints[name]
-        advertised != null &&
-            advertised.method.equals(required.method, ignoreCase = true) &&
-            advertised.path == required.path
+        endpoints[name].matches(required)
     }
+
+private fun GatewayEndpoint?.matches(required: GatewayEndpoint): Boolean =
+    this != null &&
+        method.equals(required.method, ignoreCase = true) &&
+        path == required.path
 
 object PublicBetaGatewayCapabilityManifest {
     const val VERSION = 1
+
+    /**
+     * The additive-optional `run_models` endpoint row a Gateway may advertise for the
+     * Run model catalog. It is deliberately not a requirement row: a missing or
+     * mismatched row makes the catalog unavailable and never fails connection
+     * verification.
+     */
+    val modelCatalogEndpoint =
+        GatewayCapabilityRequirement(
+            endpoint = "run_models",
+            method = "GET",
+            path = "/api/models",
+            operation = GatewayContractOperation.MODEL_CATALOG,
+        )
 
     val current =
         GatewayCapabilityManifest(
@@ -142,4 +159,17 @@ data class GatewayCapabilities(
     val endpoints: Map<String, GatewayEndpoint>,
 ) {
     fun supports(endpoint: String): Boolean = endpoint in endpoints
+}
+
+/**
+ * Additive-optional detection of the Run model catalog.
+ *
+ * The catalog is available only when the discovered table advertises the pinned
+ * `run_models` row with the exact method and path; absence or mismatch means the
+ * catalog is unavailable, never that the connection fails.
+ */
+fun GatewayCapabilities.supportsModelCatalog(): Boolean {
+    val required = PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint
+    return supports(required.endpoint) &&
+        endpoints[required.endpoint].matches(GatewayEndpoint(required.method, required.path))
 }

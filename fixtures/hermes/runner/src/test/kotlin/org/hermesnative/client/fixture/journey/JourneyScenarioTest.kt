@@ -292,4 +292,119 @@ class JourneyScenarioTest {
             settledWindow.contains("assertNotVisible: \"Title (optional)\""),
         )
     }
+
+    @Test
+    fun advertised_model_catalog_scenario_parses_the_pinned_catalog_shape() {
+        val scenario = parseCommittedScenario("model-picker-advertised")
+        val catalog = requireNotNull(scenario.modelCatalog) { "The advertised scenario declares no model catalog." }
+        assertEquals("deepseek-v4-flash", catalog.defaultModel)
+        assertEquals(listOf("deepseek-v4-flash", "hermes-agent"), catalog.entries.map { it.id })
+        assertEquals(listOf("low", "medium", "high"), catalog.entries.first().supportedEfforts)
+        assertEquals("medium", catalog.entries.first().defaultEffort)
+        assertTrue(catalog.entries[1].supportedEfforts.isEmpty())
+        assertEquals("synthetic-token", scenario.requireBearerCredential)
+    }
+
+    @Test
+    fun mismatched_row_scenario_parses_the_override_and_refusal_scenario_the_refusal_code() {
+        val mismatch = parseCommittedScenario("model-catalog-row-mismatch")
+        assertEquals("GET", mismatch.modelCatalogRow?.method)
+        assertEquals("/v1/models", mismatch.modelCatalogRow?.path)
+        assertTrue("run_models" in mismatch.capabilities)
+        val refusal = parseCommittedScenario("model-picker-refusal")
+        assertEquals("unsupported_model", refusal.runs.first().admissionRefusalCode)
+        assertTrue(refusal.runs.first().observation.isEmpty())
+    }
+
+    @Test
+    fun model_catalog_row_without_the_run_models_capability_is_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                catalogScenarioJson(
+                    revision,
+                    capabilities = """["sessions"]""",
+                    extra = """"model_catalog_row":{"method":"GET","path":"/v1/models"}""",
+                ),
+            )
+        val error = runCatching { JourneyScenarioParser.parse(file, revision) }.exceptionOrNull()
+        assertTrue(error is JourneyScenarioFormatException)
+        assertTrue(error!!.message.orEmpty().contains("run_models"))
+    }
+
+    @Test
+    fun effort_default_outside_the_supported_vocabulary_is_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                catalogScenarioJson(
+                    revision,
+                    models =
+                        """[{"id":"m1","display_name":"M1","provider":null,""" +
+                            """"effort":{"supported":["low"],"default":"ultra"}}]""",
+                ),
+            )
+        val error = runCatching { JourneyScenarioParser.parse(file, revision) }.exceptionOrNull()
+        assertTrue(error is JourneyScenarioFormatException)
+        assertTrue(error!!.message.orEmpty().contains("supported"))
+    }
+
+    @Test
+    fun empty_or_unknown_field_model_catalogs_are_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val empty = tempScenario(catalogScenarioJson(revision, models = "[]"))
+        assertTrue(
+            runCatching { JourneyScenarioParser.parse(empty, revision) }.exceptionOrNull()
+                is JourneyScenarioFormatException,
+        )
+        val unknown = tempScenario(catalogScenarioJson(revision, extra = """"future":"x""""))
+        val error = runCatching { JourneyScenarioParser.parse(unknown, revision) }.exceptionOrNull()
+        assertTrue(error is JourneyScenarioFormatException)
+        assertTrue(error!!.message.orEmpty().contains("unsupported"))
+    }
+
+    @Test
+    fun admission_refusal_with_scripted_outcome_or_missing_code_is_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val scripted =
+            tempScenario(
+                """
+                {"name":"bad-refusal","hermes_revision":"$revision","port":18443,"tls":false,
+                "capabilities":["sessions"],
+                "runs":[{"run_id":"r1","session_id":"s1","admission_refusal_code":"unsupported_model",
+                "observation":[{"type":"run.completed"}]}]}
+                """.trimIndent(),
+            )
+        assertTrue(
+            runCatching { JourneyScenarioParser.parse(scripted, revision) }.exceptionOrNull()
+                is JourneyScenarioFormatException,
+        )
+        val blank =
+            tempScenario(
+                """
+                 {"name":"blank-refusal","hermes_revision":"$revision","port":18443,"tls":false,
+                "capabilities":["sessions"],
+                "runs":[{"run_id":"r1","session_id":"s1","admission_refusal_code":""}]}
+                """.trimIndent(),
+            )
+        assertTrue(
+            runCatching { JourneyScenarioParser.parse(blank, revision) }.exceptionOrNull()
+                is JourneyScenarioFormatException,
+        )
+    }
+
+    private fun parseCommittedScenario(name: String): JourneyScenario =
+        JourneyScenarioParser.parse(File(scenariosDir, "$name.json"), pinnedDescriptor.provenance.value)
+
+    private fun catalogScenarioJson(
+        revision: String,
+        models: String = """[{"id":"m1","display_name":"M1","provider":null}]""",
+        capabilities: String = """["sessions","run_models"]""",
+        extra: String = "",
+    ): String {
+        val joiner = if (extra.isEmpty()) "" else ","
+        return """{"name":"catalog-case","hermes_revision":"$revision","port":18443,"tls":false,
+            "capabilities":$capabilities,
+            "model_catalog":{"default_model":"m1","models":$models}$joiner$extra}"""
+    }
 }

@@ -498,4 +498,141 @@ class JourneyVerifierTest {
         put("run_creates", buildJsonObject {})
         put("sse_connections", buildJsonObject {})
     }
+
+    @Test
+    fun picker_advertised_verifier_accepts_the_scripted_two_connection_flow_and_requires_both_fetches() {
+        val process = startGateway("model-picker-advertised", tls = false)
+        try {
+            val endpoint = process.endpoint
+            get(endpoint, "/v1/capabilities", bearer = "synthetic-token")
+            get(endpoint, "/api/models", bearer = "synthetic-token")
+            post(endpoint, "/v1/runs", pickerRunBody("hermes-agent", null), bearer = "synthetic-token")
+            streamEvents(endpoint, "run-picker-1", bearer = "synthetic-token")
+            get(endpoint, "/v1/runs/run-picker-1", bearer = "synthetic-token")
+            get(endpoint, "/v1/capabilities", bearer = "synthetic-token")
+            get(endpoint, "/api/models", bearer = "synthetic-token")
+            post(endpoint, "/v1/runs", pickerRunBody("deepseek-v4-flash", "low"), bearer = "synthetic-token")
+            streamEvents(endpoint, "run-picker-2", bearer = "synthetic-token")
+            get(endpoint, "/v1/runs/run-picker-2", bearer = "synthetic-token")
+            JourneyInvariants.verify(
+                "model-picker-advertised",
+                fetchTelemetry(endpoint.resolve("/__fixture/telemetry")),
+            )
+
+            val singleFetch = startGateway("model-picker-advertised", tls = false)
+            try {
+                val other = singleFetch.endpoint
+                get(other, "/api/models", bearer = "synthetic-token")
+                post(other, "/v1/runs", pickerRunBody("hermes-agent", null), bearer = "synthetic-token")
+                streamEvents(other, "run-picker-1", bearer = "synthetic-token")
+                get(other, "/v1/runs/run-picker-1", bearer = "synthetic-token")
+                post(other, "/v1/runs", pickerRunBody("deepseek-v4-flash", "low"), bearer = "synthetic-token")
+                streamEvents(other, "run-picker-2", bearer = "synthetic-token")
+                get(other, "/v1/runs/run-picker-2", bearer = "synthetic-token")
+                assertThrows(IllegalStateException::class.java) {
+                    JourneyInvariants.verify(
+                        "model-picker-advertised",
+                        fetchTelemetry(other.resolve("/__fixture/telemetry")),
+                    )
+                }
+            } finally {
+                singleFetch.stop()
+            }
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun picker_absent_verifier_accepts_the_hidden_control_flow_and_rejects_any_catalog_read() {
+        val process = startGateway("model-picker-absent", tls = false)
+        try {
+            val endpoint = process.endpoint
+            get(endpoint, "/v1/capabilities")
+            post(endpoint, "/v1/runs", pickerRunBody(null, null))
+            streamEvents(endpoint, "run-absent")
+            get(endpoint, "/v1/runs/run-absent")
+            JourneyInvariants.verify("model-picker-absent", fetchTelemetry(endpoint.resolve("/__fixture/telemetry")))
+            get(endpoint, "/api/models")
+            assertThrows(IllegalStateException::class.java) {
+                JourneyInvariants.verify(
+                    "model-picker-absent",
+                    fetchTelemetry(endpoint.resolve("/__fixture/telemetry")),
+                )
+            }
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun picker_refusal_verifier_requires_the_refused_selection_before_the_accepted_retry() {
+        val process = startGateway("model-picker-refusal", tls = false)
+        try {
+            val endpoint = process.endpoint
+            get(endpoint, "/api/models")
+            post(endpoint, "/v1/runs", pickerRunBody("deepseek-v4-flash", "high"))
+            post(endpoint, "/v1/runs", pickerRunBody(null, null))
+            streamEvents(endpoint, "run-refused-2")
+            get(endpoint, "/v1/runs/run-refused-2")
+            JourneyInvariants.verify("model-picker-refusal", fetchTelemetry(endpoint.resolve("/__fixture/telemetry")))
+
+            val unselected = startGateway("model-picker-refusal", tls = false)
+            try {
+                val other = unselected.endpoint
+                post(other, "/v1/runs", pickerRunBody(null, null))
+                post(other, "/v1/runs", pickerRunBody(null, null))
+                streamEvents(other, "run-refused-2")
+                get(other, "/v1/runs/run-refused-2")
+                assertThrows(IllegalStateException::class.java) {
+                    JourneyInvariants.verify(
+                        "model-picker-refusal",
+                        fetchTelemetry(other.resolve("/__fixture/telemetry")),
+                    )
+                }
+            } finally {
+                unselected.stop()
+            }
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun mismatched_row_verifier_accepts_the_hidden_control_flow_and_rejects_a_catalog_read() {
+        val process = startGateway("model-catalog-row-mismatch", tls = false)
+        try {
+            val endpoint = process.endpoint
+            get(endpoint, "/v1/capabilities")
+            post(endpoint, "/v1/runs", pickerRunBody(null, null))
+            streamEvents(endpoint, "run-mismatch")
+            get(endpoint, "/v1/runs/run-mismatch")
+            JourneyInvariants.verify(
+                "model-catalog-row-mismatch",
+                fetchTelemetry(endpoint.resolve("/__fixture/telemetry")),
+            )
+            get(endpoint, "/api/models")
+            assertThrows(IllegalStateException::class.java) {
+                JourneyInvariants.verify(
+                    "model-catalog-row-mismatch",
+                    fetchTelemetry(endpoint.resolve("/__fixture/telemetry")),
+                )
+            }
+        } finally {
+            process.stop()
+        }
+    }
+
+    private fun pickerRunBody(
+        model: String?,
+        effort: String?,
+    ): String {
+        val selection =
+            when {
+                model == null -> ""
+                effort == null -> ""","model":"$model""""
+                else -> ""","model":"$model","effort":"$effort""""
+            }
+        return """{"input":"Picker journey input","session_id":"session-alpha"$selection}"""
+    }
 }

@@ -1,5 +1,6 @@
 package org.hermesnative.client.fixture.contract
 
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -93,6 +94,85 @@ class ContractFixtureParserTest {
         assertEquals(401, rejected.requiredInt("response.status"))
         assertFalse(rejected.requiredBoolean("response.body.authenticated"))
         assertEquals("authentication_failed", rejected.requiredString("response.body.error.code"))
+    }
+
+    @Test
+    fun model_catalog_fixtures_cover_request_success_and_additive_tolerance() {
+        val request = parseJson("models/request.json")
+        val successful = parseJson("models/success.json")
+        val additive = parseJson("models/unknown-additive.json")
+
+        assertRequest(request, "GET", "/api/models")
+        assertEquals(200, successful.requiredInt("response.status"))
+        assertEquals("hermes.api_server.run_models", successful.requiredString("response.body.object"))
+        assertEquals("deepseek-v4-flash", successful.requiredNullableString("response.body.default_model"))
+        assertModelCatalogEntries(successful)
+        assertFalse(
+            successful.root.getValue("response").jsonObject
+                .getValue("body").jsonObject.containsKey("run_models"),
+        )
+
+        assertEquals(200, additive.requiredInt("response.status"))
+        assertEquals("hermes.api_server.run_models", additive.requiredString("response.body.object"))
+        assertTrue(additive.requiredArray("response.body.models").isNotEmpty())
+        assertEquals("additive-value", additive.requiredString("future_additive_field"))
+        val additiveBody = additive.requiredObject("response.body")
+        assertTrue(additiveBody.containsKey("future_body_field"))
+        assertTrue(additiveBody.getValue("models").jsonArray[0].jsonObject.containsKey("future_entry_field"))
+    }
+
+    private fun assertModelCatalogEntries(successful: ContractJsonFixture) {
+        val models = successful.requiredArray("response.body.models")
+        assertEquals(2, models.size)
+        val withEffort = models[0].jsonObject
+        assertEquals("deepseek-v4-flash", withEffort.getValue("id").jsonPrimitive.content)
+        assertEquals("DeepSeek V4 Flash", withEffort.getValue("display_name").jsonPrimitive.content)
+        assertEquals("opencode-go", withEffort.getValue("provider").jsonPrimitive.content)
+        val effort = withEffort.getValue("effort").jsonObject
+        assertEquals(
+            listOf("low", "medium", "high"),
+            effort.getValue("supported").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals("medium", effort.getValue("default").jsonPrimitive.content)
+
+        val withoutEffort = models[1].jsonObject
+        assertFalse(withoutEffort.containsKey("effort"))
+        assertEquals("hermes-agent", withoutEffort.getValue("id").jsonPrimitive.content)
+        assertTrue(withoutEffort.containsKey("provider"))
+        assertTrue(withoutEffort.getValue("provider") is JsonNull)
+    }
+
+    @Test
+    fun model_catalog_missing_required_field_has_a_safe_failure_category() {
+        val fixture = parseJson("models/missing-required.json")
+
+        assertFailure(ContractFixtureFailureCategory.MISSING_REQUIRED_FIELD) {
+            fixture.requiredArray("response.body.models")
+        }
+    }
+
+    @Test
+    fun model_catalog_missing_provenance_is_rejected() {
+        val content =
+            contractsRoot.resolve("models/success.json").readText()
+                .replace("\"hermes_revision\": \"$PROVENANCE\",\n", "")
+
+        assertFailure(ContractFixtureFailureCategory.MISSING_PROVENANCE) {
+            ContractFixtureParser.parseJson("missing-model-catalog-provenance.json", content, descriptor)
+        }
+    }
+
+    @Test
+    fun model_catalog_duplicate_provenance_is_rejected() {
+        val content =
+            contractsRoot.resolve("models/success.json").readText().replace(
+                "\"hermes_revision\": \"$PROVENANCE\",",
+                "\"hermes_revision\": \"$PROVENANCE\",\n  \"hermes_revision\": \"$PROVENANCE\",",
+            )
+
+        assertFailure(ContractFixtureFailureCategory.DUPLICATE_PROVENANCE) {
+            ContractFixtureParser.parseJson("duplicate-model-catalog-provenance.json", content, descriptor)
+        }
     }
 
     @Test

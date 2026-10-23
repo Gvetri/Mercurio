@@ -1,17 +1,21 @@
 package org.hermesnative.client.feature.entry.data
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.hermesnative.client.feature.entry.application.ReconcileRun
 import org.hermesnative.client.feature.entry.domain.GatewayContractPort
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
 import org.hermesnative.client.feature.entry.domain.GatewayException
+import org.hermesnative.client.feature.entry.domain.RunCreateRequest
 import org.hermesnative.client.feature.entry.domain.RunEventType
 import org.hermesnative.client.feature.entry.domain.RunId
 import org.hermesnative.client.feature.entry.domain.RunReconciliationDecision
 import org.hermesnative.client.feature.entry.domain.SessionId
 import org.hermesnative.client.feature.entry.domain.SessionListRequest
+import org.hermesnative.client.feature.entry.domain.supportsModelCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -265,6 +269,73 @@ class DefaultGatewayClientTest {
     }
 
     @Test
+    fun run_creation_pins_both_the_unset_and_the_selected_model_and_effort_request_shapes() {
+        val transport =
+            RecordingTransport(
+                responses =
+                    listOf(
+                        response("runs/create-response.json"),
+                        response("runs/create-response.json"),
+                    ),
+            )
+        val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
+        val sessionId = SessionId(SESSION_ID)
+
+        val selected =
+            client.createRun(
+                RunCreateRequest(
+                    sessionId = sessionId,
+                    input = "",
+                    model = "deepseek-v4-flash",
+                    effort = "medium",
+                ),
+            )
+        val unset = client.createRun(RunCreateRequest(sessionId = sessionId, input = ""))
+
+        assertEquals(RUN_ID, selected.id.value)
+        assertEquals(sessionId, unset.sessionId)
+        assertEquals(2, transport.requests.size)
+        assertFixtureRequest(transport.requests[0], "runs/create-request-model-effort.json")
+        assertFixtureRequest(transport.requests[1], "runs/create-request.json")
+    }
+
+    @Test
+    fun an_advertised_run_models_row_detects_the_catalog_without_changing_verification() {
+        val success =
+            clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json")).discoverCapabilities()
+        assertEquals(11, success.endpoints.size)
+        assertTrue(success.supportsModelCatalog())
+
+        val additive =
+            clientForBody(capabilitiesBodyWithRunModels("capabilities/unknown-additive.json"))
+                .discoverCapabilities()
+        assertEquals(12, additive.endpoints.size)
+        assertTrue(additive.supportsModelCatalog())
+
+        val noRow = clientForResponse("capabilities/success.json").discoverCapabilities()
+        assertFalse(noRow.supportsModelCatalog())
+    }
+
+    @Test
+    fun a_mismatched_run_models_row_is_not_detected_and_cannot_rescue_missing_required_endpoints() {
+        val wrongMethod =
+            clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", method = "POST"))
+                .discoverCapabilities()
+        assertFalse(wrongMethod.supportsModelCatalog())
+
+        val wrongPath =
+            clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", path = "/api/model"))
+                .discoverCapabilities()
+        assertFalse(wrongPath.supportsModelCatalog())
+
+        val advertisedButIncomplete =
+            clientForBody(capabilitiesBodyWithRunModels("capabilities/missing-required.json"))
+        assertFailure(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE) {
+            advertisedButIncomplete.discoverCapabilities()
+        }
+    }
+
+    @Test
     fun authentication_failure_is_safe_and_does_not_expose_the_bearer_token() {
         val client =
             DefaultGatewayClient(
@@ -423,6 +494,32 @@ class DefaultGatewayClientTest {
             bearerToken = "test-token",
             transport = RecordingTransport(responses = listOf(response(path))),
         )
+
+    private fun clientForBody(body: String): GatewayContractPort =
+        DefaultGatewayClient(
+            endpoint = "https://gateway.example",
+            bearerToken = "test-token",
+            transport = RecordingTransport(responses = listOf(GatewayHttpResponse(statusCode = 200, body = body))),
+        )
+
+    private fun capabilitiesBodyWithRunModels(
+        fixturePath: String,
+        method: String = "GET",
+        path: String = "/api/models",
+    ): String {
+        val root = Json.parseToJsonElement(contractsRoot.resolve(fixturePath).readText()).jsonObject
+        val body = root.getValue("response").jsonObject.getValue("body").jsonObject
+        val row =
+            JsonObject(
+                mapOf(
+                    "method" to JsonPrimitive(method),
+                    "path" to JsonPrimitive(path),
+                ),
+            )
+        val endpoints = body.getValue("endpoints").jsonObject
+        val endpointsWithRow = JsonObject(endpoints + ("run_models" to row))
+        return JsonObject(body + ("endpoints" to endpointsWithRow)).toString()
+    }
 
     private fun response(path: String): GatewayHttpResponse {
         val content = contractsRoot.resolve(path).readText()

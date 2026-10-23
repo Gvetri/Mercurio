@@ -38,6 +38,7 @@ import org.hermesnative.client.feature.entry.domain.RunPresentationState
 internal fun SessionDetailComposerTail(
     state: OpenSessionUiState,
     mutation: SessionMutationUiState?,
+    modelPicker: ModelPickerUiState,
     canSubmit: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
@@ -61,6 +62,7 @@ internal fun SessionDetailComposerTail(
                     onEvent = onEvent,
                 )
             }
+            ComposerModelPickerSlot(picker = modelPicker, onEvent = onEvent)
             Spacer(modifier = Modifier.height(12.dp))
             val sendEnabled =
                 composerEnabled &&

@@ -110,4 +110,43 @@ class GatewayCapabilityManifestTest {
             pinned.toMutableMap().apply { this["sessions"] = GatewayEndpoint("get", "/api/sessions") }
         assertTrue(GatewayCapabilities(upperCaseMethod).satisfies(manifest))
     }
+
+    @Test
+    fun model_catalog_detection_requires_the_exact_pinned_row_and_never_a_requirement() {
+        val manifest = PublicBetaGatewayCapabilityManifest.current
+        val row = PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint
+
+        assertEquals("run_models", row.endpoint)
+        assertEquals(GatewayEndpoint("GET", "/api/models"), GatewayEndpoint(row.method, row.path))
+        assertSame(GatewayContractOperation.MODEL_CATALOG, row.operation)
+        assertTrue(manifest.requirements.none { it.endpoint == row.endpoint })
+        assertFalse(manifest.requiredEndpoints.containsKey(row.endpoint))
+
+        listOf(
+            GatewayEndpoint("GET", "/api/models") to true,
+            GatewayEndpoint("get", "/api/models") to true,
+            GatewayEndpoint("POST", "/api/models") to false,
+            GatewayEndpoint("GET", "/v1/models") to false,
+            GatewayEndpoint("GET", "/api/models/") to false,
+        ).forEach { (advertised, expected) ->
+            assertEquals(
+                "row advertised as $advertised",
+                expected,
+                catalogCapabilities(advertised).supportsModelCatalog(),
+            )
+        }
+
+        assertTrue(catalogCapabilities(GatewayEndpoint("GET", "/api/models")).satisfies(manifest))
+        assertFalse(GatewayCapabilities(emptyMap()).supportsModelCatalog())
+        assertFalse(
+            GatewayCapabilities(mapOf("models" to GatewayEndpoint("GET", "/api/models")))
+                .supportsModelCatalog(),
+        )
+    }
+
+    private fun catalogCapabilities(catalogEndpoint: GatewayEndpoint): GatewayCapabilities =
+        GatewayCapabilities(
+            PublicBetaGatewayCapabilityManifest.current.requiredEndpoints +
+                (PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint.endpoint to catalogEndpoint),
+        )
 }
