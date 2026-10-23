@@ -82,6 +82,7 @@ internal fun SessionDetailContent(
         SessionDetailComposerTail(
             state = state,
             mutation = detail.mutation,
+            modelPicker = detail.modelPicker,
             canSubmit = canSubmit,
             onEvent = onEvent,
         )

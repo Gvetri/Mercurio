@@ -37,6 +37,7 @@ object JourneyEndpointCatalog {
             "runs" to Endpoint("POST", "/v1/runs"),
             "run_status" to Endpoint("GET", "/v1/runs/{run_id}"),
             "run_events" to Endpoint("GET", "/v1/runs/{run_id}/events"),
+            "run_models" to Endpoint("GET", "/api/models"),
             "gateway_future_endpoint" to Endpoint("GET", "/v1/future"),
         )
 }
@@ -58,6 +59,8 @@ data class JourneyScenario(
     val failNextSessionList: Boolean = false,
     val failAfterFirstSessionList: Boolean = false,
     val holdCreateMs: Int? = null,
+    val modelCatalog: JourneyModelCatalog? = null,
+    val modelCatalogRow: JourneyModelCatalogRow? = null,
 ) {
     init {
         require(name.matches(Regex("[a-z][a-z0-9-]*"))) {
@@ -68,6 +71,55 @@ data class JourneyScenario(
         require(holdCreateMs == null || holdCreateMs in 1..MAX_HOLD_CREATE_MILLIS) {
             "hold_create_ms must be between 1 and 9000 milliseconds."
         }
+        require(modelCatalogRow == null || "run_models" in capabilities) {
+            "A model catalog row override requires the run_models capability."
+        }
+    }
+}
+
+/**
+ * The additive model catalog served at `GET /api/models` for journeys that script the
+ * advertised catalog flow. The shape follows the pinned `contracts/models` fixture: a
+ * nullable `default_model` and non-empty entries; an entry without efforts is selectable
+ * with no effort control.
+ */
+data class JourneyModelCatalog(
+    val defaultModel: String?,
+    val entries: List<JourneyModelCatalogEntry>,
+) {
+    init {
+        require(entries.isNotEmpty()) { "A journey model catalog must contain at least one model entry." }
+    }
+}
+
+data class JourneyModelCatalogEntry(
+    val id: String,
+    val displayName: String,
+    val provider: String?,
+    val supportedEfforts: List<String> = emptyList(),
+    val defaultEffort: String? = null,
+) {
+    init {
+        require(id.isNotBlank()) { "A journey model catalog entry must carry a non-blank id." }
+        require(displayName.isNotBlank()) { "A journey model catalog entry must carry a non-blank display name." }
+        require(supportedEfforts.isNotEmpty() || defaultEffort == null) {
+            "A model entry without efforts cannot declare a default effort."
+        }
+        require(supportedEfforts.none(String::isBlank)) { "Journey model effort vocabulary values must not be blank." }
+        require(defaultEffort == null || defaultEffort in supportedEfforts) {
+            "A model entry default effort must be one of its supported efforts."
+        }
+    }
+}
+
+/** A deliberately mismatched `run_models` capability row: exact-method/path gates decide detection. */
+data class JourneyModelCatalogRow(
+    val method: String,
+    val path: String,
+) {
+    init {
+        require(method.isNotBlank()) { "A journey model catalog row override must carry a non-blank method." }
+        require(path.isNotBlank()) { "A journey model catalog row override must carry a non-blank path." }
     }
 }
 
@@ -96,6 +148,7 @@ data class JourneyRunScript(
     val holdOpen: Boolean = false,
     val finalizeOnDisconnect: Boolean = false,
     val refuseCreate: Boolean = false,
+    val admissionRefusalCode: String? = null,
     val liveFraming: Boolean = false,
     val finalStatus: String? = null,
     val terminalHistory: List<JourneyMessage> = emptyList(),
@@ -115,6 +168,18 @@ data class JourneyRunScript(
                 (observation.isEmpty() && finalStatus == null && terminalHistory.isEmpty()),
         ) {
             "A refused Run creation cannot script observation or terminal behavior."
+        }
+        require(admissionRefusalCode == null || !refuseCreate) {
+            "A Run cannot both fail creation and refuse admission."
+        }
+        require(
+            admissionRefusalCode == null ||
+                (
+                    admissionRefusalCode.isNotBlank() &&
+                        observation.isEmpty() && finalStatus == null && terminalHistory.isEmpty()
+                ),
+        ) {
+            "An admission-refused Run cannot carry a blank code or script observation or terminal behavior."
         }
     }
 }
@@ -158,6 +223,8 @@ private val allowedTopLevelKeys =
         "fail_next_session_list",
         "fail_after_first_session_list",
         "hold_create_ms",
+        "model_catalog",
+        "model_catalog_row",
     )
 private val allowedSessionKeys = setOf("id", "title", "preview", "pinned", "history")
 private val allowedMessageKeys = setOf("id", "role", "content", "timestamp")
@@ -171,11 +238,16 @@ private val allowedRunKeys =
         "hold_open",
         "finalize_on_disconnect",
         "refuse_create",
+        "admission_refusal_code",
         "live_framing",
         "final_status",
         "terminal_history",
     )
 private val allowedEventKeys = setOf("type", "delta")
+private val allowedCatalogKeys = setOf("default_model", "models")
+private val allowedCatalogEntryKeys = setOf("id", "display_name", "provider", "effort")
+private val allowedEffortKeys = setOf("supported", "default")
+private val allowedCatalogRowKeys = setOf("method", "path")
 private val UNICODE_ESCAPE = Regex("\\\\u([0-9a-fA-F]{4})")
 
 private fun rejectUnknownKeys(
@@ -252,6 +324,8 @@ object JourneyScenarioParser {
                 failAfterFirstSessionList =
                     JourneyScenarioJson.optionalBoolean(root, "fail_after_first_session_list", default = false),
                 holdCreateMs = JourneyScenarioJson.optionalInt(root, "hold_create_ms"),
+                modelCatalog = JourneyScenarioCatalog.parseModelCatalog(root),
+                modelCatalogRow = JourneyScenarioCatalog.parseModelCatalogRow(root),
             )
         } catch (error: IllegalArgumentException) {
             throw JourneyScenarioFormatException(error.message ?: "Journey scenario is invalid.", error)
@@ -291,6 +365,72 @@ object JourneyScenarioParser {
         }
 }
 
+private object JourneyScenarioCatalog {
+    internal fun parseModelCatalog(root: JsonObject): JourneyModelCatalog? {
+        val catalog = root["model_catalog"] ?: return null
+        val catalogObject =
+            catalog as? JsonObject
+                ?: throw JourneyScenarioFormatException("The model catalog must be a JSON object.")
+        rejectUnknownKeys(catalogObject, allowedCatalogKeys, "model_catalog")
+        val models =
+            catalogObject["models"]?.jsonArray
+                ?: throw JourneyScenarioFormatException("The model catalog must declare a models list.")
+        return JourneyModelCatalog(
+            defaultModel = nullableRequiredString(catalogObject, "default_model"),
+            entries =
+                models.mapIndexed { index, element ->
+                    parseModelCatalogEntry(element.jsonObject, index)
+                },
+        )
+    }
+
+    private fun parseModelCatalogEntry(
+        entry: JsonObject,
+        index: Int,
+    ): JourneyModelCatalogEntry {
+        rejectUnknownKeys(entry, allowedCatalogEntryKeys, "model_catalog.models[$index]")
+        val effort = entry["effort"]?.jsonObject
+        effort?.let { rejectUnknownKeys(it, allowedEffortKeys, "model_catalog.models[$index].effort") }
+        if (effort != null && effort["supported"] == null) {
+            throw JourneyScenarioFormatException("model_catalog.models[$index].effort must declare supported efforts.")
+        }
+        return JourneyModelCatalogEntry(
+            id = JourneyScenarioJson.requiredString(entry, "id"),
+            displayName = JourneyScenarioJson.requiredString(entry, "display_name"),
+            provider = JourneyScenarioJson.optionalString(entry, "provider"),
+            supportedEfforts = effort?.let { JourneyScenarioJson.requiredStringList(it, "supported") }.orEmpty(),
+            defaultEffort = effort?.let { JourneyScenarioJson.optionalString(it, "default") },
+        )
+    }
+
+    internal fun parseModelCatalogRow(root: JsonObject): JourneyModelCatalogRow? {
+        val row = root["model_catalog_row"] ?: return null
+        val rowObject =
+            row as? JsonObject
+                ?: throw JourneyScenarioFormatException("The model catalog row override must be a JSON object.")
+        rejectUnknownKeys(rowObject, allowedCatalogRowKeys, "model_catalog_row")
+        return JourneyModelCatalogRow(
+            method = JourneyScenarioJson.requiredString(rowObject, "method"),
+            path = JourneyScenarioJson.requiredString(rowObject, "path"),
+        )
+    }
+
+    internal fun nullableRequiredString(
+        container: JsonObject,
+        key: String,
+    ): String? {
+        val value =
+            container[key]
+                ?: throw JourneyScenarioFormatException("Field '$key' is required and may be null.")
+        return if (value == JsonNull) {
+            null
+        } else {
+            (value as? JsonPrimitive)?.content?.takeIf(String::isNotBlank)
+                ?: throw JourneyScenarioFormatException("Field '$key' must be a non-blank string or null.")
+        }
+    }
+}
+
 private object JourneyScenarioJson {
     internal fun parseMessages(
         container: JsonObject,
@@ -321,6 +461,7 @@ private object JourneyScenarioJson {
                 holdOpen = optionalBoolean(run, "hold_open", default = false),
                 finalizeOnDisconnect = optionalBoolean(run, "finalize_on_disconnect", default = false),
                 refuseCreate = optionalBoolean(run, "refuse_create", default = false),
+                admissionRefusalCode = optionalString(run, "admission_refusal_code"),
                 liveFraming = optionalBoolean(run, "live_framing", default = false),
                 finalStatus = optionalString(run, "final_status"),
                 terminalHistory = parseMessages(run, "terminal_history", "run[$index].terminal_history"),

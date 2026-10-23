@@ -119,8 +119,13 @@ internal suspend fun EntryStateHolder.reconcileTimedOutSendNow(
         }
     } catch (error: CancellationException) {
         throw error
-    } catch (_: GatewayException) {
-        showTimedOutSendFailure(sessionId, request.connectionGeneration, request.sessionGeneration)
+    } catch (error: GatewayException) {
+        showTimedOutSendFailure(
+            sessionId,
+            request.connectionGeneration,
+            request.sessionGeneration,
+            refusalCategory = error.category.toSendFailureCategoryOrNull(),
+        )
         true
     } catch (_: Exception) {
         showTimedOutSendFailure(sessionId, request.connectionGeneration, request.sessionGeneration)
@@ -393,6 +398,7 @@ internal fun EntryStateHolder.showTimedOutSendFailure(
     sessionId: SessionId,
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
+    refusalCategory: MessageSendErrorCategory? = null,
 ) {
     synchronized(sessionRequestLock) {
         if (
@@ -406,7 +412,10 @@ internal fun EntryStateHolder.showTimedOutSendFailure(
         markTimedOutSendUncertain(
             sessionId,
             TimedOutSendUiContext(current, opened, recoveryDraft),
-            errorCategory = pendingTimedOutSends[sessionId]?.errorCategory ?: MessageSendErrorCategory.UNCERTAIN,
+            errorCategory =
+                refusalCategory
+                    ?: pendingTimedOutSends[sessionId]?.errorCategory
+                    ?: MessageSendErrorCategory.UNCERTAIN,
         )
         pendingTimedOutSends.remove(sessionId)
     }

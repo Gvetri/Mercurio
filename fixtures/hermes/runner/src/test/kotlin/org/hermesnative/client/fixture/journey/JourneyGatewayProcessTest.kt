@@ -34,7 +34,7 @@ class JourneyGatewayProcessTest {
                 val endpoints = body.getValue("endpoints").jsonObject
                 assertEquals(scenario.capabilities.toSet(), endpoints.keys)
                 endpoints.forEach { (name, value) ->
-                    val expected = JourneyEndpointCatalog.endpoints.getValue(name)
+                    val expected = expectedEndpointRow(name, scenario.modelCatalogRow)
                     assertEquals(expected.method, value.jsonObject.getValue("method").jsonPrimitive.content)
                     assertEquals(expected.path, value.jsonObject.getValue("path").jsonPrimitive.content)
                 }
@@ -443,10 +443,118 @@ class JourneyGatewayProcessTest {
         }
     }
 
+    @Test
+    fun advertised_journey_gateway_serves_the_model_catalog_and_records_run_selections() {
+        val process = startGateway("model-picker-advertised", tls = false)
+        try {
+            val endpoint = process.endpoint
+            assertEquals(401, get(endpoint, "/api/models"))
+            val catalog = get(endpoint, "/api/models", bearer = "synthetic-token")
+            assertEquals(200, catalog)
+            val body = Json.parseToJsonElement(catalog.substringAfter(" body=")).jsonObject
+            assertEquals("hermes.api_server.run_models", body.getValue("object").jsonPrimitive.content)
+            assertEquals("deepseek-v4-flash", body.getValue("default_model").jsonPrimitive.content)
+            val models = body.getValue("models").jsonArray
+            assertEquals(2, models.size)
+            val first = models[0].jsonObject
+            assertEquals("DeepSeek V4 Flash", first.getValue("display_name").jsonPrimitive.content)
+            assertEquals(
+                listOf("low", "medium", "high"),
+                first.getValue("effort").jsonObject.getValue("supported").jsonArray
+                    .map { it.jsonPrimitive.content },
+            )
+            assertEquals("medium", first.getValue("effort").jsonObject.getValue("default").jsonPrimitive.content)
+            val second = models[1].jsonObject
+            assertEquals("hermes-agent", second.getValue("id").jsonPrimitive.content)
+            assertFalse(second.containsKey("effort"))
+            val created =
+                post(
+                    endpoint,
+                    "/v1/runs",
+                    """{"input":"Rely on this","session_id":"session-alpha","model":"hermes-agent"}""",
+                    bearer = "synthetic-token",
+                )
+            assertEquals(202, created.status)
+            val telemetry = get(endpoint, "/__fixture/telemetry")
+            assertTrue(
+                telemetry.contains(
+                    "\"model\":\"hermes-agent\",\"effort\":null," +
+                        "\"accepted\":true",
+                ),
+            )
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun refusal_script_answers_admission_with_the_openai_error_envelope_and_records_the_pair() {
+        val process = startGateway("model-picker-refusal", tls = false)
+        try {
+            val endpoint = process.endpoint
+            val refused =
+                post(
+                    endpoint,
+                    "/v1/runs",
+                    """{"input":"Refuse this","session_id":"session-alpha",""" +
+                        """"model":"deepseek-v4-flash","effort":"high"}""",
+                )
+            assertEquals(400, refused.status)
+            assertTrue(refused.body.contains("\"code\":\"unsupported_model\""))
+            assertTrue(refused.body.contains("\"type\":\"invalid_request_error\""))
+            val retried = post(endpoint, "/v1/runs", """{"input":"Refuse this","session_id":"session-alpha"}""")
+            assertEquals(202, retried.status)
+            val telemetry = get(endpoint, "/__fixture/telemetry")
+            assertTrue(
+                telemetry.contains(
+                    "\"model\":\"deepseek-v4-flash\",\"effort\":\"high\",\"accepted\":false",
+                ),
+            )
+            assertTrue(
+                telemetry.contains("\"model\":null,\"effort\":null,\"accepted\":true"),
+            )
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
+    fun mismatched_row_is_advertised_and_the_absent_scenario_serves_no_catalog_route() {
+        val mismatch = startGateway("model-catalog-row-mismatch", tls = false)
+        try {
+            val capabilities = get(mismatch.endpoint, "/v1/capabilities")
+            assertEquals(200, capabilities)
+            assertTrue(
+                capabilities.contains("\"run_models\":{\"method\":\"GET\",\"path\":\"/v1/models\"}"),
+            )
+        } finally {
+            mismatch.stop()
+        }
+        val absent = startGateway("model-picker-absent", tls = false)
+        try {
+            assertEquals(404, get(absent.endpoint, "/api/models"))
+            val capabilities = get(absent.endpoint, "/v1/capabilities")
+            assertTrue(!capabilities.contains("run_models"))
+            assertTrue(capabilities.contains("\"sessions\""))
+        } finally {
+            absent.stop()
+        }
+    }
+
     private fun assertEquals(
         expected: Int,
         actual: String,
     ) {
         org.junit.Assert.assertTrue("Expected $expected in: $actual", actual.startsWith("status=$expected "))
     }
+
+    private fun expectedEndpointRow(
+        name: String,
+        override: JourneyModelCatalogRow?,
+    ): JourneyEndpointCatalog.Endpoint =
+        if (name == "run_models" && override != null) {
+            JourneyEndpointCatalog.Endpoint(override.method, override.path)
+        } else {
+            JourneyEndpointCatalog.endpoints.getValue(name)
+        }
 }

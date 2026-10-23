@@ -10,6 +10,9 @@ import org.hermesnative.client.feature.entry.domain.GatewayEndpoint
 import org.hermesnative.client.feature.entry.domain.GatewayErrorCategory
 import org.hermesnative.client.feature.entry.domain.GatewayException
 import org.hermesnative.client.feature.entry.domain.GatewayHistoryMessage
+import org.hermesnative.client.feature.entry.domain.ModelCatalog
+import org.hermesnative.client.feature.entry.domain.ModelCatalogEntry
+import org.hermesnative.client.feature.entry.domain.ModelEffortOptions
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunEvent
 import org.hermesnative.client.feature.entry.domain.RunEventType
@@ -26,6 +29,7 @@ internal object GatewayJsonParser {
     private const val SESSION_DELETED_OBJECT = "hermes.session.deleted"
     private const val RUN_OBJECT = "hermes.run"
     private const val LIST_OBJECT = "list"
+    private const val MODEL_CATALOG_OBJECT = "hermes.api_server.run_models"
 
     fun parseObject(
         operation: String,
@@ -150,6 +154,32 @@ internal object GatewayJsonParser {
         )
     }
 
+    /**
+     * Parses the additive-optional `GET /api/models` Run model catalog response.
+     *
+     * The documented fail-closed ladder: a foreign `object` discriminator, a missing or
+     * empty `models` array, a blank required entry field, or an effort `default` outside
+     * its model's `supported` vocabulary rejects the whole response as INVALID_RESPONSE,
+     * which makes the catalog unavailable while leaving the connection healthy. Unknown
+     * additive keys at any level are ignored.
+     */
+    fun parseModelCatalog(
+        operation: String,
+        root: JsonObject,
+    ): ModelCatalog {
+        GatewayJsonFields.requireObjectField(root, "object", MODEL_CATALOG_OBJECT, operation)
+        val entries =
+            GatewayJsonFields.requiredArray(root, "models", operation).mapIndexed { index, value ->
+                GatewayJsonElements.parseModelEntry(value, "$operation.models[$index]")
+            }
+        if (entries.isEmpty()) invalid(operation, "field 'models' must not be empty")
+        return ModelCatalog(
+            discriminator = MODEL_CATALOG_OBJECT,
+            defaultModel = GatewayJsonFields.requiredNullableString(root, "default_model", operation),
+            entries = entries,
+        )
+    }
+
     fun parseRunEvent(
         operation: String,
         frame: GatewaySseFrame,
@@ -232,6 +262,40 @@ private object GatewayJsonElements {
             runResult = GatewayJsonFields.optionalString(message, "run_result", operation),
             timestamp = messageTimestamp(message, operation),
         )
+    }
+
+    fun parseModelEntry(
+        value: JsonElement,
+        operation: String,
+    ): ModelCatalogEntry {
+        val entry = value as? JsonObject ?: invalid(operation, "model entry must be a JSON object")
+        return ModelCatalogEntry(
+            id = GatewayJsonFields.requiredNonBlankString(entry, "id", operation),
+            displayName = GatewayJsonFields.requiredNonBlankString(entry, "display_name", operation),
+            provider = GatewayJsonFields.requiredNullableString(entry, "provider", operation),
+            effort = parseModelEffort(entry, operation),
+        )
+    }
+
+    private fun parseModelEffort(
+        entry: JsonObject,
+        operation: String,
+    ): ModelEffortOptions? {
+        val element = entry["effort"]
+        if (element == null || element == JsonNull) return null
+        val effort = element as? JsonObject ?: invalid(operation, "field 'effort' must be an object")
+        val supported =
+            GatewayJsonFields.requiredArray(effort, "supported", operation).mapIndexed { index, value ->
+                val term = GatewayJsonFields.stringValue(value, "supported[$index]", operation)
+                if (term.isBlank()) invalid(operation, "field 'supported[$index]' must not be blank")
+                term
+            }
+        if (supported.isEmpty()) invalid(operation, "field 'supported' must not be empty")
+        val default = GatewayJsonFields.requiredNullableString(effort, "default", operation)
+        if (default != null && default !in supported) {
+            invalid(operation, "field 'default' must be a member of 'supported'")
+        }
+        return ModelEffortOptions(supported = supported, default = default)
     }
 
     private fun messageIdentity(
