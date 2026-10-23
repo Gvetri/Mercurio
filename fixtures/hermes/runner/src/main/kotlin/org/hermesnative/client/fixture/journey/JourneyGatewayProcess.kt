@@ -101,6 +101,22 @@ class JourneyGatewayProcess private constructor(
                 server = http
             }
             val behavior = JourneyGatewayBehavior(scenario)
+            registerRoutes(server, scenario, behavior)
+            server.start()
+            val scheme = if (scenario.tls) "https" else "http"
+            return JourneyGatewayProcess(
+                server = server,
+                executor = executor,
+                endpoint = URI.create("$scheme://127.0.0.1:${server.address.port}"),
+                provenanceValue = scenario.hermesRevision,
+            )
+        }
+
+        private fun registerRoutes(
+            server: HttpServer,
+            scenario: JourneyScenario,
+            behavior: JourneyGatewayBehavior,
+        ) {
             server.createContext("/health") { exchange ->
                 record(exchange, behavior)
                 respond(exchange, HTTP_OK, """{"status":"synthetic"}""")
@@ -123,6 +139,11 @@ class JourneyGatewayProcess private constructor(
             server.createContext("/api/sessions/") { exchange ->
                 JourneyGatewayRoutes.handleSessionResource(exchange, behavior)
             }
+            if (scenario.modelCatalog != null) {
+                server.createContext("/api/models") { exchange ->
+                    JourneyGatewayRoutes.handleModelCatalog(exchange, behavior)
+                }
+            }
             server.createContext("/v1/runs") { exchange ->
                 JourneyGatewayRoutes.handleRuns(exchange, behavior)
             }
@@ -130,14 +151,6 @@ class JourneyGatewayProcess private constructor(
                 record(exchange, behavior)
                 respond(exchange, HTTP_NOT_FOUND, """{"error":"not-found"}""")
             }
-            server.start()
-            val scheme = if (scenario.tls) "https" else "http"
-            return JourneyGatewayProcess(
-                server = server,
-                executor = executor,
-                endpoint = URI.create("$scheme://127.0.0.1:${server.address.port}"),
-                provenanceValue = scenario.hermesRevision,
-            )
         }
 
         private fun loadKeyStore(
@@ -212,7 +225,7 @@ private object JourneyGatewayRoutes {
                 val created =
                     JourneySession(
                         id = behavior.createdSessionId(),
-                        title = JourneyGatewayJson.parseTitle(body),
+                        title = JourneyGatewayBodyJson.parseTitle(body),
                         preview = null,
                         pinned = false,
                         history = emptyList(),
@@ -323,12 +336,12 @@ private object JourneyGatewayRoutes {
             respond(exchange, HTTP_NOT_FOUND, """{"error":"not-found"}""")
             return
         }
-        val pinned = JourneyGatewayJson.parseBooleanField(body, "pinned")
+        val pinned = JourneyGatewayBodyJson.parseBooleanField(body, "pinned")
         val updated =
             if (pinned != null) {
                 session.copy(pinned = pinned)
             } else {
-                session.copy(title = JourneyGatewayJson.parseTitle(body))
+                session.copy(title = JourneyGatewayBodyJson.parseTitle(body))
             }
         behavior.replaceSession(updated)
         val operation =
@@ -366,6 +379,26 @@ private object JourneyGatewayRoutes {
         )
     }
 
+    internal fun handleModelCatalog(
+        exchange: HttpExchange,
+        behavior: JourneyGatewayBehavior,
+    ) {
+        record(exchange, behavior)
+        if (unauthorized(exchange, behavior)) {
+            respond(exchange, HTTP_UNAUTHORIZED, """{"error":"unauthorized"}""")
+            return
+        }
+        when {
+            exchange.requestURI.path != "/api/models" ->
+                respond(exchange, HTTP_NOT_FOUND, """{"error":"not-found"}""")
+
+            exchange.requestMethod != "GET" ->
+                respond(exchange, HTTP_METHOD_NOT_ALLOWED, """{"error":"method-not-allowed"}""")
+
+            else -> respond(exchange, HTTP_OK, JourneyGatewayJson.catalogJson(behavior.scenario))
+        }
+    }
+
     internal fun handleRuns(
         exchange: HttpExchange,
         behavior: JourneyGatewayBehavior,
@@ -388,8 +421,8 @@ private object JourneyGatewayRoutes {
         behavior: JourneyGatewayBehavior,
         body: String?,
     ) {
-        val sessionId = JourneyGatewayJson.parseStringField(body, "session_id")
-        if (sessionId == null || JourneyGatewayJson.parseRunInput(body) == null) {
+        val sessionId = JourneyGatewayBodyJson.parseStringField(body, "session_id")
+        if (sessionId == null || JourneyGatewayBodyJson.parseRunInput(body) == null) {
             respond(exchange, HTTP_BAD_REQUEST, """{"error":"invalid-run-request"}""")
             return
         }
@@ -397,12 +430,20 @@ private object JourneyGatewayRoutes {
             respond(exchange, HTTP_NOT_FOUND, """{"error":"session-not-found"}""")
             return
         }
+        val model = JourneyGatewayBodyJson.parseStringField(body, "model")
+        val effort = JourneyGatewayBodyJson.parseStringField(body, "effort")
         val script = behavior.nextRunScript(sessionId)
         if (script == null) {
+            behavior.recordSelection(sessionId, model, effort, accepted = false)
             respond(exchange, HTTP_NOT_FOUND, """{"error":"no-synthetic-run"}""")
         } else if (script.refuseCreate) {
+            behavior.recordSelection(sessionId, model, effort, accepted = false)
             respond(exchange, HTTP_SERVICE_UNAVAILABLE, """{"error":"run-create-refused"}""")
+        } else if (script.admissionRefusalCode != null) {
+            behavior.recordSelection(sessionId, model, effort, accepted = false)
+            respond(exchange, HTTP_BAD_REQUEST, JourneyGatewayJson.admissionRefusalJson(script))
         } else {
+            behavior.recordSelection(sessionId, model, effort, accepted = true)
             respond(
                 exchange,
                 HTTP_ACCEPTED,
@@ -539,7 +580,7 @@ private object JourneyGatewayJson {
             )
             append(
                 scenario.capabilities.joinToString(",") { name ->
-                    val endpoint = JourneyEndpointCatalog.endpoints.getValue(name)
+                    val endpoint = cataloguedEndpoint(scenario, name)
                     val method = GatewayHttpSupport.quote(endpoint.method)
                     val path = GatewayHttpSupport.quote(endpoint.path)
                     """${GatewayHttpSupport.quote(
@@ -549,6 +590,42 @@ private object JourneyGatewayJson {
             )
             append("}}")
         }
+
+    private fun cataloguedEndpoint(
+        scenario: JourneyScenario,
+        name: String,
+    ): JourneyEndpointCatalog.Endpoint =
+        if (name == "run_models" && scenario.modelCatalogRow != null) {
+            JourneyEndpointCatalog.Endpoint(scenario.modelCatalogRow.method, scenario.modelCatalogRow.path)
+        } else {
+            JourneyEndpointCatalog.endpoints.getValue(name)
+        }
+
+    internal fun catalogJson(scenario: JourneyScenario): String {
+        val catalog = requireNotNull(scenario.modelCatalog) { "The scenario declares no model catalog." }
+        val models = catalog.entries.joinToString(",") { entry -> catalogEntryJson(entry) }
+        return "{\"object\":\"hermes.api_server.run_models\",\"default_model\":" +
+            catalog.defaultModel.jsonValue() + ",\"models\":[" + models + "]}"
+    }
+
+    private fun catalogEntryJson(entry: JourneyModelCatalogEntry): String {
+        val effort =
+            if (entry.supportedEfforts.isEmpty()) {
+                ""
+            } else {
+                val efforts = entry.supportedEfforts.joinToString(",") { GatewayHttpSupport.quote(it) }
+                ",\"effort\":{\"supported\":[" + efforts + "],\"default\":" +
+                    entry.defaultEffort.jsonValue() + "}"
+            }
+        return "{\"id\":" + entry.id.jsonValue() + ",\"display_name\":" + entry.displayName.jsonValue() +
+            ",\"provider\":" + entry.provider.jsonValue() + effort + "}"
+    }
+
+    internal fun admissionRefusalJson(script: JourneyRunScript): String {
+        val code = requireNotNull(script.admissionRefusalCode).jsonValue()
+        return "{\"error\":{\"message\":\"synthetic-admission-refusal\"," +
+            "\"type\":\"invalid_request_error\",\"param\":null,\"code\":$code}}"
+    }
 
     internal fun renderEvent(
         script: JourneyRunScript,
@@ -601,7 +678,9 @@ private object JourneyGatewayJson {
             message.timestamp?.let { append(""","timestamp":${it.jsonValue()}""") }
             append('}')
         }
+}
 
+private object JourneyGatewayBodyJson {
     internal fun parseTitle(body: String?): String? = parseStringField(body, "title")
 
     internal fun parseStringField(
@@ -666,9 +745,17 @@ internal class OfflineAfterFirstSessionListGate(
     }
 }
 
+internal data class JourneyRunSelectionRecord(
+    val sessionId: String,
+    val model: String?,
+    val effort: String?,
+    val accepted: Boolean,
+)
+
 internal class JourneyGatewayBehavior(
     val scenario: JourneyScenario,
 ) {
+    val runSelections = CopyOnWriteArrayList<JourneyRunSelectionRecord>()
     val sessions = CopyOnWriteArrayList(scenario.sessions)
     val requests = CopyOnWriteArrayList<SyntheticGatewayRequest>()
     val sessionMutations = CopyOnWriteArrayList<Pair<String, String>>()
@@ -685,6 +772,15 @@ internal class JourneyGatewayBehavior(
     private val createdRunCounters = ConcurrentHashMap<String, AtomicInteger>()
     private val createdSessionCounter = AtomicInteger(0)
     internal val observationDelivered = ConcurrentHashMap<String, Boolean>()
+
+    fun recordSelection(
+        sessionId: String,
+        model: String?,
+        effort: String?,
+        accepted: Boolean,
+    ) {
+        runSelections += JourneyRunSelectionRecord(sessionId, model, effort, accepted)
+    }
 
     fun consumeFailNextSessionList(): Boolean {
         if (!failNextSessionList) return false
@@ -754,6 +850,16 @@ internal class JourneyGatewayBehavior(
                 },
             )
             append('}')
+            append(""","run_selections":[""")
+            append(
+                runSelections.joinToString(",") { selection ->
+                    "{\"session_id\":${selection.sessionId.jsonValue()}," +
+                        "\"model\":${selection.model.jsonValue()}," +
+                        "\"effort\":${selection.effort.jsonValue()}," +
+                        "\"accepted\":${selection.accepted}}"
+                },
+            )
+            append(']')
             append(""","interrupted_run_ids":[${interruptedRunIds.joinToString(",") { it.jsonValue() }}]""")
             append(""","sse_connections":{""")
             append(

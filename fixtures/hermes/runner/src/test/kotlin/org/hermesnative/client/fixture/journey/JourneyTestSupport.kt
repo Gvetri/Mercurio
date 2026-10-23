@@ -59,11 +59,13 @@ internal fun post(
     endpoint: URI,
     path: String,
     body: String,
+    bearer: String? = null,
 ): HttpResponse {
     val connection = (endpoint.resolve(path).toURL().openConnection() as HttpURLConnection)
     connection.connectTimeout = 2_000
     connection.readTimeout = 5_000
     connection.requestMethod = "POST"
+    bearer?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
     connection.doOutput = true
     connection.setRequestProperty("Content-Type", "application/json")
     connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
@@ -75,11 +77,13 @@ internal fun post(
 internal fun streamEvents(
     endpoint: URI,
     runId: String,
+    bearer: String? = null,
 ): List<SseEvent> {
     val connection = (endpoint.resolve("/v1/runs/$runId/events").toURL().openConnection() as HttpURLConnection)
     connection.connectTimeout = 2_000
     connection.readTimeout = 5_000
     connection.requestMethod = "GET"
+    bearer?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
     val lines = connection.inputStream.bufferedReader().lineSequence().iterator()
     val events = mutableListOf<SseEvent>()
     var lineCount = 0
