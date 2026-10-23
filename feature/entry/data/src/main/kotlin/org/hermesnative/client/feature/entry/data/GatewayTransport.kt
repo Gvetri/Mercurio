@@ -60,7 +60,7 @@ class OkHttpGatewayTransport(
         client.newCall(request(request)).execute().use { response ->
             return GatewayHttpResponse(
                 statusCode = response.code,
-                body = response.body?.string().orEmpty(),
+                body = response.body.string(),
             )
         }
     }
@@ -68,10 +68,7 @@ class OkHttpGatewayTransport(
     override fun openEventStream(request: GatewayHttpRequest): GatewayEventStream {
         val call = client.newCall(request(request))
         val response = call.execute()
-        val source = response.body?.source()
-        if (source == null) {
-            return GatewayEventStream(response.code, emptySequence()) { call.cancel() }
-        }
+        val source = response.body.source()
 
         val lines =
             sequence {
