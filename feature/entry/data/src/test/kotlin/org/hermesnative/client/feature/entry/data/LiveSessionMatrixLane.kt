@@ -378,7 +378,7 @@ internal class TlsLoopbackReadinessChecker(
                 .header("Authorization", "Bearer $bearerToken")
                 .build()
         client.newCall(request).execute().use { response ->
-            return ProbeResponse(status = response.code, body = response.body?.string().orEmpty())
+            return ProbeResponse(status = response.code, body = response.body.string())
         }
     }
 
