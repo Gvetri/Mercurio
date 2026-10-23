@@ -120,35 +120,39 @@ internal fun EntryStateHolder.createSessionJob(
                 openedSession.toOpenSessionUiState(
                     OpenSessionOverlay(messages = toMessageUiStates(openedSession.history)),
                 )
-            updateCurrentSessionRequest(request.context.generation) { current ->
-                current.copy(
-                    sessions =
-                        refreshedPage?.let { page ->
-                            mergeSessions(
-                                emptyList(),
-                                page.sessions.map { it.toSessionItemUiState() },
-                            )
-                        } ?: if (request.context.query.isBlank()) {
-                            mergeSession(current.sessions, openedSession.session)
-                        } else {
-                            current.sessions
-                        },
-                    nextOffset = refreshedPage?.nextOffset,
-                    isLoading = false,
-                    isRefreshing = false,
-                    isSearching = false,
-                    isLoadingMore = false,
-                    isStale = refreshedPage == null,
-                    isUnavailable = refreshedPage == null,
-                    errorCategory =
-                        if (refreshedPage == null) {
-                            SessionListErrorCategory.GATEWAY_UNAVAILABLE
-                        } else {
-                            null
-                        },
-                    createSession = null,
-                    openedSession = openedSessionUiState,
-                )
+            val applied =
+                updateCurrentSessionRequest(request.context.generation) { current ->
+                    current.copy(
+                        sessions =
+                            refreshedPage?.let { page ->
+                                mergeSessions(
+                                    emptyList(),
+                                    page.sessions.map { it.toSessionItemUiState() },
+                                )
+                            } ?: if (request.context.query.isBlank()) {
+                                mergeSession(current.sessions, openedSession.session)
+                            } else {
+                                current.sessions
+                            },
+                        nextOffset = refreshedPage?.nextOffset,
+                        isLoading = false,
+                        isRefreshing = false,
+                        isSearching = false,
+                        isLoadingMore = false,
+                        isStale = refreshedPage == null,
+                        isUnavailable = refreshedPage == null,
+                        errorCategory =
+                            if (refreshedPage == null) {
+                                SessionListErrorCategory.GATEWAY_UNAVAILABLE
+                            } else {
+                                null
+                            },
+                        createSession = null,
+                        openedSession = openedSessionUiState,
+                    )
+                }
+            if (applied) {
+                maybeFetchModelCatalog()
             }
         } catch (error: CancellationException) {
             throw error

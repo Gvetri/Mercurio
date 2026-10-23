@@ -1,0 +1,35 @@
+appId: org.hermesnative.client
+name: model-picker-absent
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: model-picker-absent-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Picker Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "This Gateway does not offer model selection."
+    timeout: 30000
+- assertNotVisible: "Server default"
+- assertNotVisible: "DeepSeek V4 Flash"
+- takeScreenshot: model-picker-absent-hidden
+- tapOn: "Message"
+- inputText: "Send anyway"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Stable composer result"
+    timeout: 30000
+- assertVisible: "Run state: Succeeded"

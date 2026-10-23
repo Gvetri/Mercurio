@@ -70,7 +70,7 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
             withContext(NonCancellable) {
                 withTimeout(sendTimeoutMillis) {
                     runInterruptible {
-                        SubmitMessage(work.gateway).execute(work.sessionId, work.input)
+                        SubmitMessage(work.gateway).execute(work.sessionId, work.input, work.selection)
                     }
                 }
             }
@@ -93,8 +93,10 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
             )
         }
         throw error
-    } catch (_: GatewayException) {
-        if (reportUncertainRunSubmission(work, MessageSendErrorCategory.GATEWAY_REQUEST_FAILED)) {
+    } catch (error: GatewayException) {
+        val sendCategory =
+            error.category.toSendFailureCategoryOrNull() ?: MessageSendErrorCategory.GATEWAY_REQUEST_FAILED
+        if (reportUncertainRunSubmission(work, sendCategory)) {
             onRunSubmissionCompleted?.invoke()
         }
     } catch (_: Exception) {
@@ -120,6 +122,10 @@ internal fun EntryStateHolder.completeSuccessfulSubmission(
     synchronized(sessionRequestLock) {
         if (connectionGeneration == work.requestConnectionGeneration) {
             submittedRunInputs[run.id] = work.input
+            work.selection?.let { selection ->
+                submittedRunModelSelections[run.id] = selection
+                modelSelectionStore.recordUse(work.requestEndpoint, selection.model)
+            }
         }
     }
     val applied =
