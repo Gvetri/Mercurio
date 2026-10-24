@@ -1,5 +1,6 @@
 package org.hermesnative.client.feature.entry.wiring
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -113,6 +114,7 @@ class EntryWiringHistoryCacheRegistrationTest {
 
             holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+            awaitClearedEndpoint(cache, cache.writtenListEndpoints.first())
 
             assertEquals(setOf(cache.writtenListEndpoints.first()), cache.clearedEndpoints.toSet())
             assertTrue(cache.cachedSessionList(ENDPOINT).isEmpty())
@@ -192,6 +194,16 @@ class EntryWiringHistoryCacheRegistrationTest {
 
         override fun clear() {
             credential = null
+        }
+    }
+
+    private fun awaitClearedEndpoint(cache: WiringRecordingCacheStore, endpoint: String) {
+        runBlocking {
+            withTimeout(TEST_TIMEOUT_MILLIS) {
+                while (endpoint !in cache.clearedEndpoints) {
+                    delay(10)
+                }
+            }
         }
     }
 
