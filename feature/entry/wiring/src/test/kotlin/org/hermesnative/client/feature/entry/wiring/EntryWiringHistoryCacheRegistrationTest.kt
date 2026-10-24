@@ -197,7 +197,10 @@ class EntryWiringHistoryCacheRegistrationTest {
         }
     }
 
-    private fun awaitClearedEndpoint(cache: WiringRecordingCacheStore, endpoint: String) {
+    private fun awaitClearedEndpoint(
+        cache: WiringRecordingCacheStore,
+        endpoint: String,
+    ) {
         runBlocking {
             withTimeout(TEST_TIMEOUT_MILLIS) {
                 while (endpoint !in cache.clearedEndpoints) {
