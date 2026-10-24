@@ -218,6 +218,22 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon
+
+  buildsrc_contracts:
+    name: buildsrc-contracts
+    needs: [ui_paths]
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
       - name: Verify the buildSrc quality self-test contracts
         run: >-
           ./gradlew -p buildSrc test
@@ -232,7 +248,7 @@ jobs:
   coverage_mutation:
     name: coverage-mutation
     needs: [ui_paths]
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || (needs.ui_paths.outputs.docs_only_changed != 'true' && needs.ui_paths.outputs.dependency_files_changed != 'true')))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -339,6 +355,9 @@ jobs:
     outputs:
       ui_paths_changed: ${{ steps.ui_paths.outputs.ui_paths }}
       docs_only_changed: ${{ steps.docs_only.outputs.docs_only }}
+      dependency_files_changed: ${{ steps.lane_decisions.outputs.dependency_only }}
+      ci_files_changed: ${{ steps.lane_decisions.outputs.ci_files }}
+      build_logic_changed: ${{ steps.lane_decisions.outputs.build_logic }}
     steps:
       - name: Detect modified UI paths
         id: ui_paths
@@ -383,9 +402,43 @@ jobs:
           print("Classified %d changed file(s) against the documentation surface: docs-only=%s." % (len(changed_files), decision), file=sys.stderr)
           ')"
           printf '%s\n' "docs_only=$decision" >> "$GITHUB_OUTPUT"
+      - name: Classify the lane-routing decisions
+        id: lane_decisions
+        env:
+          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
+        run: |
+          set -euo pipefail
+          decisions="$(python3 -c '
+          import json, os, sys
+          try:
+              changed_files = json.loads(os.environ["CHANGED_FILES"])
+          except (KeyError, ValueError, TypeError) as error:
+              print("The changed-file answer is unreadable (%s); failing closed to the full gate." % error, file=sys.stderr)
+              sys.exit(1)
+          if not isinstance(changed_files, list) or not all(isinstance(path, str) for path in changed_files):
+              print("The changed-file answer is not a list of file paths; failing closed to the full gate.", file=sys.stderr)
+              sys.exit(1)
+          def is_control_plane(path):
+              return "/.github/" in "/" + path
+          def is_build_logic(path):
+              return path.startswith("buildSrc/")
+          def is_dependency_file(path):
+              if is_control_plane(path) or is_build_logic(path):
+                  return False
+              return path == "gradle.properties" or path.endswith(".gradle.kts") or path.startswith("gradle/")
+          dependency_only = bool(changed_files) and all(is_dependency_file(path) for path in changed_files)
+          ci_files = any(is_control_plane(path) for path in changed_files)
+          build_logic = any(is_build_logic(path) for path in changed_files)
+          print("Classified %d changed file(s) for lane routing: dependency-only=%s ci-files=%s build-logic=%s." % (len(changed_files), dependency_only, ci_files, build_logic), file=sys.stderr)
+          print("dependency_only=%s" % str(dependency_only).lower())
+          print("ci_files=%s" % str(ci_files).lower())
+          print("build_logic=%s" % str(build_logic).lower())
+          ')"
+          printf '%s\n' "$decisions" >> "$GITHUB_OUTPUT"
       - name: Report the UI path decision
         run: |
           printf '%s\n' "UI paths changed: ${{ steps.ui_paths.outputs.ui_paths }}."
+          printf '%s\n' "Dependency-only: ${{ steps.lane_decisions.outputs.dependency_only }}. CI files: ${{ steps.lane_decisions.outputs.ci_files }}. Build logic: ${{ steps.lane_decisions.outputs.build_logic }}."
 
   api24_instrumentation:
     name: api24-instrumentation
@@ -700,6 +753,7 @@ jobs:
       - fixture_contract
       - android_build
       - architecture_check
+      - buildsrc_contracts
       - coverage_mutation
       - commit_message
       - compose_test
@@ -767,6 +821,7 @@ jobs:
           ARCHITECTURE_CHECK_RESULT: ${{ needs.architecture_check.result }}
           COVERAGE_MUTATION_RESULT: ${{ needs.coverage_mutation.result }}
           COMPOSE_TEST_RESULT: ${{ needs.compose_test.result }}
+          BUILDSRC_CONTRACTS_RESULT: ${{ needs.buildsrc_contracts.result }}
           API24_INSTRUMENTATION_RESULT: ${{ needs.api24_instrumentation.result }}
           MAESTRO_JOURNEYS_RESULT: ${{ needs.maestro_journeys.result }}
           FORK_GUARD_RESULT: ${{ needs.fork_guard.result }}
@@ -776,6 +831,9 @@ jobs:
           UI_PATHS_RESULT: ${{ needs.ui_paths.result }}
           UI_PATHS_CHANGED: ${{ needs.ui_paths.outputs.ui_paths_changed }}
           DOCS_ONLY_CHANGED: ${{ needs.ui_paths.outputs.docs_only_changed }}
+          DEPENDENCY_ONLY_CHANGED: ${{ needs.ui_paths.outputs.dependency_files_changed }}
+          CI_FILES_CHANGED: ${{ needs.ui_paths.outputs.ci_files_changed }}
+          BUILD_LOGIC_CHANGED: ${{ needs.ui_paths.outputs.build_logic_changed }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_DRAFT: ${{ github.event.pull_request.draft }}
           EVENT_FORK: ${{ github.event.pull_request.head.repo.fork }}
@@ -841,6 +899,30 @@ jobs:
                 exit 1
                 ;;
             esac
+            dependency_only_decision="$DEPENDENCY_ONLY_CHANGED"
+            case "$dependency_only_decision" in
+              true|false) ;;
+              *)
+                printf 'Dependency-file detection must report true or false for this run, but reported %s.\n' "${dependency_only_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
+            ci_files_decision="$CI_FILES_CHANGED"
+            case "$ci_files_decision" in
+              true|false) ;;
+              *)
+                printf 'CI-file detection must report true or false for this run, but reported %s.\n' "${ci_files_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
+            build_logic_decision="$BUILD_LOGIC_CHANGED"
+            case "$build_logic_decision" in
+              true|false) ;;
+              *)
+                printf 'Build-logic detection must report true or false for this run, but reported %s.\n' "${build_logic_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
             if [ "$EVENT_FORK" = true ]; then
               expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
@@ -870,13 +952,30 @@ jobs:
               "$FIXTURE_CONTRACT_RESULT" \
               "$ANDROID_BUILD_RESULT" \
               "$ARCHITECTURE_CHECK_RESULT" \
-              "$COVERAGE_MUTATION_RESULT" \
               "$COMPOSE_TEST_RESULT"; do
               if [ "$result" != "$expected_state" ]; then
                 printf 'Required quality check result: %s\n' "$result" >&2
                 exit 1
               fi
             done
+            if [ "$EVENT_DRAFT" = true ]; then
+              coverage_expected_state=skipped
+            elif [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* ]]; then
+              coverage_expected_state=success
+            elif [ "$docs_only_decision" = true ] || [ "$dependency_only_decision" = true ]; then
+              coverage_expected_state=skipped
+            else
+              coverage_expected_state=success
+            fi
+            if [ "$COVERAGE_MUTATION_RESULT" != "$coverage_expected_state" ]; then
+              printf 'Check coverage_mutation must report %s for this run, but reported %s.\n' "$coverage_expected_state" "$COVERAGE_MUTATION_RESULT" >&2
+              exit 1
+            fi
+            if [ "$EVENT_DRAFT" != true ] && [[ "$ci_files_decision" == true || "$build_logic_decision" == true ]]; then
+              test "$BUILDSRC_CONTRACTS_RESULT" = success
+            else
+              test "$BUILDSRC_CONTRACTS_RESULT" = skipped
+            fi
             if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* || "$ui_paths_decision" == true ]]; then
               test "$API24_INSTRUMENTATION_RESULT" = success
               test "$MAESTRO_JOURNEYS_RESULT" = success
@@ -895,7 +994,6 @@ jobs:
               "$FIXTURE_CONTRACT_RESULT" \
               "$ANDROID_BUILD_RESULT" \
               "$ARCHITECTURE_CHECK_RESULT" \
-              "$COVERAGE_MUTATION_RESULT" \
               "$COMPOSE_TEST_RESULT" \
               "$CONFORMANCE_RESULT"; do
               if [ "$result" != success ]; then
@@ -907,12 +1005,15 @@ jobs:
             expect fork_guard "$FORK_GUARD_RESULT" skipped
             expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
             expect ui_paths "$UI_PATHS_RESULT" skipped
+            expect coverage_mutation "$COVERAGE_MUTATION_RESULT" success
             if [ "$EVENT_NAME" = push ]; then
               test "$API24_INSTRUMENTATION_RESULT" = skipped
               test "$MAESTRO_JOURNEYS_RESULT" = skipped
+              test "$BUILDSRC_CONTRACTS_RESULT" = skipped
             else
               test "$API24_INSTRUMENTATION_RESULT" = success
               test "$MAESTRO_JOURNEYS_RESULT" = success
+              test "$BUILDSRC_CONTRACTS_RESULT" = success
             fi
           fi
           printf '%s\n' 'All checks required for this event passed.'

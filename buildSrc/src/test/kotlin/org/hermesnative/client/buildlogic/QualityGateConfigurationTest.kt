@@ -879,8 +879,8 @@ class QualityGateConfigurationTest {
             workflow.contains("COVERAGE_MUTATION_RESULT: \${{ needs.coverage_mutation.result }}"),
         )
         assertTrue(
-            "The aggregate gate must fail on a non-successful coverage and mutation result.",
-            workflow.contains("\"\$COVERAGE_MUTATION_RESULT\" \\"),
+            "The aggregate gate must fail when the coverage and mutation result misses its routed state.",
+            workflow.contains("if [ \"\$COVERAGE_MUTATION_RESULT\" != \"\$coverage_expected_state\" ]; then"),
         )
         assertTrue(
             "The architecture job must run the architecture rule suite and the deterministic boundary check.",
@@ -1213,7 +1213,7 @@ class QualityGateConfigurationTest {
         }
         val immutableReference = Regex("[0-9a-fA-F]{40}")
 
-        assertEquals("The workflow must keep all eighteen checkout steps explicit.", 18, checkoutStepIndices.size)
+        assertEquals("The workflow must keep all nineteen checkout steps explicit.", 19, checkoutStepIndices.size)
         checkoutStepIndices.forEach { index ->
             val reference = lines[index].trim().substringAfter("actions/checkout@")
             assertTrue(
@@ -1374,7 +1374,6 @@ class QualityGateConfigurationTest {
             "fixture_contract",
             "android_build",
             "architecture_check",
-            "coverage_mutation",
             "compose_test",
         ).forEach { job ->
             assertTrue(
@@ -1382,6 +1381,15 @@ class QualityGateConfigurationTest {
                 workflow.contains("  $job:\n") && workflow.substringAfter("  $job:\n").substringBefore("runs-on:").contains(heavyGate),
             )
         }
+        assertTrue(
+            "The coverage lane must also skip unlabeled docs-only and dependency-only heads while keeping the run-maestro precedence.",
+            workflow
+                .substringAfter("  coverage_mutation:")
+                .substringBefore("runs-on:")
+                .contains(
+                    "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || (needs.ui_paths.outputs.docs_only_changed != 'true' && needs.ui_paths.outputs.dependency_files_changed != 'true')))) }}",
+                ),
+        )
         val aggregate = workflow.substringAfter("  quality-gate:\n")
         assertTrue(
             "The aggregate must read the docs-only decision and fail closed on an unreadable one.",
@@ -1547,7 +1555,8 @@ class QualityGateConfigurationTest {
     @Test
     fun gradle_caching_is_declared_and_the_architecture_self_tests_stay_consolidated_and_fresh() {
         val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
-        val architectureJob = workflow.substringAfter("  architecture_check:").substringBefore("  coverage_mutation:")
+        val architectureJob = workflow.substringAfter("  architecture_check:").substringBefore("  buildsrc_contracts:")
+        val buildSrcContractsJob = workflow.substringAfter("  buildsrc_contracts:").substringBefore("  coverage_mutation:")
         val rootProperties = repositoryRoot.resolve("gradle.properties").readText()
         val buildSrcProperties = repositoryRoot.resolve("buildSrc/gradle.properties").readText()
         val buildSrcScript = repositoryRoot.resolve("buildSrc/build.gradle.kts").readText()
@@ -1573,13 +1582,34 @@ class QualityGateConfigurationTest {
                 buildSrcScript.contains("outputs.cacheIf { false }"),
         )
         assertEquals(
-            "The architecture job must consolidate the buildSrc self-tests into one Gradle invocation.",
+            "The buildsrc-contracts job must consolidate the buildSrc self-tests into one Gradle invocation.",
             1,
+            Regex("./gradlew -p buildSrc test").findAll(buildSrcContractsJob).count(),
+        )
+        assertEquals(
+            "The architecture job must not run the buildSrc self-tests.",
+            0,
             Regex("./gradlew -p buildSrc test").findAll(architectureJob).count(),
         )
         assertTrue(
+            "The buildsrc-contracts job must run on schedule, dispatch, and ready in-repository pull requests that change CI or build logic.",
+            buildSrcContractsJob.contains("    name: buildsrc-contracts\n") &&
+                buildSrcContractsJob.contains("    needs: [ui_paths]\n") &&
+                buildSrcContractsJob.contains("github.event_name == 'schedule'") &&
+                buildSrcContractsJob.contains("github.event_name == 'workflow_dispatch'") &&
+                buildSrcContractsJob.contains("!github.event.pull_request.draft") &&
+                buildSrcContractsJob.contains("!github.event.pull_request.head.repo.fork") &&
+                buildSrcContractsJob.contains("needs.ui_paths.outputs.ci_files_changed == 'true'") &&
+                buildSrcContractsJob.contains("needs.ui_paths.outputs.build_logic_changed == 'true'"),
+        )
+        assertTrue(
+            "The aggregate gate must receive the buildsrc-contracts result.",
+            workflow.contains("      - buildsrc_contracts\n") &&
+                workflow.contains("BUILDSRC_CONTRACTS_RESULT: \${{ needs.buildsrc_contracts.result }}"),
+        )
+        assertTrue(
             "The consolidated buildSrc invocation must keep the CI --no-daemon shape.",
-            architectureJob.contains("--no-daemon"),
+            architectureJob.contains("--no-daemon") && buildSrcContractsJob.contains("--no-daemon"),
         )
         listOf(
             "QualityGateConfigurationTest",
@@ -1591,7 +1621,7 @@ class QualityGateConfigurationTest {
         ).forEach { testClass ->
             assertTrue(
                 "The consolidated invocation must select $testClass.",
-                architectureJob.contains("--tests org.hermesnative.client.buildlogic.$testClass"),
+                buildSrcContractsJob.contains("--tests org.hermesnative.client.buildlogic.$testClass"),
             )
         }
     }
