@@ -72,5 +72,6 @@ internal fun EntryStateHolder.cachedOpenedSession(
         sendErrorCategory = sendErrorCategoryFor(sessionId),
         hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId),
         isStale = true,
+        isCached = true,
     )
 }

@@ -13,13 +13,17 @@ import org.hermesnative.client.feature.entry.domain.SessionId
 internal fun EntryStateHolder.showOpenedSessionFailure(requestGeneration: Long) {
     updateCurrentSessionRequest(requestGeneration) { current ->
         current.openedSession?.let { openedSession ->
+            val cachedMessages =
+                openedSession.messages.ifEmpty { cachedTranscriptUiMessages(openedSession.session.id) }
             current.copy(
                 openedSession =
                     openedSession.copy(
                         isRefreshing = false,
                         isStale = true,
-                        messages =
-                            openedSession.messages.ifEmpty { cachedTranscriptUiMessages(openedSession.session.id) },
+                        isCached =
+                            openedSession.isCached ||
+                                (openedSession.messages.isEmpty() && cachedMessages.isNotEmpty()),
+                        messages = cachedMessages,
                         errorCategory = SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED,
                     ),
             )
