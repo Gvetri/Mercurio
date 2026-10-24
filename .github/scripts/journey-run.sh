@@ -154,6 +154,8 @@ journeys=(
     settings-cache-clear
     connection-removal-purge
     cache-clear-repopulates
+    offline-cache-read
+    cache-run-isolation
     diagnostics-recording
     confirmed-send
     model-picker-advertised

@@ -117,6 +117,33 @@ class JourneyScenarioTest {
     }
 
     @Test
+    fun offline_cache_read_scenario_scripts_both_offline_arms_and_pairs_its_flow() {
+        val scenario = parseCommittedScenario("offline-cache-read")
+        assertTrue(scenario.failAfterFirstSessionList)
+        assertEquals(1, scenario.offlineRecoversAfterBlockedSessionLists)
+        assertTrue(scenario.failAfterFirstSessionOpen)
+        assertEquals(1, scenario.offlineRecoversAfterBlockedSessionOpens)
+        assertTrue(scenario.sessions.single().history.isNotEmpty())
+        assertTrue(
+            "offline-cache-read has no Maestro flow",
+            File(repositoryRoot, "fixtures/hermes/journey/flows/offline-cache-read.yaml").isFile,
+        )
+    }
+
+    @Test
+    fun cache_run_isolation_scenario_scripts_the_uncertain_send_with_cacheable_content() {
+        val scenario = parseCommittedScenario("cache-run-isolation")
+        assertEquals(2, scenario.runs.size)
+        assertTrue(scenario.runs.first().refuseCreate)
+        assertEquals("session-offline", scenario.sessions.single().id)
+        assertTrue(scenario.sessions.single().history.isNotEmpty())
+        assertTrue(
+            "cache-run-isolation has no Maestro flow",
+            File(repositoryRoot, "fixtures/hermes/journey/flows/cache-run-isolation.yaml").isFile,
+        )
+    }
+
+    @Test
     fun connection_recovery_flow_uses_the_visible_verification_action() {
         val flow = File(repositoryRoot, "fixtures/hermes/journey/flows/connection.yaml").readText()
         val correctedCredential = "synthetic-token"
