@@ -13,8 +13,8 @@ import java.security.MessageDigest
  * cache cipher over that key, and the canonical per-endpoint namespace.
  *
  * Registered by `EntryWiring.createEntryStateHolder`; population and replace-on-refresh
- * wiring live in the Session state holder. Lifecycle purge wiring arrives with a
- * follow-up ticket of this spec.
+ * wiring live in the Session state holder, and the lifecycle purge is bound by the
+ * Settings clear control and the connection-removal flow.
  */
 fun buildHistoryCacheStore(context: Context): HistoryCacheStore {
     val storage = AndroidKeyStoreHistoryCacheStorage(context)
