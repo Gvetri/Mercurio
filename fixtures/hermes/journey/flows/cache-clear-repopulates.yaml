@@ -35,8 +35,8 @@ name: cache-clear-repopulates
     visible: ".*App version.*"
     timeout: 30000
 - tapOn: "Clear cached conversations"
-- assertVisible: "Clear cached conversations?"
-- tapOn: "Clear"
+- assertVisible: 'Clear cached conversations\?'
+- tapOn: '^Clear$'
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
     visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
