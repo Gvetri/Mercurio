@@ -192,6 +192,12 @@ sealed interface EntryUiEvent {
 
     data object CloseSettingsClicked : Settings
 
+    data object ClearHistoryCacheClicked : Settings
+
+    data object ConfirmClearHistoryCacheClicked : Settings
+
+    data object CancelClearHistoryCacheClicked : Settings
+
     sealed interface Diagnostics : EntryUiEvent
 
     data object OpenLocalDiagnosticsClicked : Diagnostics
@@ -263,6 +269,7 @@ data class EntryUiState(
     val isConnected: Boolean = false,
     val errorCategory: EntryErrorCategory? = null,
     val isRemoveConfirmationOpen: Boolean = false,
+    val isClearHistoryCacheConfirmationOpen: Boolean = false,
     val isSettingsOpen: Boolean = false,
     val clientVersion: String = "unknown",
     val sessionList: SessionListUiState? = null,
@@ -526,6 +533,9 @@ class EntryStateHolder(
         when (event) {
             is EntryUiEvent.OpenSettingsClicked -> openSettings()
             is EntryUiEvent.CloseSettingsClicked -> closeSettings()
+            is EntryUiEvent.ClearHistoryCacheClicked -> requestClearHistoryCache()
+            is EntryUiEvent.ConfirmClearHistoryCacheClicked -> confirmClearHistoryCache()
+            is EntryUiEvent.CancelClearHistoryCacheClicked -> cancelClearHistoryCache()
         }
     }
 
