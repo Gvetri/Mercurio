@@ -124,6 +124,7 @@ internal fun EntryStateHolder.loadFirstPage(
                 errorCategory = null,
             )
         }
+        cacheAuthoritativeSessionList(page.sessions)
         recordDiagnostic(LocalDiagnosticEventType.SESSION_LIST_LOAD, LocalDiagnosticStatus.SUCCEEDED)
     } catch (error: CancellationException) {
         throw error
@@ -183,13 +184,15 @@ internal fun EntryStateHolder.showSessionListFailure(
 ) {
     recordDiagnostic(LocalDiagnosticEventType.SESSION_LIST_LOAD, LocalDiagnosticStatus.FAILED)
     updateCurrentSessionRequest(requestGeneration, offset) { current ->
+        val servedSessions = current.sessions.ifEmpty { cachedSessionListItems() }
         current.copy(
+            sessions = servedSessions,
             isLoading = false,
             isRefreshing = false,
             isSearching = false,
             isLoadingMore = false,
             isStale = true,
-            isUnavailable = !preserveSessions || current.sessions.isEmpty(),
+            isUnavailable = !preserveSessions || servedSessions.isEmpty(),
             errorCategory = SessionListErrorCategory.GATEWAY_UNAVAILABLE,
         )
     }

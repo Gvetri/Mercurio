@@ -13,13 +13,14 @@ const val HISTORY_CACHE_MAX_MESSAGES: Int = 5_000
 const val HISTORY_CACHE_MAX_AGE_DAYS: Int = 7
 
 /**
- * Stores conversation content on the device so already-loaded transcripts stay readable offline.
+ * Stores conversation content on the device so already-loaded transcripts and the loaded
+ * Session list stay readable offline.
  *
  * The store is device-local, namespaced per Gateway endpoint, bounded by
  * [HISTORY_CACHE_MAX_MESSAGES] messages with content no older than
  * [HISTORY_CACHE_MAX_AGE_DAYS] days, and evicts the oldest content first, deterministically.
  * It is never authoritative: a cleared store re-populates from later successful reads, and a
- * write only ever replaces the cached copy of the addressed Session.
+ * write only ever replaces the cached copy of the addressed content.
  */
 interface HistoryCacheStore {
     /** Cached messages for the addressed Session, oldest cached first; empty when nothing is cached. */
@@ -29,6 +30,15 @@ interface HistoryCacheStore {
     fun write(
         key: HistoryCacheKey,
         messages: List<GatewayHistoryMessage>,
+    )
+
+    /** Cached Session-list entries for the endpoint, in cached order; empty when nothing is cached. */
+    fun readSessionList(endpoint: String): List<Session>
+
+    /** Replaces the cached Session-list entries of the endpoint with [sessions]. */
+    fun writeSessionList(
+        endpoint: String,
+        sessions: List<Session>,
     )
 
     /** Purges every cached record this store holds for the endpoint (connection removal). */
@@ -45,6 +55,13 @@ object NoOpHistoryCacheStore : HistoryCacheStore {
     override fun write(
         key: HistoryCacheKey,
         messages: List<GatewayHistoryMessage>,
+    ) = Unit
+
+    override fun readSessionList(endpoint: String): List<Session> = emptyList()
+
+    override fun writeSessionList(
+        endpoint: String,
+        sessions: List<Session>,
     ) = Unit
 
     override fun clearEndpoint(endpoint: String) = Unit

@@ -12,8 +12,9 @@ import java.security.MessageDigest
  * Assembles the device-local history cache: Keystore-tier blob storage, the AES-256-GCM
  * cache cipher over that key, and the canonical per-endpoint namespace.
  *
- * Not yet registered in `EntryWiring`; population and purge wiring arrive with the
- * follow-up tickets of this spec.
+ * Registered by `EntryWiring.createEntryStateHolder`; population and replace-on-refresh
+ * wiring live in the Session state holder. Lifecycle purge wiring arrives with a
+ * follow-up ticket of this spec.
  */
 fun buildHistoryCacheStore(context: Context): HistoryCacheStore {
     val storage = AndroidKeyStoreHistoryCacheStorage(context)

@@ -36,6 +36,7 @@ object EntryWiring {
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
         val modelSelectionStore = SharedPreferencesModelSelectionStore(context)
+        val historyCacheStore = buildHistoryCacheStore(context)
         val localDiagnosticsBuffer =
             RollingLocalDiagnosticsBuffer(
                 FileLocalDiagnosticsStorage(context),
@@ -71,6 +72,7 @@ object EntryWiring {
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
+                    historyCacheStore = historyCacheStore,
                     runStatusNotificationSettingsStore = SharedPreferencesRunStatusNotificationSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
