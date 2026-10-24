@@ -49,3 +49,5 @@ org.hermesnative.client.feature.entry.presentation.HistoryCacheVisualRegressionT
 org.hermesnative.client.feature.entry.presentation.HistoryCacheVisualRegressionTest.cached_transcript_dark.png
 org.hermesnative.client.feature.entry.presentation.HistoryCacheVisualRegressionTest.cached_transcript_wide_light.png
 org.hermesnative.client.feature.entry.presentation.HistoryCacheVisualRegressionTest.cached_transcript_200_light.png
+org.hermesnative.client.feature.entry.presentation.HistoryCacheVisualRegressionTest.cached_session_list_wide_dark.png
+org.hermesnative.client.feature.entry.presentation.HistoryCacheVisualRegressionTest.cached_transcript_wide_dark.png

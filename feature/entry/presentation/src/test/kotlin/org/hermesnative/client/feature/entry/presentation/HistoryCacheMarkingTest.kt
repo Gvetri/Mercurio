@@ -199,6 +199,28 @@ class HistoryCacheMarkingTest {
         holder.close()
     }
 
+    @Test
+    fun rows_served_from_a_cleared_store_keep_their_truthful_cache_mark() {
+        val cache = RecordingHistoryCacheStore()
+        cache.writeSessionList(endpoint, listOf(entrySession("session-one", "Cached title")))
+        val gateway = FakeSessionGateway()
+        gateway.enqueueFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
+        gateway.enqueueFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
+        val holder = connectedMarkingHolder(gateway, cache)
+
+        verify(holder)
+        awaitState(holder, "cached list served") { it.sessionList?.isCached == true }
+
+        cache.clear()
+        holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
+
+        val state = requireNotNull(holder.uiState.value.sessionList)
+        assertEquals(listOf("session-one"), state.sessions.map { it.id.value })
+        assertTrue(state.isCached)
+        assertTrue(state.isStale)
+        holder.close()
+    }
+
     private fun connectedMarkingHolder(
         gateway: SessionGatewayPort,
         cache: RecordingHistoryCacheStore,

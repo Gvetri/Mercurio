@@ -47,6 +47,13 @@ class HistoryCacheVisualRegressionTest {
     }
 
     @Test
+    @Config(qualifiers = "w1000dp-h800dp-night")
+    fun cached_session_list_wide_dark() {
+        setContent(cachedListState(), darkTheme = true)
+        capture()
+    }
+
+    @Test
     fun cached_session_list_200_light() {
         setScaledContent(cachedListState())
         capture()
@@ -69,6 +76,13 @@ class HistoryCacheVisualRegressionTest {
     @Config(qualifiers = "w1000dp-h800dp-notnight")
     fun cached_transcript_wide_light() {
         setContent(cachedTranscriptState())
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp-night")
+    fun cached_transcript_wide_dark() {
+        setContent(cachedTranscriptState(), darkTheme = true)
         capture()
     }
 
