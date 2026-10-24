@@ -749,17 +749,17 @@ internal class OfflineAfterFirstSessionListGate(
         get() = enabled && armed && !recovered
 
     fun onSessionListRequest(): Boolean {
-        if (!enabled) return false
-        val request = sessionListRequests.incrementAndGet()
-        if (request <= 1) return false
-        armed = true
-        if (recovered) return false
-        val blocked = blockedSessionListRequests.incrementAndGet()
-        if (recoversAfterBlockedSessionLists != null && blocked > recoversAfterBlockedSessionLists) {
-            recovered = true
+        if (!enabled || sessionListRequests.incrementAndGet() <= 1) {
             return false
         }
-        return true
+        armed = true
+        val blocked = if (recovered) null else blockedSessionListRequests.incrementAndGet()
+        val shouldBlock = blocked != null &&
+            (recoversAfterBlockedSessionLists == null || blocked <= recoversAfterBlockedSessionLists)
+        if (!shouldBlock) {
+            recovered = true
+        }
+        return shouldBlock
     }
 }
 
