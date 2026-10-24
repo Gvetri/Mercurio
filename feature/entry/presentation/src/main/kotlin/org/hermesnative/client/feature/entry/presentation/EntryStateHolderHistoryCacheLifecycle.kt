@@ -15,8 +15,9 @@ internal fun EntryStateHolder.cancelClearHistoryCache() {
 
 /**
  * Empties every endpoint's cached content in one action after an explicit confirm. A
- * successful clear drops cache-served content from the view right away, so the UI keeps
- * claiming nothing that the store no longer holds.
+ * successful clear drops cache-served content from the view right away: that content
+ * has no backing anymore, and the offline experience must show the truthful cleared
+ * state without a restart. Authoritative content is left untouched.
  */
 internal fun EntryStateHolder.confirmClearHistoryCache() {
     if (!mutableUiState.value.isClearHistoryCacheConfirmationOpen) return
@@ -27,32 +28,28 @@ internal fun EntryStateHolder.confirmClearHistoryCache() {
     }
 }
 
-/**
- * Drops the rows and the opened transcript that were served from the cache: after the
- * store empties, that content has no backing, and the offline experience must show the
- * truthful cleared state without a restart. Authoritative content is left untouched.
- */
 private fun EntryUiState.withCacheServedContentDropped(): EntryUiState {
-    val list = sessionList ?: return this
-    if (!list.isCached && list.openedSession?.isCached != true) {
-        return this
+    val list = sessionList
+    return if (list == null || (!list.isCached && list.openedSession?.isCached != true)) {
+        this
+    } else {
+        val clearedList =
+            if (list.isCached) {
+                list.copy(
+                    sessions = emptyList(),
+                    isCached = false,
+                    isStale = true,
+                    isUnavailable = true,
+                )
+            } else {
+                list
+            }
+        val closedTranscript =
+            if (clearedList.openedSession?.isCached == true) {
+                clearedList.copy(openedSession = null)
+            } else {
+                clearedList
+            }
+        copy(sessionList = closedTranscript)
     }
-    val clearedList =
-        if (list.isCached) {
-            list.copy(
-                sessions = emptyList(),
-                isCached = false,
-                isStale = true,
-                isUnavailable = true,
-            )
-        } else {
-            list
-        }
-    val closedTranscript =
-        if (clearedList.openedSession?.isCached == true) {
-            clearedList.copy(openedSession = null)
-        } else {
-            clearedList
-        }
-    return copy(sessionList = closedTranscript)
 }
