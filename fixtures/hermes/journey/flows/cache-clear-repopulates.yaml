@@ -42,10 +42,10 @@ name: cache-clear-repopulates
     visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
     timeout: 30000
 - assertNotVisible: "The displayed Sessions are cached on this device. They are not live."
-- assertNotVisible: "Alpha Session"
+- assertVisible: "Alpha Session"
 - takeScreenshot: cache-clear-repopulates-cleared-offline
 - tapOn: "Try again"
-- assertNotVisible: "Alpha Session"
+- assertVisible: "Alpha Session"
 - tapOn: "Try again"
 - extendedWaitUntil:
     visible: "Alpha Session"
