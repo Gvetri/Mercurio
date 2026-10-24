@@ -1,0 +1,3 @@
+# Reviewer gate: repository owner reviews all changes.
+# The records-reviewerbot CODEOWNERS gate requires a non-empty match for every file.
+* @Gvetri
