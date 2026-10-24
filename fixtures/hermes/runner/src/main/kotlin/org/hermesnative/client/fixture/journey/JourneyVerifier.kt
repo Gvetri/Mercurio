@@ -175,6 +175,8 @@ internal object JourneyInvariants {
             "settings-cache-clear" to JourneyInvariants::verifySettingsCacheClear,
             "connection-removal-purge" to JourneyInvariants::verifyConnectionRemovalPurge,
             "cache-clear-repopulates" to JourneyInvariants::verifyCacheClearRepopulates,
+            "offline-cache-read" to JourneyInvariants::verifyOfflineCacheRead,
+            "cache-run-isolation" to JourneyInvariants::verifyCacheRunIsolation,
             "model-picker-advertised" to JourneyModelPickerInvariants::verifyModelPickerAdvertised,
             "model-picker-absent" to JourneyModelPickerInvariants::verifyModelPickerAbsent,
             "model-picker-refusal" to JourneyModelPickerInvariants::verifyModelPickerRefusal,
@@ -265,6 +267,28 @@ internal object JourneyInvariants {
         }
     }
 
+    private fun verifyOfflineCacheRead(telemetry: JsonObject) {
+        requireCacheLifecycleIsLocalOnly(telemetry, "Offline cache read")
+        val paths = recordedRequestPaths(telemetry)
+        check(paths.count { it == "/api/sessions" } >= MIN_OFFLINE_CACHE_READ_LIST_READS) {
+            "The Offline cache read journey did not exercise the Session list offline and recovered arms: $paths"
+        }
+        check(paths.count { it.endsWith("/messages") } >= MIN_OFFLINE_CACHE_READ_TRANSCRIPT_READS) {
+            "The Offline cache read journey did not attempt the Session transcript offline: $paths"
+        }
+    }
+
+    private fun verifyCacheRunIsolation(telemetry: JsonObject) {
+        JourneyRunInvariants.verifyFailedOfflineSend(telemetry)
+        val paths = recordedRequestPaths(telemetry)
+        check(paths.count { it.endsWith("/messages") } >= MIN_RUN_ISOLATION_TRANSCRIPT_READS) {
+            "The Run isolation journey did not read the Session transcript around the restart: $paths"
+        }
+        check(telemetry["session_mutations"]?.jsonArray.orEmpty().isEmpty()) {
+            "The Run isolation journey mutated Session state beyond the scripted Runs."
+        }
+    }
+
     private fun verifyCapabilitiesAdditive(telemetry: JsonObject) {
         requireConnectionAttempted(telemetry)
         check(runCreatesFor(telemetry, ACTIVE_SESSION_ID) == 1) {
@@ -277,6 +301,9 @@ internal object JourneyInvariants {
     const val STREAMING_RUN_ID = "streaming-run"
     const val MIN_CACHE_REPOPULATION_LIST_READS = 4
     const val MIN_CACHE_REPOPULATION_RESOURCE_READS = 4
+    const val MIN_OFFLINE_CACHE_READ_LIST_READS = 3
+    const val MIN_OFFLINE_CACHE_READ_TRANSCRIPT_READS = 3
+    const val MIN_RUN_ISOLATION_TRANSCRIPT_READS = 2
     const val LIVE_RUN_ID = "live-run"
     const val STOP_RUN_ID = "stop-run"
     const val INTERRUPTED_RUN_ID = "interrupted-run"
