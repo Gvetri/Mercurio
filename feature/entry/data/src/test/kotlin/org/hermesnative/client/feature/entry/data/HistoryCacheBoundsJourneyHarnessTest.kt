@@ -92,8 +92,7 @@ class HistoryCacheBoundsJourneyHarnessTest {
 
     private fun persistedMessageCount(): Int = persistedRecords().count { it.message != null }
 
-    private fun transcriptKey(index: Int): HistoryCacheKey =
-        HistoryCacheKey(ENDPOINT, SessionId("session-$index"))
+    private fun transcriptKey(index: Int): HistoryCacheKey = HistoryCacheKey(ENDPOINT, SessionId("session-$index"))
 
     private fun sessionPage(page: Int): List<Session> =
         (1..SESSIONS).map { index ->
