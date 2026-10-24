@@ -7,6 +7,8 @@ import org.hermesnative.client.feature.entry.data.BoundedHistoryCacheStore
 import org.hermesnative.client.feature.entry.domain.GatewayCapabilities
 import org.hermesnative.client.feature.entry.domain.GatewayCredentialStore
 import org.hermesnative.client.feature.entry.domain.GatewayHistoryMessage
+import org.hermesnative.client.feature.entry.domain.HistoryCacheKey
+import org.hermesnative.client.feature.entry.domain.HistoryCacheStore
 import org.hermesnative.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.hermesnative.client.feature.entry.domain.Run
 import org.hermesnative.client.feature.entry.domain.RunGatewayPort
@@ -23,6 +25,7 @@ import org.hermesnative.client.feature.entry.presentation.EntryUiEvent
 import org.hermesnative.client.feature.entry.presentation.EntryUiState
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.fail
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,11 +86,63 @@ class EntryWiringHistoryCacheRegistrationTest {
         assertFalse(File(context.noBackupFilesDir, CACHE_FILE_NAME).exists())
     }
 
+    @Test
+    fun connection_removal_through_production_wiring_purges_the_endpoint_cache() {
+        val context = RuntimeEnvironment.getApplication()
+        val gateway = RegistrationGateway()
+        val cache = WiringRecordingCacheStore()
+        val holder =
+            createRegisteredHolder(
+                context = context,
+                gateway = gateway,
+                historyCacheStore = cache,
+            )
+        try {
+            holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.EndpointChanged(ENDPOINT))
+            holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
+            holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+            awaitState(holder) { state ->
+                state.sessionList?.sessions?.singleOrNull()?.id == RegistrationGateway.SESSION_ID
+            }
+            assertTrue(cache.writtenListEndpoints.isNotEmpty())
+            cache.writeSessionList(
+                "https://gateway.example/other",
+                listOf(Session(SessionId("other-session"), "Other", null, false)),
+            )
+
+            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+
+            assertEquals(setOf(cache.writtenListEndpoints.first()), cache.clearedEndpoints.toSet())
+            assertTrue(cache.cachedSessionList(ENDPOINT).isEmpty())
+            assertEquals(1, cache.cachedSessionList("https://gateway.example/other").size)
+        } finally {
+            holder.close()
+            holders.remove(holder)
+        }
+    }
+
+    @Test
+    fun production_wiring_registers_the_cache_purge_in_the_connection_removal_lambda() {
+        val wiring =
+            File(
+                System.getProperty("fixture.repositoryRoot"),
+                "feature/entry/wiring/src/main/kotlin/org/hermesnative/client/feature/entry/wiring/EntryWiring.kt",
+            ).readText()
+        val removalLambda = wiring.substringAfter(") { endpoint ->").substringBefore("},")
+
+        assertTrue(
+            "the history cache purge must be registered in the removal lambda, found: $removalLambda",
+            "historyCacheStore::clearEndpoint" in removalLambda,
+        )
+    }
+
     private fun awaitStableConnectedState(holder: EntryStateHolder) {
         repeat(SETTLE_PROBES) {
             val sessionList = holder.uiState.value.sessionList
             if (sessionList?.isStale == true || sessionList?.errorCategory != null) {
-                assertFalse("authoritative list read was poisoned by the failing cache store", true)
+                fail("authoritative list read was poisoned by the failing cache store")
             }
             Thread.sleep(SETTLE_INTERVAL_MILLIS)
         }
@@ -99,6 +154,7 @@ class EntryWiringHistoryCacheRegistrationTest {
     private fun createRegisteredHolder(
         context: android.content.Context,
         gateway: RegistrationGateway,
+        historyCacheStore: HistoryCacheStore? = null,
     ): EntryStateHolder =
         EntryWiring.createEntryStateHolder(
             context = context,
@@ -110,6 +166,7 @@ class EntryWiringHistoryCacheRegistrationTest {
                     sessionGatewayFactory = { _, _ -> gateway },
                     runGatewayFactory = { _, _ -> gateway },
                     credentialStore = InMemoryCredentialStore(),
+                    historyCacheStore = historyCacheStore,
                 ),
         ).also { holders += it }
 
@@ -136,6 +193,40 @@ class EntryWiringHistoryCacheRegistrationTest {
         override fun clear() {
             credential = null
         }
+    }
+
+    private class WiringRecordingCacheStore : HistoryCacheStore {
+        val clearedEndpoints = mutableListOf<String>()
+        val writtenListEndpoints = mutableListOf<String>()
+        private val lists = mutableMapOf<String, List<Session>>()
+
+        override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> = emptyList()
+
+        override fun write(
+            key: HistoryCacheKey,
+            messages: List<GatewayHistoryMessage>,
+        ) = Unit
+
+        override fun readSessionList(endpoint: String): List<Session> = lists[endpoint].orEmpty()
+
+        override fun writeSessionList(
+            endpoint: String,
+            sessions: List<Session>,
+        ) {
+            writtenListEndpoints += endpoint
+            lists[endpoint] = sessions
+        }
+
+        override fun clearEndpoint(endpoint: String) {
+            clearedEndpoints += endpoint
+            lists.remove(endpoint)
+        }
+
+        override fun clear() {
+            lists.clear()
+        }
+
+        fun cachedSessionList(endpoint: String): List<Session> = lists[endpoint].orEmpty()
     }
 
     private class RegistrationGateway : SessionGatewayPort, RunGatewayPort {

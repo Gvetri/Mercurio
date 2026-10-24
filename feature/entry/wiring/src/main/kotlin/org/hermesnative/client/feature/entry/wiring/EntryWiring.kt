@@ -36,7 +36,7 @@ object EntryWiring {
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
         val modelSelectionStore = SharedPreferencesModelSelectionStore(context)
-        val historyCacheStore = buildHistoryCacheStore(context)
+        val historyCacheStore = overrides.historyCacheStore ?: buildHistoryCacheStore(context)
         val localDiagnosticsBuffer =
             RollingLocalDiagnosticsBuffer(
                 FileLocalDiagnosticsStorage(context),
@@ -67,6 +67,7 @@ object EntryWiring {
                             endpoint?.let(runSubmissionUncertaintyStore::clearEndpoint)
                             endpoint?.let(sessionDraftStore::clearEndpoint)
                             endpoint?.let(modelSelectionStore::clearEndpoint)
+                            endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
