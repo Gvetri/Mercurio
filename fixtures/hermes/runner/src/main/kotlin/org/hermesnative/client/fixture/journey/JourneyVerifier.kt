@@ -220,10 +220,6 @@ internal object JourneyInvariants {
         }
     }
 
-    /**
-     * Local-only invariant for the cache lifecycle journeys: clearing or purging cached
-     * conversations never mutates Gateway state and never creates a Run.
-     */
     private fun requireCacheLifecycleIsLocalOnly(
         telemetry: JsonObject,
         label: String,
