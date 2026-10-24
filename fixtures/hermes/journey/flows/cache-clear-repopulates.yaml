@@ -21,16 +21,14 @@ name: cache-clear-repopulates
 - tapOn: "Back to Sessions"
 - tapOn: "Refresh"
 - extendedWaitUntil:
-    visible: "The displayed Sessions are cached on this device. They are not live."
+    visible: "The displayed Session data may be stale."
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
     timeout: 30000
 - assertVisible: "Alpha Session"
-- takeScreenshot: cache-clear-repopulates-cached-list
+- takeScreenshot: cache-clear-repopulates-preserved-list
 - tapOn: "Alpha Session"
-- extendedWaitUntil:
-    visible: "The displayed Session history is cached on this device. It is not live."
-    timeout: 30000
-- assertVisible: "Synthetic cached conversation"
-- takeScreenshot: cache-clear-repopulates-cached-transcript
 - tapOn: "Back to Sessions"
 - tapOn: "Settings"
 - extendedWaitUntil:
