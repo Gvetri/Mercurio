@@ -64,6 +64,23 @@ class JourneyScenarioTest {
     }
 
     @Test
+    fun cache_lifecycle_scenarios_pair_their_flows_and_script_offline_recovery() {
+        val repopulates =
+            JourneyScenarioParser.parse(
+                File(scenariosDir, "cache-clear-repopulates.json"),
+                pinnedDescriptor.provenance.value,
+            )
+        assertTrue(repopulates.failAfterFirstSessionList)
+        assertEquals(2, repopulates.offlineRecoversAfterBlockedSessionLists)
+        setOf("settings-cache-clear", "connection-removal-purge", "cache-clear-repopulates").forEach { name ->
+            assertTrue(
+                "$name has no Maestro flow",
+                File(repositoryRoot, "fixtures/hermes/journey/flows/$name.yaml").isFile,
+            )
+        }
+    }
+
+    @Test
     fun connection_recovery_flow_uses_the_visible_verification_action() {
         val flow = File(repositoryRoot, "fixtures/hermes/journey/flows/connection.yaml").readText()
         val correctedCredential = "synthetic-token"

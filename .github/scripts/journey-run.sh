@@ -151,6 +151,9 @@ journeys=(
     capabilities-missing-required
     accessibility-controls
     settings
+    settings-cache-clear
+    connection-removal-purge
+    cache-clear-repopulates
     diagnostics-recording
     confirmed-send
     model-picker-advertised
