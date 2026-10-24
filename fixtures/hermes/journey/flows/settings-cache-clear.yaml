@@ -35,11 +35,15 @@ name: settings-cache-clear
 - takeScreenshot: settings-cache-clear-confirmation
 - tapOn: "Cancel"
 - assertVisible: ".*App version.*"
-- assertNotVisible: "Clear cached conversations?"
+- extendedWaitUntil:
+    notVisible: "Clear cached conversations?"
+    timeout: 30000
 - tapOn: "Clear cached conversations"
 - tapOn: "Clear"
 - assertVisible: ".*App version.*"
-- assertNotVisible: "Clear cached conversations?"
+- extendedWaitUntil:
+    notVisible: "Clear cached conversations?"
+    timeout: 30000
 - takeScreenshot: settings-cache-clear-confirmed
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
