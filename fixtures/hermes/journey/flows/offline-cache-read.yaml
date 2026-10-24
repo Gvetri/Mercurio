@@ -31,8 +31,9 @@ name: offline-cache-read
 - assertVisible: "Synthetic cached conversation"
 - takeScreenshot: offline-cache-read-cached-transcript
 - tapOn: "Back to Sessions"
+- tapOn: '^Try again$'
 - extendedWaitUntil:
-    notVisible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
+    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
     timeout: 30000
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
