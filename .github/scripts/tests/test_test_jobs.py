@@ -657,7 +657,6 @@ redact_file "$runner_output" || status=$?
                 if event == "push":
                     expected["API24_INSTRUMENTATION"] = "skipped"
                     expected["MAESTRO_JOURNEYS"] = "skipped"
-                    expected["BUILDSRC_CONTRACTS"] = "skipped"
             env = {**os.environ, **{f"{job}_RESULT": outcome for job, outcome in expected.items()}}
             env["EVENT_NAME"] = event
             if event == "pull_request":

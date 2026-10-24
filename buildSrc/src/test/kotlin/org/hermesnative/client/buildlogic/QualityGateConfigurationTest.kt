@@ -1592,11 +1592,12 @@ class QualityGateConfigurationTest {
             Regex("./gradlew -p buildSrc test").findAll(architectureJob).count(),
         )
         assertTrue(
-            "The buildsrc-contracts job must run on schedule, dispatch, and ready in-repository pull requests that change CI or build logic.",
+            "The buildsrc-contracts job must run on schedule, dispatch, main pushes, and ready in-repository pull requests that change CI or build logic.",
             buildSrcContractsJob.contains("    name: buildsrc-contracts\n") &&
                 buildSrcContractsJob.contains("    needs: [ui_paths]\n") &&
                 buildSrcContractsJob.contains("github.event_name == 'schedule'") &&
                 buildSrcContractsJob.contains("github.event_name == 'workflow_dispatch'") &&
+                buildSrcContractsJob.contains("github.event_name == 'push'") &&
                 buildSrcContractsJob.contains("!github.event.pull_request.draft") &&
                 buildSrcContractsJob.contains("!github.event.pull_request.head.repo.fork") &&
                 buildSrcContractsJob.contains("needs.ui_paths.outputs.ci_files_changed == 'true'") &&

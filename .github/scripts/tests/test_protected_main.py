@@ -122,12 +122,12 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         contracts = job_block(self.workflow, "buildsrc_contracts")
         self.assertEqual(
             "${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
-            "(github.event_name == 'pull_request' && (github.event.action != 'labeled' || "
+            "github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || "
             "github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && "
             "!github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || "
             "needs.ui_paths.outputs.build_logic_changed == 'true'))) }}",
             job_key(contracts, "if"),
-            "the contracts job must run on the nightly and dispatched validation and on ready in-repository CI or build-logic heads",
+            "the contracts job must run on the nightly, dispatched, and push validation and on ready in-repository CI or build-logic heads",
         )
         self.assertEqual("[ui_paths]", job_key(contracts, "needs"))
         self.assertIn("./gradlew -p buildSrc test", contracts)

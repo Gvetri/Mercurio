@@ -54,12 +54,13 @@ than the gate it mirrors.
 
 | Run | Checks that execute | Checks that stay skipped |
 | --- | --- | --- |
-| Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `api24-instrumentation`, `maestro-journeys`, unless the pull request carries the `run-maestro` label or modifies a declared UI path (next row) |
-| Ready in-repository pull request labeled `run-maestro` or modifying a declared UI path | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | None |
-| Ready in-repository pull request whose every changed file is documentation | `draft-validation`, `conformance`, `commit-message`, `fork-guard`, `ui-paths` | Every heavy check and both emulator suites, unless the pull request carries the `run-maestro` label |
+| Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `api24-instrumentation`, `maestro-journeys`, unless the pull request carries the `run-maestro` label or modifies a declared UI path (next row); `buildsrc-contracts` unless the head changes `.github/**` or `buildSrc/**` files |
+| Ready in-repository pull request labeled `run-maestro` or modifying a declared UI path | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys`; `buildsrc-contracts` when the head changes `.github/**` or `buildSrc/**` files | `buildsrc-contracts` otherwise |
+| Ready in-repository pull request whose every changed file is documentation | `draft-validation`, `conformance`, `commit-message`, `fork-guard`, `ui-paths` | Every heavy check, both emulator suites, and `buildsrc-contracts` (a documentation head changes no CI or build-logic file), unless the pull request carries the `run-maestro` label, which starts the heavy checks and the emulator suites but not `buildsrc-contracts` |
+| Ready in-repository pull request whose every changed file is a build or dependency file (`gradle/**`, any `*.gradle.kts`, `gradle.properties`, `gradle/libs.versions.toml`) | `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `coverage-mutation`, `buildsrc-contracts`, and both emulator suites, unless the pull request carries the `run-maestro` label, which starts the emulator suites and `coverage-mutation` but never `buildsrc-contracts` on a dependency-only head |
 | Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard`, `ui-paths` | Every other check |
 | External-fork pull request | `fork-guard`, `ui-paths` | Every other check |
-| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
+| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `buildsrc-contracts` runs the buildSrc self-test contracts; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
 | Nightly validation, manual validation | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | `draft-validation`, `commit-message`, `fork-guard` |
 
 The emulator suites are opt-in on pull requests. A ready in-repository pull request runs them when
@@ -173,6 +174,6 @@ read-only token scope, and the absence of secrets.
 `buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/QualityGateConfigurationTest.kt` pins
 the workflow contracts, and `.github/scripts/tests/test_protected_main.py` and
 `.github/scripts/tests/test_test_jobs.py` pin the routing, the aggregate gate, the commit-message
-check, and the conformance check. Both suites run in the `architecture-check` job, so a change to the
-workflow that contradicts a documented rule fails the gate. See
+check, and the conformance check. The workflow-contract suite runs in the `buildsrc-contracts` job,
+so a change to the workflow that contradicts a documented rule fails the gate. See
 [Quality gates](quality-gates.md) for the declared checks and thresholds.

@@ -222,7 +222,7 @@ jobs:
   buildsrc_contracts:
     name: buildsrc-contracts
     needs: [ui_paths]
-    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -1006,14 +1006,13 @@ jobs:
             expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
             expect ui_paths "$UI_PATHS_RESULT" skipped
             expect coverage_mutation "$COVERAGE_MUTATION_RESULT" success
+            test "$BUILDSRC_CONTRACTS_RESULT" = success
             if [ "$EVENT_NAME" = push ]; then
               test "$API24_INSTRUMENTATION_RESULT" = skipped
               test "$MAESTRO_JOURNEYS_RESULT" = skipped
-              test "$BUILDSRC_CONTRACTS_RESULT" = skipped
             else
               test "$API24_INSTRUMENTATION_RESULT" = success
               test "$MAESTRO_JOURNEYS_RESULT" = success
-              test "$BUILDSRC_CONTRACTS_RESULT" = success
             fi
           fi
           printf '%s\n' 'All checks required for this event passed.'
