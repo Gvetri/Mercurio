@@ -21,6 +21,9 @@ name: offline-cache-read
 - assertNotVisible: "The displayed Session history is cached on this device. It is not live."
 - takeScreenshot: offline-cache-read-authoritative-transcript
 - tapOn: "Back to Sessions"
+- extendedWaitUntil:
+    visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
+    timeout: 30000
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
     visible: "The displayed Session history is cached on this device. It is not live."
