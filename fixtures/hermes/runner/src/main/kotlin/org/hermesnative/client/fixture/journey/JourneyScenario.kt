@@ -58,6 +58,7 @@ data class JourneyScenario(
     val runs: List<JourneyRunScript> = emptyList(),
     val failNextSessionList: Boolean = false,
     val failAfterFirstSessionList: Boolean = false,
+    val offlineRecoversAfterBlockedSessionLists: Int? = null,
     val holdCreateMs: Int? = null,
     val modelCatalog: JourneyModelCatalog? = null,
     val modelCatalogRow: JourneyModelCatalogRow? = null,
@@ -73,6 +74,12 @@ data class JourneyScenario(
         }
         require(modelCatalogRow == null || "run_models" in capabilities) {
             "A model catalog row override requires the run_models capability."
+        }
+        require(
+            offlineRecoversAfterBlockedSessionLists == null ||
+                (failAfterFirstSessionList && offlineRecoversAfterBlockedSessionLists >= 1)
+        ) {
+            "Offline recovery counts require the after-first-list offline gate and a positive bound."
         }
     }
 }
@@ -222,6 +229,7 @@ private val allowedTopLevelKeys =
         "runs",
         "fail_next_session_list",
         "fail_after_first_session_list",
+        "offline_recovers_after_blocked_session_lists",
         "hold_create_ms",
         "model_catalog",
         "model_catalog_row",
@@ -323,6 +331,8 @@ object JourneyScenarioParser {
                     JourneyScenarioJson.optionalBoolean(root, "fail_next_session_list", default = false),
                 failAfterFirstSessionList =
                     JourneyScenarioJson.optionalBoolean(root, "fail_after_first_session_list", default = false),
+                offlineRecoversAfterBlockedSessionLists =
+                    JourneyScenarioJson.optionalInt(root, "offline_recovers_after_blocked_session_lists"),
                 holdCreateMs = JourneyScenarioJson.optionalInt(root, "hold_create_ms"),
                 modelCatalog = JourneyScenarioCatalog.parseModelCatalog(root),
                 modelCatalogRow = JourneyScenarioCatalog.parseModelCatalogRow(root),
