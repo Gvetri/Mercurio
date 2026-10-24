@@ -106,6 +106,7 @@ class EntryWiringHistoryCacheRegistrationTest {
             awaitState(holder) { state ->
                 state.sessionList?.sessions?.singleOrNull()?.id == RegistrationGateway.SESSION_ID
             }
+            awaitWrittenListEndpoint(cache)
             assertTrue(cache.writtenListEndpoints.isNotEmpty())
             cache.writeSessionList(
                 "https://gateway.example/other",
@@ -204,6 +205,16 @@ class EntryWiringHistoryCacheRegistrationTest {
         runBlocking {
             withTimeout(TEST_TIMEOUT_MILLIS) {
                 while (endpoint !in cache.clearedEndpoints) {
+                    delay(10)
+                }
+            }
+        }
+    }
+
+    private fun awaitWrittenListEndpoint(cache: WiringRecordingCacheStore) {
+        runBlocking {
+            withTimeout(TEST_TIMEOUT_MILLIS) {
+                while (cache.writtenListEndpoints.isEmpty()) {
                     delay(10)
                 }
             }
