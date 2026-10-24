@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-REQUIRED_CHECK_CONTEXT = "quality-gate"
+REQUIRED_RULESET_CONTEXTS = sorted(["quality-gate", "pr-template"])
 NIGHTLY_LANE = "create_nightly_failure_issue"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPOSITORY_ROOT / ".github/workflows/quality-gate.yml"
@@ -131,9 +131,9 @@ def verify_ruleset():
             for check in status_checks.get("required_status_checks", [])
             if isinstance(check, dict)
         ]
-        if contexts != [REQUIRED_CHECK_CONTEXT]:
+        if sorted(contexts, key=str) != REQUIRED_RULESET_CONTEXTS:
             violations.append(
-                f"{label} must require exactly the '{REQUIRED_CHECK_CONTEXT}' status, but requires {contexts}"
+                f"{label} must require exactly the {REQUIRED_RULESET_CONTEXTS} statuses, but requires {contexts}"
             )
         if status_checks.get("strict_required_status_checks_policy") is not True:
             violations.append(f"{label} must require the branch to be up to date before merging")

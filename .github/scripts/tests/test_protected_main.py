@@ -768,7 +768,10 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
                     "type": "required_status_checks",
                     "parameters": {
                         "strict_required_status_checks_policy": True,
-                        "required_status_checks": [{"context": "quality-gate", "integration_id": 15368}],
+                        "required_status_checks": [
+                            {"context": "quality-gate", "integration_id": 15368},
+                            {"context": "pr-template", "integration_id": 15368},
+                        ],
                     },
                 },
             ],
@@ -875,7 +878,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         ]
         completed = self.run_check()
         self.assertEqual(1, completed.returncode)
-        self.assertIn("must require exactly the 'quality-gate' status", completed.stderr)
+        self.assertIn("must require exactly the ['pr-template', 'quality-gate'] statuses", completed.stderr)
 
     def test_a_bypass_actor_fails(self):
         self.routes["/repos/Gvetri/hermes-native-client/rulesets/22461074"] = {
