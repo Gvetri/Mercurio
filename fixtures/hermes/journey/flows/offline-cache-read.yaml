@@ -32,7 +32,7 @@ name: offline-cache-read
 - takeScreenshot: offline-cache-read-cached-transcript
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
-    visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
+    notVisible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
     timeout: 30000
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
