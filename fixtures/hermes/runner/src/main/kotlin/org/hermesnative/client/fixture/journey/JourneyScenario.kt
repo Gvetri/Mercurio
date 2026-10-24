@@ -59,6 +59,8 @@ data class JourneyScenario(
     val failNextSessionList: Boolean = false,
     val failAfterFirstSessionList: Boolean = false,
     val offlineRecoversAfterBlockedSessionLists: Int? = null,
+    val failAfterFirstSessionOpen: Boolean = false,
+    val offlineRecoversAfterBlockedSessionOpens: Int? = null,
     val holdCreateMs: Int? = null,
     val modelCatalog: JourneyModelCatalog? = null,
     val modelCatalogRow: JourneyModelCatalogRow? = null,
@@ -80,6 +82,12 @@ data class JourneyScenario(
                 (failAfterFirstSessionList && offlineRecoversAfterBlockedSessionLists >= 1),
         ) {
             "Offline recovery counts require the after-first-list offline gate and a positive bound."
+        }
+        require(
+            offlineRecoversAfterBlockedSessionOpens == null ||
+                (failAfterFirstSessionOpen && offlineRecoversAfterBlockedSessionOpens >= 1),
+        ) {
+            "Offline recovery counts for Session opens require the after-first-open offline gate and a positive bound."
         }
     }
 }
@@ -230,6 +238,8 @@ private val allowedTopLevelKeys =
         "fail_next_session_list",
         "fail_after_first_session_list",
         "offline_recovers_after_blocked_session_lists",
+        "fail_after_first_session_open",
+        "offline_recovers_after_blocked_session_opens",
         "hold_create_ms",
         "model_catalog",
         "model_catalog_row",
@@ -333,6 +343,10 @@ object JourneyScenarioParser {
                     JourneyScenarioJson.optionalBoolean(root, "fail_after_first_session_list", default = false),
                 offlineRecoversAfterBlockedSessionLists =
                     JourneyScenarioJson.optionalInt(root, "offline_recovers_after_blocked_session_lists"),
+                failAfterFirstSessionOpen =
+                    JourneyScenarioJson.optionalBoolean(root, "fail_after_first_session_open", default = false),
+                offlineRecoversAfterBlockedSessionOpens =
+                    JourneyScenarioJson.optionalInt(root, "offline_recovers_after_blocked_session_opens"),
                 holdCreateMs = JourneyScenarioJson.optionalInt(root, "hold_create_ms"),
                 modelCatalog = JourneyScenarioCatalog.parseModelCatalog(root),
                 modelCatalogRow = JourneyScenarioCatalog.parseModelCatalogRow(root),

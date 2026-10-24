@@ -81,6 +81,42 @@ class JourneyScenarioTest {
     }
 
     @Test
+    fun session_open_offline_gate_fields_parse_from_the_scenario_file() {
+        val revision = pinnedDescriptor.provenance.value
+        val file =
+            tempScenario(
+                """{"name":"open-gate","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions"],"fail_after_first_session_open":true,""" +
+                    """"offline_recovers_after_blocked_session_opens":2,"sessions":[]}""",
+            )
+        val scenario = JourneyScenarioParser.parse(file, revision)
+        assertTrue(scenario.failAfterFirstSessionOpen)
+        assertEquals(2, scenario.offlineRecoversAfterBlockedSessionOpens)
+    }
+
+    @Test
+    fun open_gate_recovery_without_the_open_gate_or_a_positive_bound_is_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+        val withoutGate =
+            tempScenario(
+                """{"name":"open-recovery-without-gate","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions"],"offline_recovers_after_blocked_session_opens":2,"sessions":[]}""",
+            )
+        val withoutGateError = runCatching { JourneyScenarioParser.parse(withoutGate, revision) }.exceptionOrNull()
+        assertTrue(withoutGateError is JourneyScenarioFormatException)
+        assertTrue(withoutGateError!!.message.orEmpty().contains("Session open"))
+        val zeroBound =
+            tempScenario(
+                """{"name":"open-recovery-zero","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                    """"capabilities":["sessions"],"fail_after_first_session_open":true,""" +
+                    """"offline_recovers_after_blocked_session_opens":0,"sessions":[]}""",
+            )
+        val zeroBoundError = runCatching { JourneyScenarioParser.parse(zeroBound, revision) }.exceptionOrNull()
+        assertTrue(zeroBoundError is JourneyScenarioFormatException)
+        assertTrue(zeroBoundError!!.message.orEmpty().contains("positive bound"))
+    }
+
+    @Test
     fun connection_recovery_flow_uses_the_visible_verification_action() {
         val flow = File(repositoryRoot, "fixtures/hermes/journey/flows/connection.yaml").readText()
         val correctedCredential = "synthetic-token"
