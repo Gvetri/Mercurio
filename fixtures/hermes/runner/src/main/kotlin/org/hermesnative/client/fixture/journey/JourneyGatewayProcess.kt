@@ -754,8 +754,9 @@ internal class OfflineAfterFirstSessionListGate(
         }
         armed = true
         val blocked = if (recovered) null else blockedSessionListRequests.incrementAndGet()
-        val shouldBlock = blocked != null &&
-            (recoversAfterBlockedSessionLists == null || blocked <= recoversAfterBlockedSessionLists)
+        val shouldBlock =
+            blocked != null &&
+                (recoversAfterBlockedSessionLists == null || blocked <= recoversAfterBlockedSessionLists)
         if (!shouldBlock) {
             recovered = true
         }
