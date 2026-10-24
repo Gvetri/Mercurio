@@ -74,6 +74,7 @@ internal fun EntryStateHolder.createFirstPageLoadJob(
                         isSearching = isSearching,
                         isLoadingMore = false,
                         isStale = if (preserveSessions) current.isStale else false,
+                        isCached = if (preserveSessions) current.isCached else false,
                         isUnavailable = false,
                         errorCategory = null,
                         nextOffset = if (preserveSessions) current.nextOffset else null,
@@ -120,6 +121,7 @@ internal fun EntryStateHolder.loadFirstPage(
                 isSearching = false,
                 isLoadingMore = false,
                 isStale = false,
+                isCached = false,
                 isUnavailable = false,
                 errorCategory = null,
             )
@@ -192,6 +194,7 @@ internal fun EntryStateHolder.showSessionListFailure(
             isSearching = false,
             isLoadingMore = false,
             isStale = true,
+            isCached = servedSessions.isNotEmpty() && (current.sessions.isEmpty() || current.isCached),
             isUnavailable = !preserveSessions || servedSessions.isEmpty(),
             errorCategory = SessionListErrorCategory.GATEWAY_UNAVAILABLE,
         )
