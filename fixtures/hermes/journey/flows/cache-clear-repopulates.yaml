@@ -45,6 +45,9 @@ name: cache-clear-repopulates
 - assertVisible: "Alpha Session"
 - takeScreenshot: cache-clear-repopulates-cleared-offline
 - tapOn: "Try again"
+- extendedWaitUntil:
+    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
+    timeout: 30000
 - assertVisible: "Alpha Session"
 - tapOn: "Try again"
 - extendedWaitUntil:
