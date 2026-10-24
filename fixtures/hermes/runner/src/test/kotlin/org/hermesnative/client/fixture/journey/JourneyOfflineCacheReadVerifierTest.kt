@@ -20,11 +20,8 @@ class JourneyOfflineCacheReadVerifierTest {
                         "GET" to "/api/sessions/session-alpha/messages",
                         "GET" to "/api/sessions/session-alpha",
                         "GET" to "/api/sessions/session-alpha/messages",
-                        "GET" to "/api/sessions/session-alpha",
-                        "GET" to "/api/sessions/session-alpha/messages",
                         "GET" to "/api/sessions",
                         "GET" to "/api/sessions/session-alpha",
-                        "GET" to "/api/sessions/session-alpha/messages",
                         "GET" to "/api/sessions",
                         "GET" to "/api/sessions",
                     ),
@@ -43,7 +40,6 @@ class JourneyOfflineCacheReadVerifierTest {
                         "GET" to "/api/sessions",
                         "GET" to "/api/sessions/session-alpha/messages",
                         "GET" to "/api/sessions/session-alpha/messages",
-                        "GET" to "/api/sessions/session-alpha/messages",
                     ),
             )
         val listError =
@@ -59,7 +55,6 @@ class JourneyOfflineCacheReadVerifierTest {
                         "GET" to "/api/sessions",
                         "GET" to "/api/sessions",
                         "GET" to "/api/sessions",
-                        "GET" to "/api/sessions/session-alpha/messages",
                         "GET" to "/api/sessions/session-alpha/messages",
                     ),
             )

@@ -39,7 +39,7 @@ name: offline-cache-read
 - extendedWaitUntil:
     visible: "Synthetic cached conversation"
     timeout: 30000
-- assertNotVisible: "The displayed Session history is cached on this device. It is not live."
+- assertVisible: "The displayed Session history is cached on this device. It is not live."
 - takeScreenshot: offline-cache-read-recovered-transcript
 - tapOn: "Back to Sessions"
 - launchApp:

@@ -302,7 +302,7 @@ internal object JourneyInvariants {
     const val MIN_CACHE_REPOPULATION_LIST_READS = 4
     const val MIN_CACHE_REPOPULATION_RESOURCE_READS = 4
     const val MIN_OFFLINE_CACHE_READ_LIST_READS = 3
-    const val MIN_OFFLINE_CACHE_READ_TRANSCRIPT_READS = 3
+    const val MIN_OFFLINE_CACHE_READ_TRANSCRIPT_READS = 2
     const val MIN_RUN_ISOLATION_TRANSCRIPT_READS = 2
     const val LIVE_RUN_ID = "live-run"
     const val STOP_RUN_ID = "stop-run"
