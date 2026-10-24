@@ -61,7 +61,15 @@ The repository's coding rules — including the comments policy — and what enf
 
 `main` is protected, so create one issue-scoped branch per change, named
 `<type>/<issue>-<short-description>` such as `feat/25-protected-main-workflow`, and open a pull
-request against `main`. While the pull request is a draft it runs `formatCheck` and `:app:lintDebug`
+request against `main`. Deliver one pull request per issue. Integration branches are not allowed: a
+branch that accumulates several issues or tickets before review holds too many files, turns every
+review into a large cumulative diff, and ties unrelated fixes together. A multi-ticket effort may
+share its full specification context, but each issue ships as its own self-contained vertical
+slice — a change that works and reviews on its own — through its own issue-scoped pull request. A
+change that depends on an unmerged pull request waits for that merge and then bases on the updated
+`main` instead of stacking on the open branch.
+
+While the pull request is a draft it runs `formatCheck` and `:app:lintDebug`
 only; marking it ready for review runs the complete gate against the same head, and only the
 aggregate `quality-gate` status is required. Merging is squash-only, the squash subject is the
 pull-request title, and both that title and every commit must be a Conventional Commit. Do not merge
