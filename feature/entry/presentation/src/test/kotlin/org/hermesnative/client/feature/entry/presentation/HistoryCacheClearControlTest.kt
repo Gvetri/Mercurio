@@ -30,12 +30,13 @@ class HistoryCacheClearControlTest {
         cache.writeSessionList(endpoint, listOf(entrySession("session-cached", "Cached title")))
         val gateway = FakeSessionGateway()
         gateway.enqueueFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
-        val holder = holder(
-            repository = FakeGatewayConnectionRepository(),
-            verifier = { _, _ -> clientManifestCapabilities() },
-            gateway = gateway as SessionGatewayPort,
-            dependencies = EntryStateHolderDependencies(historyCacheStore = cache),
-        )
+        val holder =
+            holder(
+                repository = FakeGatewayConnectionRepository(),
+                verifier = { _, _ -> clientManifestCapabilities() },
+                gateway = gateway as SessionGatewayPort,
+                dependencies = EntryStateHolderDependencies(historyCacheStore = cache),
+            )
         verify(holder)
         awaitState(holder, "cached list served") { it.sessionList?.isCached == true }
         holder.onEvent(EntryUiEvent.OpenSettingsClicked)
@@ -162,7 +163,7 @@ class HistoryCacheClearControlTest {
 
         assertTrue(cache.operations.any { it == "clear" })
         assertEquals("typed text", drafts.read(draftKey))
-        assertTrue(drafts.operations.filter { "clear" in it || it == "remove" }.isEmpty())
+        assertTrue(drafts.operations.none { "clear" in it || it == "remove" })
         assertTrue(uncertainty.operations.isEmpty())
         assertTrue(recovery.operations.isEmpty())
         holder.close()

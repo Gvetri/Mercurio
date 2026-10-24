@@ -77,7 +77,7 @@ data class JourneyScenario(
         }
         require(
             offlineRecoversAfterBlockedSessionLists == null ||
-                (failAfterFirstSessionList && offlineRecoversAfterBlockedSessionLists >= 1)
+                (failAfterFirstSessionList && offlineRecoversAfterBlockedSessionLists >= 1),
         ) {
             "Offline recovery counts require the after-first-list offline gate and a positive bound."
         }

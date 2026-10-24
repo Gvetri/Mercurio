@@ -248,7 +248,8 @@ class SettingsScreenTest {
         composeTestRule
             .onNodeWithText(
                 "Clearing removes cached conversations from this device only. " +
-                    "Remote Sessions and Runs are not deleted, and diagnostic files you already exported are not removed.",
+                    "Remote Sessions and Runs are not deleted, " +
+                    "and diagnostic files you already exported are not removed.",
             ).performScrollTo()
             .assertIsDisplayed()
         composeTestRule
