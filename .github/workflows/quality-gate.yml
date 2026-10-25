@@ -626,8 +626,8 @@ jobs:
 
   maestro_journeys:
     name: maestro-journeys
-    needs: [api24_instrumentation, ui_paths]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) }}
+    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 80
     env:

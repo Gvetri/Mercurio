@@ -55,6 +55,27 @@ class TestJobs(unittest.TestCase):
         self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
         self.assertNotIn("./gradlew -p buildSrc test", architecture)
 
+    def test_maestro_journeys_skip_when_a_required_lane_fails_on_a_pull_request(self):
+        workflow = WORKFLOW.read_text()
+        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
+        self.assertIn(
+            "needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
+            "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, "
+            "coverage_mutation, compose_test]",
+            job,
+            "the emulator tail must wait for every lane that concludes before it starts",
+        )
+        self.assertIn(
+            "needs.api24_instrumentation.result == 'success'",
+            job,
+            "the emulator tail must still wait for a passing API 24 suite",
+        )
+        self.assertIn(
+            "(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))",
+            job,
+            "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
+        )
+
     def test_maestro_failure_artifact_upload_runs_for_continue_on_error_step(self):
         workflow = WORKFLOW.read_text()
         job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
