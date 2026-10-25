@@ -235,8 +235,9 @@ class TestJobs(unittest.TestCase):
         remount = runner.index("adb remount")
         install = runner.index('adb push "$ca_file"')
         chmod = runner.index("adb shell chmod 644")
-        trust_reboot = runner.rindex("adb reboot")
-        trust_boot = runner.rindex("sys.boot_completed")
+        trust_reboot = runner.index("adb reboot", chmod)
+        trust_boot = runner.index("sys.boot_completed", trust_reboot)
+        retry_reboot = runner.rindex("adb reboot")
         apk_install = runner.index('timeout 180 adb install --no-streaming -r "$apk"')
         self.assertLess(prepare_reboot, prepare_boot)
         self.assertLess(prepare_boot, remount)
@@ -244,7 +245,8 @@ class TestJobs(unittest.TestCase):
         self.assertLess(install, chmod)
         self.assertLess(chmod, trust_reboot)
         self.assertLess(trust_reboot, trust_boot)
-        self.assertLess(trust_boot, apk_install)
+        self.assertLess(trust_boot, retry_reboot)
+        self.assertLess(retry_reboot, apk_install)
 
     def test_journey_runner_captures_telemetry_before_reaping_gateway_after_health_failure(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -646,6 +648,22 @@ class TestJobs(unittest.TestCase):
         self.assertIn("journey_attempt", runner)
         self.assertIn('"$journey" = "session-lifecycle"', runner)
         self.assertEqual(1, runner.count('test --no-reinstall-driver "$flow_dir/$journey.yaml"'))
+
+    def test_journey_runner_retries_the_post_tls_boot_wait_once(self):
+        runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
+        self.assertIn("for boot_attempt in 1 2", runner)
+        self.assertEqual(1, runner.count("for boot_attempt in 1 2"))
+        self.assertEqual(1, runner.count("retrying the boot wait"))
+        self.assertIn(
+            'log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."',
+            runner,
+        )
+        self.assertIn(
+            'log "Emulator did not boot after installing the TLS trust store."\n    exit 1',
+            runner,
+            "an exhausted boot retry must still fail closed",
+        )
+        self.assertNotIn("before installing the TLS CA; retrying", runner)
 
     def test_journey_attempt_rule_bounds_the_retried_journey_to_two_attempts(self):
         self.assertEqual(2, journey_attempts(JOURNEY_RETRY_TARGET))

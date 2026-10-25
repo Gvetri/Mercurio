@@ -131,13 +131,25 @@ adb push "$ca_file" "$ca_device_path" >/dev/null
 adb shell chmod 644 "$ca_device_path"
 adb reboot >/dev/null || true
 adb wait-for-device
-for _ in $(seq 1 120); do
-    if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+boot_ok=""
+for boot_attempt in 1 2; do
+    for _ in $(seq 1 120); do
+        if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+            boot_ok=1
+            break
+        fi
+        sleep 2
+    done
+    if [ "$boot_ok" = "1" ]; then
         break
     fi
-    sleep 2
+    if [ "$boot_attempt" = "1" ]; then
+        log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."
+        adb reboot >/dev/null || true
+        adb wait-for-device
+    fi
 done
-if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; then
+if [ "$boot_ok" != "1" ]; then
     log "Emulator did not boot after installing the TLS trust store."
     exit 1
 fi
