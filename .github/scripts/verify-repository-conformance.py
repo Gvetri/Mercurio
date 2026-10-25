@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-REQUIRED_CHECK_CONTEXT = "quality-gate"
+REQUIRED_RULESET_CONTEXTS = sorted(["quality-gate", "pr-template"])
 NIGHTLY_LANE = "create_nightly_failure_issue"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPOSITORY_ROOT / ".github/workflows/quality-gate.yml"
@@ -131,9 +131,9 @@ def verify_ruleset():
             for check in status_checks.get("required_status_checks", [])
             if isinstance(check, dict)
         ]
-        if contexts != [REQUIRED_CHECK_CONTEXT]:
+        if sorted(contexts, key=str) != REQUIRED_RULESET_CONTEXTS:
             violations.append(
-                f"{label} must require exactly the '{REQUIRED_CHECK_CONTEXT}' status, but requires {contexts}"
+                f"{label} must require exactly the {REQUIRED_RULESET_CONTEXTS} statuses, but requires {contexts}"
             )
         if status_checks.get("strict_required_status_checks_policy") is not True:
             violations.append(f"{label} must require the branch to be up to date before merging")
@@ -271,8 +271,11 @@ def verify_workflow_declaration():
     required = [line.strip() for line in REQUIRED_CHECKS.read_text(encoding="utf-8").splitlines() if line.strip()]
     needs_block = text.split("  quality-gate:\n", 1)[1].split("    runs-on:", 1)[0] + "\n"
     declared = re.findall(r"^      - ([a-z0-9_]+)$", needs_block, flags=re.MULTILINE)
-    if sorted(required) != sorted(declared):
-        violations.append(f"The required-check declaration {required} does not match the aggregate needs list {declared}")
+    if sorted([*required, "buildsrc_contracts"]) != sorted(declared):
+        violations.append(
+            f"The required-check declaration {required} plus the buildsrc_contracts support job "
+            f"does not match the aggregate needs list {declared}"
+        )
     for check in ("fork_guard", "draft_validation", "commit_message", "conformance"):
         if check not in required:
             violations.append(f"The aggregate gate must declare the {check} check")

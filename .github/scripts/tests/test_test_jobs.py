@@ -46,6 +46,14 @@ class TestJobs(unittest.TestCase):
             self.assertIn(f"failure() && steps.{report_id}.outcome == 'success'", block)
             self.assertIn("redact-test-reports.py", block)
         self.assertIn("--tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest", workflow)
+        self.assertIn("      - buildsrc_contracts", aggregate)
+        contracts_job = workflow.split("  buildsrc_contracts:\n", 1)[1].split("\n  coverage_mutation:", 1)[0]
+        self.assertIn("    name: buildsrc-contracts", contracts_job)
+        self.assertIn("    needs: [ui_paths]", contracts_job)
+        self.assertIn("./gradlew -p buildSrc test", contracts_job)
+        architecture = workflow.split("  architecture_check:\n", 1)[1].split("\n  buildsrc_contracts:", 1)[0]
+        self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
+        self.assertNotIn("./gradlew -p buildSrc test", architecture)
 
     def test_maestro_failure_artifact_upload_runs_for_continue_on_error_step(self):
         workflow = WORKFLOW.read_text()
@@ -634,14 +642,15 @@ redact_file "$runner_output" || status=$?
             "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
             "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST",
-            "CONFORMANCE", "COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD",
-            "API24_INSTRUMENTATION", "MAESTRO_JOURNEYS", "UI_PATHS",
+            "BUILDSRC_CONTRACTS", "CONFORMANCE", "COMMIT_MESSAGE", "DRAFT_VALIDATION",
+            "FORK_GUARD", "API24_INSTRUMENTATION", "MAESTRO_JOURNEYS", "UI_PATHS",
         ]
         for event in ("pull_request", "push", "schedule", "workflow_dispatch"):
             expected = {job: "success" for job in required}
             if event == "pull_request":
                 expected["API24_INSTRUMENTATION"] = "skipped"
                 expected["MAESTRO_JOURNEYS"] = "skipped"
+                expected["BUILDSRC_CONTRACTS"] = "skipped"
             else:
                 for job in ("COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD", "UI_PATHS"):
                     expected[job] = "skipped"
@@ -654,8 +663,12 @@ redact_file "$runner_output" || status=$?
                 env["EVENT_BASE_REF"] = "main"
                 env["EVENT_FORK"] = "false"
                 env["EVENT_DRAFT"] = "false"
+                env["EVENT_LABELS"] = "[]"
                 env["UI_PATHS_CHANGED"] = "false"
                 env["DOCS_ONLY_CHANGED"] = "false"
+                env["DEPENDENCY_ONLY_CHANGED"] = "false"
+                env["CI_FILES_CHANGED"] = "false"
+                env["BUILD_LOGIC_CHANGED"] = "false"
             result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(0, result.returncode, result.stderr)
@@ -668,6 +681,87 @@ redact_file "$runner_output" || status=$?
                         result = subprocess.run(["bash", "-c", script], cwd=ROOT,
                                                 env=failed_env, capture_output=True, timeout=10)
                         self.assertNotEqual(0, result.returncode)
+
+    def test_aggregate_routes_dependency_buildsrc_and_ci_pull_requests(self):
+        block = WORKFLOW.read_text().split(
+            "      - name: Verify declared checks and results", 1
+        )[1].split("        run: |\n", 1)[1]
+        script = textwrap.dedent(block)
+        core = [
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
+            "ARCHITECTURE_CHECK", "COMPOSE_TEST",
+        ]
+        base = {
+            **os.environ,
+            **{f"{job}_RESULT": "success" for job in core},
+            "EVENT_NAME": "pull_request",
+            "EVENT_BASE_REF": "main",
+            "EVENT_FORK": "false",
+            "EVENT_DRAFT": "false",
+            "EVENT_LABELS": "[]",
+            "FORK_GUARD_RESULT": "success",
+            "DRAFT_VALIDATION_RESULT": "success",
+            "COMMIT_MESSAGE_RESULT": "success",
+            "UI_PATHS_RESULT": "success",
+            "UI_PATHS_CHANGED": "false",
+            "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
+            "COVERAGE_MUTATION_RESULT": "success",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
+            "API24_INSTRUMENTATION_RESULT": "skipped",
+            "MAESTRO_JOURNEYS_RESULT": "skipped",
+            "CONFORMANCE_RESULT": "success",
+        }
+
+        def run(env):
+            return subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
+                                  capture_output=True, text=True, timeout=10)
+
+        dependency_only = {**base, "DEPENDENCY_ONLY_CHANGED": "true", "COVERAGE_MUTATION_RESULT": "skipped"}
+        self.assertEqual(0, run(dependency_only).returncode,
+                         "a dependency-only head must skip the coverage and contracts lanes while the remaining lanes run")
+        for job, drifted in (
+            ("COVERAGE_MUTATION_RESULT", "success"),
+            ("BUILDSRC_CONTRACTS_RESULT", "success"),
+            ("FORMATTING_RESULT", "skipped"),
+            ("UNIT_TESTS_RESULT", "failure"),
+        ):
+            with self.subTest(routing="dependency-only drift", job=job, outcome=drifted):
+                self.assertNotEqual(0, run({**dependency_only, job: drifted}).returncode)
+        build_src = {**base, "BUILD_LOGIC_CHANGED": "true", "BUILDSRC_CONTRACTS_RESULT": "success"}
+        self.assertEqual(0, run(build_src).returncode,
+                         "a buildSrc head must run the self-test contracts job")
+        with self.subTest(routing="buildSrc drift", outcome="contracts skipped"):
+            self.assertNotEqual(0, run({**build_src, "BUILDSRC_CONTRACTS_RESULT": "skipped"}).returncode)
+        with self.subTest(routing="buildSrc drift", outcome="coverage skipped"):
+            self.assertNotEqual(0, run({**build_src, "COVERAGE_MUTATION_RESULT": "skipped"}).returncode)
+        ci_files = {**base, "CI_FILES_CHANGED": "true", "BUILDSRC_CONTRACTS_RESULT": "success"}
+        self.assertEqual(0, run(ci_files).returncode,
+                         "a .github head must run the full gate including the contracts job")
+        with self.subTest(routing=".github drift", outcome="contracts skipped"):
+            self.assertNotEqual(0, run({**ci_files, "BUILDSRC_CONTRACTS_RESULT": "skipped"}).returncode)
+        labeled_dependency_only = {
+            **dependency_only,
+            "EVENT_LABELS": '["run-maestro"]',
+            "API24_INSTRUMENTATION_RESULT": "success",
+            "MAESTRO_JOURNEYS_RESULT": "success",
+            "COVERAGE_MUTATION_RESULT": "success",
+        }
+        self.assertEqual(0, run(labeled_dependency_only).returncode,
+                         "the run-maestro label must keep the emulator and coverage lanes over a dependency-only head")
+        with self.subTest(routing="run-maestro drift", outcome="contracts success on a dependency-only head"):
+            self.assertNotEqual(0, run({**labeled_dependency_only, "BUILDSRC_CONTRACTS_RESULT": "success"}).returncode)
+        for decision, value in (
+            ("DEPENDENCY_ONLY_CHANGED", ""),
+            ("DEPENDENCY_ONLY_CHANGED", "TRUE"),
+            ("CI_FILES_CHANGED", "yes"),
+            ("BUILD_LOGIC_CHANGED", "1"),
+        ):
+            with self.subTest(routing="unreadable decision", decision=decision, value=value):
+                self.assertNotEqual(0, run({**base, decision: value}).returncode)
 
     def test_aggregate_routes_draft_ready_and_external_fork_pull_requests(self):
         block = WORKFLOW.read_text().split(
@@ -689,6 +783,10 @@ redact_file "$runner_output" || status=$?
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
             "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
         }
@@ -759,8 +857,13 @@ redact_file "$runner_output" || status=$?
             "FORK_GUARD_RESULT": "success",
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
+            "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
             "DRAFT_VALIDATION_RESULT": "success",
             "COMMIT_MESSAGE_RESULT": "success",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
             **{f"{job}_RESULT": "success" for job in core},
@@ -810,11 +913,15 @@ redact_file "$runner_output" || status=$?
             "EVENT_DRAFT": "false",
             "EVENT_LABELS": '["ready-for-agent", "run-maestro"]',
             "DOCS_ONLY_CHANGED": "true",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
             "FORK_GUARD_RESULT": "success",
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
             "DRAFT_VALIDATION_RESULT": "success",
             "COMMIT_MESSAGE_RESULT": "success",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
             **{f"{job}_RESULT": "success" for job in core},
@@ -864,6 +971,10 @@ redact_file "$runner_output" || status=$?
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
             "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
         }
