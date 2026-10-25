@@ -687,7 +687,7 @@ jobs:
       - name: Run deterministic Maestro journeys
         id: journeys
         continue-on-error: true
-        timeout-minutes: 55
+        timeout-minutes: 40
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 24
@@ -777,7 +777,7 @@ jobs:
       - name: Run deterministic Maestro journeys
         id: journeys
         continue-on-error: true
-        timeout-minutes: 55
+        timeout-minutes: 40
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 24
@@ -867,7 +867,7 @@ jobs:
       - name: Run deterministic Maestro journeys
         id: journeys
         continue-on-error: true
-        timeout-minutes: 55
+        timeout-minutes: 40
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 24
