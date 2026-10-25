@@ -48,23 +48,38 @@ lanes (`formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descrip
 `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`,
 `compose-jvm-tests`) report `skipped` from the first pull-request run and the aggregate requires
 exactly that; the `run-maestro` label keeps precedence and starts the heavy and emulator lanes on a
-documentation-only head too. The classification is deliberately conservative: code, resources,
-build files, and especially `.github/**` route the full gate, and a push, a nightly schedule, and a
-manual dispatch never consult the decision, so the release chain always re-verifies the exact `main`
-tip with the complete gate.
+documentation-only head too. A dependency-only head takes the sibling fast path: when the decision
+job reports that every changed file is a build or dependency file (`gradle/libs.versions.toml`, any
+`*.gradle.kts` including `settings.gradle.kts`, `gradle.properties`, or any file under `gradle/**`;
+the declared class is deliberately generic over dependency and build files, and `.github/**` and
+`buildSrc/**` are excluded before the match so control-plane and build-logic heads can never take
+the trimmed path by accident), the aggregate skips `api24-instrumentation`, `maestro-journeys`,
+`coverage-mutation`, and `buildsrc-contracts` while every core lane still runs, and the
+`run-maestro` label keeps precedence over the emulator lanes and `coverage-mutation` there too.
+Every classifier answer must be exactly `true` or `false`: an unreadable changed-file answer fails
+closed to the full gate, and the aggregate re-validates each decision guard before trusting the
+routing. The classification is deliberately conservative: code, resources, and especially
+`.github/**` route the full gate, and a push, a nightly schedule, and a manual dispatch never
+consult the decision, so the release chain always re-verifies the exact `main` tip with the
+complete gate.
 
-The aggregate job compares `.github/quality-gate/required-checks.txt` with its own `needs` list, so
-a check can neither be dropped from the declaration silently nor added without updating the
-declaration. The workflow contracts are self-tested in
+The aggregate job compares `.github/quality-gate/required-checks.txt` (plus the `buildsrc_contracts`
+support job) with its own `needs` list, so a check can neither be dropped from the declaration
+silently nor added without updating the declaration. Support jobs such as `buildsrc_contracts` are
+not declared GitHub statuses; the aggregate `quality-gate` remains the single required status. The
+workflow contracts are self-tested in
 `buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/QualityGateConfigurationTest.kt`, the
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,
 and `ReportEvidenceTest`, the fail-closed behaviour of the real tasks in
 `QualityVerificationFailClosedTest`, and the architecture rules in `ArchitectureCheckTest`. The
 documentation check is covered by
 `.github/scripts/tests/test_public_documentation.py`, and the published-release artifact check by
-`.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. All of
-these classes run in the `architecture-check` job, so a rule only exists if a check enforces it and
-CI executes that check.
+`.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. The six
+workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
+`CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`, and
+`ReportEvidenceTest`) run in the `buildsrc-contracts` job, and the architecture rules in
+`ArchitectureCheckTest` run in the `architecture-check` job, so a rule only exists if a check
+enforces it and CI executes that check.
 
 ## Declared scopes and thresholds
 
