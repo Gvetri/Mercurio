@@ -265,11 +265,30 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             + label_guard
             + " && ("
             + emulator_gate
-            + ") && (github.event_name != 'pull_request' "
-            "|| !contains(needs.*.result, 'failure')) }}",
+            + ") && (github.event_name != 'pull_request' || ("
+            + " && ".join(
+                f"needs.{lane}.result != 'failure'"
+                for lane in (
+                    "ui_paths", "formatting", "static_analysis", "detekt", "unit_tests",
+                    "fixture_descriptor", "fixture_lifecycle", "fixture_contract",
+                    "android_build", "coverage_mutation", "compose_test",
+                )
+            )
+            + ")) }}",
             job_key(job_block(self.workflow, "maestro_journeys"), "if"),
-            "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
+            "a failed required lane must skip the shard aggregate on pull requests while nightly validations run to completion",
         )
+        for shard in ("maestro_shard_1", "maestro_shard_2", "maestro_shard_3"):
+            self.assertEqual(
+                "${{ always() && needs.api24_instrumentation.result == 'success' && "
+                + label_guard
+                + " && ("
+                + emulator_gate
+                + ") && (github.event_name != 'pull_request' "
+                "|| !contains(needs.*.result, 'failure')) }}",
+                job_key(job_block(self.workflow, shard), "if"),
+                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
+            )
         self.assertEqual(
             "[ui_paths]",
             job_key(job_block(self.workflow, "api24_instrumentation"), "needs"),
@@ -277,9 +296,10 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         self.assertEqual(
             "[api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
             "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, "
-            "android_build, coverage_mutation, compose_test]",
+            "android_build, coverage_mutation, compose_test, "
+            "maestro_shard_1, maestro_shard_2, maestro_shard_3]",
             job_key(job_block(self.workflow, "maestro_journeys"), "needs"),
-            "the emulator tail must wait for every lane that concludes before it starts",
+            "the shard aggregate must wait for every lane and every shard",
         )
         self.assertIn('expected_state=skipped', aggregate)
         self.assertIn('if [ "$EVENT_BASE_REF" != main ]', aggregate)
@@ -602,8 +622,12 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_checkout_steps_stay_immutable_and_credential_free(self):
         jobs = jobs_of(self.workflow)
         with_checkout = [job for job in jobs if "actions/checkout@" in job_block(self.workflow, job)]
-        self.assertEqual(sorted(set(jobs) - {"fork_guard", "ui_paths"}), sorted(with_checkout))
-        self.assertEqual(len(DECLARED_CHECKS) + 3, len(jobs))
+        self.assertEqual(
+            sorted(set(jobs) - {"fork_guard", "ui_paths", "maestro_journeys"}),
+            sorted(with_checkout),
+            "only the shard aggregate may lack checkout: it reads needs results and never touches the repository",
+        )
+        self.assertEqual(len(DECLARED_CHECKS) + 6, len(jobs))
         self.assertIn("quality-gate", with_checkout)
         for job, block in ((job, job_block(self.workflow, job)) for job in jobs):
             keys = [line.strip().split(":", 1)[0] for line in block.splitlines() if re.match(r"^    [a-z0-9_\\-]+: ", line)]

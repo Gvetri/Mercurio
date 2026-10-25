@@ -15,11 +15,37 @@ WORKFLOW = ROOT / ".github/workflows/quality-gate.yml"
 JOURNEY_RUNNER = ROOT / ".github/scripts/journey-run.sh"
 JOURNEY_RETRY_TARGET = "session-lifecycle"
 JOURNEY_MAX_ATTEMPTS = 2
+MAESTRO_SHARD_TOTAL = 3
+MAESTRO_SHARD_KEYS = tuple(f"maestro_shard_{shard}" for shard in range(1, MAESTRO_SHARD_TOTAL + 1))
+MAESTRO_LANE_NEEDS = (
+    "needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
+    "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, "
+    "coverage_mutation, compose_test]"
+)
 
 
 def parse_journeys(runner_text):
     block = runner_text.split("journeys=(", 1)[1].split("\n)", 1)[0]
     return [line.strip() for line in block.splitlines() if line.strip()]
+
+
+def maestro_region(workflow):
+    return workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
+
+
+def maestro_umbrella_block(workflow):
+    return maestro_region(workflow).split("\n  maestro_shard_1:", 1)[0]
+
+
+def maestro_shard_block(workflow, shard):
+    block = maestro_region(workflow).split(f"  maestro_shard_{shard}:\n", 1)[1]
+    for following in range(shard + 1, MAESTRO_SHARD_TOTAL + 1):
+        block = block.split(f"\n  maestro_shard_{following}:", 1)[0]
+    return block
+
+
+def shard_journeys(journeys, shard):
+    return [journey for slot, journey in enumerate(journeys) if slot % MAESTRO_SHARD_TOTAL == shard - 1]
 
 
 def journey_attempts(journey, *, retried=JOURNEY_RETRY_TARGET, max_attempts=JOURNEY_MAX_ATTEMPTS):
@@ -57,43 +83,98 @@ class TestJobs(unittest.TestCase):
 
     def test_maestro_journeys_skip_when_a_required_lane_fails_on_a_pull_request(self):
         workflow = WORKFLOW.read_text()
-        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            self.assertIn(
+                MAESTRO_LANE_NEEDS,
+                job,
+                "the emulator tail must wait for every lane that concludes before it starts",
+            )
+            self.assertIn(
+                "needs.api24_instrumentation.result == 'success'",
+                job,
+                "the emulator tail must still wait for a passing API 24 suite",
+            )
+            self.assertIn(
+                "(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))",
+                job,
+                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
+            )
+        umbrella = maestro_umbrella_block(workflow)
         self.assertIn(
-            "needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
-            "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, "
-            "coverage_mutation, compose_test]",
-            job,
-            "the emulator tail must wait for every lane that concludes before it starts",
+            MAESTRO_LANE_NEEDS.replace("compose_test]", "compose_test, " + ", ".join(MAESTRO_SHARD_KEYS) + "]"),
+            umbrella,
+            "the shard aggregate must wait for every lane and every shard",
         )
         self.assertIn(
             "needs.api24_instrumentation.result == 'success'",
-            job,
-            "the emulator tail must still wait for a passing API 24 suite",
+            umbrella,
+            "the shard aggregate must still wait for a passing API 24 suite",
         )
+        for lane in (
+            "ui_paths", "formatting", "static_analysis", "detekt", "unit_tests",
+            "fixture_descriptor", "fixture_lifecycle", "fixture_contract", "android_build",
+            "coverage_mutation", "compose_test",
+        ):
+            self.assertIn(
+                f"needs.{lane}.result != 'failure'",
+                umbrella,
+                "a failed required lane must skip the shard aggregate on pull requests exactly as it skipped the unsharded emulator tail",
+            )
+
+    def test_maestro_journeys_aggregates_every_shard(self):
+        workflow = WORKFLOW.read_text()
+        umbrella = maestro_umbrella_block(workflow)
+        self.assertIn("    name: maestro-journeys\n", umbrella)
         self.assertIn(
-            "(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))",
-            job,
-            "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
+            "SHARD_RESULTS: ${{ needs.maestro_shard_1.result }} ${{ needs.maestro_shard_2.result }}"
+            " ${{ needs.maestro_shard_3.result }}",
+            umbrella,
         )
+        self.assertIn("Required maestro shard", umbrella)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            self.assertIn(f"    name: maestro-journeys-shard-{shard}-of-3\n", job)
+            self.assertIn(f"MAESTRO_CLI_VERSION: '2.10.0'", job)
+            self.assertIn(f".github/scripts/journey-run.sh {shard} {MAESTRO_SHARD_TOTAL}\n", job)
+            self.assertNotIn(
+                ".github/scripts/journey-run.sh\n",
+                job.replace("chmod +x .github/scripts/journey-run.sh\n", ""),
+                "a shard must never run the unsharded journey set",
+            )
+            self.assertIn(
+                f"name: journey-evidence-shard-{shard}-" + "${{ github.run_id }}-${{ github.run_attempt }}",
+                job,
+            )
+            self.assertIn(
+                f"name: journey-retry-evidence-shard-{shard}-" + "${{ github.run_id }}-${{ github.run_attempt }}",
+                job,
+            )
+        region = maestro_region(workflow)
+        self.assertEqual(MAESTRO_SHARD_TOTAL, region.count(".github/scripts/journey-run.sh "))
+        self.assertEqual(MAESTRO_SHARD_TOTAL, region.count("uses: reactivecircus/android-emulator-runner@v2"))
 
     def test_maestro_failure_artifact_upload_runs_for_continue_on_error_step(self):
         workflow = WORKFLOW.read_text()
-        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
-        upload = job.split("      - name: Upload journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        redaction = job.split("      - name: Redact journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn("        id: journeys", job)
-        self.assertIn("        continue-on-error: true", job)
-        self.assertIn("        id: redact_journey_evidence", redaction)
-        self.assertIn("if: ${{ always() && steps.journeys.outcome != 'success' }}", redaction)
-        self.assertIn("redact-test-reports.py", redaction)
-        self.assertIn("steps.redact_journey_evidence.outcome == 'success'", upload)
-        self.assertIn("uses: actions/upload-artifact@v4", upload)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            upload = job.split("      - name: Upload journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            redaction = job.split("      - name: Redact journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("        id: journeys", job)
+            self.assertIn("        continue-on-error: true", job)
+            self.assertIn("        id: redact_journey_evidence", redaction)
+            self.assertIn("if: ${{ always() && steps.journeys.outcome != 'success' }}", redaction)
+            self.assertIn("redact-test-reports.py", redaction)
+            self.assertIn("steps.redact_journey_evidence.outcome == 'success'", upload)
+            self.assertIn("uses: actions/upload-artifact@v4", upload)
 
     def test_maestro_journey_emulator_uses_writable_system_for_test_ca(self):
         workflow = WORKFLOW.read_text()
-        journey_step = workflow.split("      - name: Run deterministic Maestro journeys\n", 1)[1]
-        journey_step = journey_step.split("\n      - name: Upload journey failure evidence", 1)[0]
-        self.assertIn("emulator-options: -no-window -no-audio -no-boot-anim -writable-system", journey_step)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            journey_step = job.split("      - name: Run deterministic Maestro journeys\n", 1)[1]
+            journey_step = journey_step.split("\n      - name: Upload journey failure evidence", 1)[0]
+            self.assertIn("emulator-options: -no-window -no-audio -no-boot-anim -writable-system", journey_step)
 
     def test_journey_runner_preinstalls_the_pinned_driver_and_skips_the_dadb_reinstall(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
@@ -129,9 +210,10 @@ class TestJobs(unittest.TestCase):
         self.assertLess(guard, download, "the archive download must be guarded by a cache-friendly presence check")
         self.assertLess(download, unzip)
         workflow = WORKFLOW.read_text()
-        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
-        self.assertIn("uses: actions/cache@v4", job)
-        self.assertIn("key: maestro-cli-${{ env.MAESTRO_CLI_VERSION }}", job)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            self.assertIn("uses: actions/cache@v4", job)
+            self.assertIn("key: maestro-cli-${{ env.MAESTRO_CLI_VERSION }}", job)
 
     def test_maestro_journey_timeout_preserves_failure_evidence(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
@@ -153,8 +235,9 @@ class TestJobs(unittest.TestCase):
         remount = runner.index("adb remount")
         install = runner.index('adb push "$ca_file"')
         chmod = runner.index("adb shell chmod 644")
-        trust_reboot = runner.rindex("adb reboot")
-        trust_boot = runner.rindex("sys.boot_completed")
+        trust_reboot = runner.index("adb reboot", chmod)
+        trust_boot = runner.index("sys.boot_completed", trust_reboot)
+        retry_reboot = runner.rindex("adb reboot")
         apk_install = runner.index('timeout 180 adb install --no-streaming -r "$apk"')
         self.assertLess(prepare_reboot, prepare_boot)
         self.assertLess(prepare_boot, remount)
@@ -162,7 +245,8 @@ class TestJobs(unittest.TestCase):
         self.assertLess(install, chmod)
         self.assertLess(chmod, trust_reboot)
         self.assertLess(trust_reboot, trust_boot)
-        self.assertLess(trust_boot, apk_install)
+        self.assertLess(trust_boot, retry_reboot)
+        self.assertLess(retry_reboot, apk_install)
 
     def test_journey_runner_captures_telemetry_before_reaping_gateway_after_health_failure(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -473,21 +557,88 @@ class TestJobs(unittest.TestCase):
             evidence_dir = workspace / "artifacts/journey-evidence"
             self.assertFalse((evidence_dir / "empty-sessions-maestro-attempt1.log").exists())
 
+    def test_journey_runner_shard_selection_partitions_the_pinned_journeys(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        observed = {}
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            with tempfile.TemporaryDirectory() as directory:
+                workspace = Path(directory)
+                environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+                result = subprocess.run(
+                    ["bash", str(ROOT / ".github/scripts/journey-run.sh"), str(shard), str(MAESTRO_SHARD_TOTAL)],
+                    cwd=workspace,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertIn(f"Running deterministic journey shard {shard} of {MAESTRO_SHARD_TOTAL}.", result.stdout)
+                self.assertIn("All deterministic journeys passed.", result.stdout)
+                observed[shard] = [line.split("Journey: ", 1)[1] for line in result.stdout.splitlines() if line.startswith("Journey: ")]
+                self.assertEqual(
+                    sorted(set(observed[shard])),
+                    sorted(path.name for path in count_dir.iterdir()),
+                    "every assigned journey must run exactly once in its shard",
+                )
+                self.assertTrue(all((count_dir / path.name).read_text().strip() == "1" for path in count_dir.iterdir()))
+        expected = {shard: shard_journeys(journeys, shard) for shard in observed}
+        for shard in sorted(observed):
+            self.assertEqual(expected[shard], observed[shard], f"shard {shard} must run exactly its assigned journeys")
+        self.assertEqual(set(journeys), {journey for subset in observed.values() for journey in subset})
+        for shard in sorted(observed):
+            for other in sorted(observed):
+                if shard < other:
+                    self.assertFalse(set(observed[shard]) & set(observed[other]), f"shards {shard} and {other} overlap")
+
+    def test_journey_runner_rejects_invalid_shard_selections(self):
+        for arguments in (("0", "3"), ("4", "3"), ("x", "3"), ("2",), ("2", "0"), ("", "3")):
+            with self.subTest(arguments=arguments):
+                with tempfile.TemporaryDirectory() as directory:
+                    workspace = Path(directory)
+                    environment, _ = self._prepare_journey_runner_fixture(workspace, "none", 0)
+                    result = subprocess.run(
+                        ["bash", str(ROOT / ".github/scripts/journey-run.sh"), *arguments],
+                        cwd=workspace,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("Invalid shard selection", result.stdout)
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), "2", "99"],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("Invalid shard selection", result.stdout)
+            self.assertIn("29 pinned journeys", result.stdout)
+            self.assertNotIn("Journey:", result.stdout)
+
     def test_journey_retry_evidence_uploads_for_recovered_runs(self):
         workflow = WORKFLOW.read_text()
-        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
-        redaction = job.split("      - name: Redact retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn("        id: redact_retried_journey_evidence", redaction)
-        self.assertIn(
-            "if: ${{ always() && steps.journeys.outcome == 'success' && hashFiles('artifacts/journey-evidence/*-attempt1*') != '' }}",
-            redaction,
-        )
-        self.assertIn("redact-test-reports.py", redaction)
-        upload = job.split("      - name: Upload retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn("if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}", upload)
-        self.assertIn("uses: actions/upload-artifact@v4", upload)
-        self.assertIn("name: journey-retry-evidence-${{ github.run_id }}-${{ github.run_attempt }}", upload)
-        self.assertLess(job.index("Redact retried journey evidence"), job.index("Upload retried journey evidence"))
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            redaction = job.split("      - name: Redact retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("        id: redact_retried_journey_evidence", redaction)
+            self.assertIn(
+                "if: ${{ always() && steps.journeys.outcome == 'success' && hashFiles('artifacts/journey-evidence/*-attempt1*') != '' }}",
+                redaction,
+            )
+            self.assertIn("redact-test-reports.py", redaction)
+            upload = job.split("      - name: Upload retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}", upload)
+            self.assertIn("uses: actions/upload-artifact@v4", upload)
+            self.assertIn(f"name: journey-retry-evidence-shard-{shard}-" + "${{ github.run_id }}-${{ github.run_attempt }}", upload)
+            self.assertLess(job.index("Redact retried journey evidence"), job.index("Upload retried journey evidence"))
 
     def test_journey_runner_bounds_the_platform_flake_retry_to_one_extra_attempt(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
@@ -497,6 +648,22 @@ class TestJobs(unittest.TestCase):
         self.assertIn("journey_attempt", runner)
         self.assertIn('"$journey" = "session-lifecycle"', runner)
         self.assertEqual(1, runner.count('test --no-reinstall-driver "$flow_dir/$journey.yaml"'))
+
+    def test_journey_runner_retries_the_post_tls_boot_wait_once(self):
+        runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
+        self.assertIn("for boot_attempt in 1 2", runner)
+        self.assertEqual(1, runner.count("for boot_attempt in 1 2"))
+        self.assertEqual(1, runner.count("retrying the boot wait"))
+        self.assertIn(
+            'log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."',
+            runner,
+        )
+        self.assertIn(
+            'log "Emulator did not boot after installing the TLS trust store."\n    exit 1',
+            runner,
+            "an exhausted boot retry must still fail closed",
+        )
+        self.assertNotIn("before installing the TLS CA; retrying", runner)
 
     def test_journey_attempt_rule_bounds_the_retried_journey_to_two_attempts(self):
         self.assertEqual(2, journey_attempts(JOURNEY_RETRY_TARGET))

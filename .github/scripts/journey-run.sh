@@ -13,6 +13,52 @@ flow_dir="$workspace/fixtures/hermes/journey/flows"
 
 log() { printf '%s\n' "$*"; }
 
+journeys=(
+    connection
+    session-list-first
+    empty-sessions
+    pending-creation
+    session-lifecycle
+    pagination-search
+    active-run-isolation
+    streaming
+    live-streaming
+    interrupted-sse-refetch
+    composer-stop
+    terminal-success
+    terminal-failure
+    explicit-retry
+    stale-recoverable
+    failed-offline-send
+    offline-session-list
+    markdown-links
+    markdown-blocks
+    capabilities-additive
+    capabilities-missing-required
+    accessibility-controls
+    settings
+    diagnostics-recording
+    confirmed-send
+    model-picker-advertised
+    model-picker-absent
+    model-picker-refusal
+    model-catalog-row-mismatch
+)
+
+shard_index="${1:-}"
+shard_total="${2:-}"
+if [[ -n "$shard_index" || -n "$shard_total" ]]; then
+    if [[ -z "$shard_index" || -z "$shard_total" ]] \
+        || ! [[ "$shard_index" =~ ^[1-9][0-9]*$ ]] \
+        || ! [[ "$shard_total" =~ ^[1-9][0-9]*$ ]] \
+        || [ "$shard_index" -gt "$shard_total" ] \
+        || [ "$shard_total" -gt "${#journeys[@]}" ]; then
+        log "Invalid shard selection: pass a 1-based shard index and shard total within the ${#journeys[@]} pinned journeys."
+        exit 1
+    fi
+    log "Running deterministic journey shard ${shard_index} of ${shard_total}."
+fi
+
 gateway_pid=""
 active_journey=""
 stop_gateway() {
@@ -85,13 +131,25 @@ adb push "$ca_file" "$ca_device_path" >/dev/null
 adb shell chmod 644 "$ca_device_path"
 adb reboot >/dev/null || true
 adb wait-for-device
-for _ in $(seq 1 120); do
-    if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+boot_ok=""
+for boot_attempt in 1 2; do
+    for _ in $(seq 1 120); do
+        if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+            boot_ok=1
+            break
+        fi
+        sleep 2
+    done
+    if [ "$boot_ok" = "1" ]; then
         break
     fi
-    sleep 2
+    if [ "$boot_attempt" = "1" ]; then
+        log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."
+        adb reboot >/dev/null || true
+        adb wait-for-device
+    fi
 done
-if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; then
+if [ "$boot_ok" != "1" ]; then
     log "Emulator did not boot after installing the TLS trust store."
     exit 1
 fi
@@ -127,39 +185,11 @@ log "Preparing the journey Gateway classpath."
 classpath_file="$workspace/fixtures/hermes/runner/build/journey-classpath.txt"
 classpath="$(cat "$classpath_file")"
 
-journeys=(
-    connection
-    session-list-first
-    empty-sessions
-    pending-creation
-    session-lifecycle
-    pagination-search
-    active-run-isolation
-    streaming
-    live-streaming
-    interrupted-sse-refetch
-    composer-stop
-    terminal-success
-    terminal-failure
-    explicit-retry
-    stale-recoverable
-    failed-offline-send
-    offline-session-list
-    markdown-links
-    markdown-blocks
-    capabilities-additive
-    capabilities-missing-required
-    accessibility-controls
-    settings
-    diagnostics-recording
-    confirmed-send
-    model-picker-advertised
-    model-picker-absent
-    model-picker-refusal
-    model-catalog-row-mismatch
-)
-
-for journey in "${journeys[@]}"; do
+for journey_slot in "${!journeys[@]}"; do
+    journey="${journeys[$journey_slot]}"
+    if [[ -n "$shard_total" ]] && [ $((journey_slot % shard_total)) -ne $((shard_index - 1)) ]; then
+        continue
+    fi
     log "Journey: $journey"
     journey_attempt=1
     while :; do
