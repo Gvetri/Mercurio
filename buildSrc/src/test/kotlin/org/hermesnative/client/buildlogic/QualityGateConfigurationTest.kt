@@ -1213,7 +1213,7 @@ class QualityGateConfigurationTest {
         }
         val immutableReference = Regex("[0-9a-fA-F]{40}")
 
-        assertEquals("The workflow must keep all nineteen checkout steps explicit.", 19, checkoutStepIndices.size)
+        assertEquals("The workflow must keep all twenty-one checkout steps explicit.", 21, checkoutStepIndices.size)
         checkoutStepIndices.forEach { index ->
             val reference = lines[index].trim().substringAfter("actions/checkout@")
             assertTrue(
