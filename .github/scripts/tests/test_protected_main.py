@@ -265,16 +265,21 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             + label_guard
             + " && ("
             + emulator_gate
-            + ") }}",
+            + ") && (github.event_name != 'pull_request' "
+            "|| !contains(needs.*.result, 'failure')) }}",
             job_key(job_block(self.workflow, "maestro_journeys"), "if"),
+            "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
         )
         self.assertEqual(
             "[ui_paths]",
             job_key(job_block(self.workflow, "api24_instrumentation"), "needs"),
         )
         self.assertEqual(
-            "[api24_instrumentation, ui_paths]",
+            "[api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
+            "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, "
+            "android_build, coverage_mutation, compose_test]",
             job_key(job_block(self.workflow, "maestro_journeys"), "needs"),
+            "the emulator tail must wait for every lane that concludes before it starts",
         )
         self.assertIn('expected_state=skipped', aggregate)
         self.assertIn('if [ "$EVENT_BASE_REF" != main ]', aggregate)

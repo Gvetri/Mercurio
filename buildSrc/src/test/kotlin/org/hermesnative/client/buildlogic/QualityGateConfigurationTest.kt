@@ -1240,14 +1240,19 @@ class QualityGateConfigurationTest {
         assertTrue("The workflow must define a Maestro journey job.", workflow.contains("  maestro_journeys:"))
         assertTrue("The Maestro journey job must be named explicitly.", workflow.contains("    name: maestro-journeys"))
         assertTrue(
-            "The Maestro journey job must wait for a passing API 24 suite and run on scheduled, manual, or ready pull requests that carry the run-maestro label or modify a UI path.",
-            maestroJob.contains("    needs: [api24_instrumentation, ui_paths]") &&
+            "The Maestro journey job must wait for a passing API 24 suite and run on scheduled, manual, or ready pull requests that carry the run-maestro label or modify a UI path, and a pull-request run must skip the journey when a required lane has already failed.",
+            maestroJob.contains(
+                "    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, " +
+                    "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, " +
+                    "coverage_mutation, compose_test]",
+            ) &&
                 maestroJob.contains("needs.api24_instrumentation.result == 'success'") &&
                 maestroJob.contains("github.event_name == 'schedule'") &&
                 maestroJob.contains("github.event_name == 'workflow_dispatch'") &&
                 maestroJob.contains("github.event_name == 'pull_request'") &&
                 maestroJob.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')") &&
-                maestroJob.contains("needs.ui_paths.outputs.ui_paths_changed == 'true'"),
+                maestroJob.contains("needs.ui_paths.outputs.ui_paths_changed == 'true'") &&
+                maestroJob.contains("(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))"),
         )
         assertTrue(
             "The Maestro journey job must run the pinned runner script.",
