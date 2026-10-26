@@ -97,8 +97,8 @@ def sign(apk, output, certificate):
         metadata.update(apk_sha256=digest(signed), certificate_sha256=expected_certificate)
         output.mkdir(parents=True)
         try:
-            shutil.copyfile(signed, output / "hermes-native-client.apk")
-            (output / "SHA256SUMS").write_text(f"{metadata['apk_sha256']}  hermes-native-client.apk\n")
+            shutil.copyfile(signed, output / "mercurio.apk")
+            (output / "SHA256SUMS").write_text(f"{metadata['apk_sha256']}  mercurio.apk\n")
             (output / "signing-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
         except OSError:
             shutil.rmtree(output)

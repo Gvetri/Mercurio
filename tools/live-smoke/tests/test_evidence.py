@@ -92,7 +92,7 @@ def sample_evidence(apk_sha=SHA):
         },
         "device": {
             "serial": "emulator-5554",
-            "avd_name": "hnc-issue29-live",
+            "avd_name": "mercurio-issue29-live",
             "api_level": 35,
             "model": "sdk_gphone64_x86_64",
             "fingerprint": "google/sdk_gphone64",

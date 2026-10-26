@@ -36,7 +36,7 @@ def make_inputs(tmp_path, **overrides):
         evidence_dir=tmp_path / "work" / "evidence",
         tls_p12=tmp_path / "journey-gateway.p12",
         device_serial="emulator-5554",
-        avd_name="hnc-issue29-live",
+        avd_name="mercurio-issue29-live",
         designation="designated",
     )
     base.update(overrides)
