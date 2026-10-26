@@ -106,7 +106,7 @@ private fun ConnectionContent(
     ) {
         if (!showConnectionForm) {
             Text(
-                text = "Hermes Native Client",
+                text = "Mercurio",
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { heading() },

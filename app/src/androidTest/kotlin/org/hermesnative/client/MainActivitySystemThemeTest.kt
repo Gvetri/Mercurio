@@ -58,7 +58,7 @@ class MainActivitySystemLightThemeTest {
             )
         }
         composeTestRule
-            .onNodeWithText("Hermes Native Client")
+            .onNodeWithText("Mercurio")
             .assertIsDisplayed()
         composeTestRule
             .onNodeWithText("Connect to a Hermes Gateway")
@@ -93,7 +93,7 @@ class MainActivitySystemDarkThemeTest {
             )
         }
         composeTestRule
-            .onNodeWithText("Hermes Native Client")
+            .onNodeWithText("Mercurio")
             .assertIsDisplayed()
         composeTestRule
             .onNodeWithText("Connect to a Hermes Gateway")
