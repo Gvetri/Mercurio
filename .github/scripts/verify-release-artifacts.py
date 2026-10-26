@@ -91,7 +91,7 @@ def download(tag, directory):
 
 
 def verify_checksum_file(directory, apk_sha256, notes):
-    require((directory / "SHA256SUMS").read_text() == f"{apk_sha256}  hermes-native-client.apk\n",
+    require((directory / "SHA256SUMS").read_text() == f"{apk_sha256}  mercurio.apk\n",
             "The published SHA256SUMS does not state the downloaded APK checksum")
     require(notes["APK checksum"] == apk_sha256,
             "The release notes state a checksum the published APK does not have")
@@ -117,7 +117,7 @@ def verify_signing_metadata(directory, source, apk_sha256, certificate):
 def verify_apk(directory, metadata, certificate):
     tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/35.0.0"
     environment = {name: os.environ[name] for name in ("PATH", "JAVA_HOME")}
-    apk = directory / "hermes-native-client.apk"
+    apk = directory / "mercurio.apk"
     actual = SIGNER["apk_metadata"](apk, tools, environment)
     require(actual["version_code"] == metadata["version_code"]
             and actual["version_name"] == metadata["version_name"],
@@ -155,7 +155,7 @@ def verify(tag, certificate_path):
     with tempfile.TemporaryDirectory(prefix="verify-release-", dir=temporary) as directory:
         downloaded = Path(directory)
         download(tag, downloaded)
-        apk_sha256 = SIGNER["digest"](downloaded / "hermes-native-client.apk")
+        apk_sha256 = SIGNER["digest"](downloaded / "mercurio.apk")
         verify_checksum_file(downloaded, apk_sha256, notes)
         metadata = verify_signing_metadata(downloaded, source, apk_sha256, certificate)
         verify_apk(downloaded, metadata, certificate)

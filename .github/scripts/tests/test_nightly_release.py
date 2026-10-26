@@ -1113,7 +1113,7 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertIn("not a stable-support promise", release["body"])
         self.assertIn("nightly-7002-bbbbbbbbbbbb", release["body"])
         self.assertEqual(["create", "upload", "download", "edit"], (self.provider / "operations").read_text().splitlines())
-        self.assertEqual({"hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json"}, {item["name"] for item in release["assets"]})
+        self.assertEqual({"mercurio.apk", "SHA256SUMS", "signing-metadata.json"}, {item["name"] for item in release["assets"]})
         result, values = self.prepare()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("false", values["publish"])
@@ -1184,7 +1184,7 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual(retry_tag, release["tag_name"])
         self.assertEqual(["create", "upload", "delete", "create", "upload", "download", "edit"],
                          (self.provider / "operations").read_text().splitlines())
-        self.assertEqual({"hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json"},
+        self.assertEqual({"mercurio.apk", "SHA256SUMS", "signing-metadata.json"},
                          {item["name"] for item in release["assets"]})
 
     def test_download_mismatch_never_publishes_the_draft(self):

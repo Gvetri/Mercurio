@@ -125,7 +125,7 @@ REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS = (
 )
 
 REQUIRED_RELEASE_ARTIFACT_STATEMENTS = (
-    "hermes-native-client.apk",
+    "mercurio.apk",
     "SHA256SUMS",
     "signing-metadata.json",
     "Semantic Version",

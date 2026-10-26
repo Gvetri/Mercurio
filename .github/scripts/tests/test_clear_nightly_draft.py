@@ -31,7 +31,7 @@ class ClearNightlyDraftTest(unittest.TestCase):
                 f"- Signing certificate SHA-256: `{(ROOT / '.github/release-certificate.sha256').read_text().strip()}`\n"
                 "- Deterministic validation: https://github.com/Gvetri/hermes-native-client/actions/runs/123 (attempt 1)\n"
             ),
-            "assets": [{"id": 10, "name": "hermes-native-client.apk", "state": "uploaded",
+            "assets": [{"id": 10, "name": "mercurio.apk", "state": "uploaded",
                         "uploader": {"login": "github-actions[bot]", "id": 41898282},
                         "digest": "sha256:" + "b" * 64}],
         }
@@ -251,7 +251,7 @@ class ClearNightlyDraftTest(unittest.TestCase):
         self.add_metadata()
         checksum = {"id": 11, "name": "SHA256SUMS",
                     "uploader": {"login": "github-actions[bot]", "id": 41898282},
-                    "digest": "sha256:" + hashlib.sha256(("b" * 64 + "  hermes-native-client.apk\n").encode()).hexdigest()}
+                    "digest": "sha256:" + hashlib.sha256(("b" * 64 + "  mercurio.apk\n").encode()).hexdigest()}
         assets = list(self.release["assets"])
         for retained in (assets, [assets[0], checksum], [checksum, assets[1]]):
             with self.subTest(names=[asset["name"] for asset in retained]):

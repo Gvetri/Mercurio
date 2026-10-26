@@ -147,7 +147,7 @@ Publication proceeds in this order:
 2. Read the draft back by the exact release ID returned by creation. Do not
    rediscover it through a release listing, which can omit the new draft;
    GitHub's by-tag endpoint also excludes drafts.
-3. Upload `hermes-native-client.apk`, `SHA256SUMS`, and `signing-metadata.json`.
+3. Upload `mercurio.apk`, `SHA256SUMS`, and `signing-metadata.json`.
 4. Read the asset inventory, download the uploaded files, compare every file's
    SHA-256 with the local verified artifact, and verify the APK again.
 5. Publish the verified draft as the **Nightly** prerelease. Read back its release
@@ -213,7 +213,7 @@ existing lightweight tag's commit must agree. Recovery refuses published or
 non-draft releases, a missing/invisible draft, non-Nightly state, unknown evidence,
 ambiguous tag ownership, and changed state. A draft is provably incomplete only
 when its full asset inventory is a **strict subset** of the publisher's declared
-`hermes-native-client.apk`, `SHA256SUMS`, and `signing-metadata.json` allowlist.
+`mercurio.apk`, `SHA256SUMS`, and `signing-metadata.json` allowlist.
 An asset outside that set is interpreted as **foreign state**, not something the
 publisher created, and requires human inspection. Every retained asset must identify
 `github-actions[bot]` (id `41898282`) as its uploader; a different, missing, or
@@ -305,8 +305,8 @@ Download all three release files and use Android Build Tools 35.0.0:
 
 ```text
 sha256sum --check SHA256SUMS
-apksigner verify --print-certs hermes-native-client.apk
-aapt2 dump badging hermes-native-client.apk
+apksigner verify --print-certs mercurio.apk
+aapt2 dump badging mercurio.apk
 ```
 
 Compare the certificate digest with `.github/release-certificate.sha256` at the

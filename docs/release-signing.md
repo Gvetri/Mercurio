@@ -169,7 +169,7 @@ Verify a downloaded signed artifact with Android Build Tools 35.0.0:
 
 ```text
 sha256sum --check SHA256SUMS
-apksigner verify --print-certs hermes-native-client.apk
+apksigner verify --print-certs mercurio.apk
 ```
 
 The single signer certificate's SHA-256 must match the committed digest. Never
