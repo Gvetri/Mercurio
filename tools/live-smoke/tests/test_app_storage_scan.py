@@ -18,7 +18,7 @@ from livesmoke.orchestrate import LiveSmokeGate  # noqa: E402
 from livesmoke.proc import CommandResult  # noqa: E402
 from test_config import make_inputs  # noqa: E402
 
-APP_PATH = "/data/user/0/org.hermesnative.client"
+APP_PATH = "/data/user/0/org.mercurio.client"
 PROVIDER_KEY = "synthetic-provider-key-for-tests"
 
 
@@ -77,7 +77,7 @@ class AppStorageScanTests(unittest.TestCase):
             )
             surface = gate.record["redaction"]["surfaces"]["device_app_storage"]
             self.assertEqual(surface["path"], APP_PATH)
-            self.assertEqual(surface["package"], "org.hermesnative.client")
+            self.assertEqual(surface["package"], "org.mercurio.client")
             self.assertEqual(surface["serial"], "emulator-5554")
             self.assertTrue(surface["pulled"])
             self.assertTrue(surface["scanned"])

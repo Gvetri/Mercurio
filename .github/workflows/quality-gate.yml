@@ -237,12 +237,12 @@ jobs:
       - name: Verify the buildSrc quality self-test contracts
         run: >-
           ./gradlew -p buildSrc test
-          --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
-          --tests org.hermesnative.client.buildlogic.QualityVerificationFailClosedTest
-          --tests org.hermesnative.client.buildlogic.CoverageEvidenceTest
-          --tests org.hermesnative.client.buildlogic.MutationEvidenceTest
-          --tests org.hermesnative.client.buildlogic.BoundaryDoubleVerifierTest
-          --tests org.hermesnative.client.buildlogic.ReportEvidenceTest
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest
+          --tests org.mercurio.client.buildlogic.CoverageEvidenceTest
+          --tests org.mercurio.client.buildlogic.MutationEvidenceTest
+          --tests org.mercurio.client.buildlogic.BoundaryDoubleVerifierTest
+          --tests org.mercurio.client.buildlogic.ReportEvidenceTest
           --no-daemon
 
   coverage_mutation:
@@ -368,7 +368,7 @@ jobs:
               - 'app/src/main/**'
               - 'feature/entry/presentation/**'
               - 'feature/entry/wiring/src/main/res/**'
-              - 'fixtures/hermes/journey/**'
+              - 'fixtures/mercurio/journey/**'
       - name: Detect the changed files of the pull request
         id: changed_files
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3

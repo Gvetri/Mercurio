@@ -142,7 +142,7 @@ python3 .github/scripts/tests/test_stable_public_beta.py
 python3 .github/scripts/tests/test_nightly_release.py
 python3 -m unittest discover -s .github/scripts/tests -p 'test_*sign*.py'
 actionlint .github/workflows/stable-public-beta.yml
-./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
+./gradlew -p buildSrc test --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest
 ```
 
 The Python suites require JDK 21, Android SDK Platform 35, Build Tools 35.0.0,

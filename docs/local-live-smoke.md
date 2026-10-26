@@ -86,7 +86,7 @@ python3 tools/live-smoke/live_smoke.py preflight \
   --hermes-source ~/src/hermes-agent \
   --video-recipient <maintainer-fingerprint> \
   --device-serial <owned-emulator-serial> --avd-name <owned-avd-name> \
-  --tls-p12 "$PWD/fixtures/hermes/journey-tls/journey-gateway.p12"
+  --tls-p12 "$PWD/fixtures/mercurio/journey-tls/journey-gateway.p12"
 
 # 2. Run the gate (builds a disposable image from the pinned source).
 python3 tools/live-smoke/live_smoke.py run --<same inputs>

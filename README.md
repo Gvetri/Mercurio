@@ -34,7 +34,7 @@ Build the debug and release APKs:
 ./gradlew :app:assembleDebug :app:assembleRelease
 ```
 
-The application package is `org.hermesnative.client`. Local release builds are unsigned and are not distribution artifacts. The [protected release signing workflow](docs/release-signing.md) signs only an exact validated `main` source. Nightly signing is unattended; standalone signing requires explicit human approval. The signer itself does not publish a release.
+The application package is `org.mercurio.client`. Local release builds are unsigned and are not distribution artifacts. The [protected release signing workflow](docs/release-signing.md) signs only an exact validated `main` source. Nightly signing is unattended; standalone signing requires explicit human approval. The signer itself does not publish a release.
 
 ## Nightly releases
 

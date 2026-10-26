@@ -36,7 +36,7 @@ from support import (  # noqa: E402
 )
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-P12 = REPO_ROOT / "fixtures" / "hermes" / "journey-tls" / "journey-gateway.p12"
+P12 = REPO_ROOT / "fixtures" / "mercurio" / "journey-tls" / "journey-gateway.p12"
 VERSION = "0.1.0"
 
 
@@ -304,8 +304,8 @@ class OrchestratorEndToEndTests(unittest.TestCase):
         self.assertEqual(evidence["teardown"]["status"], "ok")
         self.assertTrue(evidence["redaction"]["clean"])
         surfaces = evidence["redaction"]["surfaces"]
-        self.assertEqual(surfaces["device_app_storage"]["path"], "/data/user/0/org.hermesnative.client")
-        self.assertEqual(surfaces["device_app_storage"]["package"], "org.hermesnative.client")
+        self.assertEqual(surfaces["device_app_storage"]["path"], "/data/user/0/org.mercurio.client")
+        self.assertEqual(surfaces["device_app_storage"]["package"], "org.mercurio.client")
         self.assertTrue(surfaces["device_app_storage"]["pulled"])
         self.assertTrue(surfaces["device_app_storage"]["scanned"])
         self.assertIn("host_scratch", surfaces)

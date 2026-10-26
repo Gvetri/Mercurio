@@ -131,7 +131,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         )
         self.assertEqual("[ui_paths]", job_key(contracts, "needs"))
         self.assertIn("./gradlew -p buildSrc test", contracts)
-        self.assertIn("--tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest", contracts)
+        self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", contracts)
         architecture = job_block(self.workflow, "architecture_check")
         self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
         self.assertNotIn("./gradlew -p buildSrc test", architecture)
@@ -332,7 +332,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
                 "app/src/main/**",
                 "feature/entry/presentation/**",
                 "feature/entry/wiring/src/main/res/**",
-                "fixtures/hermes/journey/**",
+                "fixtures/mercurio/journey/**",
             ],
             re.findall(r"^              - '(.+)'$", filters, re.MULTILINE),
         )

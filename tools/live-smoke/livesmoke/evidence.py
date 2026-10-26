@@ -439,8 +439,8 @@ def validate_evidence(
             device_surface = surfaces.get("device_app_storage")
             if not isinstance(device_surface, dict) \
                     or device_surface.get("pulled") is not True \
-                    or device_surface.get("package") != "org.hermesnative.client" \
-                    or device_surface.get("path") != "/data/user/0/org.hermesnative.client" \
+                    or device_surface.get("package") != "org.mercurio.client" \
+                    or device_surface.get("path") != "/data/user/0/org.mercurio.client" \
                     or not isinstance(device_surface.get("serial"), str) or not device_surface.get("serial"):
                 note("redaction_unverified")
 
