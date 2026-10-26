@@ -25,11 +25,11 @@ require(nightlySourceSha == null || nightlySourceSha.matches(Regex("[0-9a-f]{40}
 }
 
 android {
-    namespace = "org.hermesnative.client"
+    namespace = "org.mercurio.client"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "org.hermesnative.client"
+        applicationId = "org.mercurio.client"
         minSdk = 24
         targetSdk = 35
         versionCode = nightlyVersionCode ?: 1

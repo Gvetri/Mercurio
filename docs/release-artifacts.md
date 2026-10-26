@@ -39,7 +39,7 @@ release artifacts are documented in [Development Nightly releases](nightly-relea
 The published compatibility statement of a release is the one recorded in that release's notes. The
 client is validated against the repository's pinned, immutable Hermes revision
 `d9833c5615b80e199a174cd67d90ab430695a972`, whose descriptor is
-[`fixtures/hermes/pinned-fixture.properties`](../fixtures/hermes/pinned-fixture.properties). See
+[`fixtures/mercurio/pinned-fixture.properties`](../fixtures/mercurio/pinned-fixture.properties). See
 [Deterministic Hermes fixture](deterministic-fixture.md) for the pinned provenance and the
 compatibility-change rules. A mutable reference such as `main` or `latest` is never release
 evidence.

@@ -71,7 +71,7 @@ class TestJobs(unittest.TestCase):
             report_id = "redact_jvm_reports" if job == "unit_tests" else "redact_compose_reports"
             self.assertIn(f"failure() && steps.{report_id}.outcome == 'success'", block)
             self.assertIn("redact-test-reports.py", block)
-        self.assertIn("--tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest", workflow)
+        self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", workflow)
         self.assertIn("      - buildsrc_contracts", aggregate)
         contracts_job = workflow.split("  buildsrc_contracts:\n", 1)[1].split("\n  coverage_mutation:", 1)[0]
         self.assertIn("    name: buildsrc-contracts", contracts_job)
@@ -252,17 +252,17 @@ class TestJobs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             workspace = Path(directory)
             gateway_pid_file = workspace / "gateway.pid"
-            classpath_file = workspace / "fixtures/hermes/runner/build/journey-classpath.txt"
+            classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
             classpath_file.parent.mkdir(parents=True)
             classpath_file.write_text("fixture-classpath")
             for relative in (
                 ".github/scripts/verify-journey-capabilities.py",
-                "fixtures/hermes/contracts/capabilities/success.json",
+                "fixtures/mercurio/contracts/capabilities/success.json",
             ):
                 copied = workspace / relative
                 copied.parent.mkdir(parents=True, exist_ok=True)
                 copied.write_text((ROOT / relative).read_text())
-            capabilities = json.loads((ROOT / "fixtures/hermes/contracts/capabilities/success.json").read_text())["response"]["body"]
+            capabilities = json.loads((ROOT / "fixtures/mercurio/contracts/capabilities/success.json").read_text())["response"]["body"]
 
             def add_executable(name, body):
                 executable = workspace / name
@@ -367,17 +367,17 @@ class TestJobs(unittest.TestCase):
 
     def _prepare_journey_runner_fixture(self, workspace, fail_journey, fail_times):
         gateway_pid_file = workspace / "gateway.pid"
-        classpath_file = workspace / "fixtures/hermes/runner/build/journey-classpath.txt"
+        classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
         classpath_file.parent.mkdir(parents=True)
         classpath_file.write_text("fixture-classpath")
         for relative in (
             ".github/scripts/verify-journey-capabilities.py",
-            "fixtures/hermes/contracts/capabilities/success.json",
+            "fixtures/mercurio/contracts/capabilities/success.json",
         ):
             copied = workspace / relative
             copied.parent.mkdir(parents=True, exist_ok=True)
             copied.write_text((ROOT / relative).read_text())
-        capabilities = json.loads((ROOT / "fixtures/hermes/contracts/capabilities/success.json").read_text())["response"]["body"]
+        capabilities = json.loads((ROOT / "fixtures/mercurio/contracts/capabilities/success.json").read_text())["response"]["body"]
         count_dir = workspace / "maestro.counts"
         count_dir.mkdir()
 

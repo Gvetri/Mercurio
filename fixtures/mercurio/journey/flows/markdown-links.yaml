@@ -1,0 +1,52 @@
+appId: org.mercurio.client
+name: markdown-links
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: markdown-links-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Markdown Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Safe Markdown text"
+    direction: UP
+    timeout: 30000
+- assertVisible: "Safe Markdown text"
+- tapOn: "Message actions for message-markdown-1"
+- assertVisible: "Copy message"
+- assertVisible: "Share message"
+- takeScreenshot: markdown-links-01-menu-open
+- back
+- assertNotVisible: "Copy message"
+- takeScreenshot: markdown-links-02-menu-closed
+- scrollUntilVisible:
+    element:
+      text: ".*the secure page.*"
+    direction: DOWN
+- assertVisible: ".*Visit the safe HTTPS link.*"
+- assertNotVisible: ".*example.com/secure.*"
+- scrollUntilVisible:
+    element:
+      text: ".*stays plain text.*"
+    direction: DOWN
+- assertVisible: ".*inert label.*"
+- assertNotVisible: ".*javascript:.*"
+- scrollUntilVisible:
+    element:
+      text: ".*val total = 1.*"
+    direction: DOWN
+- assertVisible: "Copy code"
+- assertVisible: "Message"

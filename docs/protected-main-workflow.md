@@ -66,7 +66,7 @@ than the gate it mirrors.
 The emulator suites are opt-in on pull requests. A ready in-repository pull request runs them when
 the `run-maestro` label is present or when the `ui-paths` detector reports that the head modifies a
 declared UI path (`app/src/main/**`, `feature/entry/presentation/**`,
-`feature/entry/wiring/src/main/res/**`, `fixtures/hermes/journey/**`): `api24-instrumentation` runs
+`feature/entry/wiring/src/main/res/**`, `fixtures/mercurio/journey/**`): `api24-instrumentation` runs
 first, and `maestro-journeys` starts only after it passes, so a build or device-suite failure never
 reaches the journey lane. A pull request with neither the label nor a modified UI path reports both
 suites as `skipped`, and the aggregate requires exactly that routing; the label on a draft or an
@@ -171,7 +171,7 @@ read-only token scope, and the absence of secrets.
 
 ## The contracts are themselves tested
 
-`buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/QualityGateConfigurationTest.kt` pins
+`buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/QualityGateConfigurationTest.kt` pins
 the workflow contracts, and `.github/scripts/tests/test_protected_main.py` and
 `.github/scripts/tests/test_test_jobs.py` pin the routing, the aggregate gate, the commit-message
 check, and the conformance check. The workflow-contract suite runs in the `buildsrc-contracts` job,

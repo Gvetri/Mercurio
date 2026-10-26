@@ -43,7 +43,7 @@ def make_signing_fixture(root, version_code=1, version_name="test"):
     manifest = root / "AndroidManifest.xml"
     manifest.write_text(
         '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
-        f'package="org.hermesnative.client" android:versionCode="{version_code}" android:versionName="{version_name}">'
+        f'package="org.mercurio.client" android:versionCode="{version_code}" android:versionName="{version_name}">'
         '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35"/>'
         '<application android:label="Signing test"/></manifest>'
     )

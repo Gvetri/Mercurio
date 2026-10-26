@@ -1,0 +1,109 @@
+appId: org.mercurio.client
+name: model-picker-advertised
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: model-picker-advertised-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Picker Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Server default"
+    timeout: 30000
+- takeScreenshot: model-picker-advertised-control
+- tapOn:
+    text: "Server default"
+    index: 0
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "DeepSeek V4 Flash"
+    commands:
+      - back
+      - tapOn:
+          text: "Server default"
+          index: 0
+- assertVisible: "Hermes Agent"
+- takeScreenshot: model-picker-advertised-menu
+- assertVisible:
+    text: "DeepSeek V4 Flash"
+    below: "Server default"
+- assertVisible:
+    text: "Hermes Agent"
+    below: "DeepSeek V4 Flash"
+- tapOn: "Hermes Agent"
+- back
+- assertVisible: "Hermes Agent"
+- takeScreenshot: model-picker-advertised-hermes-selected
+- tapOn: "Message"
+- inputText: "Rely on this"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Stable recents result"
+    timeout: 30000
+- assertVisible: "Run state: Succeeded"
+- tapOn: "Hermes Agent"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "DeepSeek V4 Flash"
+    commands:
+      - back
+      - tapOn:
+          text: "Hermes Agent"
+          index: 0
+- takeScreenshot: model-picker-advertised-recents-menu
+- assertVisible:
+    text: "DeepSeek V4 Flash"
+    below: "Hermes Agent"
+- tapOn: "DeepSeek V4 Flash"
+- extendedWaitUntil:
+    visible: "Reasoning effort"
+    timeout: 30000
+- tapOn: "low"
+- back
+- assertVisible: "DeepSeek V4 Flash"
+- takeScreenshot: model-picker-advertised-effort-selected
+- tapOn: "Message"
+- inputText: "Override this"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Run state: Succeeded"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "Stable picker result"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Stable picker result"
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Verify your Hermes Gateway"
+    timeout: 30000
+- hideKeyboard
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Picker Session"
+- extendedWaitUntil:
+    visible: "DeepSeek V4 Flash"
+    timeout: 30000
+- assertNotVisible: "Server default"
+- takeScreenshot: model-picker-advertised-restart-memory

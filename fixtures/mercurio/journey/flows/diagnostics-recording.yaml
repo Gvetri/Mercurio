@@ -1,0 +1,29 @@
+appId: org.mercurio.client
+name: diagnostics-recording
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- assertVisible: "Verify Gateway Connection"
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- assertVisible: "Alpha Session"
+- takeScreenshot: diagnostics-before-opening
+- tapOn: "Settings"
+- tapOn: "Local diagnostics"
+- assertVisible: "Diagnostics stay on this device\\..*"
+- extendedWaitUntil:
+    visible: ".*diagnostic record.* stored on this device.*"
+    timeout: 10000
+- assertNotVisible: "No diagnostics available"
+- takeScreenshot: diagnostics-recorded-after-connection
+- tapOn: "Back to Sessions"
+- assertVisible: ".*App version.*"
+- tapOn: "Back to Sessions"
+- assertVisible: "Alpha Session"

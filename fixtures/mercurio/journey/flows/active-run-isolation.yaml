@@ -1,0 +1,75 @@
+appId: org.mercurio.client
+name: active-run-isolation
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: active-run-isolation-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Alpha Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- tapOn: "Message"
+- inputText: "Run this"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Active partial"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Refresh history"
+    direction: UP
+    timeout: 30000
+- tapOn: "Refresh history"
+- extendedWaitUntil:
+    visible: "Run state: Uncertain"
+    timeout: 30000
+- assertVisible: "The displayed Session history may be stale."
+- tapOn: "Back to Sessions"
+- repeat:
+    times: 4
+    while:
+      notVisible:
+        text: "Beta Session"
+    commands:
+      - swipe:
+          start: "50%, 68%"
+          end: "50%, 56%"
+          duration: 500
+- assertVisible: "Beta Session"
+- tapOn: "Beta Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- assertVisible: "Message"
+- tapOn: "Back to Sessions"
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 62%"
+    duration: 600
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 62%"
+    duration: 600
+- assertVisible: "Alpha Session"
+- tapOn: "Alpha Session"
+- extendedWaitUntil:
+    visible: "Latest Run"
+    timeout: 30000
+- tapOn:
+    text: "Show run ID"
+    index: 0
+- extendedWaitUntil:
+    visible: "Run ID: active-run"
+    timeout: 30000

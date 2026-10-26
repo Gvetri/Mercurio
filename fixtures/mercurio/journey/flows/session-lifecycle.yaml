@@ -1,0 +1,173 @@
+appId: org.mercurio.client
+name: session-lifecycle
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: session-lifecycle-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- assertVisible: "Alpha Session"
+- tapOn: "Create Session"
+- assertVisible: "Title (optional)"
+- tapOn: "Title (optional)"
+- inputText: "Discarded Back draft"
+- hideKeyboard
+- takeScreenshot: session-lifecycle-01-back-draft-open
+- back
+- assertNotVisible: "Discarded Back draft"
+- tapOn: "Refresh"
+- tapOn: "Create Session"
+- tapOn: "Title (optional)"
+- inputText: "Discarded Cancel draft"
+- hideKeyboard
+- takeScreenshot: session-lifecycle-02-cancel-draft-open
+- tapOn: "Cancel"
+- assertNotVisible: "Discarded Cancel draft"
+- tapOn: "Refresh"
+- tapOn: "Create Session"
+- tapOn: "Title (optional)"
+- inputText: "Lifecycle Session"
+- hideKeyboard
+- takeScreenshot: session-lifecycle-03-named-create-draft
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Lifecycle Session"
+    timeout: 30000
+- takeScreenshot: session-lifecycle-04-named-result
+- tapOn: "Lifecycle Session"
+- assertVisible: "Back to Sessions"
+- assertVisible: "Message"
+- assertVisible: "No messages in this Session."
+- assertNotVisible: "Assistant"
+
+- tapOn: "Session actions for Lifecycle Session"
+- assertVisible: "Pin Session"
+- back
+- assertNotVisible: "Pin Session"
+- assertVisible: "Back to Sessions"
+- tapOn: "Session actions for Lifecycle Session"
+- tapOn: "Rename Session"
+- scrollUntilVisible:
+    element: "Cancel Rename"
+    direction: DOWN
+- tapOn: "Cancel Rename"
+- tapOn: "Session actions for Lifecycle Session"
+- tapOn: "Delete Session"
+- scrollUntilVisible:
+    element: "Cancel Delete"
+    direction: DOWN
+- tapOn: "Cancel Delete"
+- tapOn: "Refresh history"
+- tapOn: "Session actions for Lifecycle Session"
+- tapOn: "Rename Session"
+- tapOn: "New Session title"
+- longPressOn:
+    text: "Lifecycle Session"
+    below: "Current title: Lifecycle Session"
+- tapOn: "Select All"
+- inputText: "Managed Session"
+- assertVisible: "Managed Session"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "Confirm Rename Session"
+    direction: DOWN
+- tapOn: "Confirm Rename Session"
+- extendedWaitUntil:
+    visible: "Session actions for Managed Session"
+    timeout: 30000
+- tapOn: "Session actions for Managed Session"
+- tapOn: "Pin Session"
+- tapOn: "Session actions for Managed Session"
+- assertVisible: "Unpin Session"
+- tapOn: "Unpin Session"
+- tapOn: "Session actions for Managed Session"
+- assertVisible: "Pin Session"
+- tapOn: "Delete Session"
+- assertVisible: 'Delete "Managed Session"?'
+- scrollUntilVisible:
+    element: "Remote deletion cannot be undone by this client."
+    direction: DOWN
+- scrollUntilVisible:
+    element: "Confirm Delete Session"
+    direction: DOWN
+- tapOn: "Confirm Delete Session"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- assertVisible: "Alpha Session"
+
+- tapOn: "Session actions for Alpha Session"
+- back
+- assertNotVisible: "Pin Session"
+- assertNotVisible: "Back to Sessions"
+- tapOn: "Session actions for Alpha Session"
+- tapOn: "Rename Session"
+- scrollUntilVisible:
+    element: "Cancel Rename"
+    direction: DOWN
+- tapOn: "Cancel Rename"
+- tapOn: "Session actions for Alpha Session"
+- tapOn: "Delete Session"
+- scrollUntilVisible:
+    element: "Cancel Delete"
+    direction: DOWN
+- tapOn: "Cancel Delete"
+- tapOn: "Refresh"
+- tapOn: "Session actions for Alpha Session"
+- tapOn: "Rename Session"
+- tapOn: "New Session title"
+- longPressOn:
+    text: "Alpha Session"
+    below: "Current title: Alpha Session"
+- tapOn: "Select All"
+- inputText: "Renamed Session"
+- assertVisible: "Renamed Session"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "Confirm Rename Session"
+    direction: DOWN
+- tapOn: "Confirm Rename Session"
+- extendedWaitUntil:
+    visible: "Session actions for Renamed Session"
+    timeout: 30000
+- tapOn: "Session actions for Renamed Session"
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        text: "Pin Session"
+    commands:
+      - back
+      - tapOn: "Session actions for Renamed Session"
+- tapOn: "Pin Session"
+- extendedWaitUntil:
+    visible: "Pinned"
+    timeout: 30000
+- tapOn: "Session actions for Renamed Session"
+- assertVisible: "Unpin Session"
+- tapOn: "Unpin Session"
+- tapOn: "Session actions for Renamed Session"
+- assertVisible: "Pin Session"
+- tapOn: "Delete Session"
+- assertVisible: 'Delete "Renamed Session"?'
+- scrollUntilVisible:
+    element: "Remote deletion cannot be undone by this client."
+    direction: DOWN
+- scrollUntilVisible:
+    element: "Confirm Delete Session"
+    direction: DOWN
+- tapOn: "Confirm Delete Session"
+- extendedWaitUntil:
+    visible: "No Sessions on this Gateway"
+    timeout: 30000
+- assertNotVisible: "Renamed Session"
+- assertNotVisible: "Managed Session"

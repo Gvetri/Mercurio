@@ -9,18 +9,18 @@ public-network dependency, real provider credentials, or live model execution.
 
 | Piece | Location | Purpose |
 | --- | --- | --- |
-| Pinned fixture descriptor | `fixtures/hermes/pinned-fixture.properties` | One immutable `hermes_revision` provenance for all fixture evidence |
-| Journey scenarios | `fixtures/hermes/journey/scenarios/*.json` | Explicit repository-owned fake Gateway configuration, one per journey |
-| Journey Gateway | `fixtures/hermes/runner` (`JourneyGatewayProcess`) | Loopback HTTP/TLS Gateway with deterministic health, capability, Session, Run, SSE, and telemetry routes |
-| Journey verifier | `fixtures/hermes/runner` (`JourneyVerifier`) | Asserts gateway-side invariants (observation counts, Run creation counts, interruption records) after each journey |
-| Maestro flows | `fixtures/hermes/journey/flows/*.yaml` | Versioned black-box journeys asserting deterministic state transitions and stable user-visible outcomes |
-| Test-only TLS assets | `fixtures/hermes/journey-tls/` | Self-signed CA + server certificate for the emulator's system trust store |
+| Pinned fixture descriptor | `fixtures/mercurio/pinned-fixture.properties` | One immutable `hermes_revision` provenance for all fixture evidence |
+| Journey scenarios | `fixtures/mercurio/journey/scenarios/*.json` | Explicit repository-owned fake Gateway configuration, one per journey |
+| Journey Gateway | `fixtures/mercurio/runner` (`JourneyGatewayProcess`) | Loopback HTTP/TLS Gateway with deterministic health, capability, Session, Run, SSE, and telemetry routes |
+| Journey verifier | `fixtures/mercurio/runner` (`JourneyVerifier`) | Asserts gateway-side invariants (observation counts, Run creation counts, interruption records) after each journey |
+| Maestro flows | `fixtures/mercurio/journey/flows/*.yaml` | Versioned black-box journeys asserting deterministic state transitions and stable user-visible outcomes |
+| Test-only TLS assets | `fixtures/mercurio/journey-tls/` | Self-signed CA + server certificate for the emulator's system trust store |
 | CI lane | `maestro_journeys` in `.github/workflows/quality-gate.yml` | GitHub-hosted emulator execution of every journey against the exact candidate APK |
 
 The lane runs on the nightly schedule and on manual dispatch. A ready in-repository pull request
 runs it when the head carries the `run-maestro` label or when the `ui-paths` detector reports that
 the head modifies a declared UI path (`app/src/main/**`, `feature/entry/presentation/**`,
-`feature/entry/wiring/src/main/res/**`, `fixtures/hermes/journey/**`): the job then waits for a
+`feature/entry/wiring/src/main/res/**`, `fixtures/mercurio/journey/**`): the job then waits for a
 passing `api24-instrumentation` run, so a build or device-suite failure never reaches the journey
 lane.
 
@@ -102,31 +102,31 @@ an emulator or device, and the pinned Maestro CLI (`cli-2.10.0`).
 sha256sum app/build/outputs/apk/debug/app-debug.apk
 
 # 2. Generate the Journey Gateway classpath used by steps 3 and 6.
-./gradlew :fixtures:hermes:runner:journeyGatewayClasspath
+./gradlew :fixtures:mercurio:runner:journeyGatewayClasspath
 
 # 3. Start the fake Gateway for one journey (foreground, port 18443).
-./gradlew :fixtures:hermes:runner:runJourneyGateway -Pscenario=terminal-success
+./gradlew :fixtures:mercurio:runner:runJourneyGateway -Pscenario=terminal-success
 
 # 4. In a second terminal, install the test CA into an API 24 AOSP emulator.
 # The emulator must be started with the -writable-system option or the
 # remount below will not make /system writable.
 adb root && adb remount
 CA_HASH=$(openssl x509 -inform PEM -subject_hash_old \
-  -in fixtures/hermes/journey-tls/journey-ca.pem | head -1)
-adb push fixtures/hermes/journey-tls/journey-ca.pem \
+  -in fixtures/mercurio/journey-tls/journey-ca.pem | head -1)
+adb push fixtures/mercurio/journey-tls/journey-ca.pem \
   "/system/etc/security/cacerts/${CA_HASH}.0"
 adb reboot   # then wait for boot
 
 # 5. Install the APK and run the journey flow.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-maestro test fixtures/hermes/journey/flows/terminal-success.yaml
+maestro test fixtures/mercurio/journey/flows/terminal-success.yaml
 
 # 6. Assert the gateway-side invariants.
 java -Dfixture.repositoryRoot="$(pwd)" \
-  -cp "$(cat fixtures/hermes/runner/build/journey-classpath.txt)" \
-  org.hermesnative.client.fixture.journey.JourneyVerifierKt \
+  -cp "$(cat fixtures/mercurio/runner/build/journey-classpath.txt)" \
+  org.mercurio.client.fixture.journey.JourneyVerifierKt \
   https://127.0.0.1:18443/__fixture/telemetry terminal-success \
-  fixtures/hermes/journey-tls/journey-gateway.p12
+  fixtures/mercurio/journey-tls/journey-gateway.p12
 ```
 
 CI runs the same steps via `.github/scripts/journey-run.sh` for every journey

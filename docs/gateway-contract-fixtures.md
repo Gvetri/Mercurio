@@ -1,6 +1,6 @@
 # Gateway contract fixtures
 
-The files under [`fixtures/hermes/contracts`](../fixtures/hermes/contracts) are
+The files under [`fixtures/mercurio/contracts`](../fixtures/mercurio/contracts) are
 small, repository-owned evidence for the supported Public Beta Gateway boundary.
 They are not generated from a running Gateway and they do not require a public
 network, a provider, or a credential.
@@ -9,7 +9,7 @@ network, a provider, or a credential.
 
 Each accepted JSON or SSE fixture contains exactly one `hermes_revision` field.
 Its value must match the immutable provenance in
-[`fixtures/hermes/pinned-fixture.properties`](../fixtures/hermes/pinned-fixture.properties).
+[`fixtures/mercurio/pinned-fixture.properties`](../fixtures/mercurio/pinned-fixture.properties).
 The validator rejects a missing field, duplicate provenance metadata, an
 `image_digest` field when `hermes_revision` is selected, or a value that does
 not match the descriptor.
@@ -108,7 +108,7 @@ endpoints, applied to this optional row: the row is present with the exact
 pinned method and path, and the catalog is available; the row is absent or
 mismatched, and the catalog is unavailable without any failure. A bearer-
 authenticated `GET /api/models` (see the bare request in
-[`fixtures/hermes/contracts/models`](../fixtures/hermes/contracts/models))
+[`fixtures/mercurio/contracts/models`](../fixtures/mercurio/contracts/models))
 returns HTTP 200 with:
 
 - `object` — the fixed discriminator `hermes.api_server.run_models`;
@@ -145,8 +145,8 @@ Absence is fail-closed in a fixed ladder:
 Run creation accepts the optional `model` and `effort` keys per Run. An unset
 selection is omitted from the request body; a required contract field is never
 sent as null. The pinned two-key body in
-`fixtures/hermes/contracts/runs/create-request.json` is the omitted case and
-`fixtures/hermes/contracts/runs/create-request-model-effort.json` pins the
+`fixtures/mercurio/contracts/runs/create-request.json` is the omitted case and
+`fixtures/mercurio/contracts/runs/create-request-model-effort.json` pins the
 selected case.
 
 ## Identity and data policy

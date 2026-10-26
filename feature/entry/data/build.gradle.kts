@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
-    id("hermes-quality-gate")
+    id("mercurio-quality-gate")
 }
 
 kotlin {
@@ -19,7 +19,7 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.junit4)
     testImplementation(project(":feature:entry:application"))
-    testImplementation(project(":fixtures:hermes:runner"))
+    testImplementation(project(":fixtures:mercurio:runner"))
 }
 
 tasks.test {
@@ -35,8 +35,8 @@ tasks.register<Test>("liveAcceptanceTest") {
     classpath = sourceSets["test"].runtimeClasspath
     useJUnit()
     filter {
-        includeTestsMatching("org.hermesnative.client.feature.entry.data.LiveGatewaySessionAcceptanceTest")
-        includeTestsMatching("org.hermesnative.client.feature.entry.data.LiveGatewayRunAcceptanceTest")
+        includeTestsMatching("org.mercurio.client.feature.entry.data.LiveGatewaySessionAcceptanceTest")
+        includeTestsMatching("org.mercurio.client.feature.entry.data.LiveGatewayRunAcceptanceTest")
     }
     systemProperty("fixture.repositoryRoot", rootProject.projectDir.absolutePath)
     providers.gradleProperty("live.session.matrix.evidenceDir").orNull?.let { evidenceDir ->
@@ -54,10 +54,10 @@ tasks.register<Test>("liveAcceptanceTest") {
     providers.gradleProperty("live.fixture.fileDriftIssues").orNull?.let { fileDriftIssues ->
         systemProperty("live.fixture.fileDriftIssues", fileDriftIssues)
     }
-    inputs.file(rootProject.file("fixtures/hermes/pinned-fixture.properties"))
+    inputs.file(rootProject.file("fixtures/mercurio/pinned-fixture.properties"))
         .withPropertyName("pinnedDescriptor")
         .withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.dir(rootProject.file("fixtures/hermes/journey-tls"))
+    inputs.dir(rootProject.file("fixtures/mercurio/journey-tls"))
         .withPropertyName("journeyTls")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }

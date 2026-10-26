@@ -125,7 +125,7 @@ class MaestroMcpTests(unittest.TestCase):
 class FlowBuilderTests(unittest.TestCase):
     def test_connect_flow_uses_environment_variables_not_literals(self):
         flow = build_connect_flow()
-        self.assertIn("appId: org.hermesnative.client", flow)
+        self.assertIn("appId: org.mercurio.client", flow)
         self.assertIn("${LIVE_SMOKE_ENDPOINT}", flow)
         self.assertIn("${LIVE_SMOKE_TOKEN}", flow)
         self.assertNotIn("https://10.0.2.2", flow)

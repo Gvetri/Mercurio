@@ -1,11 +1,11 @@
 import io.gitlab.arturbosch.detekt.extensions.DetektExtension
-import org.hermesnative.client.buildlogic.BoundaryDoubleVerifier
-import org.hermesnative.client.buildlogic.CoverageEvidenceVerifier
-import org.hermesnative.client.buildlogic.FixtureDescriptorValidator
-import org.hermesnative.client.buildlogic.MutationEvidenceVerifier
-import org.hermesnative.client.buildlogic.QualityPolicy
-import org.hermesnative.client.buildlogic.gradleWrapperCommand
-import org.hermesnative.client.buildlogic.requireTasksInInvocation
+import org.mercurio.client.buildlogic.BoundaryDoubleVerifier
+import org.mercurio.client.buildlogic.CoverageEvidenceVerifier
+import org.mercurio.client.buildlogic.FixtureDescriptorValidator
+import org.mercurio.client.buildlogic.MutationEvidenceVerifier
+import org.mercurio.client.buildlogic.QualityPolicy
+import org.mercurio.client.buildlogic.gradleWrapperCommand
+import org.mercurio.client.buildlogic.requireTasksInInvocation
 import org.gradle.kotlin.dsl.register
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -39,15 +39,15 @@ subprojects {
 }
 
 val architectureRuleTestSource =
-    file("buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt")
-val architectureRuleTestClass = "org.hermesnative.client.buildlogic.ArchitectureCheckTest"
+    file("buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt")
+val architectureRuleTestClass = "org.mercurio.client.buildlogic.ArchitectureCheckTest"
 val architectureRuleTestBuildDir = file("build/architecture-rule-tests/buildSrc")
 val architectureRuleTestResults = architectureRuleTestBuildDir.resolve("test-results/test")
 var architectureRuleTestsExecuted = false
-val fixtureDescriptorFile = file("fixtures/hermes/pinned-fixture.properties")
+val fixtureDescriptorFile = file("fixtures/mercurio/pinned-fixture.properties")
 val fixtureDescriptorTestSource =
-    file("buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/FixtureDescriptorValidatorTest.kt")
-val fixtureDescriptorTestClass = "org.hermesnative.client.buildlogic.FixtureDescriptorValidatorTest"
+    file("buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/FixtureDescriptorValidatorTest.kt")
+val fixtureDescriptorTestClass = "org.mercurio.client.buildlogic.FixtureDescriptorValidatorTest"
 val fixtureDescriptorTestBuildDir = file("build/fixture-descriptor-tests/buildSrc")
 val fixtureDescriptorTestResults = fixtureDescriptorTestBuildDir.resolve("test-results/test")
 
@@ -264,7 +264,7 @@ val detektModules =
         ":feature:entry:data",
         ":feature:entry:presentation",
         ":feature:entry:wiring",
-        ":fixtures:hermes:runner",
+        ":fixtures:mercurio:runner",
     )
 
 val detektAnalysisTasks =
@@ -411,7 +411,7 @@ tasks.register("fixtureDescriptorTests") {
 }
 
 gradle.projectsEvaluated {
-    project(":fixtures:hermes:runner").tasks.named("test").configure {
+    project(":fixtures:mercurio:runner").tasks.named("test").configure {
         outputs.upToDateWhen { false }
     }
 }
@@ -419,9 +419,9 @@ gradle.projectsEvaluated {
 tasks.register("fixtureLifecycleTests") {
     group = "verification"
     description = "Runs deterministic local Gateway fixture lifecycle tests without provider access."
-    dependsOn(":fixtures:hermes:runner:fixtureLifecycleTest")
+    dependsOn(":fixtures:mercurio:runner:fixtureLifecycleTest")
     doLast {
-        val lifecycleTests = project(":fixtures:hermes:runner").tasks.named("fixtureLifecycleTest").get()
+        val lifecycleTests = project(":fixtures:mercurio:runner").tasks.named("fixtureLifecycleTest").get()
         check(lifecycleTests.state.didWork || lifecycleTests.state.upToDate) {
             "fixtureLifecycleTests requires the fixture lifecycle tests to execute in this invocation."
         }
@@ -431,9 +431,9 @@ tasks.register("fixtureLifecycleTests") {
 tasks.register("fixtureContractTests") {
     group = "verification"
     description = "Runs client-owned Gateway JSON and SSE contract fixture tests."
-    dependsOn(":fixtures:hermes:runner:fixtureContractTest")
+    dependsOn(":fixtures:mercurio:runner:fixtureContractTest")
     doLast {
-        val contractTests = project(":fixtures:hermes:runner").tasks.named("fixtureContractTest").get()
+        val contractTests = project(":fixtures:mercurio:runner").tasks.named("fixtureContractTest").get()
         check(contractTests.state.didWork || contractTests.state.upToDate) {
             "fixtureContractTests requires the contract fixture tests to execute in this invocation."
         }
@@ -443,9 +443,9 @@ tasks.register("fixtureContractTests") {
 tasks.register("journeyScenarioTests") {
     group = "verification"
     description = "Runs deterministic journey scenario, Gateway, and verifier tests without a device."
-    dependsOn(":fixtures:hermes:runner:journeyScenarioTest")
+    dependsOn(":fixtures:mercurio:runner:journeyScenarioTest")
     doLast {
-        val scenarioTests = project(":fixtures:hermes:runner").tasks.named("journeyScenarioTest").get()
+        val scenarioTests = project(":fixtures:mercurio:runner").tasks.named("journeyScenarioTest").get()
         check(scenarioTests.state.didWork || scenarioTests.state.upToDate) {
             "journeyScenarioTests requires the journey scenario tests to execute in this invocation."
         }
