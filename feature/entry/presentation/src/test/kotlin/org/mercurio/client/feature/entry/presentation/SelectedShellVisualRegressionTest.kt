@@ -6,12 +6,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
-import org.mercurio.client.feature.entry.domain.Run
-import org.mercurio.client.feature.entry.domain.RunId
-import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.Run
+import org.mercurio.client.feature.entry.domain.RunId
+import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode

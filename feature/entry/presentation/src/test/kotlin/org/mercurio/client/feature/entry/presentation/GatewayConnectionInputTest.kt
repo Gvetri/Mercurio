@@ -25,13 +25,13 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.core.graphics.Insets
 import androidx.core.view.WindowInsetsCompat
-import org.mercurio.client.feature.entry.application.EntryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.application.EntryState
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 

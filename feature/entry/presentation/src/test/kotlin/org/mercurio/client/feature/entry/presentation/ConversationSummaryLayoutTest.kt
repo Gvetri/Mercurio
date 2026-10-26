@@ -7,14 +7,14 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
-import org.mercurio.client.feature.entry.domain.Run
-import org.mercurio.client.feature.entry.domain.RunId
-import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.Run
+import org.mercurio.client.feature.entry.domain.RunId
+import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode

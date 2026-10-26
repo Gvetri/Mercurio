@@ -1,12 +1,12 @@
 package org.mercurio.client.feature.entry.presentation
 
-import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
-import org.mercurio.client.feature.entry.domain.GatewayConnection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
+import org.mercurio.client.feature.entry.domain.GatewayConnection
 
 class EntryStateHolderRemovalConfirmationTest {
     @Test

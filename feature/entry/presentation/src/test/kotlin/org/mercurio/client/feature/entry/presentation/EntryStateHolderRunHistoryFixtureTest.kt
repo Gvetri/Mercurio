@@ -1,5 +1,9 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import org.mercurio.client.feature.entry.data.InMemoryRunRecoveryRegistry
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
@@ -9,10 +13,6 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.fixture.SyntheticGatewayBehavior
 import org.mercurio.client.fixture.SyntheticGatewayMessage
 import org.mercurio.client.fixture.SyntheticGatewaySession
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
 class EntryStateHolderRunHistoryFixtureTest {
     @Test

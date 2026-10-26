@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.junit.Assert.assertEquals
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.mercurio.client.feature.entry.domain.SessionId
-import org.junit.Assert.assertEquals
-import org.junit.Test
 
 class ModelPickerStateHolderTest {
     @Test

@@ -2,6 +2,11 @@ package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import org.mercurio.client.feature.entry.data.DefaultGatewayConnectionRepository
 import org.mercurio.client.feature.entry.data.InMemoryGatewayConnectionDataSource
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
@@ -12,11 +17,6 @@ import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 private const val TEST_TIMEOUT_MILLIS = 5_000L

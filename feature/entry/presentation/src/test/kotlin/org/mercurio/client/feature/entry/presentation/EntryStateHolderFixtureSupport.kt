@@ -6,6 +6,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertEquals
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.data.DefaultGatewayClient
@@ -31,7 +32,6 @@ import org.mercurio.client.fixture.GatewayProcessFactory
 import org.mercurio.client.fixture.LocalSyntheticGatewayProcess
 import org.mercurio.client.fixture.SyntheticGatewayBehavior
 import org.mercurio.client.fixture.SyntheticGatewaySession
-import org.junit.Assert.assertEquals
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch

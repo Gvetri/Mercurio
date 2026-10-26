@@ -1,5 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import org.mercurio.client.feature.entry.data.DefaultRunSubmissionUncertaintyStore
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEvent
@@ -7,9 +10,6 @@ import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.SessionDraftKey
 import org.mercurio.client.feature.entry.domain.SessionDraftStore
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
 /** Deterministic in-memory double for the persisted composer draft boundary. */
 internal class InMemorySessionDraftStore : SessionDraftStore {

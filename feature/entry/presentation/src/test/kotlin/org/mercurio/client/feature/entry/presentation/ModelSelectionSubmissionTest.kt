@@ -1,5 +1,9 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.ModelSelection
@@ -7,10 +11,6 @@ import org.mercurio.client.feature.entry.domain.ModelSelectionStore
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunCreateRequest
 import org.mercurio.client.feature.entry.domain.RunId
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
 class ModelSelectionSubmissionTest {
     @Test

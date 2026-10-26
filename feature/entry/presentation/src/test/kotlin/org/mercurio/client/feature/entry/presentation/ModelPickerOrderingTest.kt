@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.junit.Assert.assertEquals
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.ModelCatalog
 import org.mercurio.client.feature.entry.domain.ModelCatalogEntry
 import org.mercurio.client.feature.entry.domain.ModelEffortOptions
 import org.mercurio.client.feature.entry.domain.ModelSelection
-import org.junit.Assert.assertEquals
-import org.junit.Test
 
 class ModelPickerOrderingTest {
     @Test

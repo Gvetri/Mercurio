@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.presentation
 
-import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
-import org.mercurio.client.feature.entry.domain.RunId
-import org.mercurio.client.feature.entry.domain.SessionId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
+import org.mercurio.client.feature.entry.domain.RunId
+import org.mercurio.client.feature.entry.domain.SessionId
 import java.time.Instant
 
 class SessionHistoryStateTest {
