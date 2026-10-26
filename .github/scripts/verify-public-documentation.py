@@ -307,7 +307,7 @@ def verify_scope(root):
 
 
 def verify(root):
-    require((root / README).is_file(), "The repository root is not a Hermes Native Client checkout")
+    require((root / README).is_file(), "The repository root is not a Mercurio checkout")
     violations = []
     violations.extend(verify_links(root))
     violations.extend(verify_safety(root))
