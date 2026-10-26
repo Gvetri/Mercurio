@@ -37,7 +37,7 @@ class GatewayClient:
             headers={
                 "Authorization": "Bearer %s" % self._api_key,
                 "Accept": "application/json",
-                "User-Agent": "hermes-native-client-live-smoke",
+                "User-Agent": "mercurio-live-smoke",
             },
         )
         try:

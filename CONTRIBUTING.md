@@ -2,7 +2,7 @@
 
 ## Public scope
 
-Hermes Native Client is an independent Android client. Contributions must keep the public repository self-contained and must not add private organization details, real Gateway endpoints, credentials, provider secrets, local Hermes runtime code, desktop web interface code, or WebView-based desktop reuse.
+Mercurio is an independent Android client. Contributions must keep the public repository self-contained and must not add private organization details, real Gateway endpoints, credentials, provider secrets, local Hermes runtime code, desktop web interface code, or WebView-based desktop reuse.
 
 The client connects to a pre-existing Hermes Gateway. It does not host the Gateway or embed a local Hermes runtime.
 

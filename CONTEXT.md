@@ -1,8 +1,12 @@
-# Hermes Native Client
+# Mercurio
 
 This context covers the concepts used by the native client when connecting to a Hermes Gateway and working with conversation history and agent executions.
 
 ## Language
+
+**Mercurio**:
+The user-facing name of this app, formerly Hermes Native Client.
+_Avoid_: native client
 
 **Gateway**:
 An existing service that provides the supported Hermes client capabilities.

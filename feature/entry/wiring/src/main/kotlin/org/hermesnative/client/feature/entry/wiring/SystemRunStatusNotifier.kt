@@ -78,6 +78,6 @@ class SystemRunStatusNotifier(
     private companion object {
         const val CHANNEL_ID = "run_status"
         const val CHANNEL_NAME = "Run status"
-        const val TITLE = "Hermes Native Client"
+        const val TITLE = "Mercurio"
     }
 }

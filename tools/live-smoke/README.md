@@ -1,7 +1,7 @@
 # Local exact-APK live smoke gate
 
 This directory owns the local-only release-candidate smoke gate for
-`hermes-native-client`. It installs the exact candidate APK on the owned
+`mercurio`. It installs the exact candidate APK on the owned
 Android virtual device and drives three bounded synthetic text turns through a
 disposable real Hermes Gateway and the real configured model provider.
 

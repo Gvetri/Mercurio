@@ -68,7 +68,7 @@ class RunStatusNotificationWiringTest {
 
         val notification = shadow.getNotification(run.id.value.hashCode())
         assertEquals(
-            "Hermes Native Client",
+            "Mercurio",
             notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
         )
         assertEquals(

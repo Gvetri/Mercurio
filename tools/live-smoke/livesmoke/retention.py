@@ -155,7 +155,7 @@ def install_policy(runner: CommandRunner, conf_dir: Path, retained_dir: Path) ->
     _verify_owner_only_dir(retained_dir)
     rule = "e %s 0700 - - m:%dd" % (retained_dir, RETENTION_DAYS)
     content = (
-        "# Managed by tools/live-smoke (hermes-native-client).\n"
+        "# Managed by tools/live-smoke (mercurio).\n"
         "# Retained live smoke video: encrypted, release-maintainer only.\n"
         "# Expiry is enforced by the dedicated hermes-live-smoke-retention timer.\n"
         "# Re-running the live smoke gate rewrites this file; do not edit by hand.\n"
@@ -345,7 +345,7 @@ def ensure_clean_timer(
     service_path = unit_dir / RETENTION_SERVICE_UNIT
     timer_path = unit_dir / RETENTION_TIMER_UNIT
     service_content = (
-        "# Managed by tools/live-smoke (hermes-native-client); do not edit by hand.\n"
+        "# Managed by tools/live-smoke (mercurio); do not edit by hand.\n"
         "[Unit]\n"
         "Description=Expire the retained Hermes live smoke video (encrypted, release-maintainer only)\n"
         "\n"
@@ -354,7 +354,7 @@ def ensure_clean_timer(
         "ExecStart=%s --user --clean %s\n" % (systemd_tmpfiles_bin, conf_text)
     )
     timer_content = (
-        "# Managed by tools/live-smoke (hermes-native-client); do not edit by hand.\n"
+        "# Managed by tools/live-smoke (mercurio); do not edit by hand.\n"
         "[Unit]\n"
         "Description=Daily expiry of the retained Hermes live smoke video\n"
         "\n"

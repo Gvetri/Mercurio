@@ -38,7 +38,7 @@ class MainActivityConfigurationChangeTest {
         composeTestRule.activityRule.scenario.recreate()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Hermes Native Client").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Mercurio").assertIsDisplayed()
         composeTestRule.onNodeWithText("Connect to a Hermes Gateway").assertIsDisplayed()
         composeTestRule
             .onNodeWithText("Add Gateway Connection")
@@ -69,7 +69,7 @@ class MainActivityConfigurationChangeTest {
                 activityBeforeRotation,
                 composeTestRule.activity,
             )
-            composeTestRule.onNodeWithText("Hermes Native Client").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Mercurio").assertIsDisplayed()
             composeTestRule.onNodeWithText("Connect to a Hermes Gateway").assertIsDisplayed()
             composeTestRule
                 .onNodeWithText("Add Gateway Connection")
