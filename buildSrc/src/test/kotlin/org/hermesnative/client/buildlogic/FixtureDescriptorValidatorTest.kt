@@ -93,7 +93,7 @@ class FixtureDescriptorValidatorTest {
 
     @Test
     fun validates_the_checked_in_descriptor() {
-        val descriptorFile = repositoryRoot.resolve("fixtures/hermes/pinned-fixture.properties")
+        val descriptorFile = repositoryRoot.resolve("fixtures/mercurio/pinned-fixture.properties")
         val descriptor = FixtureDescriptorValidator.validate(descriptorFile)
 
         assertEquals("hermes_revision", descriptor.provenanceField)

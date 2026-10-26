@@ -26,7 +26,7 @@ class QualityVerificationFailClosedTest {
                 listOf(
                     InjectedFixture(
                         relativePath =
-                            "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain/" +
+                            "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/" +
                                 "GatewayConnectionRepository.kt",
                         appended = unreachedProductionFixture(),
                     ),
@@ -52,7 +52,7 @@ class QualityVerificationFailClosedTest {
                 listOf(
                     InjectedFixture(
                         relativePath =
-                            "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain/" +
+                            "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/" +
                                 "GatewayConnectionRepository.kt",
                         appended = unreachedProductionFixture(),
                     ),
@@ -90,10 +90,10 @@ class QualityVerificationFailClosedTest {
     fun mock_based_test_code_fails_the_mock_check() {
         assertNewFixtureFails(
             relativePath =
-                "feature/entry/application/src/test/kotlin/org/hermesnative/client/feature/entry/application/" +
+                "feature/entry/application/src/test/kotlin/org/mercurio/client/feature/entry/application/" +
                     "QualityGateMockFixture.kt",
             content =
-                "package org.hermesnative.client.feature.entry.application\n\n" +
+                "package org.mercurio.client.feature.entry.application\n\n" +
                     "private val qualityGateMockFixture = " + "mock" + "(Any::class)\n",
             tasks = listOf("verifyNoMocks"),
             expected = "mock-based test code is not allowed",
@@ -104,10 +104,10 @@ class QualityVerificationFailClosedTest {
     fun non_deterministic_boundary_double_fails_the_determinism_check() {
         assertNewFixtureFails(
             relativePath =
-                "feature/entry/presentation/src/test/kotlin/org/hermesnative/client/feature/entry/presentation/" +
+                "feature/entry/presentation/src/test/kotlin/org/mercurio/client/feature/entry/presentation/" +
                     "QualityGateDoubleFixture.kt",
             content =
-                "package org.hermesnative.client.feature.entry.presentation\n\n" +
+                "package org.mercurio.client.feature.entry.presentation\n\n" +
                     "private class FakeRunRecoveryRegistryFixture : RunRecoveryRegistry {\n" +
                     "    private val seed = java.util.Random(7)\n" +
                     "}\n",
@@ -152,9 +152,9 @@ class QualityVerificationFailClosedTest {
     @Test
     fun detekt_return_count_violation_fails_the_real_analysis_task() {
         assertNewFixtureFails(
-            relativePath = "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain/DetektReturnCountFixture.kt",
+            relativePath = "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/DetektReturnCountFixture.kt",
             content =
-                "package org.hermesnative.client.feature.entry.domain\n\n" +
+                "package org.mercurio.client.feature.entry.domain\n\n" +
                     "internal fun detektFixtureGuardedTotal(input: Int, other: Int): Int {\n" +
                     "    if (input < 0) return 0\n" +
                     "    if (other < 0) return 1\n" +
@@ -168,9 +168,9 @@ class QualityVerificationFailClosedTest {
     @Test
     fun detekt_else_case_violation_fails_the_real_analysis_with_type_resolution() {
         assertNewFixtureFails(
-            relativePath = "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain/DetektFixtureState.kt",
+            relativePath = "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/DetektFixtureState.kt",
             content =
-                "package org.hermesnative.client.feature.entry.domain\n\n" +
+                "package org.mercurio.client.feature.entry.domain\n\n" +
                     "internal enum class DetektFixtureState {\n" +
                     "    READY,\n" +
                     "    STOPPED,\n" +
@@ -188,9 +188,9 @@ class QualityVerificationFailClosedTest {
     @Test
     fun detekt_comment_over_private_function_fails_the_real_analysis() {
         assertNewFixtureFails(
-            relativePath = "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain/DetektCommentFixture.kt",
+            relativePath = "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/DetektCommentFixture.kt",
             content =
-                "package org.hermesnative.client.feature.entry.domain\n\n" +
+                "package org.mercurio.client.feature.entry.domain\n\n" +
                     "/**\n" +
                     " * The documentation over this private function must be reported.\n" +
                     " */\n" +
@@ -204,9 +204,9 @@ class QualityVerificationFailClosedTest {
     @Test
     fun detekt_comment_over_private_property_fails_the_real_analysis() {
         assertNewFixtureFails(
-            relativePath = "feature/entry/domain/src/main/kotlin/org/hermesnative/client/feature/entry/domain/DetektFixtureCommentHolder.kt",
+            relativePath = "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/DetektFixtureCommentHolder.kt",
             content =
-                "package org.hermesnative.client.feature.entry.domain\n\n" +
+                "package org.mercurio.client.feature.entry.domain\n\n" +
                     "internal object DetektFixtureCommentHolder {\n" +
                     "    /**\n" +
                     "     * The documentation over this private property must be reported.\n" +

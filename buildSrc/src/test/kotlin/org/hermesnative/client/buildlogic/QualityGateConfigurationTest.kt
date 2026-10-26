@@ -846,7 +846,7 @@ class QualityGateConfigurationTest {
         val buildScript = repositoryRoot.resolve("build.gradle.kts").readText()
         val policy =
             repositoryRoot.resolve(
-                "buildSrc/src/main/kotlin/org/hermesnative/client/buildlogic/QualityPolicy.kt",
+                "buildSrc/src/main/kotlin/org/mercurio/client/buildlogic/QualityPolicy.kt",
             ).readText()
         val documentation = repositoryRoot.resolve("docs/quality-gates.md")
         val coverageMutationJob =
@@ -888,7 +888,7 @@ class QualityGateConfigurationTest {
         )
         assertTrue(
             "The workflow must run the fail-closed quality verification tests.",
-            workflow.contains("--tests org.hermesnative.client.buildlogic.QualityVerificationFailClosedTest"),
+            workflow.contains("--tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest"),
         )
         listOf("verifyDeterministicFakes", "coverageVerify", "mutationVerify").forEach { task ->
             assertTrue("The local gate must depend on $task.", buildScript.contains("\"$task\","))
@@ -959,7 +959,7 @@ class QualityGateConfigurationTest {
         ).forEach { testClass ->
             assertTrue(
                 "The workflow must run the buildSrc quality self-test $testClass.",
-                workflow.contains("--tests org.hermesnative.client.buildlogic.$testClass"),
+                workflow.contains("--tests org.mercurio.client.buildlogic.$testClass"),
             )
         }
         val architectureJobHeader =
@@ -990,7 +990,7 @@ class QualityGateConfigurationTest {
                 "feature/entry/data/build.gradle.kts",
             )
         val conventionPlugin =
-            repositoryRoot.resolve("buildSrc/src/main/kotlin/hermes-quality-gate.gradle.kts").readText()
+            repositoryRoot.resolve("buildSrc/src/main/kotlin/mercurio-quality-gate.gradle.kts").readText()
         val buildScript = repositoryRoot.resolve("build.gradle.kts").readText()
         val catalog = repositoryRoot.resolve("gradle/libs.versions.toml").readText()
 
@@ -998,7 +998,7 @@ class QualityGateConfigurationTest {
             val script = repositoryRoot.resolve(moduleScript).readText()
             assertTrue(
                 "$moduleScript must apply the shared quality-gate plugin.",
-                script.contains("id(\"hermes-quality-gate\")"),
+                script.contains("id(\"mercurio-quality-gate\")"),
             )
             listOf("kover {", "PitestTask", "mutationThreshold", "CoverageUnit", "QualityPolicy").forEach { wiring ->
                 assertTrue(
@@ -1142,7 +1142,7 @@ class QualityGateConfigurationTest {
         val buildSrcScript = repositoryRoot.resolve("buildSrc/build.gradle.kts").readText()
         val ruleSuite =
             repositoryRoot.resolve(
-                "buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt",
+                "buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt",
             ).readText()
 
         assertTrue(
@@ -1309,14 +1309,14 @@ class QualityGateConfigurationTest {
                 "              - 'app/src/main/**'\n" +
                 "              - 'feature/entry/presentation/**'\n" +
                 "              - 'feature/entry/wiring/src/main/res/**'\n" +
-                "              - 'fixtures/hermes/journey/**'",
+                "              - 'fixtures/mercurio/journey/**'",
             uiPathsJob.substringAfter("          filters: |\n").substringBefore("\n      - name:"),
         )
         listOf(
             "app/src/main/**",
             "feature/entry/presentation/**",
             "feature/entry/wiring/src/main/res/**",
-            "fixtures/hermes/journey/**",
+            "fixtures/mercurio/journey/**",
         ).forEach { path ->
             assertTrue("Documentation must declare the UI path $path.", documentation.contains(path))
         }
@@ -1627,7 +1627,7 @@ class QualityGateConfigurationTest {
         ).forEach { testClass ->
             assertTrue(
                 "The consolidated invocation must select $testClass.",
-                buildSrcContractsJob.contains("--tests org.hermesnative.client.buildlogic.$testClass"),
+                buildSrcContractsJob.contains("--tests org.mercurio.client.buildlogic.$testClass"),
             )
         }
     }

@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 CHECK = ROOT / '.github/scripts/verify-journey-capabilities.py'
-FIXTURE = ROOT / 'fixtures/hermes/contracts/capabilities/success.json'
+FIXTURE = ROOT / 'fixtures/mercurio/contracts/capabilities/success.json'
 
 
 class JourneyCapabilitiesTest(unittest.TestCase):

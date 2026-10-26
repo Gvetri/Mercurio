@@ -13,9 +13,9 @@ SCRIPT = ROOT / ".github/scripts/verify-public-documentation.py"
 README = Path("README.md")
 USER_GUIDE = Path("docs/user-guide.md")
 RELEASE_ARTIFACTS = Path("docs/release-artifacts.md")
-PINNED_FIXTURE = Path("fixtures/hermes/pinned-fixture.properties")
+PINNED_FIXTURE = Path("fixtures/mercurio/pinned-fixture.properties")
 DIAGNOSTICS_SURFACE = Path(
-    "feature/entry/presentation/src/main/kotlin/org/hermesnative/client/feature/entry/presentation"
+    "feature/entry/presentation/src/main/kotlin/org/mercurio/client/feature/entry/presentation"
     "/LocalDiagnosticsScreen.kt"
 )
 IGNORED = shutil.ignore_patterns(".git", "build", ".gradle", ".kotlin", "__pycache__")

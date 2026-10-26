@@ -9,7 +9,7 @@ class MutationEvidenceTest {
     private val scope =
         MutationScope(
             modulePath = ":feature:entry:fixture",
-            targetPackage = "org.hermesnative.client.feature.entry.fixture",
+            targetPackage = "org.mercurio.client.feature.entry.fixture",
             minMutants = 8,
             minMutatedClasses = 2,
             minMutationScorePercent = 40,
@@ -165,7 +165,7 @@ class MutationEvidenceTest {
                 lineTotal = 10,
                 branchCovered = 2,
                 branchTotal = 2,
-                classNames = setOf("org/hermesnative/client/feature/entry/fixture/FixtureOne"),
+                classNames = setOf("org/mercurio/client/feature/entry/fixture/FixtureOne"),
             )
         val mutation =
             MutationSummary(
@@ -175,12 +175,12 @@ class MutationEvidenceTest {
                 statuses = emptyMap(),
                 mutatedClasses =
                     setOf(
-                        "org.hermesnative.client.feature.entry.fixture.FixtureOne",
-                        "org.hermesnative.client.feature.entry.fixture.FixtureTwo",
+                        "org.mercurio.client.feature.entry.fixture.FixtureOne",
+                        "org.mercurio.client.feature.entry.fixture.FixtureTwo",
                     ),
             )
 
-        assertVerificationFails("does not report org.hermesnative.client.feature.entry.fixture.FixtureTwo") {
+        assertVerificationFails("does not report org.mercurio.client.feature.entry.fixture.FixtureTwo") {
             MutationEvidenceVerifier.requireCoveredByCoverage(listOf(mutation), listOf(coverage))
         }
     }
@@ -194,7 +194,7 @@ class MutationEvidenceTest {
                 lineTotal = 10,
                 branchCovered = 2,
                 branchTotal = 2,
-                classNames = setOf("org/hermesnative/client/feature/entry/fixture/FixtureOne"),
+                classNames = setOf("org/mercurio/client/feature/entry/fixture/FixtureOne"),
             )
         val mutation =
             MutationSummary(
@@ -202,7 +202,7 @@ class MutationEvidenceTest {
                 total = 10,
                 detected = 10,
                 statuses = emptyMap(),
-                mutatedClasses = setOf("org.hermesnative.client.feature.entry.fixture.FixtureOne\$observeRun\$3"),
+                mutatedClasses = setOf("org.mercurio.client.feature.entry.fixture.FixtureOne\$observeRun\$3"),
             )
 
         MutationEvidenceVerifier.requireCoveredByCoverage(listOf(mutation), listOf(coverage))

@@ -15,7 +15,7 @@ class ArchitectureRuleTestsFailClosedTest {
         )
     private val focusedTestSource =
         repositoryRoot.resolve(
-            "buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt",
+            "buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt",
         )
     private val buildSrcBuildScript = repositoryRoot.resolve("buildSrc/build.gradle.kts")
 
@@ -57,7 +57,7 @@ class ArchitectureRuleTestsFailClosedTest {
         try {
             focusedTestSource.writeText(
                 """
-                package org.hermesnative.client.buildlogic
+                package org.mercurio.client.buildlogic
 
                 class ArchitectureCheckTest
                 """.trimIndent() + "\n",
@@ -151,7 +151,7 @@ class ArchitectureRuleTestsFailClosedTest {
                     "buildSrc",
                     "test",
                     "--tests",
-                    "org.hermesnative.client.buildlogic.ArchitectureCheckTest",
+                    "org.mercurio.client.buildlogic.ArchitectureCheckTest",
                     "--rerun-tasks",
                     "--no-build-cache",
                 )
@@ -178,9 +178,9 @@ class ArchitectureRuleTestsFailClosedTest {
                         ignoreFailures = true
                         doLast {
                             project.layout.buildDirectory.dir("test-results/test").get().asFile
-                                .resolve("TEST-org.hermesnative.client.buildlogic.ArchitectureCheckTest-synthetic.xml")
+                                .resolve("TEST-org.mercurio.client.buildlogic.ArchitectureCheckTest-synthetic.xml")
                                 .writeText(
-                                    "<testsuite name=\"org.hermesnative.client.buildlogic.ArchitectureCheckTest\" tests=\"1\" skipped=\"0\" failures=\"1\" errors=\"0\"><testcase name=\"synthetic\"><failure message=\"synthetic failure\" /></testcase></testsuite>",
+                                    "<testsuite name=\"org.mercurio.client.buildlogic.ArchitectureCheckTest\" tests=\"1\" skipped=\"0\" failures=\"1\" errors=\"0\"><testcase name=\"synthetic\"><failure message=\"synthetic failure\" /></testcase></testsuite>",
                                 )
                         }
                     }
@@ -219,7 +219,7 @@ class ArchitectureRuleTestsFailClosedTest {
         try {
             focusedTestSource.writeText(
                 """
-                package org.hermesnative.client.buildlogic
+                package org.mercurio.client.buildlogic
 
                 import org.junit.Ignore
                 import org.junit.Test
@@ -248,7 +248,7 @@ class ArchitectureRuleTestsFailClosedTest {
         try {
             focusedTestSource.writeText(
                 """
-                package org.hermesnative.client.buildlogic
+                package org.mercurio.client.buildlogic
 
                 import org.junit.Ignore
                 import org.junit.Test

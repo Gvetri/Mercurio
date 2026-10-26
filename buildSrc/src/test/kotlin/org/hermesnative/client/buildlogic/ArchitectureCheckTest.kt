@@ -96,9 +96,9 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("domain", "LayerViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.domain
+                package org.mercurio.client.feature.entry.domain
 
-                import org.hermesnative.client.feature.entry.application.FixtureUseCase
+                import org.mercurio.client.feature.entry.application.FixtureUseCase
 
                 internal class LayerViolation(private val useCase: FixtureUseCase)
                 """
@@ -113,9 +113,9 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("application", "LayerViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.application
+                package org.mercurio.client.feature.entry.application
 
-                import org.hermesnative.client.feature.entry.data.FixtureAdapter
+                import org.mercurio.client.feature.entry.data.FixtureAdapter
 
                 internal class LayerViolation(private val adapter: FixtureAdapter)
                 """
@@ -130,7 +130,7 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("domain", "ReferenceViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.domain
+                package org.mercurio.client.feature.entry.domain
 
                 val referenceViolation = android.os.Bundle()
                 """
@@ -145,7 +145,7 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("application", "ReferenceViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.application
+                package org.mercurio.client.feature.entry.application
 
                 val referenceViolation = io.ktor.client.HttpClient()
                 """
@@ -160,10 +160,10 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("application", "ReferenceViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.application
+                package org.mercurio.client.feature.entry.application
 
                 val referenceViolation =
-                    org.hermesnative.client.feature.entry.`data`.DefaultGatewayConnectionRepository
+                    org.mercurio.client.feature.entry.`data`.DefaultGatewayConnectionRepository
                 """
 
         withFixtureScope(mapOf(violation)) { scope ->
@@ -176,9 +176,9 @@ class ArchitectureCheckTest {
         val accepted =
             fixturePath("application", "AllowedReference.kt") to
                 """
-                package org.hermesnative.client.feature.entry.application
+                package org.mercurio.client.feature.entry.application
 
-                val allowedPort: org.hermesnative.client.feature.entry.domain.GatewayConnectionRepository? = null
+                val allowedPort: org.mercurio.client.feature.entry.domain.GatewayConnectionRepository? = null
                 """
 
         withFixtureScope(mapOf(accepted)) { scope ->
@@ -191,7 +191,7 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("presentation", "ReferenceViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.presentation
+                package org.mercurio.client.feature.entry.presentation
 
                 val referenceViolation = android.webkit.WebView(null)
                 """
@@ -206,7 +206,7 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("presentation", "ReferenceViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.presentation
+                package org.mercurio.client.feature.entry.presentation
 
                 val referenceViolation = java.net.URL("https://example.com/secure")
                 """
@@ -221,7 +221,7 @@ class ArchitectureCheckTest {
         val accepted =
             fixturePath("presentation", "AllowedReference.kt") to
                 """
-                package org.hermesnative.client.feature.entry.presentation
+                package org.mercurio.client.feature.entry.presentation
 
                 val allowedContent = "https://example.com/secure"
                 """
@@ -236,7 +236,7 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("wiring", "FileViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.wiring
+                package org.mercurio.client.feature.entry.wiring
 
                 val fileViolation = android.net.Uri.fromFile(snapshotFile)
                 """
@@ -251,7 +251,7 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("wiring", "FileViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.wiring
+                package org.mercurio.client.feature.entry.wiring
 
                 val fileViolation = android.net.Uri.parse("file:///data/data/snapshot.jsonl")
                 """
@@ -266,7 +266,7 @@ class ArchitectureCheckTest {
         val violation =
             fixturePath("wiring", "FileViolation.kt") to
                 """
-                package org.hermesnative.client.feature.entry.wiring
+                package org.mercurio.client.feature.entry.wiring
 
                 val fileViolation = Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 """
@@ -281,7 +281,7 @@ class ArchitectureCheckTest {
         val accepted =
             fixturePath("wiring", "AllowedReference.kt") to
                 """
-                package org.hermesnative.client.feature.entry.wiring
+                package org.mercurio.client.feature.entry.wiring
 
                 val allowedSnapshotUri =
                     androidx.core.content.FileProvider.getUriForFile(context, authority, snapshotFile)
@@ -348,11 +348,11 @@ class ArchitectureCheckTest {
     }
 
     private fun assertLayerBoundaries(scope: KoScope) {
-        val domain = Layer("Domain", "org.hermesnative.client.feature.entry.domain..")
-        val application = Layer("Application", "org.hermesnative.client.feature.entry.application..")
-        val data = Layer("Data", "org.hermesnative.client.feature.entry.data..")
-        val presentation = Layer("Presentation", "org.hermesnative.client.feature.entry.presentation..")
-        val wiring = Layer("Wiring", "org.hermesnative.client.feature.entry.wiring..")
+        val domain = Layer("Domain", "org.mercurio.client.feature.entry.domain..")
+        val application = Layer("Application", "org.mercurio.client.feature.entry.application..")
+        val data = Layer("Data", "org.mercurio.client.feature.entry.data..")
+        val presentation = Layer("Presentation", "org.mercurio.client.feature.entry.presentation..")
+        val wiring = Layer("Wiring", "org.mercurio.client.feature.entry.wiring..")
 
         scope.assertArchitecture(
             additionalMessage = "$layerBoundaryRule failed. $layerBoundaryGuidance",
@@ -494,39 +494,39 @@ class ArchitectureCheckTest {
     private fun fixturePath(
         layer: String,
         fileName: String,
-    ) = "feature/entry/$layer/src/main/kotlin/org/hermesnative/client/feature/entry/$layer/$fileName"
+    ) = "feature/entry/$layer/src/main/kotlin/org/mercurio/client/feature/entry/$layer/$fileName"
 
     private fun layerFixture(violation: Pair<String, String>? = null): Map<String, String> {
         val files =
             mutableMapOf(
                 fixturePath("domain", "FixturePort.kt") to
                     """
-                    package org.hermesnative.client.feature.entry.domain
+                    package org.mercurio.client.feature.entry.domain
 
                     internal interface FixturePort
                     """,
                 fixturePath("application", "FixtureUseCase.kt") to
                     """
-                    package org.hermesnative.client.feature.entry.application
+                    package org.mercurio.client.feature.entry.application
 
-                    import org.hermesnative.client.feature.entry.domain.FixturePort
+                    import org.mercurio.client.feature.entry.domain.FixturePort
 
                     internal class FixtureUseCase(private val port: FixturePort)
                     """,
                 fixturePath("data", "FixtureAdapter.kt") to
                     """
-                    package org.hermesnative.client.feature.entry.data
+                    package org.mercurio.client.feature.entry.data
 
-                    import org.hermesnative.client.feature.entry.domain.FixturePort
+                    import org.mercurio.client.feature.entry.domain.FixturePort
 
                     internal class FixtureAdapter : FixturePort
                     """,
                 fixturePath("presentation", "FixtureHolder.kt") to
                     """
-                    package org.hermesnative.client.feature.entry.presentation
+                    package org.mercurio.client.feature.entry.presentation
 
-                    import org.hermesnative.client.feature.entry.application.FixtureUseCase
-                    import org.hermesnative.client.feature.entry.domain.FixturePort
+                    import org.mercurio.client.feature.entry.application.FixtureUseCase
+                    import org.mercurio.client.feature.entry.domain.FixturePort
 
                     internal class FixtureHolder(
                         private val useCase: FixtureUseCase,
@@ -535,12 +535,12 @@ class ArchitectureCheckTest {
                     """,
                 fixturePath("wiring", "FixtureWiring.kt") to
                     """
-                    package org.hermesnative.client.feature.entry.wiring
+                    package org.mercurio.client.feature.entry.wiring
 
-                    import org.hermesnative.client.feature.entry.application.FixtureUseCase
-                    import org.hermesnative.client.feature.entry.data.FixtureAdapter
-                    import org.hermesnative.client.feature.entry.domain.FixturePort
-                    import org.hermesnative.client.feature.entry.presentation.FixtureHolder
+                    import org.mercurio.client.feature.entry.application.FixtureUseCase
+                    import org.mercurio.client.feature.entry.data.FixtureAdapter
+                    import org.mercurio.client.feature.entry.domain.FixturePort
+                    import org.mercurio.client.feature.entry.presentation.FixtureHolder
 
                     internal object FixtureWiring {
                         fun assemble(): FixtureHolder {
@@ -601,9 +601,9 @@ class ArchitectureCheckTest {
                 "org.koin",
                 "retrofit2",
                 "java.net",
-                "org.hermesnative.client.feature.entry.data",
-                "org.hermesnative.client.feature.entry.presentation",
-                "org.hermesnative.client.feature.entry.wiring",
+                "org.mercurio.client.feature.entry.data",
+                "org.mercurio.client.feature.entry.presentation",
+                "org.mercurio.client.feature.entry.wiring",
             )
 
         val forbiddenLayerReference =

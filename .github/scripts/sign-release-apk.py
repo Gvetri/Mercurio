@@ -40,7 +40,7 @@ def apk_metadata(apk, tools, environment):
     """Read public version and ABI metadata from the APK, not caller assertions."""
     badging = run_tool([str(tools / "aapt2"), "dump", "badging", str(apk)], environment)
     package = re.search(r"^package: name='([^']+)' versionCode='([0-9]+)' versionName='([^']*)'", badging, re.MULTILINE)
-    if package is None or package[1] != "org.hermesnative.client":
+    if package is None or package[1] != "org.mercurio.client":
         raise SigningError("Unexpected APK application identity")
     with zipfile.ZipFile(apk) as archive:
         abis = sorted({name.split("/")[1] for name in archive.namelist() if name.startswith("lib/") and not name.endswith("/")})
