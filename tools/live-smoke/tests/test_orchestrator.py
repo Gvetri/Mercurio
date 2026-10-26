@@ -36,7 +36,7 @@ from support import (  # noqa: E402
 )
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-P12 = REPO_ROOT / "fixtures" / "hermes" / "journey-tls" / "journey-gateway.p12"
+P12 = REPO_ROOT / "fixtures" / "mercurio" / "journey-tls" / "journey-gateway.p12"
 VERSION = "0.1.0"
 
 
