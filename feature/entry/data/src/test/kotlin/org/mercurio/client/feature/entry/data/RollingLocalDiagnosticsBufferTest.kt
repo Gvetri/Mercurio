@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.data
 
-import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
-import org.mercurio.client.feature.entry.domain.LocalDiagnosticEventType
-import org.mercurio.client.feature.entry.domain.LocalDiagnosticStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticEventType
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticStatus
 import java.time.Instant
 
 class RollingLocalDiagnosticsBufferTest {

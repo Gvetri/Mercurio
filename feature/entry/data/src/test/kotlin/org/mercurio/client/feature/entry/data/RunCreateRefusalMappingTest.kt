@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.data
 
+import org.junit.Assert.assertEquals
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.RunCreateRequest
 import org.mercurio.client.feature.entry.domain.SessionId
-import org.junit.Assert.assertEquals
-import org.junit.Test
 import java.util.ArrayDeque
 
 class RunCreateRefusalMappingTest {

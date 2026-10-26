@@ -5,6 +5,12 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import org.mercurio.client.feature.entry.application.ReconcileRun
 import org.mercurio.client.feature.entry.domain.GatewayContractPort
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
@@ -16,12 +22,6 @@ import org.mercurio.client.feature.entry.domain.RunReconciliationDecision
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.supportsModelCatalog
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
 import java.io.File
 import java.io.IOException
 import java.net.URI

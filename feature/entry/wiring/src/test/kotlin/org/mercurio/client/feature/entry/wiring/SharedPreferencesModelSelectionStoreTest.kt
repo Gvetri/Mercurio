@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.wiring
 
-import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config

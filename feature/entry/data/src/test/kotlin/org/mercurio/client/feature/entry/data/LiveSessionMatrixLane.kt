@@ -5,6 +5,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.junit.Assert.assertEquals
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.mercurio.client.fixture.DeterministicGatewayFixture
@@ -18,7 +19,6 @@ import org.mercurio.client.fixture.journey.JourneyRunEvent
 import org.mercurio.client.fixture.journey.JourneyRunScript
 import org.mercurio.client.fixture.journey.JourneyScenario
 import org.mercurio.client.fixture.journey.JourneySession
-import org.junit.Assert.assertEquals
 import java.io.File
 import java.net.ServerSocket
 import java.net.URI

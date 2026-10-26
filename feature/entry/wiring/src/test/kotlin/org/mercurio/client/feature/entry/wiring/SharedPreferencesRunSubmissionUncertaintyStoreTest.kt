@@ -2,14 +2,14 @@ package org.mercurio.client.feature.entry.wiring
 
 import android.content.Context
 import android.content.SharedPreferences
-import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
-import org.mercurio.client.feature.entry.domain.RunId
-import org.mercurio.client.feature.entry.domain.SessionId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
+import org.mercurio.client.feature.entry.domain.RunId
+import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config

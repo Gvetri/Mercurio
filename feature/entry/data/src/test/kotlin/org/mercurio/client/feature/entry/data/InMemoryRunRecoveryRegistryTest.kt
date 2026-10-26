@@ -1,10 +1,10 @@
 package org.mercurio.client.feature.entry.data
 
+import org.junit.Assert.assertEquals
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionId
-import org.junit.Assert.assertEquals
-import org.junit.Test
 
 class InMemoryRunRecoveryRegistryTest {
     private val first = RunRecoveryEntry(SessionId("session-1"), RunId("run-1"))

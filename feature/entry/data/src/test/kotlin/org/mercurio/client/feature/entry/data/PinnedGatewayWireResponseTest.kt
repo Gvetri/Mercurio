@@ -1,10 +1,10 @@
 package org.mercurio.client.feature.entry.data
 
-import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
-import org.mercurio.client.feature.entry.domain.GatewayException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
+import org.mercurio.client.feature.entry.domain.GatewayException
 
 /** Wire shapes verified against the real disposable Gateway at the repository pin. */
 class PinnedGatewayWireResponseTest {

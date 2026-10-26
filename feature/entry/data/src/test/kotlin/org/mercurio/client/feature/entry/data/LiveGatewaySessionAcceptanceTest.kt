@@ -1,16 +1,16 @@
 package org.mercurio.client.feature.entry.data
 
-import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
-import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
-import org.mercurio.client.feature.entry.domain.Session
-import org.mercurio.client.feature.entry.domain.SessionId
-import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
+import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
+import org.mercurio.client.feature.entry.domain.Session
+import org.mercurio.client.feature.entry.domain.SessionId
+import org.mercurio.client.feature.entry.domain.SessionListRequest
 import java.net.URI
 
 class LiveGatewaySessionAcceptanceTest {

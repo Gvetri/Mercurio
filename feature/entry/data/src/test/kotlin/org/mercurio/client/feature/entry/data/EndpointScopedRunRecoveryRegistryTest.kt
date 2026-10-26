@@ -1,12 +1,12 @@
 package org.mercurio.client.feature.entry.data
 
-import org.mercurio.client.feature.entry.domain.RunId
-import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
-import org.mercurio.client.feature.entry.domain.SessionId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.fail
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.RunId
+import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
+import org.mercurio.client.feature.entry.domain.SessionId
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit

@@ -1,5 +1,9 @@
 package org.mercurio.client.feature.entry.data
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEvent
@@ -7,10 +11,6 @@ import org.mercurio.client.feature.entry.domain.RunEventObservation
 import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.SessionId
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
 class LiveGatewayRunAcceptanceTest {
     private val repositoryRoot = laneRepositoryRoot()

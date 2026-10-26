@@ -1,5 +1,8 @@
 package org.mercurio.client.feature.entry.data
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
 import org.mercurio.client.feature.entry.application.OpenSession
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.fixture.DeterministicGatewayFixture
@@ -9,9 +12,6 @@ import org.mercurio.client.fixture.LocalSyntheticGatewayProcess
 import org.mercurio.client.fixture.SyntheticGatewayBehavior
 import org.mercurio.client.fixture.SyntheticGatewayMessage
 import org.mercurio.client.fixture.SyntheticGatewaySession
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
 import java.io.File
 
 class GatewayHistoryFixtureIntegrationTest {

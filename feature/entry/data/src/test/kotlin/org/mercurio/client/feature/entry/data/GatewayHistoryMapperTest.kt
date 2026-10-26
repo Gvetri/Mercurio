@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.data
 
 import kotlinx.serialization.json.jsonObject
-import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
-import org.mercurio.client.feature.entry.domain.GatewayException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
+import org.mercurio.client.feature.entry.domain.GatewayException
 import java.io.File
 
 class GatewayHistoryMapperTest {
