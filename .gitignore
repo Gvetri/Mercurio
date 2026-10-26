@@ -21,8 +21,8 @@ Thumbs.db
 .env.*
 secrets/
 
-!fixtures/hermes/journey-tls/*.p12
-!fixtures/hermes/journey-tls/*.pem
+!fixtures/mercurio/journey-tls/*.p12
+!fixtures/mercurio/journey-tls/*.pem
 
 .scratch/
 coverage/

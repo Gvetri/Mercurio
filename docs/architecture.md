@@ -48,7 +48,7 @@ Wiring selects concrete datasource and repository implementations and creates th
 
 ## Architecture checks
 
-The architecture rules are Konsist checks. `./gradlew architectureRuleTests` runs the rule suite and fails unless its executed evidence is complete, and every rule also runs against a synthetic scope that carries one deliberate violation, so a rule that stopped rejecting a violation fails the suite instead of passing it. The rules live in `buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt` and are declared by name:
+The architecture rules are Konsist checks. `./gradlew architectureRuleTests` runs the rule suite and fails unless its executed evidence is complete, and every rule also runs against a synthetic scope that carries one deliberate violation, so a rule that stopped rejecting a violation fails the suite instead of passing it. The rules live in `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt` and are declared by name:
 
 | Rule | Rejects |
 | --- | --- |

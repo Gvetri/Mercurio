@@ -35,7 +35,7 @@ from livesmoke.errors import LiveSmokeError
 from livesmoke.gateway_api import GatewayClient, capabilities_summary, enabled_toolset_names
 from livesmoke.proc import CommandRunner, process_environment, redact_text
 
-APP_PACKAGE = "org.hermesnative.client"
+APP_PACKAGE = "org.mercurio.client"
 EMULATOR_HOST_ALIAS = "10.0.2.2"
 TURN_PROMPTS = (
     "Count from 1 to 60 separated by spaces. Reply with the numbers only.",

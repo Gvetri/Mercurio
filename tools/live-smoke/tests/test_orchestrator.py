@@ -304,8 +304,8 @@ class OrchestratorEndToEndTests(unittest.TestCase):
         self.assertEqual(evidence["teardown"]["status"], "ok")
         self.assertTrue(evidence["redaction"]["clean"])
         surfaces = evidence["redaction"]["surfaces"]
-        self.assertEqual(surfaces["device_app_storage"]["path"], "/data/user/0/org.hermesnative.client")
-        self.assertEqual(surfaces["device_app_storage"]["package"], "org.hermesnative.client")
+        self.assertEqual(surfaces["device_app_storage"]["path"], "/data/user/0/org.mercurio.client")
+        self.assertEqual(surfaces["device_app_storage"]["package"], "org.mercurio.client")
         self.assertTrue(surfaces["device_app_storage"]["pulled"])
         self.assertTrue(surfaces["device_app_storage"]["scanned"])
         self.assertIn("host_scratch", surfaces)
