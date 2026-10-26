@@ -1,5 +1,11 @@
 package org.mercurio.client.feature.entry.application
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.ModelSelection
@@ -8,12 +14,6 @@ import org.mercurio.client.feature.entry.domain.RunCreateRequest
 import org.mercurio.client.feature.entry.domain.RunGatewayPort
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.SessionId
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertSame
-import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
-import org.junit.Test
 
 class SubmitMessageTest {
     @Test

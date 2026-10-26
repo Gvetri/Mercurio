@@ -12,6 +12,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertFalse
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.presentation.EntryScreen
 import org.mercurio.client.feature.entry.presentation.EntryUiEvent
@@ -21,10 +25,6 @@ import org.mercurio.client.feature.entry.presentation.OpenSessionUiState
 import org.mercurio.client.feature.entry.presentation.SessionItemUiState
 import org.mercurio.client.feature.entry.presentation.SessionListUiState
 import org.mercurio.client.feature.entry.presentation.SessionMessageUiState
-import org.junit.Assert.assertFalse
-import org.junit.Rule
-import org.junit.Test
-import org.junit.runner.RunWith
 
 /**
  * On-device integration coverage for the adaptive shell: the real Android back

@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.application
 
+import org.junit.Assert.assertEquals
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionHistory
@@ -7,8 +9,6 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
-import org.junit.Assert.assertEquals
-import org.junit.Test
 
 class SessionMutationFlowTest {
     @Test

@@ -1,11 +1,11 @@
 package org.mercurio.client.feature.entry.application
 
-import org.mercurio.client.feature.entry.domain.GatewayConnection
-import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayConnection
+import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
 
 class RemoveGatewayConnectionTest {
     @Test

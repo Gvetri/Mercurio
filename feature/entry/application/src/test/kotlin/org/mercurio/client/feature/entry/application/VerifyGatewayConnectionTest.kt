@@ -1,5 +1,8 @@
 package org.mercurio.client.feature.entry.application
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
 import org.mercurio.client.feature.entry.domain.GatewayConnection
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
@@ -7,9 +10,6 @@ import org.mercurio.client.feature.entry.domain.GatewayEndpoint
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
 
 private fun clientManifestCapabilities(vararg extra: Pair<String, GatewayEndpoint>): GatewayCapabilities =
     GatewayCapabilities(

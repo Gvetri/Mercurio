@@ -1,9 +1,9 @@
 package org.mercurio.client.feature.entry.application
 
-import org.mercurio.client.feature.entry.domain.GatewayCapabilities
-import org.mercurio.client.feature.entry.domain.GatewayCapabilityPort
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayCapabilities
+import org.mercurio.client.feature.entry.domain.GatewayCapabilityPort
 
 class VerifyGatewayCapabilitiesTest {
     @Test

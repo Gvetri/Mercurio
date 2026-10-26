@@ -51,7 +51,8 @@ class GatewayHistoryMapperTest {
         val envelope =
             GatewayJsonParser.parseObject(
                 "populated Session history fixture",
-                repositoryRoot.resolve("fixtures/mercurio/contracts/sessions/history-response-populated.json").readText(),
+                repositoryRoot.resolve("fixtures/mercurio/contracts/sessions/history-response-populated.json")
+                    .readText(),
             )
         val body = envelope["response"]!!.jsonObject["body"]!!.jsonObject
         val history = GatewayJsonParser.parseHistory("populated Session history fixture", body)
