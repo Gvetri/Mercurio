@@ -46,7 +46,7 @@ class SignApkTest(unittest.TestCase):
     def test_signs_and_verifies_the_expected_identity_without_retaining_secrets(self):
         result = self.sign()
         self.assertEqual(0, result.returncode, result.stderr)
-        artifact = self.output / "hermes-native-client.apk"
+        artifact = self.output / "mercurio.apk"
         verified = self.run_tool([str(self.tools / "apksigner"), "verify", "--print-certs", str(artifact)])
         self.assertIn(self.fingerprint, verified.stdout.decode())
         metadata = json.loads((self.output / "signing-metadata.json").read_text())
@@ -57,7 +57,7 @@ class SignApkTest(unittest.TestCase):
         self.assertEqual([], metadata["native_abis"])
         self.assertEqual(hashlib.sha256(artifact.read_bytes()).hexdigest(), metadata["apk_sha256"])
         self.assertEqual(
-            {"hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json"},
+            {"mercurio.apk", "SHA256SUMS", "signing-metadata.json"},
             {entry.name for entry in self.output.iterdir()},
         )
         for secret in (self.env["ANDROID_RELEASE_KEYSTORE_PASSWORD"], self.env["ANDROID_RELEASE_KEYSTORE_BASE64"]):

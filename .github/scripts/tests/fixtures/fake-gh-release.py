@@ -82,7 +82,7 @@ elif operation == "download":
             asset["download_count"] += 1
         state.write_text(json.dumps(release))
     if (root / "corrupt-download").exists() or (tag.startswith("stable-beta-") and (root / "corrupt-stable-download").exists()):
-        (destination / "hermes-native-client.apk").write_bytes(b"corrupt-fixture")
+        (destination / "mercurio.apk").write_bytes(b"corrupt-fixture")
 elif operation == "edit":
     assert "--draft=false" in arguments and "--prerelease" in arguments and "--latest=false" in arguments
     release = json.loads(state.read_text())

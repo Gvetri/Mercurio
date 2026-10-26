@@ -118,11 +118,11 @@ def clear(identity, tag, source):
             require(isinstance(uploader, dict) and uploader.get("login") == "github-actions[bot]"
                     and type(uploader.get("id")) is int and uploader["id"] == 41898282,
                     "Asset uploader is missing, unreadable, or not the release bot")
-            if asset["name"] == "hermes-native-client.apk":
+            if asset["name"] == "mercurio.apk":
                 require(asset.get("digest") == f"sha256:{notes['apk_sha256']}",
                         "APK digest is missing or disagrees with publisher notes")
             elif asset["name"] == "SHA256SUMS":
-                checksum = hashlib.sha256(f"{notes['apk_sha256']}  hermes-native-client.apk\n".encode()).hexdigest()
+                checksum = hashlib.sha256(f"{notes['apk_sha256']}  mercurio.apk\n".encode()).hexdigest()
                 require(asset.get("digest") == f"sha256:{checksum}",
                         "SHA256SUMS digest is missing or disagrees with publisher notes")
             elif asset["name"] == "signing-metadata.json":

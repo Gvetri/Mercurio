@@ -162,7 +162,7 @@ class GateHarness:
                 if sub == "uninstall":
                     return ok(argv, "Success\n")
                 if sub == "emu":
-                    return ok(argv, "hnc-issue29-live\nOK\n")
+                    return ok(argv, "mercurio-issue29-live\nOK\n")
                 if sub == "shell":
                     command = argv[4]
                     if command == "getprop":
@@ -229,7 +229,7 @@ class GateHarness:
             tls_p12=P12,
             designation="designated",
             device_serial="emulator-5554",
-            avd_name="hnc-issue29-live",
+            avd_name="mercurio-issue29-live",
             gateway_port=free_port(),
             tls_port=self.tls_port,
             tmpfiles_conf_dir=self.root / "user-tmpfiles.d",

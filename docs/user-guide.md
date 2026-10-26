@@ -27,12 +27,12 @@ install one:
 1. Open the repository's [releases page](https://github.com/Gvetri/hermes-native-client/releases).
 2. Pick the newest release named **Stable Public Beta vX.Y.Z**. A release named **Nightly** is a
    development snapshot, not a stable release.
-3. Download `hermes-native-client.apk` and `SHA256SUMS` from that release.
+3. Download `mercurio.apk` and `SHA256SUMS` from that release.
 4. Verify the APK before installing it:
 
    ```text
    sha256sum --check SHA256SUMS
-   apksigner verify --print-certs hermes-native-client.apk
+   apksigner verify --print-certs mercurio.apk
    ```
 
    The reported signer certificate digest must equal the digest published in the release notes and
