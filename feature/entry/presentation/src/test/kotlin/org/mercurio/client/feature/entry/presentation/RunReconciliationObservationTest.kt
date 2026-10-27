@@ -529,4 +529,46 @@ class RunReconciliationObservationTest {
             dispatcher.drain()
         }
     }
+
+    @Test
+    fun transport_failure_during_reconciliation_keeps_the_streamed_terminal_state() {
+        val session = reconciliationSession()
+        val run = Run(RunId("run-terminal-streamed"), session.id, "running")
+        val gateway =
+            ReconciliationFakeGateway(session).apply {
+                histories.add(SessionHistory(session.id, emptyList()))
+                runs.add(run)
+                observations.add(
+                    ReconciliationScriptedObservation(
+                        listOf(
+                            RunEvent(RunEventType.RUNNING, run.id, "running", eventId = "running"),
+                            RunEvent(RunEventType.COMPLETED, run.id, "succeeded", eventId = "completed"),
+                        ),
+                    ),
+                )
+                failStatusRunIds += run.id
+            }
+        val holder = reconciliationHolder(gateway)
+
+        try {
+            openReconciledSession(holder, gateway)
+            holder.onEvent(EntryUiEvent.ComposerTextChanged("Second ping"))
+            holder.onEvent(EntryUiEvent.SendMessageClicked)
+
+            awaitReconciliationState(holder) {
+                val opened = it.sessionList?.openedSession
+                opened?.isSending == false &&
+                    opened.isReconciliationInProgress == false &&
+                    opened.latestRun?.id == run.id &&
+                    opened.errorCategory == null
+            }
+            assertEquals(
+                RunPresentationState.SUCCEEDED,
+                holder.uiState.value.sessionList?.openedSession?.latestRunState,
+            )
+            assertEquals(listOf(run.id), gateway.statusRequests)
+        } finally {
+            holder.close()
+        }
+    }
 }

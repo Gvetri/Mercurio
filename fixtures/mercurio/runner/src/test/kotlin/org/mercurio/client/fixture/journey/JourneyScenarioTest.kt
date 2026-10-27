@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -391,6 +392,39 @@ class JourneyScenarioTest {
             runCatching { JourneyScenarioParser.parse(blank, revision) }.exceptionOrNull()
                 is JourneyScenarioFormatException,
         )
+    }
+
+    @Test
+    fun idle_gap_run_script_parses_and_conflicts_are_rejected() {
+        val revision = pinnedDescriptor.provenance.value
+
+        fun parseGapScenario(runsJson: String): JourneyScenario =
+            JourneyScenarioParser.parse(
+                tempScenario(
+                    """{"name":"gap-case","hermes_revision":"$revision","port":18443,"tls":false,""" +
+                        """"capabilities":["sessions"],"sessions":[],"runs":[{"run_id":"r1",""" +
+                        """"session_id":"s1",$runsJson}]}""",
+                ),
+                revision,
+            )
+        val gapRunsJson = "\"idle_gap_ms\":5000,\"observation\":[]"
+        assertEquals(5000, parseGapScenario(gapRunsJson).runs.single().idleGapMillis)
+        assertNull(parseGapScenario("\"observation\":[]").runs.single().idleGapMillis)
+        val holdConflict =
+            runCatching {
+                parseGapScenario("\"hold_open\":true,\"idle_gap_ms\":5000,\"observation\":[]")
+            }.exceptionOrNull()
+        assertTrue(holdConflict is JourneyScenarioFormatException)
+        val outOfRange = runCatching { parseGapScenario("\"idle_gap_ms\":0,\"observation\":[]") }.exceptionOrNull()
+        assertTrue(outOfRange is JourneyScenarioFormatException)
+    }
+
+    @Test
+    fun committed_idle_gap_scenario_parses_with_paced_run_scripts() {
+        val scenario = parseCommittedScenario("sse-idle-gap-streaming")
+        assertEquals(2, scenario.runs.size)
+        assertNull(scenario.runs[0].idleGapMillis)
+        assertEquals(12_000, scenario.runs[1].idleGapMillis)
     }
 
     private fun parseCommittedScenario(name: String): JourneyScenario =

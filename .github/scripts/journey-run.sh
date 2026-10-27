@@ -24,6 +24,7 @@ journeys=(
     streaming
     live-streaming
     interrupted-sse-refetch
+    sse-idle-gap-streaming
     composer-stop
     terminal-success
     terminal-failure

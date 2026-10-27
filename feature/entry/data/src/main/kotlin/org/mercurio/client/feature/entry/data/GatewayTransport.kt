@@ -4,6 +4,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.time.Duration
 
 class GatewayHttpRequest(
     val method: String,
@@ -47,6 +48,7 @@ interface GatewayTransport {
 
 class OkHttpGatewayTransport(
     client: OkHttpClient = OkHttpClient(),
+    eventStreamReadTimeout: Duration = DEFAULT_EVENT_STREAM_READ_TIMEOUT,
 ) : GatewayTransport {
     private val client =
         client
@@ -54,6 +56,12 @@ class OkHttpGatewayTransport(
             .retryOnConnectionFailure(false)
             .followRedirects(false)
             .followSslRedirects(false)
+            .build()
+
+    private val streamingClient =
+        client
+            .newBuilder()
+            .readTimeout(eventStreamReadTimeout)
             .build()
 
     override fun execute(request: GatewayHttpRequest): GatewayHttpResponse {
@@ -66,7 +74,7 @@ class OkHttpGatewayTransport(
     }
 
     override fun openEventStream(request: GatewayHttpRequest): GatewayEventStream {
-        val call = client.newCall(request(request))
+        val call = streamingClient.newCall(request(request))
         val response = call.execute()
         val source = response.body.source()
 
@@ -96,5 +104,6 @@ class OkHttpGatewayTransport(
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         val EMPTY_REQUEST_BODY = "".toRequestBody(JSON_MEDIA_TYPE)
         val METHODS_WITHOUT_BODY = setOf("GET", "DELETE", "HEAD")
+        val DEFAULT_EVENT_STREAM_READ_TIMEOUT: Duration = Duration.ofSeconds(45)
     }
 }

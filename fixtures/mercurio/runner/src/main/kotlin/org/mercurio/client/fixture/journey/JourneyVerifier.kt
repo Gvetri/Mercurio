@@ -144,6 +144,26 @@ private fun recordedRequestMethods(telemetry: JsonObject): List<String> =
         request.jsonObject["method"]?.jsonPrimitive?.content
     }
 
+private const val IDLE_GAP_FAST_RUN_ID = "run-fast-first"
+
+private const val IDLE_GAP_SLOW_RUN_ID = "run-idle-gap"
+
+internal fun verifyIdleGapStreaming(telemetry: JsonObject) {
+    requireConnectionAttempted(telemetry)
+    check(runCreatesFor(telemetry, JourneyInvariants.ACTIVE_SESSION_ID) == 2) {
+        "The idle-gap journey did not submit exactly two Runs (fast first message, paced second message)."
+    }
+    check(sseFor(telemetry, IDLE_GAP_FAST_RUN_ID).opened == 1) {
+        "The fast first Run was not observed exactly once."
+    }
+    check(sseFor(telemetry, IDLE_GAP_SLOW_RUN_ID).opened == 1) {
+        "The paced idle-gap Run was not observed exactly once."
+    }
+    check(runStatusRequests(telemetry) >= 1) {
+        "The client did not reconcile the paced Run status."
+    }
+}
+
 internal object JourneyInvariants {
     private val scenarioVerifiers: Map<String, (JsonObject) -> Unit> =
         mapOf(
@@ -163,6 +183,7 @@ internal object JourneyInvariants {
             "streaming" to JourneyRunInvariants::verifyStreaming,
             "live-streaming" to JourneyRunInvariants::verifyLiveStreaming,
             "interrupted-sse-refetch" to JourneyRunInvariants::verifyInterruptedSseRefetch,
+            "sse-idle-gap-streaming" to ::verifyIdleGapStreaming,
             "composer-stop" to JourneyRunInvariants::verifyComposerStop,
             "terminal-success" to JourneyRunInvariants::verifyTerminal,
             "terminal-failure" to JourneyRunInvariants::verifyTerminal,
