@@ -302,6 +302,36 @@ class JourneyGatewayProcessTest {
     }
 
     @Test
+    fun idle_gap_pacing_writes_a_keepalive_comment_before_every_paced_event() {
+        val scenarioFile = File(scenariosDir, "sse-idle-gap-streaming.json")
+        val parsed = JourneyScenarioParser.parse(scenarioFile, pinnedDescriptor.provenance.value)
+        val scenario =
+            parsed.copy(
+                port = freePort(),
+                tls = false,
+                runs = parsed.runs.map { run -> run.copy(idleGapMillis = run.idleGapMillis?.let { 50 }) },
+            )
+        val process = JourneyGatewayProcess.start(scenario)
+        try {
+            val connection =
+                (process.endpoint.resolve("/v1/runs/run-idle-gap/events").toURL().openConnection() as HttpURLConnection)
+            connection.connectTimeout = 2_000
+            connection.readTimeout = 5_000
+            connection.requestMethod = "GET"
+            val lines = connection.inputStream.bufferedReader().lineSequence().toList()
+            val nonBlank = lines.filter { it.isNotEmpty() }
+            assertEquals(": open", nonBlank.first())
+            assertEquals(": stream closed", nonBlank.last())
+            assertEquals(3, nonBlank.count { it == ": keep-alive" })
+            val dataLines = nonBlank.filter { it.startsWith("data:") }
+            assertEquals(3, dataLines.size)
+            assertTrue(dataLines.last().contains("\"event\":\"run.completed\""))
+        } finally {
+            process.stop()
+        }
+    }
+
+    @Test
     fun bearer_credential_is_enforced_for_gateway_routes() {
         val process = startGateway("connection", tls = false)
         try {

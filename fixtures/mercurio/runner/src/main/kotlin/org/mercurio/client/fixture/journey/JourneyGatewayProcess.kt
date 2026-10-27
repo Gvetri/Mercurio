@@ -534,6 +534,11 @@ private object JourneyGatewaySse {
             if (!script.holdOpen && script.finalStatus != null && index == events.lastIndex) {
                 behavior.observationDelivered[runId] = true
             }
+            script.idleGapMillis?.let { gapMillis ->
+                Thread.sleep(gapMillis.toLong())
+                exchange.responseBody.write(keepAliveComment)
+                exchange.responseBody.flush()
+            }
             exchange.responseBody.write(JourneyGatewayJson.renderEvent(script, event, index))
             exchange.responseBody.flush()
             if (interruptAfter != null && index + 1 >= interruptAfter) {

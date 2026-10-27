@@ -17,6 +17,7 @@ private const val SURROGATE_RANGE_END = 0xD7FF
 private const val SURROGATE_RANGE_START = 0xE000
 private const val CODE_POINT_MAX = 0xFFFF
 private const val MAX_HOLD_CREATE_MILLIS = 9000
+private const val MAX_IDLE_GAP_MILLIS = 30_000
 
 /** The pinned `/v1/capabilities` endpoint names a journey can advertise. */
 object JourneyEndpointCatalog {
@@ -152,6 +153,7 @@ data class JourneyRunScript(
     val liveFraming: Boolean = false,
     val finalStatus: String? = null,
     val terminalHistory: List<JourneyMessage> = emptyList(),
+    val idleGapMillis: Int? = null,
 ) {
     init {
         require(interruptAfterEvents == null || interruptAfterEvents in 0..observation.size) {
@@ -162,6 +164,12 @@ data class JourneyRunScript(
         }
         require(!finalizeOnDisconnect || (holdOpen && finalStatus != null)) {
             "A disconnect-finalized observation must hold open and declare its final status."
+        }
+        require(idleGapMillis == null || idleGapMillis in 1..MAX_IDLE_GAP_MILLIS) {
+            "idle_gap_ms must be between 1 and $MAX_IDLE_GAP_MILLIS milliseconds."
+        }
+        require(!holdOpen || idleGapMillis == null) {
+            "A held-open observation cannot pace idle gaps between events."
         }
         require(
             !refuseCreate ||
@@ -242,6 +250,7 @@ private val allowedRunKeys =
         "live_framing",
         "final_status",
         "terminal_history",
+        "idle_gap_ms",
     )
 private val allowedEventKeys = setOf("type", "delta")
 private val allowedCatalogKeys = setOf("default_model", "models")
@@ -465,6 +474,7 @@ private object JourneyScenarioJson {
                 liveFraming = optionalBoolean(run, "live_framing", default = false),
                 finalStatus = optionalString(run, "final_status"),
                 terminalHistory = parseMessages(run, "terminal_history", "run[$index].terminal_history"),
+                idleGapMillis = optionalInt(run, "idle_gap_ms"),
             )
         }
 

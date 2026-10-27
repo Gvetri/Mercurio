@@ -1,0 +1,41 @@
+appId: org.mercurio.client
+name: sse-idle-gap-streaming
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: sse-idle-gap-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 30000
+- tapOn: "Alpha Session"
+- extendedWaitUntil:
+    visible: "Back to Sessions"
+    timeout: 30000
+- tapOn: "Message"
+- inputText: "First ping"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "First reply lands"
+    timeout: 30000
+- tapOn: "Message"
+- inputText: "Second ping with silence"
+- hideKeyboard
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Run state: Running"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Gap survived the silence"
+    timeout: 90000
+- assertNotVisible: 'Stream interrupted\. Run result is uncertain\.'
+- assertVisible: "Run state: Succeeded"
+- takeScreenshot: sse-idle-gap-completed
