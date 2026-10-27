@@ -401,6 +401,43 @@ class SessionHistoryScreenTest {
     }
 
     @Test
+    fun loading_history_shows_progress_instead_of_an_empty_transcript() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Gateway connected",
+                            supportingText = "Connected",
+                            actionLabel = "Connected",
+                            isConnected = true,
+                            sessionList =
+                                SessionListUiState(
+                                    openedSession =
+                                        OpenSessionUiState(
+                                            session =
+                                                SessionItemUiState(
+                                                    SessionId("session-1"),
+                                                    "Loading",
+                                                    null,
+                                                    false,
+                                                ),
+                                            messages = emptyList(),
+                                            isRefreshing = true,
+                                        ),
+                                ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Loading Session history…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No messages in this Session.").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
+    }
+
+    @Test
     fun failed_run_suppresses_server_failure_text_and_shows_only_the_safe_message() {
         val prompt = "Write a confidential poem"
         val message =

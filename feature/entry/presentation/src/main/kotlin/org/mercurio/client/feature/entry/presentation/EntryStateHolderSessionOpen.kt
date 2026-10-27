@@ -7,7 +7,9 @@ import org.mercurio.client.feature.entry.application.OpenSession
 import org.mercurio.client.feature.entry.application.OpenedSession
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.RunEventObservation
+import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
+import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showOpenedSessionFailure(requestGeneration: Long) {
@@ -62,8 +64,19 @@ internal suspend fun EntryStateHolder.openSessionJob(
     sessionId: SessionId,
     replacedSessionId: SessionId?,
 ) {
+    val openedSessionBeforeAttempt = mutableUiState.value.sessionList?.openedSession
     try {
-        val openedSession = OpenSession(gateway).execute(sessionId)
+        val opener = OpenSession(gateway)
+        val session = opener.executeSession(sessionId)
+        val metadataApplied =
+            updateCurrentSessionRequest(request.generation) { current ->
+                applyOpenedSessionMetadata(current, session, sessionId)
+            }
+        if (!metadataApplied) {
+            return
+        }
+        val history = opener.executeHistory(sessionId)
+        val openedSession = OpenedSession(session = session, history = history)
         val applied =
             updateCurrentSessionRequest(request.generation) { current ->
                 applyOpenedSessionResult(current, openedSession, sessionId)
@@ -81,9 +94,9 @@ internal suspend fun EntryStateHolder.openSessionJob(
     } catch (error: CancellationException) {
         throw error
     } catch (_: GatewayException) {
-        showSessionOpenFailure(request.generation, sessionId)
+        showSessionOpenFailure(request.generation, sessionId, openedSessionBeforeAttempt)
     } catch (_: Exception) {
-        showSessionOpenFailure(request.generation, sessionId)
+        showSessionOpenFailure(request.generation, sessionId, openedSessionBeforeAttempt)
     }
 }
 
@@ -130,6 +143,49 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
     )
 }
 
+/**
+ * Applies the Session metadata as soon as `GET /api/sessions/{id}` returns, so the Session screen
+ * can appear while the transcript is still loading. The transcript is filled by
+ * [applyOpenedSessionResult] when the history request returns.
+ */
+internal fun EntryStateHolder.applyOpenedSessionMetadata(
+    current: SessionListUiState,
+    session: Session,
+    sessionId: SessionId,
+): SessionListUiState {
+    val authoritativeSession = session.toSessionItemUiState()
+    val knownRuns = sessionRuns[sessionId].orEmpty()
+    val latestObservation = latestObservationState(sessionId, knownRuns)
+    val recoveryLoadBlocksSession =
+        recoveryLoadPending ||
+            recoveryLoadFailed ||
+            sessionId in connectionRecoverySessionCounts ||
+            sessionId in recoverySessionCounts
+    val sessionWithoutHistory =
+        OpenedSession(session = session, history = SessionHistory(sessionId, emptyList()))
+    return current.copy(
+        sessions =
+            current.sessions
+                .map { item -> if (item.id == sessionId) authoritativeSession else item }
+                .orderedSessions(),
+        sessionMutations = retainSessionMutation(current.sessionMutations, sessionId),
+        isStale = false,
+        isUnavailable = false,
+        openedSession =
+            sessionWithoutHistory.toOpenSessionUiState(
+                OpenSessionOverlay(
+                    messages = emptyList(),
+                    composerText = restoredSessionDraft(sessionId),
+                    sendErrorCategory = sendErrorCategoryFor(sessionId),
+                    hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId) || recoveryLoadBlocksSession,
+                    isSending = runJobs.containsKey(sessionId),
+                    isRefreshing = true,
+                ),
+            ).withRunSnapshot(knownRuns, latestObservation),
+        errorCategory = null,
+    )
+}
+
 internal suspend fun EntryStateHolder.applyOpenedSessionOutcome(
     gateway: SessionGatewayPort,
     request: SessionRequestContext,
@@ -154,11 +210,13 @@ internal suspend fun EntryStateHolder.applyOpenedSessionOutcome(
 internal fun EntryStateHolder.showSessionOpenFailure(
     requestGeneration: Long,
     sessionId: SessionId,
+    openedSessionToRestore: OpenSessionUiState?,
 ) {
     updateCurrentSessionRequest(requestGeneration) { current ->
         current.copy(
             sessionMutations = retainRenameDraft(current.sessionMutations, sessionId),
             openingSessionId = null,
+            openedSession = openedSessionToRestore,
             isStale = true,
             isUnavailable = true,
             errorCategory = SessionListErrorCategory.SESSION_UNAVAILABLE,

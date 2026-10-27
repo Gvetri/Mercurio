@@ -150,7 +150,14 @@ private fun ColumnScope.SessionDetailTranscript(
             )
             Spacer(modifier = Modifier.height(8.dp))
             if (displayedMessages.isEmpty()) {
-                Text(text = "No messages in this Session.")
+                Text(
+                    text =
+                        if (detail.content.isRefreshing) {
+                            "Loading Session history…"
+                        } else {
+                            "No messages in this Session."
+                        },
+                )
             }
         }
         items(
