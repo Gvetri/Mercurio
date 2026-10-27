@@ -72,7 +72,9 @@ class EntryStateHolderSessionActionsTest {
 
         verify(holder)
         holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-        awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
+        awaitState(holder, "open conversation") {
+            it.sessionList?.openingSessionId == null && it.sessionList?.openedSession != null
+        }
 
         holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
         awaitState(holder, "reloaded list") {
