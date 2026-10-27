@@ -7,6 +7,7 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
+import org.mercurio.client.feature.entry.domain.isTerminal
 
 internal fun EntryStateHolder.updateUnconfirmedRunSessionUi(
     sessionId: SessionId,
@@ -78,6 +79,11 @@ internal fun EntryStateHolder.showRunReconciliationFailure(
             return@synchronized
         }
         val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
+        // The Run stream already settled this Run with a terminal event. A failed
+        // second-opinion status call must not downgrade a known result to Uncertain.
+        if (observationStateFor(sessionId, runId)?.state?.isTerminal() == true) {
+            return@synchronized
+        }
         val knownRun =
             visibleSessionRuns(sessionId).lastOrNull { it.id == runId }
                 ?: Run(runId, sessionId, UNCERTAIN_RUN_STATUS)
