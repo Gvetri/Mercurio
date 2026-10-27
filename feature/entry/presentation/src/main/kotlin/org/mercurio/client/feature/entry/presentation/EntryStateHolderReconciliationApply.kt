@@ -27,6 +27,9 @@ internal fun EntryStateHolder.applyReconciliationLocked(
         val decision = reconciliation.decision
         val terminalRunIds = terminalRunIdsFor(request.sessionId, reconciliation)
         val session = visibleSessionTarget(request.sessionId, shouldUpdateVisibleUi)
+        if (decision == RunReconciliationDecision.CONFIRMED && !run.isActive()) {
+            recordTerminalPollReconciliation(request.sessionId, run)
+        }
         if (historyGenerationMatches(request.sessionId, request.historyGeneration)) {
             val release = recordReconciledRunState(request.sessionId, reconciliation, terminalRunIds)
             if (decision == RunReconciliationDecision.CONFIRMED) {

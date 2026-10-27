@@ -15,6 +15,19 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 import org.mercurio.client.feature.entry.domain.isTerminal
 
+internal fun EntryStateHolder.recordTerminalPollReconciliation(
+    sessionId: SessionId,
+    run: Run,
+) {
+    authoritativeSessionRuns[sessionId] =
+        mergeRuns(authoritativeSessionRuns[sessionId].orEmpty(), listOf(run))
+    if (isLocallyOwnedRun(sessionId, run.id)) {
+        sessionRuns[sessionId] = mergeRuns(sessionRuns[sessionId].orEmpty(), listOf(run))
+    }
+    forgetObservationState(sessionId, run.id)
+    updateVisibleRunState(sessionId)
+}
+
 internal fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunReconcileContext) {
     val recoveryEntries =
         try {
