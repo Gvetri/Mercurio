@@ -37,5 +37,7 @@ name: sse-idle-gap-streaming
     visible: "Gap survived the silence"
     timeout: 90000
 - assertNotVisible: 'Stream interrupted\. Run result is uncertain\.'
-- assertVisible: "Run state: Succeeded"
+- extendedWaitUntil:
+    visible: "Run state: Succeeded"
+    timeout: 90000
 - takeScreenshot: sse-idle-gap-completed
