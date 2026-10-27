@@ -209,12 +209,12 @@ class RunReconciliationTerminalPollTest {
             historyGenerations[session.id] = (historyGenerations[session.id] ?: 0L) + 1L
 
             gateway.releaseStatus.countDown()
-            awaitReconciliationCondition { gateway.statusRequests.size >= 2 }
-
-            val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals(RunPresentationState.SUCCEEDED, opened.latestRunState)
-            assertEquals(null, opened.activeResponse)
-            assertTrue(opened.messages.any { message -> message.content == "Stored final reply" })
+            awaitReconciliationState(holder) {
+                val opened = it.sessionList?.openedSession
+                opened?.latestRunState == RunPresentationState.SUCCEEDED &&
+                    opened.activeResponse == null &&
+                    opened.messages.any { message -> message.content == "Stored final reply" }
+            }
         } finally {
             gateway.releaseStatus.countDown()
             holder.close()
