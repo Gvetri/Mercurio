@@ -194,6 +194,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(restartedHolder, endpoint, hasSavedEndpoint = true)
                 openSession(restartedHolder, gateway.session.id)
+                awaitCondition { gateway.statusRequests.contains(gateway.activeRun.id) }
                 awaitState(restartedHolder) {
                     it.sessionList?.openedSession?.let { opened -> !opened.isReconciliationInProgress } == true
                 }
