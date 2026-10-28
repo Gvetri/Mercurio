@@ -31,15 +31,34 @@ class SessionHistoryStateTest {
 
     @Test
     fun invalid_optional_timestamp_is_not_invented() {
-        val mapped =
-            GatewayHistoryMessage(
-                id = "message-1",
-                role = "assistant",
-                content = "Reply",
-                timestamp = "not-a-timestamp",
-            ).toSessionMessageUiState()
+        assertNull(mappedTimestamp("not-a-timestamp"))
+    }
 
-        assertNull(mapped.timestamp)
+    @Test
+    fun both_pinned_timestamp_forms_produce_a_usable_parsed_value() {
+        val expectedByForm =
+            mapOf(
+                "2026-09-08T20:00:00Z" to Instant.parse("2026-09-08T20:00:00Z"),
+                "1757325600" to Instant.ofEpochSecond(1757325600L),
+                "1757325600.0" to Instant.ofEpochSecond(1757325600L),
+                "1790949057.5903823" to Instant.ofEpochSecond(1790949057L, 590382300L),
+            )
+
+        expectedByForm.forEach { (timestamp, expected) ->
+            assertEquals(timestamp, expected, mappedTimestamp(timestamp))
+        }
+    }
+
+    @Test
+    fun non_finite_numeric_timestamps_stay_unavailable() {
+        listOf("1e309", "NaN", "Infinity").forEach { timestamp ->
+            assertNull(timestamp, mappedTimestamp(timestamp))
+        }
+    }
+
+    @Test
+    fun missing_timestamp_is_never_fabricated() {
+        assertNull(mappedTimestamp(null))
     }
 
     @Test
@@ -78,4 +97,12 @@ class SessionHistoryStateTest {
 
         assertEquals("", state.openedSession?.composerText)
     }
+
+    private fun mappedTimestamp(raw: String?): Instant? =
+        GatewayHistoryMessage(
+            id = "message-1",
+            role = "assistant",
+            content = "Reply",
+            timestamp = raw,
+        ).toSessionMessageUiState().timestamp
 }

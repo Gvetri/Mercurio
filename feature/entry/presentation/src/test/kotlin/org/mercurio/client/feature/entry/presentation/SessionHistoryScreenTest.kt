@@ -87,6 +87,43 @@ class SessionHistoryScreenTest {
     }
 
     @Test
+    fun epoch_second_timestamp_from_the_gateway_reaches_the_rendered_timestamp_line() {
+        val message =
+            GatewayHistoryMessage(
+                id = "message-epoch",
+                role = "assistant",
+                content = "Answer",
+                timestamp = "1757325600.0",
+            ).toSessionMessageUiState()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Gateway connected",
+                            supportingText = "Connected",
+                            actionLabel = "Connected",
+                            isConnected = true,
+                            sessionList =
+                                SessionListUiState(
+                                    openedSession =
+                                        OpenSessionUiState(
+                                            session =
+                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
+                                            messages = listOf(message),
+                                        ),
+                                ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Answer").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNode(hasText("Timestamp:", substring = true)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun refreshing_history_preserves_content_and_shows_refreshing_state() {
         composeTestRule.setContent {
             HermesTheme {
