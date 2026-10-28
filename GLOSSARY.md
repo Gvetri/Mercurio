@@ -40,6 +40,13 @@ _Avoid_: provider selection, model config
 An optional per-run hint for how much reasoning the server applies, offered with Model selection.
 _Avoid_: thinking budget, effort level
 
+**Deep link**:
+A link in the app's own scheme that opens a Session or the composer from outside the app.
+_Avoid_: URI handler, app link, intent URL
+
+**Canonical scheme**:
+The one URI scheme the client owns (`mercurio`). Deep links use it; a future interactive sign-in redirect reuses it.
+_Avoid_: custom scheme, protocol
 
 **Inline image**:
 An image referenced by URL inside Message content and rendered in the transcript.
