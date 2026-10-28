@@ -57,17 +57,26 @@ data class OpenedSession(
 class OpenSession(
     private val gateway: SessionGatewayPort,
 ) {
-    fun execute(sessionId: SessionId): OpenedSession {
+    fun execute(sessionId: SessionId): OpenedSession =
+        OpenedSession(
+            session = executeSession(sessionId),
+            history = executeHistory(sessionId),
+        )
+
+    fun executeSession(sessionId: SessionId): Session {
         val session = gateway.openSession(sessionId)
         if (session.id != sessionId) {
             throw invalidResponse("session.id does not match the requested Session")
         }
+        return session
+    }
 
+    fun executeHistory(sessionId: SessionId): SessionHistory {
         val history = gateway.loadSessionHistory(sessionId)
         if (history.sessionId != sessionId) {
             throw invalidResponse("session_id does not match the requested Session")
         }
-        return OpenedSession(session, history)
+        return history
     }
 
     private fun invalidResponse(detail: String): GatewayException =

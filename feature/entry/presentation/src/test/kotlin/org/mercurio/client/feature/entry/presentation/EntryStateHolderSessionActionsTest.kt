@@ -72,7 +72,9 @@ class EntryStateHolderSessionActionsTest {
 
         verify(holder)
         holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-        awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
+        awaitState(holder, "open conversation") {
+            it.sessionList?.openingSessionId == null && it.sessionList?.openedSession != null
+        }
 
         holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
         awaitState(holder, "reloaded list") {
@@ -150,6 +152,9 @@ class EntryStateHolderSessionActionsTest {
             awaitState(holder, "opened Session") {
                 it.sessionList?.openedSession != null
             }
+            awaitState(holder, "initial history load") {
+                it.sessionList?.openedSession?.isRefreshing == false
+            }
 
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
             assertTrue(gateway.refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
@@ -184,6 +189,9 @@ class EntryStateHolderSessionActionsTest {
             holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
             awaitState(holder, "opened Session") {
                 it.sessionList?.openedSession != null
+            }
+            awaitState(holder, "initial history load") {
+                it.sessionList?.openedSession?.isRefreshing == false
             }
 
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
@@ -223,6 +231,9 @@ class EntryStateHolderSessionActionsTest {
             holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
             awaitState(holder, "opened Session") {
                 it.sessionList?.openedSession != null
+            }
+            awaitState(holder, "initial history load") {
+                it.sessionList?.openedSession?.isRefreshing == false
             }
 
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
