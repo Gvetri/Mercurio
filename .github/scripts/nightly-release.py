@@ -141,7 +141,7 @@ def report_validation():
         "failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale",
     }, "Cannot report a successful or unfinished validation")
     jobs = pages(f"actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs")
-    stages = {"unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"}
+    stages = {"unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys", "coverage_mutation"}
     names = POLICY["required_check_names"]()
     results = {}
     additional = []

@@ -1440,7 +1440,12 @@ class QualityGateConfigurationTest {
             "Issue creation must require a non-successful API 24 result.",
             issueJob.contains("needs.api24_instrumentation.result != 'success'"),
         )
-        assertTrue("Issue publication must wait for every required test job.", issueJob.contains("needs: [unit_tests, compose_test, api24_instrumentation, maestro_journeys]"))
+        assertTrue(
+            "Issue publication must wait for every required test job, including the nightly-verified coverage lane.",
+            issueJob.contains(
+                "needs: [unit_tests, compose_test, api24_instrumentation, maestro_journeys, coverage_mutation]",
+            ),
+        )
         listOf("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys").forEach { job ->
             assertTrue("Issue creation must include failures in $job.", issueJob.contains("needs.$job.result != 'success'"))
         }

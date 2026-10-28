@@ -92,10 +92,12 @@ manual dispatch never consult the decision, so the Nightly signing chain always 
 `main` tip with the complete gate. An unreadable changed-file answer fails closed: the detector job
 fails, the heavy lanes run, and the aggregate reports the failure.
 
-On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`, or
-`maestro-journeys` does not succeed, the `create-nightly-failure-issue` job creates or updates one
-issue from run metadata only: it never downloads or copies test logs into public issue content, and
-it reads the exact issue back after the write. The lane is deliberately not a check. It is the only
+On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`,
+`maestro-journeys`, or `coverage-mutation` does not succeed, the `create-nightly-failure-issue` job
+creates or updates one issue from run metadata only: it never downloads or copies test logs into
+public issue content, and it reads the exact issue back after the write. The issue carries the
+`ready-for-agent` label and the `<!-- nightly-run:<id> -->` marker, so the scheduled fixer takes it
+like any other nightly report. The lane is deliberately not a check. It is the only
 job that requests a write scope, and it runs on the schedule alone, so no write token ever reaches
 pull-request code.
 
