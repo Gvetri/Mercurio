@@ -223,10 +223,9 @@ internal fun EntryStateHolder.showSessionOpenFailure(
         current.copy(
             sessionMutations = retainRenameDraft(current.sessionMutations, sessionId),
             openingSessionId = null,
-            openedSession = openedSessionToRestore,
+            openedSession = openedSessionToRestore ?: cachedOpenedSession(current, sessionId),
             isStale = true,
             isUnavailable = true,
-            openedSession = current.openedSession ?: cachedOpenedSession(current, sessionId),
             errorCategory = SessionListErrorCategory.SESSION_UNAVAILABLE,
         )
     }

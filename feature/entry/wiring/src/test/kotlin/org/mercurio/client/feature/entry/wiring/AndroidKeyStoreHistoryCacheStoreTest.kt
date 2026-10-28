@@ -1,18 +1,18 @@
 package org.mercurio.client.feature.entry.wiring
 
 import android.content.Context
-import org.mercurio.client.feature.entry.data.AesGcmHistoryCacheCipher
-import org.mercurio.client.feature.entry.data.BoundedHistoryCacheStore
-import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
-import org.mercurio.client.feature.entry.domain.HistoryCacheKey
-import org.mercurio.client.feature.entry.domain.HistoryCacheStore
-import org.mercurio.client.feature.entry.domain.SessionId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.data.AesGcmHistoryCacheCipher
+import org.mercurio.client.feature.entry.data.BoundedHistoryCacheStore
+import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
+import org.mercurio.client.feature.entry.domain.HistoryCacheKey
+import org.mercurio.client.feature.entry.domain.HistoryCacheStore
+import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config

@@ -19,6 +19,7 @@ import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 
+@Suppress("LargeClass")
 class JourneyGatewayProcessTest {
     @Test
     fun every_journey_serves_valid_capability_json_before_device_execution() {

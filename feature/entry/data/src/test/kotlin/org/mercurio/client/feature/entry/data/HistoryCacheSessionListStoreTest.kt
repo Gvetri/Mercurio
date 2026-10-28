@@ -1,13 +1,13 @@
 package org.mercurio.client.feature.entry.data
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.HISTORY_CACHE_MAX_MESSAGES
 import org.mercurio.client.feature.entry.domain.HistoryCacheKey
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionId
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
 import java.time.Duration
 import java.time.Instant
 import javax.crypto.spec.SecretKeySpec

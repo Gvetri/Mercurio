@@ -5,11 +5,6 @@ import android.content.pm.ApplicationInfo
 import androidx.annotation.XmlRes
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
-import org.mercurio.client.feature.entry.domain.HistoryCacheKey
-import org.mercurio.client.feature.entry.domain.SessionId
-import org.mercurio.client.feature.entry.wiring.AndroidKeyStoreHistoryCacheStorage
-import org.mercurio.client.feature.entry.wiring.buildHistoryCacheStore
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,6 +14,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
+import org.mercurio.client.feature.entry.domain.HistoryCacheKey
+import org.mercurio.client.feature.entry.domain.SessionId
+import org.mercurio.client.feature.entry.wiring.AndroidKeyStoreHistoryCacheStorage
+import org.mercurio.client.feature.entry.wiring.buildHistoryCacheStore
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
 import java.nio.charset.StandardCharsets
