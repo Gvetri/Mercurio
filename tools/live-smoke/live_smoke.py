@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local-only exact-APK live smoke gate for hermes-native-client.
+"""Local-only exact-APK live smoke gate for mercurio.
 
 Subcommands
 -----------

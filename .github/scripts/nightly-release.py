@@ -212,7 +212,7 @@ def prepare(clock=time):
 
 
 SIGNER = runpy.run_path(str(Path(__file__).with_name("sign-release-apk.py")))
-ASSETS = ("hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json")
+ASSETS = ("mercurio.apk", "SHA256SUMS", "signing-metadata.json")
 
 
 def verify_artifact(directory, certificate, evidence, code, signing_run_id=None, signing_run_attempt=None):
@@ -227,7 +227,7 @@ def verify_artifact(directory, certificate, evidence, code, signing_run_id=None,
     require(metadata["signing_run_attempt"] == (signing_run_attempt if signing_run_attempt is not None else POLICY["positive_integer"](os.environ.get("GITHUB_RUN_ATTEMPT"))), "APK belongs to an earlier signing attempt")
     tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/35.0.0"
     environment = {name: os.environ[name] for name in ("PATH", "JAVA_HOME")}
-    apk = directory / "hermes-native-client.apk"
+    apk = directory / "mercurio.apk"
     actual = SIGNER["apk_metadata"](apk, tools, environment)
     require(actual["version_code"] == code and actual["version_name"] == f"nightly-{code}-{evidence['source_sha'][:12]}", "APK version does not match the Nightly")
     require(set(actual["native_abis"]) <= {"arm64-v8a"}, "Nightly APK is not an ARM64 device build")
@@ -239,7 +239,7 @@ def verify_artifact(directory, certificate, evidence, code, signing_run_id=None,
     require(signers == [fingerprint] and metadata["certificate_sha256"] == fingerprint, "Nightly signing identity is inconsistent")
     checksum = SIGNER["digest"](apk)
     require(metadata["apk_sha256"] == checksum, "Nightly APK checksum changed")
-    require((directory / "SHA256SUMS").read_text() == f"{checksum}  hermes-native-client.apk\n", "Nightly checksum file is inconsistent")
+    require((directory / "SHA256SUMS").read_text() == f"{checksum}  mercurio.apk\n", "Nightly checksum file is inconsistent")
     return metadata
 
 

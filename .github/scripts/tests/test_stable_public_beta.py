@@ -204,7 +204,7 @@ class StableBetaTest(unittest.TestCase):
             {"id": index, "name": name, "size": (signed / name).stat().st_size,
              "state": "uploaded", "digest": "sha256:" + hashlib.sha256((signed / name).read_bytes()).hexdigest(),
              "download_count": 0}
-            for index, name in enumerate(("hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json"), 1)
+            for index, name in enumerate(("mercurio.apk", "SHA256SUMS", "signing-metadata.json"), 1)
         ]
         store = self.provider / "nightly-assets"
         store.mkdir()
@@ -274,14 +274,14 @@ class StableBetaTest(unittest.TestCase):
         for private in ("emulator-5554", "OPENCODE_GO_API_KEY", "ls-20261002T100000Z-abc123.mp4.gpg",
                         "/home/example", "recipient_fingerprint", "container_removed"):
             self.assertNotIn(private, release["body"])
-        self.assertEqual({"hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json"},
+        self.assertEqual({"mercurio.apk", "SHA256SUMS", "signing-metadata.json"},
                          {item["name"] for item in release["assets"]})
         public_metadata = json.loads((self.provider / "assets/signing-metadata.json").read_text())
         self.assertEqual({"source_sha", "validation_run_id", "validation_run_attempt", "signing_run_id",
                           "signing_run_attempt", "version_code", "version_name", "native_abis", "apk_sha256",
                           "certificate_sha256"}, set(public_metadata))
-        self.assertEqual((self.provider / "nightly-assets/hermes-native-client.apk").read_bytes(),
-                         (self.provider / "assets/hermes-native-client.apk").read_bytes())
+        self.assertEqual((self.provider / "nightly-assets/mercurio.apk").read_bytes(),
+                         (self.provider / "assets/mercurio.apk").read_bytes())
         self.assertEqual(["download", "download", "create", "upload", "download", "edit"],
                          (self.provider / "operations").read_text().splitlines())
         result, _ = self.command("publish")

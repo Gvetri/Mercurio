@@ -278,7 +278,7 @@ def prepare(declaration_path, smoke_path, certificate, staging=None):
         metadata = verify_assets(downloaded, release, certificate, validation, code, run_id, attempt)
         smoke = SMOKE["load_evidence"](smoke_path)
         problems = SMOKE["validate_evidence"](smoke, expected_apk_sha256=metadata["apk_sha256"],
-                                               actual_apk_sha256=file_hash(downloaded / "hermes-native-client.apk"))
+                                               actual_apk_sha256=file_hash(downloaded / "mercurio.apk"))
         require(not problems, "Exact APK Live Smoke evidence is incomplete or contradictory")
         asset_hashes = {name: file_hash(downloaded / name) for name in NIGHTLY["ASSETS"]}
     attempt = POLICY["positive_integer"](os.environ.get("GITHUB_RUN_ATTEMPT"))

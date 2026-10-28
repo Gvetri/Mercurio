@@ -1,0 +1,75 @@
+{
+  "name": "sse-idle-gap-streaming",
+  "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+  "port": 18443,
+  "tls": true,
+  "capabilities": [
+    "sessions",
+    "session_create",
+    "session",
+    "session_update",
+    "session_delete",
+    "session_messages",
+    "runs",
+    "run_status",
+    "run_events"
+  ],
+  "sessions": [
+    {
+      "id": "session-alpha",
+      "title": "Alpha Session",
+      "preview": "Synthetic preview",
+      "pinned": false
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "run-fast-first",
+      "session_id": "session-alpha",
+      "create_status": "started",
+      "observation": [
+        {
+          "type": "tool.started"
+        },
+        {
+          "type": "run.completed"
+        }
+      ],
+      "final_status": "completed",
+      "terminal_history": [
+        {
+          "id": "message-first-reply",
+          "role": "assistant",
+          "content": "First reply lands"
+        }
+      ]
+    },
+    {
+      "run_id": "run-idle-gap",
+      "session_id": "session-alpha",
+      "create_status": "started",
+      "live_framing": true,
+      "idle_gap_ms": 12000,
+      "observation": [
+        {
+          "type": "tool.started"
+        },
+        {
+          "type": "message.delta",
+          "delta": "Gap survived the silence"
+        },
+        {
+          "type": "run.completed"
+        }
+      ],
+      "final_status": "completed",
+      "terminal_history": [
+        {
+          "id": "message-gap-reply",
+          "role": "assistant",
+          "content": "Gap survived the silence"
+        }
+      ]
+    }
+  ]
+}

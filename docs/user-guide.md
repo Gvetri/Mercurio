@@ -1,6 +1,6 @@
-# Hermes Native Client user guide
+# Mercurio user guide
 
-Hermes Native Client is an independent Android application. It is a native shell for connecting to
+Mercurio is an independent Android application. It is a native shell for connecting to
 one pre-existing, compatible Hermes Gateway that you already operate. It does not embed a local
 Hermes runtime, an agent execution engine, a desktop web interface, an Electron application, or a
 WebView wrapper.
@@ -27,12 +27,12 @@ install one:
 1. Open the repository's [releases page](https://github.com/Gvetri/hermes-native-client/releases).
 2. Pick the newest release named **Stable Public Beta vX.Y.Z**. A release named **Nightly** is a
    development snapshot, not a stable release.
-3. Download `hermes-native-client.apk` and `SHA256SUMS` from that release.
+3. Download `mercurio.apk` and `SHA256SUMS` from that release.
 4. Verify the APK before installing it:
 
    ```text
    sha256sum --check SHA256SUMS
-   apksigner verify --print-certs hermes-native-client.apk
+   apksigner verify --print-certs mercurio.apk
    ```
 
    The reported signer certificate digest must equal the digest published in the release notes and
@@ -156,7 +156,7 @@ verification, a Session-list load, or a Run submission succeeded, failed, or was
 
 ## Tested revision and compatibility
 
-Hermes Native Client is validated against the immutable Hermes revision
+Mercurio is validated against the immutable Hermes revision
 `d9833c5615b80e199a174cd67d90ab430695a972`, the repository's pinned fixture provenance. Each
 Stable Public Beta release states its own compatibility limits in its release notes, and the client
 claims no compatibility beyond that published statement. The artifact package, the published

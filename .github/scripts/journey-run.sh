@@ -5,13 +5,65 @@ workspace="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
 evidence_dir="$workspace/artifacts/journey-evidence"
 mkdir -p "$evidence_dir"
 
-keystore="$workspace/fixtures/hermes/journey-tls/journey-gateway.p12"
-ca_file="$workspace/fixtures/hermes/journey-tls/journey-ca.pem"
+keystore="$workspace/fixtures/mercurio/journey-tls/journey-gateway.p12"
+ca_file="$workspace/fixtures/mercurio/journey-tls/journey-ca.pem"
 apk="$workspace/app/build/outputs/apk/debug/app-debug.apk"
-scenario_dir="$workspace/fixtures/hermes/journey/scenarios"
-flow_dir="$workspace/fixtures/hermes/journey/flows"
+scenario_dir="$workspace/fixtures/mercurio/journey/scenarios"
+flow_dir="$workspace/fixtures/mercurio/journey/flows"
 
 log() { printf '%s\n' "$*"; }
+
+journeys=(
+    connection
+    session-list-first
+    empty-sessions
+    pending-creation
+    session-lifecycle
+    pagination-search
+    active-run-isolation
+    streaming
+    live-streaming
+    interrupted-sse-refetch
+    sse-idle-gap-streaming
+    composer-stop
+    terminal-success
+    terminal-failure
+    explicit-retry
+    stale-recoverable
+    failed-offline-send
+    offline-session-list
+    markdown-links
+    markdown-blocks
+    capabilities-additive
+    capabilities-missing-required
+    accessibility-controls
+    settings
+    settings-cache-clear
+    connection-removal-purge
+    cache-clear-repopulates
+    offline-cache-read
+    cache-run-isolation
+    diagnostics-recording
+    confirmed-send
+    model-picker-advertised
+    model-picker-absent
+    model-picker-refusal
+    model-catalog-row-mismatch
+)
+
+shard_index="${1:-}"
+shard_total="${2:-}"
+if [[ -n "$shard_index" || -n "$shard_total" ]]; then
+    if [[ -z "$shard_index" || -z "$shard_total" ]] \
+        || ! [[ "$shard_index" =~ ^[1-9][0-9]*$ ]] \
+        || ! [[ "$shard_total" =~ ^[1-9][0-9]*$ ]] \
+        || [ "$shard_index" -gt "$shard_total" ] \
+        || [ "$shard_total" -gt "${#journeys[@]}" ]; then
+        log "Invalid shard selection: pass a 1-based shard index and shard total within the ${#journeys[@]} pinned journeys."
+        exit 1
+    fi
+    log "Running deterministic journey shard ${shard_index} of ${shard_total}."
+fi
 
 gateway_pid=""
 active_journey=""
@@ -85,13 +137,25 @@ adb push "$ca_file" "$ca_device_path" >/dev/null
 adb shell chmod 644 "$ca_device_path"
 adb reboot >/dev/null || true
 adb wait-for-device
-for _ in $(seq 1 120); do
-    if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+boot_ok=""
+for boot_attempt in 1 2; do
+    for _ in $(seq 1 120); do
+        if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+            boot_ok=1
+            break
+        fi
+        sleep 2
+    done
+    if [ "$boot_ok" = "1" ]; then
         break
     fi
-    sleep 2
+    if [ "$boot_attempt" = "1" ]; then
+        log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."
+        adb reboot >/dev/null || true
+        adb wait-for-device
+    fi
 done
-if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; then
+if [ "$boot_ok" != "1" ]; then
     log "Emulator did not boot after installing the TLS trust store."
     exit 1
 fi
@@ -123,55 +187,22 @@ unzip -j -o "$workspace/maestro-cli/maestro/lib/maestro-client.jar" \
     "maestro-app.apk" "maestro-server.apk" -d "$driver_dir" >/dev/null
 
 log "Preparing the journey Gateway classpath."
-( cd "$workspace" && ./gradlew :fixtures:hermes:runner:journeyGatewayClasspath --console=plain -q )
-classpath_file="$workspace/fixtures/hermes/runner/build/journey-classpath.txt"
+( cd "$workspace" && ./gradlew :fixtures:mercurio:runner:journeyGatewayClasspath --console=plain -q )
+classpath_file="$workspace/fixtures/mercurio/runner/build/journey-classpath.txt"
 classpath="$(cat "$classpath_file")"
 
-journeys=(
-    connection
-    session-list-first
-    empty-sessions
-    pending-creation
-    session-lifecycle
-    pagination-search
-    active-run-isolation
-    streaming
-    live-streaming
-    interrupted-sse-refetch
-    composer-stop
-    terminal-success
-    terminal-failure
-    explicit-retry
-    stale-recoverable
-    failed-offline-send
-    offline-session-list
-    markdown-links
-    markdown-blocks
-    capabilities-additive
-    capabilities-missing-required
-    accessibility-controls
-    settings
-    settings-cache-clear
-    connection-removal-purge
-    cache-clear-repopulates
-    offline-cache-read
-    cache-run-isolation
-    diagnostics-recording
-    confirmed-send
-    model-picker-advertised
-    model-picker-absent
-    model-picker-refusal
-    model-catalog-row-mismatch
-)
-
-for journey in "${journeys[@]}"; do
+for journey_slot in "${!journeys[@]}"; do
+    journey="${journeys[$journey_slot]}"
+    if [[ -n "$shard_total" ]] && [ $((journey_slot % shard_total)) -ne $((shard_index - 1)) ]; then
+        continue
+    fi
     log "Journey: $journey"
     journey_attempt=1
     while :; do
     gateway_log="$evidence_dir/${journey}-gateway.log"
     java -Dfixture.repositoryRoot="$workspace" \
         -cp "$classpath" \
-        org.hermesnative.client.fixture.journey.JourneyGatewayMainKt \
+        org.mercurio.client.fixture.journey.JourneyGatewayMainKt \
         "$scenario_dir/$journey.json" "$keystore" >"$gateway_log" 2>&1 &
     gateway_pid=$!
     active_journey="$journey"
@@ -206,7 +237,7 @@ for journey in "${journeys[@]}"; do
     }
     if ! printf '%s' "$capabilities_body" | python3 \
         "$workspace/.github/scripts/verify-journey-capabilities.py" \
-        "$workspace/fixtures/hermes/contracts/capabilities/success.json" "$journey"; then
+        "$workspace/fixtures/mercurio/contracts/capabilities/success.json" "$journey"; then
         log "Journey Gateway capability check failed for $journey."
         exit 1
     fi
@@ -255,7 +286,7 @@ for journey in "${journeys[@]}"; do
 
     java -Dfixture.repositoryRoot="$workspace" \
         -cp "$classpath" \
-        org.hermesnative.client.fixture.journey.JourneyVerifierKt \
+        org.mercurio.client.fixture.journey.JourneyVerifierKt \
         "https://127.0.0.1:18443/__fixture/telemetry" "$journey" "$keystore" ||
         {
             cp -r "$HOME/.maestro/tests" "$evidence_dir/${journey}-maestro-tests" 2>/dev/null || true

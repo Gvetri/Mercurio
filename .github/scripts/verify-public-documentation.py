@@ -17,9 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 README = Path("README.md")
 USER_GUIDE = Path("docs/user-guide.md")
 RELEASE_ARTIFACTS = Path("docs/release-artifacts.md")
-PINNED_FIXTURE = Path("fixtures/hermes/pinned-fixture.properties")
+PINNED_FIXTURE = Path("fixtures/mercurio/pinned-fixture.properties")
 DIAGNOSTICS_SURFACE = Path(
-    "feature/entry/presentation/src/main/kotlin/org/hermesnative/client/feature/entry/presentation"
+    "feature/entry/presentation/src/main/kotlin/org/mercurio/client/feature/entry/presentation"
     "/LocalDiagnosticsScreen.kt"
 )
 
@@ -125,7 +125,7 @@ REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS = (
 )
 
 REQUIRED_RELEASE_ARTIFACT_STATEMENTS = (
-    "hermes-native-client.apk",
+    "mercurio.apk",
     "SHA256SUMS",
     "signing-metadata.json",
     "Semantic Version",
@@ -307,7 +307,7 @@ def verify_scope(root):
 
 
 def verify(root):
-    require((root / README).is_file(), "The repository root is not a Hermes Native Client checkout")
+    require((root / README).is_file(), "The repository root is not a Mercurio checkout")
     violations = []
     violations.extend(verify_links(root))
     violations.extend(verify_safety(root))

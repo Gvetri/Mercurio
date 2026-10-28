@@ -92,12 +92,12 @@ def sample_evidence(apk_sha=SHA):
         },
         "device": {
             "serial": "emulator-5554",
-            "avd_name": "hnc-issue29-live",
+            "avd_name": "mercurio-issue29-live",
             "api_level": 35,
             "model": "sdk_gphone64_x86_64",
             "fingerprint": "google/sdk_gphone64",
         },
-        "apk": {"file_name": "app.apk", "sha256": apk_sha, "package": "org.hermesnative.client"},
+        "apk": {"file_name": "app.apk", "sha256": apk_sha, "package": "org.mercurio.client"},
         "turns": {
             "count": 3,
             "items": [
@@ -147,8 +147,8 @@ def sample_evidence(apk_sha=SHA):
                 "host_scratch": {"scanned": True, "files": 1},
                 "gateway_container_data": {"scanned": True, "files": 2},
                 "device_app_storage": {
-                    "package": "org.hermesnative.client",
-                    "path": "/data/user/0/org.hermesnative.client",
+                    "package": "org.mercurio.client",
+                    "path": "/data/user/0/org.mercurio.client",
                     "serial": "emulator-5554",
                     "pulled": True, "scanned": True, "files": 1,
                 },

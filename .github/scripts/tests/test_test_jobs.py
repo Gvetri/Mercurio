@@ -15,11 +15,37 @@ WORKFLOW = ROOT / ".github/workflows/quality-gate.yml"
 JOURNEY_RUNNER = ROOT / ".github/scripts/journey-run.sh"
 JOURNEY_RETRY_TARGET = "session-lifecycle"
 JOURNEY_MAX_ATTEMPTS = 2
+MAESTRO_SHARD_TOTAL = 3
+MAESTRO_SHARD_KEYS = tuple(f"maestro_shard_{shard}" for shard in range(1, MAESTRO_SHARD_TOTAL + 1))
+MAESTRO_LANE_NEEDS = (
+    "needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
+    "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, "
+    "coverage_mutation, compose_test]"
+)
 
 
 def parse_journeys(runner_text):
     block = runner_text.split("journeys=(", 1)[1].split("\n)", 1)[0]
     return [line.strip() for line in block.splitlines() if line.strip()]
+
+
+def maestro_region(workflow):
+    return workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
+
+
+def maestro_umbrella_block(workflow):
+    return maestro_region(workflow).split("\n  maestro_shard_1:", 1)[0]
+
+
+def maestro_shard_block(workflow, shard):
+    block = maestro_region(workflow).split(f"  maestro_shard_{shard}:\n", 1)[1]
+    for following in range(shard + 1, MAESTRO_SHARD_TOTAL + 1):
+        block = block.split(f"\n  maestro_shard_{following}:", 1)[0]
+    return block
+
+
+def shard_journeys(journeys, shard):
+    return [journey for slot, journey in enumerate(journeys) if slot % MAESTRO_SHARD_TOTAL == shard - 1]
 
 
 def journey_attempts(journey, *, retried=JOURNEY_RETRY_TARGET, max_attempts=JOURNEY_MAX_ATTEMPTS):
@@ -45,26 +71,110 @@ class TestJobs(unittest.TestCase):
             report_id = "redact_jvm_reports" if job == "unit_tests" else "redact_compose_reports"
             self.assertIn(f"failure() && steps.{report_id}.outcome == 'success'", block)
             self.assertIn("redact-test-reports.py", block)
-        self.assertIn("--tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest", workflow)
+        self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", workflow)
+        self.assertIn("      - buildsrc_contracts", aggregate)
+        contracts_job = workflow.split("  buildsrc_contracts:\n", 1)[1].split("\n  coverage_mutation:", 1)[0]
+        self.assertIn("    name: buildsrc-contracts", contracts_job)
+        self.assertIn("    needs: [ui_paths]", contracts_job)
+        self.assertIn("./gradlew -p buildSrc test", contracts_job)
+        architecture = workflow.split("  architecture_check:\n", 1)[1].split("\n  buildsrc_contracts:", 1)[0]
+        self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
+        self.assertNotIn("./gradlew -p buildSrc test", architecture)
+
+    def test_maestro_journeys_skip_when_a_required_lane_fails_on_a_pull_request(self):
+        workflow = WORKFLOW.read_text()
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            self.assertIn(
+                MAESTRO_LANE_NEEDS,
+                job,
+                "the emulator tail must wait for every lane that concludes before it starts",
+            )
+            self.assertIn(
+                "needs.api24_instrumentation.result == 'success'",
+                job,
+                "the emulator tail must still wait for a passing API 24 suite",
+            )
+            self.assertIn(
+                "(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))",
+                job,
+                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
+            )
+        umbrella = maestro_umbrella_block(workflow)
+        self.assertIn(
+            MAESTRO_LANE_NEEDS.replace("compose_test]", "compose_test, " + ", ".join(MAESTRO_SHARD_KEYS) + "]"),
+            umbrella,
+            "the shard aggregate must wait for every lane and every shard",
+        )
+        self.assertIn(
+            "needs.api24_instrumentation.result == 'success'",
+            umbrella,
+            "the shard aggregate must still wait for a passing API 24 suite",
+        )
+        for lane in (
+            "ui_paths", "formatting", "static_analysis", "detekt", "unit_tests",
+            "fixture_descriptor", "fixture_lifecycle", "fixture_contract", "android_build",
+            "coverage_mutation", "compose_test",
+        ):
+            self.assertIn(
+                f"needs.{lane}.result != 'failure'",
+                umbrella,
+                "a failed required lane must skip the shard aggregate on pull requests exactly as it skipped the unsharded emulator tail",
+            )
+
+    def test_maestro_journeys_aggregates_every_shard(self):
+        workflow = WORKFLOW.read_text()
+        umbrella = maestro_umbrella_block(workflow)
+        self.assertIn("    name: maestro-journeys\n", umbrella)
+        self.assertIn(
+            "SHARD_RESULTS: ${{ needs.maestro_shard_1.result }} ${{ needs.maestro_shard_2.result }}"
+            " ${{ needs.maestro_shard_3.result }}",
+            umbrella,
+        )
+        self.assertIn("Required maestro shard", umbrella)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            self.assertIn(f"    name: maestro-journeys-shard-{shard}-of-3\n", job)
+            self.assertIn(f"MAESTRO_CLI_VERSION: '2.10.0'", job)
+            self.assertIn(f".github/scripts/journey-run.sh {shard} {MAESTRO_SHARD_TOTAL}\n", job)
+            self.assertNotIn(
+                ".github/scripts/journey-run.sh\n",
+                job.replace("chmod +x .github/scripts/journey-run.sh\n", ""),
+                "a shard must never run the unsharded journey set",
+            )
+            self.assertIn(
+                f"name: journey-evidence-shard-{shard}-" + "${{ github.run_id }}-${{ github.run_attempt }}",
+                job,
+            )
+            self.assertIn(
+                f"name: journey-retry-evidence-shard-{shard}-" + "${{ github.run_id }}-${{ github.run_attempt }}",
+                job,
+            )
+        region = maestro_region(workflow)
+        self.assertEqual(MAESTRO_SHARD_TOTAL, region.count(".github/scripts/journey-run.sh "))
+        self.assertEqual(MAESTRO_SHARD_TOTAL, region.count("uses: reactivecircus/android-emulator-runner@v2"))
 
     def test_maestro_failure_artifact_upload_runs_for_continue_on_error_step(self):
         workflow = WORKFLOW.read_text()
-        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
-        upload = job.split("      - name: Upload journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        redaction = job.split("      - name: Redact journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn("        id: journeys", job)
-        self.assertIn("        continue-on-error: true", job)
-        self.assertIn("        id: redact_journey_evidence", redaction)
-        self.assertIn("if: ${{ always() && steps.journeys.outcome != 'success' }}", redaction)
-        self.assertIn("redact-test-reports.py", redaction)
-        self.assertIn("steps.redact_journey_evidence.outcome == 'success'", upload)
-        self.assertIn("uses: actions/upload-artifact@v4", upload)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            upload = job.split("      - name: Upload journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            redaction = job.split("      - name: Redact journey failure evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("        id: journeys", job)
+            self.assertIn("        continue-on-error: true", job)
+            self.assertIn("        id: redact_journey_evidence", redaction)
+            self.assertIn("if: ${{ always() && steps.journeys.outcome != 'success' }}", redaction)
+            self.assertIn("redact-test-reports.py", redaction)
+            self.assertIn("steps.redact_journey_evidence.outcome == 'success'", upload)
+            self.assertIn("uses: actions/upload-artifact@v4", upload)
 
     def test_maestro_journey_emulator_uses_writable_system_for_test_ca(self):
         workflow = WORKFLOW.read_text()
-        journey_step = workflow.split("      - name: Run deterministic Maestro journeys\n", 1)[1]
-        journey_step = journey_step.split("\n      - name: Upload journey failure evidence", 1)[0]
-        self.assertIn("emulator-options: -no-window -no-audio -no-boot-anim -writable-system", journey_step)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            journey_step = job.split("      - name: Run deterministic Maestro journeys\n", 1)[1]
+            journey_step = journey_step.split("\n      - name: Upload journey failure evidence", 1)[0]
+            self.assertIn("emulator-options: -no-window -no-audio -no-boot-anim -writable-system", journey_step)
 
     def test_journey_runner_preinstalls_the_pinned_driver_and_skips_the_dadb_reinstall(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
@@ -100,9 +210,10 @@ class TestJobs(unittest.TestCase):
         self.assertLess(guard, download, "the archive download must be guarded by a cache-friendly presence check")
         self.assertLess(download, unzip)
         workflow = WORKFLOW.read_text()
-        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
-        self.assertIn("uses: actions/cache@v4", job)
-        self.assertIn("key: maestro-cli-${{ env.MAESTRO_CLI_VERSION }}", job)
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            self.assertIn("uses: actions/cache@v4", job)
+            self.assertIn("key: maestro-cli-${{ env.MAESTRO_CLI_VERSION }}", job)
 
     def test_maestro_journey_timeout_preserves_failure_evidence(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
@@ -124,8 +235,9 @@ class TestJobs(unittest.TestCase):
         remount = runner.index("adb remount")
         install = runner.index('adb push "$ca_file"')
         chmod = runner.index("adb shell chmod 644")
-        trust_reboot = runner.rindex("adb reboot")
-        trust_boot = runner.rindex("sys.boot_completed")
+        trust_reboot = runner.index("adb reboot", chmod)
+        trust_boot = runner.index("sys.boot_completed", trust_reboot)
+        retry_reboot = runner.rindex("adb reboot")
         apk_install = runner.index('timeout 180 adb install --no-streaming -r "$apk"')
         self.assertLess(prepare_reboot, prepare_boot)
         self.assertLess(prepare_boot, remount)
@@ -133,23 +245,24 @@ class TestJobs(unittest.TestCase):
         self.assertLess(install, chmod)
         self.assertLess(chmod, trust_reboot)
         self.assertLess(trust_reboot, trust_boot)
-        self.assertLess(trust_boot, apk_install)
+        self.assertLess(trust_boot, retry_reboot)
+        self.assertLess(retry_reboot, apk_install)
 
     def test_journey_runner_captures_telemetry_before_reaping_gateway_after_health_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = Path(directory)
             gateway_pid_file = workspace / "gateway.pid"
-            classpath_file = workspace / "fixtures/hermes/runner/build/journey-classpath.txt"
+            classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
             classpath_file.parent.mkdir(parents=True)
             classpath_file.write_text("fixture-classpath")
             for relative in (
                 ".github/scripts/verify-journey-capabilities.py",
-                "fixtures/hermes/contracts/capabilities/success.json",
+                "fixtures/mercurio/contracts/capabilities/success.json",
             ):
                 copied = workspace / relative
                 copied.parent.mkdir(parents=True, exist_ok=True)
                 copied.write_text((ROOT / relative).read_text())
-            capabilities = json.loads((ROOT / "fixtures/hermes/contracts/capabilities/success.json").read_text())["response"]["body"]
+            capabilities = json.loads((ROOT / "fixtures/mercurio/contracts/capabilities/success.json").read_text())["response"]["body"]
 
             def add_executable(name, body):
                 executable = workspace / name
@@ -254,17 +367,17 @@ class TestJobs(unittest.TestCase):
 
     def _prepare_journey_runner_fixture(self, workspace, fail_journey, fail_times):
         gateway_pid_file = workspace / "gateway.pid"
-        classpath_file = workspace / "fixtures/hermes/runner/build/journey-classpath.txt"
+        classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
         classpath_file.parent.mkdir(parents=True)
         classpath_file.write_text("fixture-classpath")
         for relative in (
             ".github/scripts/verify-journey-capabilities.py",
-            "fixtures/hermes/contracts/capabilities/success.json",
+            "fixtures/mercurio/contracts/capabilities/success.json",
         ):
             copied = workspace / relative
             copied.parent.mkdir(parents=True, exist_ok=True)
             copied.write_text((ROOT / relative).read_text())
-        capabilities = json.loads((ROOT / "fixtures/hermes/contracts/capabilities/success.json").read_text())["response"]["body"]
+        capabilities = json.loads((ROOT / "fixtures/mercurio/contracts/capabilities/success.json").read_text())["response"]["body"]
         count_dir = workspace / "maestro.counts"
         count_dir.mkdir()
 
@@ -444,21 +557,88 @@ class TestJobs(unittest.TestCase):
             evidence_dir = workspace / "artifacts/journey-evidence"
             self.assertFalse((evidence_dir / "empty-sessions-maestro-attempt1.log").exists())
 
+    def test_journey_runner_shard_selection_partitions_the_pinned_journeys(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        observed = {}
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            with tempfile.TemporaryDirectory() as directory:
+                workspace = Path(directory)
+                environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+                result = subprocess.run(
+                    ["bash", str(ROOT / ".github/scripts/journey-run.sh"), str(shard), str(MAESTRO_SHARD_TOTAL)],
+                    cwd=workspace,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertIn(f"Running deterministic journey shard {shard} of {MAESTRO_SHARD_TOTAL}.", result.stdout)
+                self.assertIn("All deterministic journeys passed.", result.stdout)
+                observed[shard] = [line.split("Journey: ", 1)[1] for line in result.stdout.splitlines() if line.startswith("Journey: ")]
+                self.assertEqual(
+                    sorted(set(observed[shard])),
+                    sorted(path.name for path in count_dir.iterdir()),
+                    "every assigned journey must run exactly once in its shard",
+                )
+                self.assertTrue(all((count_dir / path.name).read_text().strip() == "1" for path in count_dir.iterdir()))
+        expected = {shard: shard_journeys(journeys, shard) for shard in observed}
+        for shard in sorted(observed):
+            self.assertEqual(expected[shard], observed[shard], f"shard {shard} must run exactly its assigned journeys")
+        self.assertEqual(set(journeys), {journey for subset in observed.values() for journey in subset})
+        for shard in sorted(observed):
+            for other in sorted(observed):
+                if shard < other:
+                    self.assertFalse(set(observed[shard]) & set(observed[other]), f"shards {shard} and {other} overlap")
+
+    def test_journey_runner_rejects_invalid_shard_selections(self):
+        for arguments in (("0", "3"), ("4", "3"), ("x", "3"), ("2",), ("2", "0"), ("", "3")):
+            with self.subTest(arguments=arguments):
+                with tempfile.TemporaryDirectory() as directory:
+                    workspace = Path(directory)
+                    environment, _ = self._prepare_journey_runner_fixture(workspace, "none", 0)
+                    result = subprocess.run(
+                        ["bash", str(ROOT / ".github/scripts/journey-run.sh"), *arguments],
+                        cwd=workspace,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn("Invalid shard selection", result.stdout)
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), "2", "99"],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("Invalid shard selection", result.stdout)
+            self.assertIn("30 pinned journeys", result.stdout)
+            self.assertNotIn("Journey:", result.stdout)
+
     def test_journey_retry_evidence_uploads_for_recovered_runs(self):
         workflow = WORKFLOW.read_text()
-        job = workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
-        redaction = job.split("      - name: Redact retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn("        id: redact_retried_journey_evidence", redaction)
-        self.assertIn(
-            "if: ${{ always() && steps.journeys.outcome == 'success' && hashFiles('artifacts/journey-evidence/*-attempt1*') != '' }}",
-            redaction,
-        )
-        self.assertIn("redact-test-reports.py", redaction)
-        upload = job.split("      - name: Upload retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
-        self.assertIn("if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}", upload)
-        self.assertIn("uses: actions/upload-artifact@v4", upload)
-        self.assertIn("name: journey-retry-evidence-${{ github.run_id }}-${{ github.run_attempt }}", upload)
-        self.assertLess(job.index("Redact retried journey evidence"), job.index("Upload retried journey evidence"))
+        for shard in range(1, MAESTRO_SHARD_TOTAL + 1):
+            job = maestro_shard_block(workflow, shard)
+            redaction = job.split("      - name: Redact retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("        id: redact_retried_journey_evidence", redaction)
+            self.assertIn(
+                "if: ${{ always() && steps.journeys.outcome == 'success' && hashFiles('artifacts/journey-evidence/*-attempt1*') != '' }}",
+                redaction,
+            )
+            self.assertIn("redact-test-reports.py", redaction)
+            upload = job.split("      - name: Upload retried journey evidence\n", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}", upload)
+            self.assertIn("uses: actions/upload-artifact@v4", upload)
+            self.assertIn(f"name: journey-retry-evidence-shard-{shard}-" + "${{ github.run_id }}-${{ github.run_attempt }}", upload)
+            self.assertLess(job.index("Redact retried journey evidence"), job.index("Upload retried journey evidence"))
 
     def test_journey_runner_bounds_the_platform_flake_retry_to_one_extra_attempt(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
@@ -468,6 +648,22 @@ class TestJobs(unittest.TestCase):
         self.assertIn("journey_attempt", runner)
         self.assertIn('"$journey" = "session-lifecycle"', runner)
         self.assertEqual(1, runner.count('test --no-reinstall-driver "$flow_dir/$journey.yaml"'))
+
+    def test_journey_runner_retries_the_post_tls_boot_wait_once(self):
+        runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
+        self.assertIn("for boot_attempt in 1 2", runner)
+        self.assertEqual(1, runner.count("for boot_attempt in 1 2"))
+        self.assertEqual(1, runner.count("retrying the boot wait"))
+        self.assertIn(
+            'log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."',
+            runner,
+        )
+        self.assertIn(
+            'log "Emulator did not boot after installing the TLS trust store."\n    exit 1',
+            runner,
+            "an exhausted boot retry must still fail closed",
+        )
+        self.assertNotIn("before installing the TLS CA; retrying", runner)
 
     def test_journey_attempt_rule_bounds_the_retried_journey_to_two_attempts(self):
         self.assertEqual(2, journey_attempts(JOURNEY_RETRY_TARGET))
@@ -634,14 +830,15 @@ redact_file "$runner_output" || status=$?
             "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
             "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST",
-            "CONFORMANCE", "COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD",
-            "API24_INSTRUMENTATION", "MAESTRO_JOURNEYS", "UI_PATHS",
+            "BUILDSRC_CONTRACTS", "CONFORMANCE", "COMMIT_MESSAGE", "DRAFT_VALIDATION",
+            "FORK_GUARD", "API24_INSTRUMENTATION", "MAESTRO_JOURNEYS", "UI_PATHS",
         ]
         for event in ("pull_request", "push", "schedule", "workflow_dispatch"):
             expected = {job: "success" for job in required}
             if event == "pull_request":
                 expected["API24_INSTRUMENTATION"] = "skipped"
                 expected["MAESTRO_JOURNEYS"] = "skipped"
+                expected["BUILDSRC_CONTRACTS"] = "skipped"
             else:
                 for job in ("COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD", "UI_PATHS"):
                     expected[job] = "skipped"
@@ -654,8 +851,12 @@ redact_file "$runner_output" || status=$?
                 env["EVENT_BASE_REF"] = "main"
                 env["EVENT_FORK"] = "false"
                 env["EVENT_DRAFT"] = "false"
+                env["EVENT_LABELS"] = "[]"
                 env["UI_PATHS_CHANGED"] = "false"
                 env["DOCS_ONLY_CHANGED"] = "false"
+                env["DEPENDENCY_ONLY_CHANGED"] = "false"
+                env["CI_FILES_CHANGED"] = "false"
+                env["BUILD_LOGIC_CHANGED"] = "false"
             result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(0, result.returncode, result.stderr)
@@ -668,6 +869,87 @@ redact_file "$runner_output" || status=$?
                         result = subprocess.run(["bash", "-c", script], cwd=ROOT,
                                                 env=failed_env, capture_output=True, timeout=10)
                         self.assertNotEqual(0, result.returncode)
+
+    def test_aggregate_routes_dependency_buildsrc_and_ci_pull_requests(self):
+        block = WORKFLOW.read_text().split(
+            "      - name: Verify declared checks and results", 1
+        )[1].split("        run: |\n", 1)[1]
+        script = textwrap.dedent(block)
+        core = [
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
+            "ARCHITECTURE_CHECK", "COMPOSE_TEST",
+        ]
+        base = {
+            **os.environ,
+            **{f"{job}_RESULT": "success" for job in core},
+            "EVENT_NAME": "pull_request",
+            "EVENT_BASE_REF": "main",
+            "EVENT_FORK": "false",
+            "EVENT_DRAFT": "false",
+            "EVENT_LABELS": "[]",
+            "FORK_GUARD_RESULT": "success",
+            "DRAFT_VALIDATION_RESULT": "success",
+            "COMMIT_MESSAGE_RESULT": "success",
+            "UI_PATHS_RESULT": "success",
+            "UI_PATHS_CHANGED": "false",
+            "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
+            "COVERAGE_MUTATION_RESULT": "success",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
+            "API24_INSTRUMENTATION_RESULT": "skipped",
+            "MAESTRO_JOURNEYS_RESULT": "skipped",
+            "CONFORMANCE_RESULT": "success",
+        }
+
+        def run(env):
+            return subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
+                                  capture_output=True, text=True, timeout=10)
+
+        dependency_only = {**base, "DEPENDENCY_ONLY_CHANGED": "true", "COVERAGE_MUTATION_RESULT": "skipped"}
+        self.assertEqual(0, run(dependency_only).returncode,
+                         "a dependency-only head must skip the coverage and contracts lanes while the remaining lanes run")
+        for job, drifted in (
+            ("COVERAGE_MUTATION_RESULT", "success"),
+            ("BUILDSRC_CONTRACTS_RESULT", "success"),
+            ("FORMATTING_RESULT", "skipped"),
+            ("UNIT_TESTS_RESULT", "failure"),
+        ):
+            with self.subTest(routing="dependency-only drift", job=job, outcome=drifted):
+                self.assertNotEqual(0, run({**dependency_only, job: drifted}).returncode)
+        build_src = {**base, "BUILD_LOGIC_CHANGED": "true", "BUILDSRC_CONTRACTS_RESULT": "success"}
+        self.assertEqual(0, run(build_src).returncode,
+                         "a buildSrc head must run the self-test contracts job")
+        with self.subTest(routing="buildSrc drift", outcome="contracts skipped"):
+            self.assertNotEqual(0, run({**build_src, "BUILDSRC_CONTRACTS_RESULT": "skipped"}).returncode)
+        with self.subTest(routing="buildSrc drift", outcome="coverage skipped"):
+            self.assertNotEqual(0, run({**build_src, "COVERAGE_MUTATION_RESULT": "skipped"}).returncode)
+        ci_files = {**base, "CI_FILES_CHANGED": "true", "BUILDSRC_CONTRACTS_RESULT": "success"}
+        self.assertEqual(0, run(ci_files).returncode,
+                         "a .github head must run the full gate including the contracts job")
+        with self.subTest(routing=".github drift", outcome="contracts skipped"):
+            self.assertNotEqual(0, run({**ci_files, "BUILDSRC_CONTRACTS_RESULT": "skipped"}).returncode)
+        labeled_dependency_only = {
+            **dependency_only,
+            "EVENT_LABELS": '["run-maestro"]',
+            "API24_INSTRUMENTATION_RESULT": "success",
+            "MAESTRO_JOURNEYS_RESULT": "success",
+            "COVERAGE_MUTATION_RESULT": "success",
+        }
+        self.assertEqual(0, run(labeled_dependency_only).returncode,
+                         "the run-maestro label must keep the emulator and coverage lanes over a dependency-only head")
+        with self.subTest(routing="run-maestro drift", outcome="contracts success on a dependency-only head"):
+            self.assertNotEqual(0, run({**labeled_dependency_only, "BUILDSRC_CONTRACTS_RESULT": "success"}).returncode)
+        for decision, value in (
+            ("DEPENDENCY_ONLY_CHANGED", ""),
+            ("DEPENDENCY_ONLY_CHANGED", "TRUE"),
+            ("CI_FILES_CHANGED", "yes"),
+            ("BUILD_LOGIC_CHANGED", "1"),
+        ):
+            with self.subTest(routing="unreadable decision", decision=decision, value=value):
+                self.assertNotEqual(0, run({**base, decision: value}).returncode)
 
     def test_aggregate_routes_draft_ready_and_external_fork_pull_requests(self):
         block = WORKFLOW.read_text().split(
@@ -689,6 +971,10 @@ redact_file "$runner_output" || status=$?
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
             "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
         }
@@ -759,8 +1045,13 @@ redact_file "$runner_output" || status=$?
             "FORK_GUARD_RESULT": "success",
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
+            "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
             "DRAFT_VALIDATION_RESULT": "success",
             "COMMIT_MESSAGE_RESULT": "success",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
             **{f"{job}_RESULT": "success" for job in core},
@@ -810,11 +1101,15 @@ redact_file "$runner_output" || status=$?
             "EVENT_DRAFT": "false",
             "EVENT_LABELS": '["ready-for-agent", "run-maestro"]',
             "DOCS_ONLY_CHANGED": "true",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
             "FORK_GUARD_RESULT": "success",
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
             "DRAFT_VALIDATION_RESULT": "success",
             "COMMIT_MESSAGE_RESULT": "success",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
             **{f"{job}_RESULT": "success" for job in core},
@@ -864,6 +1159,10 @@ redact_file "$runner_output" || status=$?
             "UI_PATHS_RESULT": "success",
             "UI_PATHS_CHANGED": "false",
             "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
         }
@@ -899,13 +1198,14 @@ redact_file "$runner_output" || status=$?
         }
         self.assertEqual(0, run(docs_only_unlabeled).returncode,
                          "an unlabeled docs-only head must keep both emulator suites skipped")
-        ui_changed = {**unlabeled, "UI_PATHS_CHANGED": "true",
-                      "API24_INSTRUMENTATION_RESULT": "success", "MAESTRO_JOURNEYS_RESULT": "success"}
-        self.assertEqual(0, run(ui_changed).returncode)
-        for job in ("API24_INSTRUMENTATION_RESULT", "MAESTRO_JOURNEYS_RESULT"):
-            for outcome in ("skipped", "failure", "cancelled", ""):
-                with self.subTest(routing="changed ui paths", job=job, outcome=outcome):
-                    self.assertNotEqual(0, run({**ui_changed, job: outcome}).returncode)
+        ui_changed = {**unlabeled, "UI_PATHS_CHANGED": "true", "API24_INSTRUMENTATION_RESULT": "success"}
+        self.assertEqual(0, run(ui_changed).returncode,
+                         "a changed UI path must start the API 24 suite and leave the journey lane skipped")
+        with self.subTest(routing="changed ui paths started the journey lane"):
+            self.assertNotEqual(0, run({**ui_changed, "MAESTRO_JOURNEYS_RESULT": "success"}).returncode)
+        for outcome in ("skipped", "failure", "cancelled", ""):
+            with self.subTest(routing="changed ui paths", job="API24_INSTRUMENTATION_RESULT", outcome=outcome):
+                self.assertNotEqual(0, run({**ui_changed, "API24_INSTRUMENTATION_RESULT": outcome}).returncode)
         with self.subTest(routing="changed ui paths on a draft"):
             self.assertEqual(0, run({**ui_changed, "EVENT_DRAFT": "true",
                                      "COMMIT_MESSAGE_RESULT": "skipped",
@@ -919,6 +1219,22 @@ redact_file "$runner_output" || status=$?
             self.assertNotEqual(0, run({**unlabeled, "UI_PATHS_RESULT": "failure"}).returncode)
         with self.subTest(routing="skipped ui path detection on a pull request"):
             self.assertNotEqual(0, run({**unlabeled, "UI_PATHS_RESULT": "skipped"}).returncode)
+
+    def test_maestro_journeys_run_only_on_the_nightly_schedule_or_the_run_maestro_label(self):
+        workflow = WORKFLOW.read_text()
+        blocks = [("umbrella", maestro_umbrella_block(workflow))]
+        blocks.extend((f"shard {shard}", maestro_shard_block(workflow, shard))
+                      for shard in range(1, MAESTRO_SHARD_TOTAL + 1))
+        for name, block in blocks:
+            with self.subTest(job=name):
+                self.assertIn("needs.api24_instrumentation.result == 'success'", block,
+                              "the journey lane must stay behind a passing API 24 suite")
+                self.assertIn("github.event_name == 'schedule'", block)
+                self.assertIn("github.event_name == 'workflow_dispatch'", block)
+                self.assertIn("contains(github.event.pull_request.labels.*.name, 'run-maestro')", block,
+                              "a pull-request run must need the explicit run-maestro label")
+                self.assertNotIn("needs.ui_paths.outputs.ui_paths_changed", block,
+                                 "a changed UI path must never start the journey lane")
 
     def test_the_pull_request_trigger_starts_only_on_head_informative_events(self):
         triggers = WORKFLOW.read_text().split("\non:\n", 1)[1].split("\npermissions:\n", 1)[0]

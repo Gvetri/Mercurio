@@ -186,7 +186,7 @@ jobs:
         with:
           name: signed-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            signed/hermes-native-client.apk
+            signed/mercurio.apk
             signed/SHA256SUMS
             signed/signing-metadata.json
           if-no-files-found: error

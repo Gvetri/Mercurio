@@ -80,7 +80,7 @@ ARG HERMES_REVISION
 ARG HERMES_SOURCE_TREE=unverified
 ARG HERMES_SOURCE_VERSION=unverified
 LABEL org.opencontainers.image.title="hermes-live-smoke-gateway" \
-      org.opencontainers.image.description="Disposable headless Hermes Gateway fixture for the hermes-native-client exact-APK local live smoke gate. Not a production image." \
+      org.opencontainers.image.description="Disposable headless Hermes Gateway fixture for the mercurio exact-APK local live smoke gate. Not a production image." \
       org.opencontainers.image.revision="${HERMES_REVISION}" \
       org.opencontainers.image.version="${HERMES_SOURCE_VERSION}" \
       org.opencontainers.image.source="https://github.com/NousResearch/hermes-agent" \

@@ -169,7 +169,7 @@ Verify a downloaded signed artifact with Android Build Tools 35.0.0:
 
 ```text
 sha256sum --check SHA256SUMS
-apksigner verify --print-certs hermes-native-client.apk
+apksigner verify --print-certs mercurio.apk
 ```
 
 The single signer certificate's SHA-256 must match the committed digest. Never
@@ -198,7 +198,7 @@ production key, live providers, or real Gateway data:
 
 ```text
 python3 -m unittest discover -s .github/scripts/tests -p 'test_*sign*.py'
-./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
+./gradlew -p buildSrc test --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest
 ```
 
 JDK 21, Android SDK Platform 35, Build Tools 35.0.0, `JAVA_HOME`, and `ANDROID_HOME`

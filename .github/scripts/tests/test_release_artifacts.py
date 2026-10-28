@@ -21,7 +21,7 @@ TAG = "stable-beta-v0.1.0"
 VERSION = "0.1.0"
 VERSION_CODE = 7002
 SOURCE = "b" * 40
-ASSETS = ("hermes-native-client.apk", "SHA256SUMS", "signing-metadata.json")
+ASSETS = ("mercurio.apk", "SHA256SUMS", "signing-metadata.json")
 
 
 def sha256(path):
@@ -175,7 +175,7 @@ class PublishedReleaseArtifactsTest(unittest.TestCase):
                              "omit the community-support-only policy")
 
     def test_a_checksum_file_that_does_not_match_the_apk_is_rejected(self):
-        (self.store / "SHA256SUMS").write_text(f"{'0' * 64}  hermes-native-client.apk\n")
+        (self.store / "SHA256SUMS").write_text(f"{'0' * 64}  mercurio.apk\n")
         self.assert_rejected(self.command(TAG, str(self.certificate)),
                              "does not state the downloaded APK checksum")
 
