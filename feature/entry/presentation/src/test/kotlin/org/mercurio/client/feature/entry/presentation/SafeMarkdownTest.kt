@@ -481,8 +481,8 @@ class SafeMarkdownTest {
     }
 
     @Test
-    fun image_and_math_markup_inside_an_unterminated_fence_stay_code() {
-        val source = "![chart](https://example.com/chart.png)\n\$y\$"
+    fun table_image_and_math_markup_inside_an_unterminated_fence_stay_code() {
+        val source = "![chart](https://example.com/chart.png)\n\$y\$\n| a | b |"
 
         val blocks = parseSafeMarkdown("```\n$source")
 

@@ -44,8 +44,9 @@ internal sealed interface MarkdownBlock {
     ) : MarkdownBlock
 
     /**
-     * A pipe table: the header row, the data rows as authored, and [spans] holding the
-     * literal source text the renderer still shows until a table renderer lands.
+     * A pipe table: the header row, the data rows padded or trimmed to the header
+     * width, and [spans] holding the literal source text the renderer still shows
+     * until a table renderer lands.
      */
     data class Table(
         val header: List<String>,
