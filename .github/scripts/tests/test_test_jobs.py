@@ -839,6 +839,7 @@ redact_file "$runner_output" || status=$?
                 expected["API24_INSTRUMENTATION"] = "skipped"
                 expected["MAESTRO_JOURNEYS"] = "skipped"
                 expected["BUILDSRC_CONTRACTS"] = "skipped"
+                expected["COVERAGE_MUTATION"] = "skipped"
             else:
                 for job in ("COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD", "UI_PATHS"):
                     expected[job] = "skipped"
@@ -897,7 +898,7 @@ redact_file "$runner_output" || status=$?
             "DEPENDENCY_ONLY_CHANGED": "false",
             "CI_FILES_CHANGED": "false",
             "BUILD_LOGIC_CHANGED": "false",
-            "COVERAGE_MUTATION_RESULT": "success",
+            "COVERAGE_MUTATION_RESULT": "skipped",
             "BUILDSRC_CONTRACTS_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
@@ -924,8 +925,8 @@ redact_file "$runner_output" || status=$?
                          "a buildSrc head must run the self-test contracts job")
         with self.subTest(routing="buildSrc drift", outcome="contracts skipped"):
             self.assertNotEqual(0, run({**build_src, "BUILDSRC_CONTRACTS_RESULT": "skipped"}).returncode)
-        with self.subTest(routing="buildSrc drift", outcome="coverage skipped"):
-            self.assertNotEqual(0, run({**build_src, "COVERAGE_MUTATION_RESULT": "skipped"}).returncode)
+        with self.subTest(routing="buildSrc drift", outcome="coverage ran on a pull request"):
+            self.assertNotEqual(0, run({**build_src, "COVERAGE_MUTATION_RESULT": "success"}).returncode)
         ci_files = {**base, "CI_FILES_CHANGED": "true", "BUILDSRC_CONTRACTS_RESULT": "success"}
         self.assertEqual(0, run(ci_files).returncode,
                          "a .github head must run the full gate including the contracts job")
@@ -936,10 +937,10 @@ redact_file "$runner_output" || status=$?
             "EVENT_LABELS": '["run-maestro"]',
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
-            "COVERAGE_MUTATION_RESULT": "success",
+            "COVERAGE_MUTATION_RESULT": "skipped",
         }
         self.assertEqual(0, run(labeled_dependency_only).returncode,
-                         "the run-maestro label must keep the emulator and coverage lanes over a dependency-only head")
+                         "the run-maestro label must keep the emulator lanes over a dependency-only head, and never revive coverage on a pull request")
         with self.subTest(routing="run-maestro drift", outcome="contracts success on a dependency-only head"):
             self.assertNotEqual(0, run({**labeled_dependency_only, "BUILDSRC_CONTRACTS_RESULT": "success"}).returncode)
         for decision, value in (
@@ -959,7 +960,7 @@ redact_file "$runner_output" || status=$?
         required = [
             "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
-            "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
+            "ARCHITECTURE_CHECK", "COMPOSE_TEST", "CONFORMANCE",
         ]
         heavy = {f"{job}_RESULT": "success" for job in required}
         base = {
@@ -975,6 +976,7 @@ redact_file "$runner_output" || status=$?
             "CI_FILES_CHANGED": "false",
             "BUILD_LOGIC_CHANGED": "false",
             "BUILDSRC_CONTRACTS_RESULT": "skipped",
+            "COVERAGE_MUTATION_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
         }
@@ -1033,7 +1035,7 @@ redact_file "$runner_output" || status=$?
         core = [
             "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
-            "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
+            "ARCHITECTURE_CHECK", "COMPOSE_TEST", "CONFORMANCE",
         ]
         ready = {
             **os.environ,
@@ -1052,6 +1054,7 @@ redact_file "$runner_output" || status=$?
             "DRAFT_VALIDATION_RESULT": "success",
             "COMMIT_MESSAGE_RESULT": "success",
             "BUILDSRC_CONTRACTS_RESULT": "skipped",
+            "COVERAGE_MUTATION_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "skipped",
             "MAESTRO_JOURNEYS_RESULT": "skipped",
             **{f"{job}_RESULT": "success" for job in core},
@@ -1091,7 +1094,7 @@ redact_file "$runner_output" || status=$?
         core = [
             "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
-            "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
+            "ARCHITECTURE_CHECK", "COMPOSE_TEST", "CONFORMANCE",
         ]
         labeled_docs_only = {
             **os.environ,
@@ -1110,6 +1113,7 @@ redact_file "$runner_output" || status=$?
             "DRAFT_VALIDATION_RESULT": "success",
             "COMMIT_MESSAGE_RESULT": "success",
             "BUILDSRC_CONTRACTS_RESULT": "skipped",
+            "COVERAGE_MUTATION_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
             **{f"{job}_RESULT": "success" for job in core},
@@ -1144,7 +1148,7 @@ redact_file "$runner_output" || status=$?
         core = [
             "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
             "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
-            "ARCHITECTURE_CHECK", "COVERAGE_MUTATION", "COMPOSE_TEST", "CONFORMANCE",
+            "ARCHITECTURE_CHECK", "COMPOSE_TEST", "CONFORMANCE",
         ]
         base = {
             **os.environ,
@@ -1163,6 +1167,7 @@ redact_file "$runner_output" || status=$?
             "CI_FILES_CHANGED": "false",
             "BUILD_LOGIC_CHANGED": "false",
             "BUILDSRC_CONTRACTS_RESULT": "skipped",
+            "COVERAGE_MUTATION_RESULT": "skipped",
             "API24_INSTRUMENTATION_RESULT": "success",
             "MAESTRO_JOURNEYS_RESULT": "success",
         }
