@@ -60,7 +60,7 @@ except ValueError:
 policy = runpy.run_path(str(Path(sys.argv[2]) / "release-signing.py"))
 declared = policy["required_check_names"]()
 job_names = {key: declared[key] for key in (
-    "unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys",
+    "unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys", "coverage_mutation",
 )}
 if not isinstance(results, dict) or set(results) != set(job_names) or any(
     not isinstance(value, str) or value not in {"success", "failure", "cancelled", "skipped"}

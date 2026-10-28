@@ -37,6 +37,10 @@ regenerate both reports against one class set, then run the verifications:
 ./gradlew coverageVerify mutationVerify
 ```
 
+The pull-request gate does not run this lane, so this local evidence is the only pre-merge check for
+a covered production change: run both commands and keep them green before you open or update the pull
+request. The `main` push, the nightly schedule, and manual dispatch still verify it centrally.
+
 The first invocation produces both reports against one class set; the second verifies them. See
 [Quality gates](../quality-gates.md) for the declared scopes and thresholds and for
 [how to change a declared value](../quality-gates.md#changing-a-declared-value).

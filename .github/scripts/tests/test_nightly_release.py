@@ -244,7 +244,8 @@ class NightlyPreparationTest(unittest.TestCase):
                  "GH_TOKEN": "synthetic-token", "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",
                  "GITHUB_SHA": self.selected, "GITHUB_SERVER_URL": "https://github.com",
                  "TEST_JOB_RESULTS": json.dumps(dict.fromkeys(
-                     ("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys"), "success")),
+                     ("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys",
+                      "coverage_mutation"), "success")),
                  "ADDITIONAL_FAILED_STAGES": json.dumps(additional), **(overrides or {})},
             capture_output=True, text=True, check=False,
         )
@@ -435,7 +436,7 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertIn("## Additional failed required jobs\n\n- `formatting`", issue["body"])
         self.assertIn("## Required test jobs\n\n- `unit-tests`: `success`\n"
                       "- `compose-jvm-tests`: `success`\n- `api24-instrumentation`: `success`\n"
-                      "- `maestro-journeys`: `success`\n", issue["body"])
+                      "- `maestro-journeys`: `success`\n- `coverage-mutation`: `success`\n", issue["body"])
         self.assertEqual(["POST"], (root / "writes").read_text().splitlines())
 
     def test_green_validation_and_all_success_stages_cannot_create_an_issue(self):

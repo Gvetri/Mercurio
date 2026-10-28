@@ -870,6 +870,13 @@ class QualityGateConfigurationTest {
             coverageMutationJob.contains("gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a"),
         )
         assertTrue(
+            "The coverage and mutation job must run on the main line only and never on a pull request.",
+            coverageMutationJob.contains(
+                "    if: \${{ always() && (github.event.action != 'labeled' || " +
+                    "github.event.label.name == 'run-maestro') && github.event_name != 'pull_request' }}\n",
+            ),
+        )
+        assertTrue(
             "The aggregate declaration must include coverage_mutation.",
             requiredChecks.contains("coverage_mutation"),
         )
@@ -1387,12 +1394,12 @@ class QualityGateConfigurationTest {
             )
         }
         assertTrue(
-            "The coverage lane must also skip unlabeled docs-only and dependency-only heads while keeping the run-maestro precedence.",
+            "The coverage lane must never run on a pull request, whatever the head contains.",
             workflow
                 .substringAfter("  coverage_mutation:")
                 .substringBefore("runs-on:")
                 .contains(
-                    "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || (needs.ui_paths.outputs.docs_only_changed != 'true' && needs.ui_paths.outputs.dependency_files_changed != 'true')))) }}",
+                    "    if: \${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && github.event_name != 'pull_request' }}",
                 ),
         )
         val aggregate = workflow.substringAfter("  quality-gate:\n")
@@ -1433,7 +1440,12 @@ class QualityGateConfigurationTest {
             "Issue creation must require a non-successful API 24 result.",
             issueJob.contains("needs.api24_instrumentation.result != 'success'"),
         )
-        assertTrue("Issue publication must wait for every required test job.", issueJob.contains("needs: [unit_tests, compose_test, api24_instrumentation, maestro_journeys]"))
+        assertTrue(
+            "Issue publication must wait for every required test job, including the nightly-verified coverage lane.",
+            issueJob.contains(
+                "needs: [unit_tests, compose_test, api24_instrumentation, maestro_journeys, coverage_mutation]",
+            ),
+        )
         listOf("unit_tests", "compose_test", "api24_instrumentation", "maestro_journeys").forEach { job ->
             assertTrue("Issue creation must include failures in $job.", issueJob.contains("needs.$job.result != 'success'"))
         }

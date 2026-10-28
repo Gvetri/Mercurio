@@ -62,10 +62,10 @@ published and no release state changes. The reporting job has `actions: read`,
 release-write permission.
 
 The issue is labelled `ready-for-agent` and identifies the **validation** run,
-attempt and commit, not the parent Nightly run. Its four stage results come from
+attempt and commit, not the parent Nightly run. Its five stage results come from
 that exact attempt's jobs: `unit-tests`, `compose-jvm-tests`,
-`api24-instrumentation`, and `maestro-journeys`. Other failed required jobs, such as
-`formatting`, appear in a separate section, from the same exact run and attempt.
+`api24-instrumentation`, `maestro-journeys`, and `coverage-mutation`. Other failed required jobs,
+such as `formatting`, appear in a separate section, from the same exact run and attempt.
 The expected skips of `fork-guard`, `draft-validation`, and `commit-message` are
 not failures on this main validation. The `nightly-run` marker deduplicates
 by validation run ID; reporting another attempt updates and reopens the same issue.

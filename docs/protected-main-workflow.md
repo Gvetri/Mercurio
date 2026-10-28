@@ -54,10 +54,10 @@ than the gate it mirrors.
 
 | Run | Checks that execute | Checks that stay skipped |
 | --- | --- | --- |
-| Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `api24-instrumentation` unless the pull request carries the `run-maestro` label or modifies a declared UI path, and `maestro-journeys` unless it carries the label (next row); `buildsrc-contracts` unless the head changes `.github/**` or `buildSrc/**` files |
-| Ready in-repository pull request labeled `run-maestro`, or modifying a declared UI path | The complete gate plus `api24-instrumentation`; `maestro-journeys` only when the label is present, and only after `api24-instrumentation` passes; `buildsrc-contracts` when the head changes `.github/**` or `buildSrc/**` files | `buildsrc-contracts` otherwise, and `maestro-journeys` on a head that modifies a declared UI path without the label |
+| Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `api24-instrumentation` unless the pull request carries the `run-maestro` label or modifies a declared UI path, `maestro-journeys` unless it carries the label (next row), and `coverage-mutation` on every pull request; `buildsrc-contracts` unless the head changes `.github/**` or `buildSrc/**` files |
+| Ready in-repository pull request labeled `run-maestro`, or modifying a declared UI path | The complete gate plus `api24-instrumentation`; `maestro-journeys` only when the label is present, and only after `api24-instrumentation` passes; `buildsrc-contracts` when the head changes `.github/**` or `buildSrc/**` files | `buildsrc-contracts` otherwise, `maestro-journeys` on a head that modifies a declared UI path without the label, and `coverage-mutation` on every pull request |
 | Ready in-repository pull request whose every changed file is documentation | `draft-validation`, `conformance`, `commit-message`, `fork-guard`, `ui-paths` | Every heavy check, both emulator suites, and `buildsrc-contracts` (a documentation head changes no CI or build-logic file), unless the pull request carries the `run-maestro` label, which starts the heavy checks and the emulator suites but not `buildsrc-contracts` |
-| Ready in-repository pull request whose every changed file is a build or dependency file (`gradle/**`, any `*.gradle.kts`, `gradle.properties`, `gradle/libs.versions.toml`) | `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `coverage-mutation`, `buildsrc-contracts`, and both emulator suites, unless the pull request carries the `run-maestro` label, which starts the emulator suites and `coverage-mutation` but never `buildsrc-contracts` on a dependency-only head |
+| Ready in-repository pull request whose every changed file is a build or dependency file (`gradle/**`, any `*.gradle.kts`, `gradle.properties`, `gradle/libs.versions.toml`) | `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `coverage-mutation`, `buildsrc-contracts`, and both emulator suites, unless the pull request carries the `run-maestro` label, which starts the emulator suites but never `coverage-mutation` or `buildsrc-contracts` on a dependency-only head |
 | Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard`, `ui-paths` | Every other check |
 | External-fork pull request | `fork-guard`, `ui-paths` | Every other check |
 | Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `buildsrc-contracts` runs the buildSrc self-test contracts; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
@@ -75,20 +75,29 @@ external-fork pull request starts no validation, and its aggregate still reports
 exact head holds. [The journey suite](deterministic-emulator-journeys.md#requesting-the-journey-lane)
 lists the key areas that need the label.
 
+`coverage-mutation` is a main-line and nightly signal: it runs on every `push` to `main`, on the
+nightly schedule, and on manual dispatch, and it reports `skipped` on every pull request, whatever
+the head contains and whether or not it carries a label. The aggregate requires exactly that. A
+covered production change must therefore regenerate and verify its coverage and mutation evidence
+locally before review; [the local quality-gate recipe](agents/local-quality-gate.md#the-staleness-convergence-recipe)
+has the commands.
+
 A documentation-only pull request takes a fast path from the opened event. When the `ui-paths` job's
 changed-file answer shows that every changed file of the head is a Markdown file outside `.github/`
 or a file under `docs/**`, the heavy lanes report `skipped` and the aggregate requires exactly that
 routing; the `run-maestro` label keeps precedence and starts the heavy and emulator lanes on a
-documentation-only head too. The classification is deliberately conservative — code, resources,
+documentation-only head too. `coverage-mutation` reports `skipped` on every pull request regardless. The classification is deliberately conservative — code, resources,
 build files, and especially `.github/**` route the full gate — and a push, a nightly schedule, and a
 manual dispatch never consult the decision, so the Nightly signing chain always validates the exact
 `main` tip with the complete gate. An unreadable changed-file answer fails closed: the detector job
 fails, the heavy lanes run, and the aggregate reports the failure.
 
-On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`, or
-`maestro-journeys` does not succeed, the `create-nightly-failure-issue` job creates or updates one
-issue from run metadata only: it never downloads or copies test logs into public issue content, and
-it reads the exact issue back after the write. The lane is deliberately not a check. It is the only
+On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`,
+`maestro-journeys`, or `coverage-mutation` does not succeed, the `create-nightly-failure-issue` job
+creates or updates one issue from run metadata only: it never downloads or copies test logs into
+public issue content, and it reads the exact issue back after the write. The issue carries the
+`ready-for-agent` label and the `<!-- nightly-run:<id> -->` marker, so the scheduled fixer takes it
+like any other nightly report. The lane is deliberately not a check. It is the only
 job that requests a write scope, and it runs on the schedule alone, so no write token ever reaches
 pull-request code.
 
