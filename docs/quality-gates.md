@@ -33,7 +33,7 @@ must report `skipped`, and any other outcome fails the aggregate; see
 | `android-build` | `:app:compileDebugKotlin :app:compileReleaseKotlin` on main pushes; `:app:assembleDebug :app:assembleRelease` otherwise | A debug/release compilation fails, or a non-push application APK does not build |
 | `architecture-check` | `architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, mock, or boundary-double rule is violated |
 | `compose-jvm-tests` | `:feature:entry:presentation:verifyRoborazziBaselineManifest :feature:entry:presentation:verifyRoborazziDebug` | A pinned Compose surface drifts from its approved baseline, or the baseline manifest and the snapshots disagree |
-| `coverage-mutation` | `coverageVerify mutationVerify` | Coverage or mutation evidence is missing, empty, stale, narrowed, below a declared threshold, or outside the declared production scope |
+| `coverage-mutation` | `coverageVerify mutationVerify` | Coverage or mutation evidence is missing, empty, stale, narrowed, below a declared threshold, or outside the declared production scope. Required on every `push` to `main`, on the nightly schedule, and on manual dispatch; skipped on every pull request, so a covered production change must regenerate and verify its evidence locally before it is reviewed |
 | `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
 | `commit-message` | `.github/scripts/verify-conventional-commits.py` | The squash-merge title or a commit of the pull request is not a Conventional Commit, or the commit list of the pull request is unavailable, empty, or truncated |
 | `draft-validation` | `formatCheck :app:lintDebug` | The head of a draft pull request is unformatted or fails Android lint |
@@ -45,17 +45,19 @@ must report `skipped`, and any other outcome fails the aggregate; see
 A documentation-only pull request takes a fast path: when the decision job reports that every
 changed file of the head is a Markdown file outside `.github/` or a file under `docs/**`, the heavy
 lanes (`formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`,
-`fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `coverage-mutation`,
+`fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`,
 `compose-jvm-tests`) report `skipped` from the first pull-request run and the aggregate requires
-exactly that; the `run-maestro` label keeps precedence and starts the heavy and emulator lanes on a
+exactly that; the `run-maestro` label keeps precedence and starts the heavy lanes on a
 documentation-only head too. A dependency-only head takes the sibling fast path: when the decision
 job reports that every changed file is a build or dependency file (`gradle/libs.versions.toml`, any
 `*.gradle.kts` including `settings.gradle.kts`, `gradle.properties`, or any file under `gradle/**`;
 the declared class is deliberately generic over dependency and build files, and `.github/**` and
 `buildSrc/**` are excluded before the match so control-plane and build-logic heads can never take
 the trimmed path by accident), the aggregate skips `api24-instrumentation`, `maestro-journeys`,
-`coverage-mutation`, and `buildsrc-contracts` while every core lane still runs, and the
-`run-maestro` label keeps precedence over the emulator lanes and `coverage-mutation` there too.
+and `buildsrc-contracts` while every core lane still runs, and the `run-maestro` label keeps
+precedence over the emulator lanes there too. On every pull request the aggregate also expects
+`coverage-mutation` to report `skipped`: the lane is a main-line and nightly signal, and the label
+does not revive it.
 Every classifier answer must be exactly `true` or `false`: an unreadable changed-file answer fails
 closed to the full gate, and the aggregate re-validates each decision guard before trusting the
 routing. The classification is deliberately conservative: code, resources, and especially
