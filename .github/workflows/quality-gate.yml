@@ -248,7 +248,7 @@ jobs:
   coverage_mutation:
     name: coverage-mutation
     needs: [ui_paths]
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || (needs.ui_paths.outputs.docs_only_changed != 'true' && needs.ui_paths.outputs.dependency_files_changed != 'true')))) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -922,8 +922,8 @@ jobs:
 
   create_nightly_failure_issue:
     name: create-nightly-failure-issue
-    if: ${{ always() && github.event_name == 'schedule' && (needs.unit_tests.result != 'success' || needs.compose_test.result != 'success' || needs.api24_instrumentation.result != 'success' || needs.maestro_journeys.result != 'success') }}
-    needs: [unit_tests, compose_test, api24_instrumentation, maestro_journeys]
+    if: ${{ always() && github.event_name == 'schedule' && (needs.unit_tests.result != 'success' || needs.compose_test.result != 'success' || needs.api24_instrumentation.result != 'success' || needs.maestro_journeys.result != 'success' || needs.coverage_mutation.result != 'success') }}
+    needs: [unit_tests, compose_test, api24_instrumentation, maestro_journeys, coverage_mutation]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
@@ -941,7 +941,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TEST_JOB_RESULTS: >-
-            {"unit_tests":"${{ needs.unit_tests.result }}","compose_test":"${{ needs.compose_test.result }}","api24_instrumentation":"${{ needs.api24_instrumentation.result }}","maestro_journeys":"${{ needs.maestro_journeys.result }}"}
+            {"unit_tests":"${{ needs.unit_tests.result }}","compose_test":"${{ needs.compose_test.result }}","api24_instrumentation":"${{ needs.api24_instrumentation.result }}","maestro_journeys":"${{ needs.maestro_journeys.result }}","coverage_mutation":"${{ needs.coverage_mutation.result }}"}
         run: .github/scripts/create-nightly-failure-issue.sh
 
   quality-gate:
@@ -1164,15 +1164,7 @@ jobs:
                 exit 1
               fi
             done
-            if [ "$EVENT_DRAFT" = true ]; then
-              coverage_expected_state=skipped
-            elif [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* ]]; then
-              coverage_expected_state=success
-            elif [ "$docs_only_decision" = true ] || [ "$dependency_only_decision" = true ]; then
-              coverage_expected_state=skipped
-            else
-              coverage_expected_state=success
-            fi
+            coverage_expected_state=skipped
             if [ "$COVERAGE_MUTATION_RESULT" != "$coverage_expected_state" ]; then
               printf 'Check coverage_mutation must report %s for this run, but reported %s.\n' "$coverage_expected_state" "$COVERAGE_MUTATION_RESULT" >&2
               exit 1
