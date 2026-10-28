@@ -47,7 +47,7 @@ private fun pipeTableBlock(lines: List<String>): MarkdownBlock.Table? {
     val spans = parseInline(lines.joinToString(separator = " "))
     return MarkdownBlock.Table(
         header = header,
-        rows = lines.drop(MINIMUM_TABLE_LINES).map(::tableCells),
+        rows = lines.drop(MINIMUM_TABLE_LINES).map { line -> tableRow(tableCells(line), header.size) },
         spans = spans,
     )
 }
@@ -58,6 +58,11 @@ private fun tableCells(line: String): List<String> {
     if (line.endsWith(TABLE_PIPE)) cells.removeAt(cells.lastIndex)
     return cells
 }
+
+private fun tableRow(
+    cells: List<String>,
+    width: Int,
+): List<String> = List(width) { position -> cells.getOrElse(position) { "" } }
 
 internal data class InlineMath(
     val startIndex: Int,

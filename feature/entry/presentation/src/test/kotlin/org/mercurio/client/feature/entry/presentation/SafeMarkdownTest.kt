@@ -380,6 +380,14 @@ class SafeMarkdownTest {
     }
 
     @Test
+    fun ragged_table_rows_pad_or_trim_to_the_header_width() {
+        val blocks = parseSafeMarkdown("| a | b |\n| --- | --- |\n| only |\n| x | y | z |")
+
+        val table = blocks.single() as MarkdownBlock.Table
+        assertEquals(listOf(listOf("only", ""), listOf("x", "y")), table.rows)
+    }
+
+    @Test
     fun a_well_formed_image_construct_becomes_a_structured_element() {
         val blocks = parseSafeMarkdown("Shot: ![chart](https://example.com/chart.png)")
 
@@ -453,6 +461,44 @@ class SafeMarkdownTest {
 
         assertEquals(listOf("CodeBlock"), blocks.map { it::class.simpleName })
         assertEquals(source, (blocks.single() as MarkdownBlock.CodeBlock).code)
+    }
+
+    @Test
+    fun image_and_math_markup_adjacent_to_a_fence_stay_literal_paragraph_content() {
+        val source = "Shot: ![chart](https://example.com/chart.png)\n```kotlin\nval x = 1\n```\nValue \$y\$ here"
+
+        val blocks = parseSafeMarkdown(source)
+
+        assertEquals(listOf("Paragraph", "CodeBlock", "Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals("val x = 1", (blocks[1] as MarkdownBlock.CodeBlock).code)
+        assertEquals(
+            listOf(
+                InlineElement.Image(alt = "chart", destination = "https://example.com/chart.png"),
+                InlineElement.Math(expression = "y"),
+            ),
+            blocks.spans().mapNotNull { it.element },
+        )
+    }
+
+    @Test
+    fun image_and_math_markup_inside_an_unterminated_fence_stay_code() {
+        val source = "![chart](https://example.com/chart.png)\n\$y\$"
+
+        val blocks = parseSafeMarkdown("```\n$source")
+
+        assertEquals(listOf("CodeBlock"), blocks.map { it::class.simpleName })
+        assertEquals(source, (blocks.single() as MarkdownBlock.CodeBlock).code)
+    }
+
+    @Test
+    fun display_math_inside_a_paragraph_run_stays_literal_text() {
+        val content = "See \$\$E = mc^2\$\$ above"
+
+        val blocks = parseSafeMarkdown(content)
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals(content, blocks.plainText())
+        assertTrue(blocks.spans().all { it.element == null })
     }
 
     @Test

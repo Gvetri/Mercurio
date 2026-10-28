@@ -140,7 +140,7 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     val lines = content.lines()
     val paragraphLines = mutableListOf<String>()
 
-    fun flushParagraph() {
+    fun flushParagraphRun() {
         if (paragraphLines.isEmpty()) return
         val source = paragraphLines.joinToString(separator = " ")
         blocks += structuredBlock(paragraphLines) ?: MarkdownBlock.Paragraph(parseInline(source))
@@ -152,17 +152,17 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
         val line = lines[index]
         when {
             isFenceLine(line) -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (block, nextIndex) = readFenceBlock(lines, index, line)
                 blocks += block
                 index = nextIndex
             }
             line.isBlank() -> {
-                flushParagraph()
+                flushParagraphRun()
                 index++
             }
             ATX_HEADING.matches(line.trim()) -> {
-                flushParagraph()
+                flushParagraphRun()
                 blocks +=
                     MarkdownBlock.Heading(
                         level = line.trim().takeWhile { it == '#' }.length,
@@ -171,24 +171,24 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
                 index++
             }
             isBlockquoteLine(line) -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (spans, nextIndex) = readBlockquote(lines, index)
                 blocks += MarkdownBlock.Blockquote(spans)
                 index = nextIndex
             }
             isThematicBreak(line) -> {
-                flushParagraph()
+                flushParagraphRun()
                 blocks += MarkdownBlock.HorizontalRule
                 index++
             }
             bulletItem(line) != null -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (items, nextIndex) = readListItemRun(lines, index, ::bulletItem)
                 blocks += MarkdownBlock.BulletList(items)
                 index = nextIndex
             }
             numberedItem(line) != null -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (items, nextIndex) = readListItemRun(lines, index, ::numberedItem)
                 blocks += MarkdownBlock.NumberedList(items)
                 index = nextIndex
@@ -199,7 +199,7 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
             }
         }
     }
-    flushParagraph()
+    flushParagraphRun()
     return blocks
 }
 
