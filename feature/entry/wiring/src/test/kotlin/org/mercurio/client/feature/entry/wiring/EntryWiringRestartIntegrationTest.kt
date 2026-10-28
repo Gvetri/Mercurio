@@ -18,6 +18,8 @@ import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
 import org.mercurio.client.feature.entry.domain.GatewayCredentialStore
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
+import org.mercurio.client.feature.entry.domain.HistoryCacheKey
+import org.mercurio.client.feature.entry.domain.HistoryCacheStore
 import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.mercurio.client.feature.entry.domain.Run
@@ -192,6 +194,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(restartedHolder, endpoint, hasSavedEndpoint = true)
                 openSession(restartedHolder, gateway.session.id)
+                awaitCondition { gateway.statusRequests.contains(gateway.activeRun.id) }
                 awaitState(restartedHolder) {
                     it.sessionList?.openedSession?.let { opened -> !opened.isReconciliationInProgress } == true
                 }
@@ -479,6 +482,7 @@ class EntryWiringRestartIntegrationTest {
                     runGatewayFactory = { _, _ -> gateway },
                     coroutineScope = coroutineScope,
                     credentialStore = credentialStore,
+                    historyCacheStore = InMemoryHistoryCacheStore(),
                 ),
         ).also {
             holders += it
@@ -752,6 +756,39 @@ class EntryWiringRestartIntegrationTest {
             } else {
                 block.run()
             }
+        }
+    }
+
+    private class InMemoryHistoryCacheStore : HistoryCacheStore {
+        private val transcripts = mutableMapOf<HistoryCacheKey, List<GatewayHistoryMessage>>()
+        private val sessionLists = mutableMapOf<String, List<Session>>()
+
+        override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> = transcripts[key].orEmpty()
+
+        override fun write(
+            key: HistoryCacheKey,
+            messages: List<GatewayHistoryMessage>,
+        ) {
+            transcripts[key] = messages
+        }
+
+        override fun readSessionList(endpoint: String): List<Session> = sessionLists[endpoint].orEmpty()
+
+        override fun writeSessionList(
+            endpoint: String,
+            sessions: List<Session>,
+        ) {
+            sessionLists[endpoint] = sessions
+        }
+
+        override fun clearEndpoint(endpoint: String) {
+            sessionLists.remove(endpoint)
+            transcripts.keys.removeAll { it.endpoint == endpoint }
+        }
+
+        override fun clear() {
+            transcripts.clear()
+            sessionLists.clear()
         }
     }
 

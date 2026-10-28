@@ -15,11 +15,17 @@ import org.mercurio.client.feature.entry.domain.SessionId
 internal fun EntryStateHolder.showOpenedSessionFailure(requestGeneration: Long) {
     updateCurrentSessionRequest(requestGeneration) { current ->
         current.openedSession?.let { openedSession ->
+            val cachedMessages =
+                openedSession.messages.ifEmpty { cachedTranscriptUiMessages(openedSession.session.id) }
             current.copy(
                 openedSession =
                     openedSession.copy(
                         isRefreshing = false,
                         isStale = true,
+                        isCached =
+                            openedSession.isCached ||
+                                (openedSession.messages.isEmpty() && cachedMessages.isNotEmpty()),
+                        messages = cachedMessages,
                         errorCategory = SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED,
                     ),
             )
@@ -77,6 +83,7 @@ internal suspend fun EntryStateHolder.openSessionJob(
         }
         val history = opener.executeHistory(sessionId)
         val openedSession = OpenedSession(session = session, history = history)
+        cacheOpenedSessionTranscript(openedSession)
         val applied =
             updateCurrentSessionRequest(request.generation) { current ->
                 applyOpenedSessionResult(current, openedSession, sessionId)
@@ -216,7 +223,7 @@ internal fun EntryStateHolder.showSessionOpenFailure(
         current.copy(
             sessionMutations = retainRenameDraft(current.sessionMutations, sessionId),
             openingSessionId = null,
-            openedSession = openedSessionToRestore,
+            openedSession = openedSessionToRestore ?: cachedOpenedSession(current, sessionId),
             isStale = true,
             isUnavailable = true,
             errorCategory = SessionListErrorCategory.SESSION_UNAVAILABLE,

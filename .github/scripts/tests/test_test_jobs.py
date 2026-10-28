@@ -628,7 +628,8 @@ class TestJobs(unittest.TestCase):
             )
             self.assertNotEqual(0, result.returncode)
             self.assertIn("Invalid shard selection", result.stdout)
-            self.assertIn("30 pinned journeys", result.stdout)
+            pinned = len(parse_journeys((ROOT / ".github/scripts/journey-run.sh").read_text()))
+            self.assertIn(f"{pinned} pinned journeys", result.stdout)
             self.assertNotIn("Journey:", result.stdout)
 
     def test_journey_retry_evidence_uploads_for_recovered_runs(self):

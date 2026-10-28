@@ -22,6 +22,7 @@ import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticEventType
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticStatus
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsExportResult
+import org.mercurio.client.feature.entry.domain.NoOpHistoryCacheStore
 import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryUiEvent
 import org.robolectric.RobolectricTestRunner
@@ -233,6 +234,7 @@ class LocalDiagnosticsWiringTest {
                 overrides =
                     EntryWiringOverrides(
                         coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+                        historyCacheStore = NoOpHistoryCacheStore,
                     ),
                 clientVersion = "0.1.0",
             )
