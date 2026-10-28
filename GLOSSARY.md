@@ -39,3 +39,16 @@ _Avoid_: provider selection, model config
 **Reasoning effort**:
 An optional per-run hint for how much reasoning the server applies, offered with Model selection.
 _Avoid_: thinking budget, effort level
+
+
+**Inline image**:
+An image referenced by URL inside Message content and rendered in the transcript.
+_Avoid_: attachment, media file
+
+**Link preview**:
+A compact card of fetched title, site domain, optional description, and optional thumbnail shown for an HTTPS link in a Message.
+_Avoid_: embed, snippet, open graph card
+
+**Lightbox**:
+The full-screen viewer for a loaded Inline image, offering zoom, save, and share.
+_Avoid_: gallery, photo browser
