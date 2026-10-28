@@ -18,11 +18,26 @@ public-network dependency, real provider credentials, or live model execution.
 | CI lane | `maestro_journeys` in `.github/workflows/quality-gate.yml` | GitHub-hosted emulator execution of every journey against the exact candidate APK |
 
 The lane runs on the nightly schedule and on manual dispatch. A ready in-repository pull request
-runs it when the head carries the `run-maestro` label or when the `ui-paths` detector reports that
-the head modifies a declared UI path (`app/src/main/**`, `feature/entry/presentation/**`,
-`feature/entry/wiring/src/main/res/**`, `fixtures/mercurio/journey/**`): the job then waits for a
-passing `api24-instrumentation` run, so a build or device-suite failure never reaches the journey
-lane.
+runs it only when the head carries the `run-maestro` label: the job then waits for a passing
+`api24-instrumentation` run, so a build or device-suite failure never reaches the journey lane. A
+changed UI path starts `api24-instrumentation` on its own and never the journey lane.
+
+## Requesting the journey lane
+
+Add the `run-maestro` label to the pull request when the change can move what a journey observes.
+
+| Key area | Why a journey observes it |
+| --- | --- |
+| `app/src/main/**` | App shell, manifest, activity aliases, theme, and icons — every flow starts here |
+| `feature/entry/presentation/**` | Session list, transcript, composer, settings, and diagnostics surfaces that the flows drive |
+| `feature/entry/wiring/src/main/res/**` | User-visible strings and resources that the flows select |
+| `fixtures/mercurio/journey/**` | The flows, the scenarios, and the fake-Gateway routes themselves |
+| `feature/entry/application/**`, `feature/entry/domain/**`, `feature/entry/data/**`, and the Kotlin wiring under `feature/entry/wiring/**` | State transitions, Gateway request order, SSE recovery, and run reconciliation that the journeys assert through the UI |
+
+Add the label **before** the push that starts the gate. A label added while a run is in flight
+cancels that run, and the labeled run then validates the same head. A draft or external-fork pull
+request starts no validation even with the label. When a change sits on a boundary between two key
+areas, add the label: the nightly schedule runs the whole suite against `main` either way.
 
 ## Guarantees
 

@@ -76,6 +76,17 @@ pull-request title, and both that title and every commit must be a Conventional 
 or cherry-pick an external fork directly: carry the change onto an in-repository branch first. See
 [The protected main branch and the pull-request workflow](docs/protected-main-workflow.md).
 
+## Emulator journeys
+
+The Maestro journey suite runs on the nightly schedule and on a manual dispatch, not on ordinary pull
+requests. A pull request asks for it with the `run-maestro` label. Add that label when the change
+touches a key area: the app shell, a user-visible screen, a user-visible string or resource, the
+journey fixtures, or the state, Gateway, and wiring code that those journeys assert. Agents add the
+label for those paths without being asked. Add it before the push that starts the gate: a label added
+while a run is in flight cancels that run. See
+[Requesting the journey lane](docs/deterministic-emulator-journeys.md#requesting-the-journey-lane)
+for the key areas and their reasons.
+
 ## Release signing
 
 Release keys are available only to the main-only signing job, never to pull-request or build
