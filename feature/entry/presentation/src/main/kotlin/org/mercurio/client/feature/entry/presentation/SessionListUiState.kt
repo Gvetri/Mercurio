@@ -9,6 +9,7 @@ import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isRunRetryEligible
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
+import java.math.BigDecimal
 import java.time.Instant
 
 enum class SessionListErrorCategory(
@@ -217,10 +218,24 @@ internal fun GatewayHistoryMessage.toSessionMessageUiState(
         runId = runId,
         runStatus = runStatus,
         runResult = runResult,
-        timestamp = timestamp?.let { runCatching { Instant.parse(it) }.getOrNull() },
+        timestamp = timestamp?.let(::parseGatewayTimestamp),
         failureSafeMessage = if (failed) runFailureMessageFor(modelSelection) else null,
         retryAvailable = isRunRetryEligible(if (failed) RunPresentationState.FAILED else null, retryInput),
     )
+}
+
+private fun parseGatewayTimestamp(value: String): Instant? =
+    runCatching { Instant.parse(value) }.getOrNull() ?: epochSecondsToInstant(value)
+
+private const val NANOSECOND_SCALE = 9
+
+private fun epochSecondsToInstant(value: String): Instant? {
+    val seconds = value.toBigDecimalOrNull() ?: return null
+    return runCatching {
+        val wholeSeconds = seconds.toBigInteger()
+        val fractionNanos = seconds.remainder(BigDecimal.ONE).movePointRight(NANOSECOND_SCALE).toLong()
+        Instant.ofEpochSecond(wholeSeconds.longValueExact(), fractionNanos)
+    }.getOrNull()
 }
 
 internal fun runFailureMessageFor(modelSelection: ModelSelection?): String {
