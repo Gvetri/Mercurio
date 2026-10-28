@@ -42,6 +42,25 @@ internal sealed interface MarkdownBlock {
         val language: String?,
         val code: String,
     ) : MarkdownBlock
+
+    /**
+     * A pipe table: the header row, the data rows as authored, and [spans] holding the
+     * literal source text the renderer still shows until a table renderer lands.
+     */
+    data class Table(
+        val header: List<String>,
+        val rows: List<List<String>>,
+        val spans: List<MarkdownSpan>,
+    ) : MarkdownBlock
+
+    /**
+     * A `$$…$$` display-math block: the expression without its delimiters, and [spans]
+     * holding the literal source text the renderer still shows until a math renderer lands.
+     */
+    data class DisplayMath(
+        val expression: String,
+        val spans: List<MarkdownSpan>,
+    ) : MarkdownBlock
 }
 
 /**
@@ -56,7 +75,8 @@ internal data class NumberedItem(
 /**
  * One run of literal message text. [link] is set only for a destination that
  * [allowedExternalLinkDestination] accepts; every other link target stays as its
- * inert label text.
+ * inert label text. [element] marks an inline construct the parser recognised;
+ * [text] still holds that construct's source verbatim, so an inert render is unchanged.
  */
 internal data class MarkdownSpan(
     val text: String,
@@ -64,7 +84,25 @@ internal data class MarkdownSpan(
     val italic: Boolean = false,
     val code: Boolean = false,
     val link: String? = null,
+    val element: InlineElement? = null,
 )
+
+/**
+ * An inline construct the parser recognised. The span keeps its literal source in
+ * [MarkdownSpan.text], so a renderer stays inert until it opts into handling the element.
+ */
+internal sealed interface InlineElement {
+    /** `![alt](destination)` with the label and the destination its source authored. */
+    data class Image(
+        val alt: String,
+        val destination: String,
+    ) : InlineElement
+
+    /** `$expression$` with the dollar delimiters dropped from [expression]. */
+    data class Math(
+        val expression: String,
+    ) : InlineElement
+}
 
 /**
  * The HTTPS destination an external browser intent may be built for, or null when the
@@ -91,9 +129,11 @@ private const val CODE_FENCE = "```"
 
 /**
  * Parses the supported Markdown subset of untrusted Gateway content: headings,
- * blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links, and fenced code
- * blocks. Unsupported constructs stay literal text, so nothing in the source can become
- * executable content.
+ * blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links, fenced code
+ * blocks, pipe tables, and math delimiters. Pipe tables and `$$…$$` display math become
+ * their own blocks, `![…](…)` and `$…$` become marked spans, and every one of them keeps
+ * its literal source text until its renderer lands. Unsupported constructs stay literal
+ * text, so nothing in the source can become executable content.
  */
 internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
@@ -101,10 +141,10 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     val paragraphLines = mutableListOf<String>()
 
     fun flushParagraph() {
-        if (paragraphLines.isNotEmpty()) {
-            blocks += MarkdownBlock.Paragraph(parseInline(paragraphLines.joinToString(separator = " ")))
-            paragraphLines.clear()
-        }
+        if (paragraphLines.isEmpty()) return
+        val source = paragraphLines.joinToString(separator = " ")
+        blocks += structuredBlock(paragraphLines) ?: MarkdownBlock.Paragraph(parseInline(source))
+        paragraphLines.clear()
     }
 
     var index = 0
