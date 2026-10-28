@@ -36,7 +36,7 @@ from support import (  # noqa: E402
 )
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-P12 = REPO_ROOT / "fixtures" / "hermes" / "journey-tls" / "journey-gateway.p12"
+P12 = REPO_ROOT / "fixtures" / "mercurio" / "journey-tls" / "journey-gateway.p12"
 VERSION = "0.1.0"
 
 
@@ -162,7 +162,7 @@ class GateHarness:
                 if sub == "uninstall":
                     return ok(argv, "Success\n")
                 if sub == "emu":
-                    return ok(argv, "hnc-issue29-live\nOK\n")
+                    return ok(argv, "mercurio-issue29-live\nOK\n")
                 if sub == "shell":
                     command = argv[4]
                     if command == "getprop":
@@ -229,7 +229,7 @@ class GateHarness:
             tls_p12=P12,
             designation="designated",
             device_serial="emulator-5554",
-            avd_name="hnc-issue29-live",
+            avd_name="mercurio-issue29-live",
             gateway_port=free_port(),
             tls_port=self.tls_port,
             tmpfiles_conf_dir=self.root / "user-tmpfiles.d",
@@ -304,8 +304,8 @@ class OrchestratorEndToEndTests(unittest.TestCase):
         self.assertEqual(evidence["teardown"]["status"], "ok")
         self.assertTrue(evidence["redaction"]["clean"])
         surfaces = evidence["redaction"]["surfaces"]
-        self.assertEqual(surfaces["device_app_storage"]["path"], "/data/user/0/org.hermesnative.client")
-        self.assertEqual(surfaces["device_app_storage"]["package"], "org.hermesnative.client")
+        self.assertEqual(surfaces["device_app_storage"]["path"], "/data/user/0/org.mercurio.client")
+        self.assertEqual(surfaces["device_app_storage"]["package"], "org.mercurio.client")
         self.assertTrue(surfaces["device_app_storage"]["pulled"])
         self.assertTrue(surfaces["device_app_storage"]["scanned"])
         self.assertIn("host_scratch", surfaces)

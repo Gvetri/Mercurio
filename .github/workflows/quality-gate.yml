@@ -237,12 +237,12 @@ jobs:
       - name: Verify the buildSrc quality self-test contracts
         run: >-
           ./gradlew -p buildSrc test
-          --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
-          --tests org.hermesnative.client.buildlogic.QualityVerificationFailClosedTest
-          --tests org.hermesnative.client.buildlogic.CoverageEvidenceTest
-          --tests org.hermesnative.client.buildlogic.MutationEvidenceTest
-          --tests org.hermesnative.client.buildlogic.BoundaryDoubleVerifierTest
-          --tests org.hermesnative.client.buildlogic.ReportEvidenceTest
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest
+          --tests org.mercurio.client.buildlogic.CoverageEvidenceTest
+          --tests org.mercurio.client.buildlogic.MutationEvidenceTest
+          --tests org.mercurio.client.buildlogic.BoundaryDoubleVerifierTest
+          --tests org.mercurio.client.buildlogic.ReportEvidenceTest
           --no-daemon
 
   coverage_mutation:
@@ -368,7 +368,7 @@ jobs:
               - 'app/src/main/**'
               - 'feature/entry/presentation/**'
               - 'feature/entry/wiring/src/main/res/**'
-              - 'fixtures/hermes/journey/**'
+              - 'fixtures/mercurio/journey/**'
       - name: Detect the changed files of the pull request
         id: changed_files
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
@@ -627,7 +627,7 @@ jobs:
   maestro_journeys:
     name: maestro-journeys
     needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test, maestro_shard_1, maestro_shard_2, maestro_shard_3]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) && (github.event_name != 'pull_request' || (needs.ui_paths.result != 'failure' && needs.formatting.result != 'failure' && needs.static_analysis.result != 'failure' && needs.detekt.result != 'failure' && needs.unit_tests.result != 'failure' && needs.fixture_descriptor.result != 'failure' && needs.fixture_lifecycle.result != 'failure' && needs.fixture_contract.result != 'failure' && needs.android_build.result != 'failure' && needs.coverage_mutation.result != 'failure' && needs.compose_test.result != 'failure')) }}
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || (needs.ui_paths.result != 'failure' && needs.formatting.result != 'failure' && needs.static_analysis.result != 'failure' && needs.detekt.result != 'failure' && needs.unit_tests.result != 'failure' && needs.fixture_descriptor.result != 'failure' && needs.fixture_lifecycle.result != 'failure' && needs.fixture_contract.result != 'failure' && needs.android_build.result != 'failure' && needs.coverage_mutation.result != 'failure' && needs.compose_test.result != 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -653,7 +653,7 @@ jobs:
   maestro_shard_1:
     name: maestro-journeys-shard-1-of-3
     needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -743,7 +743,7 @@ jobs:
   maestro_shard_2:
     name: maestro-journeys-shard-2-of-3
     needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -833,7 +833,7 @@ jobs:
   maestro_shard_3:
     name: maestro-journeys-shard-3-of-3
     needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -1184,9 +1184,12 @@ jobs:
             fi
             if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* || "$ui_paths_decision" == true ]]; then
               test "$API24_INSTRUMENTATION_RESULT" = success
-              test "$MAESTRO_JOURNEYS_RESULT" = success
             else
               test "$API24_INSTRUMENTATION_RESULT" = skipped
+            fi
+            if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* ]]; then
+              test "$MAESTRO_JOURNEYS_RESULT" = success
+            else
               test "$MAESTRO_JOURNEYS_RESULT" = skipped
             fi
           else

@@ -1,0 +1,44 @@
+appId: org.mercurio.client
+name: offline-session-list
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add Gateway Connection"
+- tapOn: "Gateway HTTPS endpoint"
+- inputText: "https://10.0.2.2:18443"
+- hideKeyboard
+- tapOn: "Bearer credential"
+- inputText: "synthetic-token"
+- hideKeyboard
+- takeScreenshot: offline-session-list-form-filled
+- tapOn: "Verify Gateway Connection"
+- extendedWaitUntil:
+    visible: "Alpha Session"
+    timeout: 30000
+- tapOn: "Refresh"
+- extendedWaitUntil:
+    visible: "The displayed Session data may be stale."
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Alpha Session"
+    timeout: 30000
+- tapOn: "Alpha Session"
+- extendedWaitUntil:
+    visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "This Session could not be opened. It may have been removed. Return to the list or refresh."
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Try again"
+    timeout: 30000
+- tapOn: "Try again"
+- extendedWaitUntil:
+    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Alpha Session"
+    timeout: 30000

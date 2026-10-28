@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "org.hermesnative.client.feature.entry.wiring"
+    namespace = "org.mercurio.client.feature.entry.wiring"
     compileSdk = 35
 
     defaultConfig {

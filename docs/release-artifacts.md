@@ -16,11 +16,11 @@ verify it, and what must be checked before the release is announced.
   Nightly run links, the exact-APK Local Live Smoke result with the hash of the reviewed redacted
   evidence, the public user changes, and the community-support-only policy.
 - Exactly three assets:
-  - `hermes-native-client.apk` — the signed ARM64 device APK. The bytes are the ones the protected
+  - `mercurio.apk` — the signed ARM64 device APK. The bytes are the ones the protected
     signer produced for the selected Nightly; the Android version name and version code embedded in
     the APK are retained. The stable Semantic Version is release metadata and a tag, not a modified
     or re-signed artifact.
-  - `SHA256SUMS` — a single line, `<apk-sha256>  hermes-native-client.apk`.
+  - `SHA256SUMS` — a single line, `<apk-sha256>  mercurio.apk`.
   - `signing-metadata.json` — the source commit, the deterministic validation run identity and
     attempt, the signing run identity and attempt, the Android version code and version name, the
     actual native ABI list, the APK SHA-256, and the signing certificate SHA-256.
@@ -39,7 +39,7 @@ release artifacts are documented in [Development Nightly releases](nightly-relea
 The published compatibility statement of a release is the one recorded in that release's notes. The
 client is validated against the repository's pinned, immutable Hermes revision
 `d9833c5615b80e199a174cd67d90ab430695a972`, whose descriptor is
-[`fixtures/hermes/pinned-fixture.properties`](../fixtures/hermes/pinned-fixture.properties). See
+[`fixtures/mercurio/pinned-fixture.properties`](../fixtures/mercurio/pinned-fixture.properties). See
 [Deterministic Hermes fixture](deterministic-fixture.md) for the pinned provenance and the
 compatibility-change rules. A mutable reference such as `main` or `latest` is never release
 evidence.
@@ -50,8 +50,8 @@ Download the assets and check them with Android Build Tools 35.0.0:
 
 ```text
 sha256sum --check SHA256SUMS
-apksigner verify --print-certs hermes-native-client.apk
-aapt2 dump badging hermes-native-client.apk
+apksigner verify --print-certs mercurio.apk
+aapt2 dump badging mercurio.apk
 ```
 
 Compare the reported certificate digest with the release notes and with the pinned
@@ -78,10 +78,10 @@ The check reads the release back and fails closed on any of the following:
   tag;
 - the tag does not target a full source commit, or the notes omit the Semantic Version, source
   commit, milestone, APK SHA-256, compatibility statement, or the community-support-only policy;
-- the asset set is not exactly `hermes-native-client.apk`, `SHA256SUMS`, and
+- the asset set is not exactly `mercurio.apk`, `SHA256SUMS`, and
   `signing-metadata.json`, an asset is not uploaded, or an asset download link does not belong to
   this repository's release tag;
-- `SHA256SUMS` does not state the SHA-256 of the downloaded `hermes-native-client.apk`;
+- `SHA256SUMS` does not state the SHA-256 of the downloaded `mercurio.apk`;
 - `signing-metadata.json` does not bind the source commit, the APK checksum, and the pinned signing
   certificate, or its reported Android version and native ABI list disagree with the APK;
 - the downloaded APK is not signed by the pinned certificate identity, or contains a native

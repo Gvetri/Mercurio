@@ -1,0 +1,212 @@
+package org.mercurio.client.feature.entry.application
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayCapabilities
+import org.mercurio.client.feature.entry.domain.GatewayConnection
+import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
+import org.mercurio.client.feature.entry.domain.GatewayEndpoint
+import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
+import org.mercurio.client.feature.entry.domain.GatewayException
+import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
+
+private fun clientManifestCapabilities(vararg extra: Pair<String, GatewayEndpoint>): GatewayCapabilities =
+    GatewayCapabilities(
+        PublicBetaGatewayCapabilityManifest.current.requiredEndpoints + extra.toMap(),
+    )
+
+class VerifyGatewayConnectionTest {
+    @Test
+    fun saves_the_trimmed_endpoint_and_verified_credential_after_all_required_capabilities_are_present() {
+        val repository = FakeGatewayConnectionRepository()
+        var receivedEndpoint: String? = null
+        var receivedCredential: String? = null
+        val verifier =
+            VerifyGatewayConnection(repository) { endpoint, credential ->
+                receivedEndpoint = endpoint
+                receivedCredential = credential
+                clientManifestCapabilities("gateway_future_endpoint" to GatewayEndpoint("GET", "/v1/future"))
+            }
+
+        val capabilities = verifier.execute("  https://gateway.example/profile/  ", "memory-only-token")
+
+        assertEquals("https://gateway.example/profile", receivedEndpoint)
+        assertEquals("memory-only-token", receivedCredential)
+        assertEquals(10, capabilities.endpoints.size)
+        assertEquals(GatewayConnection("https://gateway.example/profile", "memory-only-token"), repository.saved)
+    }
+
+    @Test
+    fun canonicalizes_scheme_host_and_default_https_port_for_recovery_scoping() {
+        val repository = FakeGatewayConnectionRepository()
+        val verifier =
+            VerifyGatewayConnection(repository) { endpoint, _ ->
+                assertEquals("https://gateway.example/profile", endpoint)
+                clientManifestCapabilities()
+            }
+
+        verifier.execute(" HTTPS://GATEWAY.EXAMPLE:0443/profile/ ", "token")
+
+        assertEquals(GatewayConnection("https://gateway.example/profile", "token"), repository.saved)
+    }
+
+    @Test
+    fun canonicalizes_only_percent_encoded_unreserved_path_characters() {
+        assertEquals(
+            "https://gateway.example/profile/aA0-._~",
+            normalizeGatewayEndpoint("https://gateway.example/profile/%61%41%30%2d%2E%5f%7e"),
+        )
+    }
+
+    @Test
+    fun preserves_reserved_non_ascii_and_nested_percent_escapes() {
+        val endpoint = "https://gateway.example/profile/a%2Fb%3f%25%C3%A9%2561"
+
+        assertEquals(endpoint, normalizeGatewayEndpoint(endpoint))
+    }
+
+    @Test
+    fun rejects_missing_required_capabilities_without_persisting_the_endpoint() {
+        val repository = FakeGatewayConnectionRepository()
+        val verifier =
+            VerifyGatewayConnection(repository) { _, _ ->
+                GatewayCapabilities(
+                    PublicBetaGatewayCapabilityManifest.current.requiredEndpoints
+                        .toMutableMap()
+                        .apply { remove("run_events") },
+                )
+            }
+
+        val error = captureFailure { verifier.execute("https://gateway.example", "token") }
+
+        assertEquals(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE, error.category)
+        assertNull(repository.saved)
+    }
+
+    @Test
+    fun rejects_a_required_endpoint_advertised_with_the_wrong_path_without_persisting_the_endpoint() {
+        val repository = FakeGatewayConnectionRepository()
+        val verifier =
+            VerifyGatewayConnection(repository) { _, _ ->
+                GatewayCapabilities(
+                    PublicBetaGatewayCapabilityManifest.current.requiredEndpoints
+                        .toMutableMap()
+                        .apply {
+                            this["session_messages"] =
+                                GatewayEndpoint("GET", "/api/sessions/{session_id}/history")
+                        },
+                )
+            }
+
+        val error = captureFailure { verifier.execute("https://gateway.example", "token") }
+
+        assertEquals(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE, error.category)
+        assertNull(repository.saved)
+    }
+
+    @Test
+    fun failed_replacement_verification_preserves_the_working_credential() {
+        val repository =
+            FakeGatewayConnectionRepository().apply {
+                saved = GatewayConnection("https://gateway.example", "working-token")
+            }
+        val verifier =
+            VerifyGatewayConnection(repository) { _, _ ->
+                throw GatewayException(GatewayErrorCategory.AUTHENTICATION_FAILED)
+            }
+
+        captureFailure {
+            verifier.execute(
+                endpoint = "https://gateway.example",
+                bearerCredential = "replacement-token",
+            )
+        }
+
+        assertEquals(GatewayConnection("https://gateway.example", "working-token"), repository.saved)
+    }
+
+    @Test
+    fun successful_replacement_verification_atomically_persists_the_proposed_credential() {
+        val repository =
+            FakeGatewayConnectionRepository().apply {
+                saved = GatewayConnection("https://gateway.example", "working-token")
+            }
+        val verifier =
+            VerifyGatewayConnection(repository) { _, _ ->
+                clientManifestCapabilities()
+            }
+
+        verifier.execute(
+            endpoint = "https://gateway.example",
+            bearerCredential = "replacement-token",
+        )
+
+        assertEquals(GatewayConnection("https://gateway.example", "replacement-token"), repository.saved)
+    }
+
+    @Test
+    fun rejects_blank_endpoint_and_credential_before_verification() {
+        val repository = FakeGatewayConnectionRepository()
+        val verifier = VerifyGatewayConnection(repository) { _, _ -> error("must not verify") }
+
+        assertEquals(
+            GatewayErrorCategory.INVALID_ADDRESS,
+            captureFailure { verifier.execute("  ", "token") }.category,
+        )
+        assertEquals(
+            GatewayErrorCategory.AUTHENTICATION_FAILED,
+            captureFailure { verifier.execute("https://gateway.example", "  ") }.category,
+        )
+    }
+
+    @Test
+    fun rejects_insecure_or_malformed_endpoints_before_verification() {
+        val repository = FakeGatewayConnectionRepository()
+        var verificationCalls = 0
+        val verifier =
+            VerifyGatewayConnection(repository) { _, _ ->
+                verificationCalls += 1
+                error("must not verify")
+            }
+
+        listOf(
+            "http://gateway.example",
+            "https://",
+            "https://gateway.example:0",
+            "https://gateway.example:65536",
+            "https://user@gateway.example",
+            "https://gateway.example?profile=one",
+            "https://gateway.example#profile",
+            "https://gateway.example/%",
+        ).forEach { endpoint ->
+            assertEquals(
+                "endpoint=$endpoint",
+                GatewayErrorCategory.INVALID_ADDRESS,
+                captureFailure { verifier.execute(endpoint, "token") }.category,
+            )
+        }
+
+        assertNull(repository.saved)
+        assertEquals(0, verificationCalls)
+    }
+
+    private fun captureFailure(block: () -> Unit): GatewayException {
+        try {
+            block()
+        } catch (error: GatewayException) {
+            return error
+        }
+        throw AssertionError("Expected GatewayException")
+    }
+
+    private class FakeGatewayConnectionRepository : GatewayConnectionRepository {
+        var saved: GatewayConnection? = null
+
+        override fun load(): GatewayConnection? = saved
+
+        override fun save(connection: GatewayConnection) {
+            saved = connection
+        }
+    }
+}

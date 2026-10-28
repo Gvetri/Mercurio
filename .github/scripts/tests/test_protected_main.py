@@ -131,7 +131,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         )
         self.assertEqual("[ui_paths]", job_key(contracts, "needs"))
         self.assertIn("./gradlew -p buildSrc test", contracts)
-        self.assertIn("--tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest", contracts)
+        self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", contracts)
         architecture = job_block(self.workflow, "architecture_check")
         self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
         self.assertNotIn("./gradlew -p buildSrc test", architecture)
@@ -260,11 +260,17 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "${{ always() && " + label_guard + " && (" + emulator_gate + ") }}",
             job_key(job_block(self.workflow, "api24_instrumentation"), "if"),
         )
+        journey_gate = (
+            "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
+            "(github.event_name == 'pull_request' && !github.event.pull_request.draft && "
+            "!github.event.pull_request.head.repo.fork && "
+            "contains(github.event.pull_request.labels.*.name, 'run-maestro'))"
+        )
         self.assertEqual(
             "${{ always() && needs.api24_instrumentation.result == 'success' && "
             + label_guard
             + " && ("
-            + emulator_gate
+            + journey_gate
             + ") && (github.event_name != 'pull_request' || ("
             + " && ".join(
                 f"needs.{lane}.result != 'failure'"
@@ -276,18 +282,18 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             )
             + ")) }}",
             job_key(job_block(self.workflow, "maestro_journeys"), "if"),
-            "a failed required lane must skip the shard aggregate on pull requests while nightly validations run to completion",
+            "a failed required lane must skip the shard aggregate on pull requests while nightly validations run to completion, and a changed UI path must never start the journey lane",
         )
         for shard in ("maestro_shard_1", "maestro_shard_2", "maestro_shard_3"):
             self.assertEqual(
                 "${{ always() && needs.api24_instrumentation.result == 'success' && "
                 + label_guard
                 + " && ("
-                + emulator_gate
+                + journey_gate
                 + ") && (github.event_name != 'pull_request' "
                 "|| !contains(needs.*.result, 'failure')) }}",
                 job_key(job_block(self.workflow, shard), "if"),
-                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion",
+                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion, and a changed UI path must never start a journey shard",
             )
         self.assertEqual(
             "[ui_paths]",
@@ -332,7 +338,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
                 "app/src/main/**",
                 "feature/entry/presentation/**",
                 "feature/entry/wiring/src/main/res/**",
-                "fixtures/hermes/journey/**",
+                "fixtures/mercurio/journey/**",
             ],
             re.findall(r"^              - '(.+)'$", filters, re.MULTILINE),
         )

@@ -35,7 +35,7 @@ from livesmoke.proc import CommandResult, SubprocessRunner  # noqa: E402
 from support import ScriptedRunner  # noqa: E402
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-TLS_ASSETS = REPO_ROOT / "fixtures" / "hermes" / "journey-tls"
+TLS_ASSETS = REPO_ROOT / "fixtures" / "mercurio" / "journey-tls"
 P12 = TLS_ASSETS / "journey-gateway.p12"
 OPENSSL = shutil.which("openssl")
 

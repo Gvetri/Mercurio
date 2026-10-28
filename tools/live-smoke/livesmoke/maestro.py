@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from livesmoke.errors import LiveSmokeError
 
-APP_ID = "org.hermesnative.client"
+APP_ID = "org.mercurio.client"
 
 CONNECTED_MARKER = "Connected to Gateway"
 SESSIONS_MARKER = "Create Session"

@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "hermes-native-client"
+rootProject.name = "mercurio"
 
 include(":app")
 include(":feature:entry:domain")
@@ -22,4 +22,4 @@ include(":feature:entry:application")
 include(":feature:entry:data")
 include(":feature:entry:presentation")
 include(":feature:entry:wiring")
-include(":fixtures:hermes:runner")
+include(":fixtures:mercurio:runner")

@@ -38,9 +38,9 @@ must report `skipped`, and any other outcome fails the aggregate; see
 | `commit-message` | `.github/scripts/verify-conventional-commits.py` | The squash-merge title or a commit of the pull request is not a Conventional Commit, or the commit list of the pull request is unavailable, empty, or truncated |
 | `draft-validation` | `formatCheck :app:lintDebug` | The head of a draft pull request is unformatted or fails Android lint |
 | `fork-guard` | `.github/workflows/quality-gate.yml` | Never on its own: it reports the handling of an external-fork pull request, and the aggregate requires it for every pull request, then fails closed for an external fork |
-| `ui-paths` | `dorny/paths-filter` (pinned revision) in `.github/workflows/quality-gate.yml` | The changed-file answer for the pull request is unavailable or the detector reports an unreadable decision: the emulator-lane routing fails closed. The detector declares the UI surface as `app/src/main/**`, `feature/entry/presentation/**`, `feature/entry/wiring/src/main/res/**`, and `fixtures/hermes/journey/**`. The same job classifies a documentation-only head against the declared documentation surface, and an unreadable changed-file answer fails closed to the full gate |
+| `ui-paths` | `dorny/paths-filter` (pinned revision) in `.github/workflows/quality-gate.yml` | The changed-file answer for the pull request is unavailable or the detector reports an unreadable decision: the emulator-lane routing fails closed. The detector declares the UI surface as `app/src/main/**`, `feature/entry/presentation/**`, `feature/entry/wiring/src/main/res/**`, and `fixtures/mercurio/journey/**`. The same job classifies a documentation-only head against the declared documentation surface, and an unreadable changed-file answer fails closed to the full gate |
 | `api24-instrumentation` | `:app:verifyConnectedAndroidTests` | Instrumentation produced no tests, skipped a test, or reported a failure. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label or modifies a declared UI path; skipped on main pushes, drafts, external forks, and pull requests that carry neither |
-| `maestro-journeys` | `.github/scripts/journey-run.sh` | A deterministic emulator journey fails against the controlled fake Gateway. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label or modifies a declared UI path, after a passing `api24-instrumentation`; skipped on main pushes, drafts, external forks, and pull requests that carry neither |
+| `maestro-journeys` | `.github/scripts/journey-run.sh` | A deterministic emulator journey fails against the controlled fake Gateway. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label, after a passing `api24-instrumentation`; skipped on main pushes, drafts, external forks, and every pull request without the label, including one that modifies a declared UI path. [The journey suite](deterministic-emulator-journeys.md#requesting-the-journey-lane) lists the key areas that need the label |
 
 A documentation-only pull request takes a fast path: when the decision job reports that every
 changed file of the head is a Markdown file outside `.github/` or a file under `docs/**`, the heavy
@@ -68,7 +68,7 @@ support job) with its own `needs` list, so a check can neither be dropped from t
 silently nor added without updating the declaration. Support jobs such as `buildsrc_contracts` are
 not declared GitHub statuses; the aggregate `quality-gate` remains the single required status. The
 workflow contracts are self-tested in
-`buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/QualityGateConfigurationTest.kt`, the
+`buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/QualityGateConfigurationTest.kt`, the
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,
 and `ReportEvidenceTest`, the fail-closed behaviour of the real tasks in
 `QualityVerificationFailClosedTest`, and the architecture rules in `ArchitectureCheckTest`. The
@@ -83,13 +83,13 @@ enforces it and CI executes that check.
 
 ## Declared scopes and thresholds
 
-`QualityPolicy` in `buildSrc/src/main/kotlin/org/hermesnative/client/buildlogic/QualityPolicy.kt`
+`QualityPolicy` in `buildSrc/src/main/kotlin/org/mercurio/client/buildlogic/QualityPolicy.kt`
 is the single declaration of the enforced scope. The Gradle tasks read their thresholds from it, and
 the tables below mirror those declared values; the "(measured …)" figures record what each module
 measured when its scope was declared.
 
-The Gradle wiring is declared once as well. `buildSrc/src/main/kotlin/hermes-quality-gate.gradle.kts`
-is a convention plugin: each modified module applies `id("hermes-quality-gate")` and keeps no Kover or
+The Gradle wiring is declared once as well. `buildSrc/src/main/kotlin/mercurio-quality-gate.gradle.kts`
+is a convention plugin: each modified module applies `id("mercurio-quality-gate")` and keeps no Kover or
 PIT block of its own. `buildSrc` resolves the Kover and PIT plugin versions from the main build's
 version catalog and keeps both plugins on its build-logic classpath, so each version has one
 declaration. The plugin reads the module scope from `QualityPolicy` and fails on a module that
@@ -167,7 +167,7 @@ keeps no double check, so a new port belongs in the same change as its declarati
 ### Architecture rules
 
 `./gradlew architectureRuleTests` runs the architecture rule suite from
-`buildSrc/src/test/kotlin/org/hermesnative/client/buildlogic/ArchitectureCheckTest.kt` in an isolated
+`buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt` in an isolated
 build directory, and fails unless the focused source exists, its report exists, is non-empty, and
 holds at least one executed, unskipped, passing test. The rules are Konsist checks: the layer graph
 runs through the Konsist architecture assertion, and the reference rules read the declared scopes

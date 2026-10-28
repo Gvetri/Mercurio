@@ -5,11 +5,11 @@ workspace="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
 evidence_dir="$workspace/artifacts/journey-evidence"
 mkdir -p "$evidence_dir"
 
-keystore="$workspace/fixtures/hermes/journey-tls/journey-gateway.p12"
-ca_file="$workspace/fixtures/hermes/journey-tls/journey-ca.pem"
+keystore="$workspace/fixtures/mercurio/journey-tls/journey-gateway.p12"
+ca_file="$workspace/fixtures/mercurio/journey-tls/journey-ca.pem"
 apk="$workspace/app/build/outputs/apk/debug/app-debug.apk"
-scenario_dir="$workspace/fixtures/hermes/journey/scenarios"
-flow_dir="$workspace/fixtures/hermes/journey/flows"
+scenario_dir="$workspace/fixtures/mercurio/journey/scenarios"
+flow_dir="$workspace/fixtures/mercurio/journey/flows"
 
 log() { printf '%s\n' "$*"; }
 
@@ -24,6 +24,7 @@ journeys=(
     streaming
     live-streaming
     interrupted-sse-refetch
+    sse-idle-gap-streaming
     composer-stop
     terminal-success
     terminal-failure
@@ -181,8 +182,8 @@ unzip -j -o "$workspace/maestro-cli/maestro/lib/maestro-client.jar" \
     "maestro-app.apk" "maestro-server.apk" -d "$driver_dir" >/dev/null
 
 log "Preparing the journey Gateway classpath."
-( cd "$workspace" && ./gradlew :fixtures:hermes:runner:journeyGatewayClasspath --console=plain -q )
-classpath_file="$workspace/fixtures/hermes/runner/build/journey-classpath.txt"
+( cd "$workspace" && ./gradlew :fixtures:mercurio:runner:journeyGatewayClasspath --console=plain -q )
+classpath_file="$workspace/fixtures/mercurio/runner/build/journey-classpath.txt"
 classpath="$(cat "$classpath_file")"
 
 for journey_slot in "${!journeys[@]}"; do
@@ -196,7 +197,7 @@ for journey_slot in "${!journeys[@]}"; do
     gateway_log="$evidence_dir/${journey}-gateway.log"
     java -Dfixture.repositoryRoot="$workspace" \
         -cp "$classpath" \
-        org.hermesnative.client.fixture.journey.JourneyGatewayMainKt \
+        org.mercurio.client.fixture.journey.JourneyGatewayMainKt \
         "$scenario_dir/$journey.json" "$keystore" >"$gateway_log" 2>&1 &
     gateway_pid=$!
     active_journey="$journey"
@@ -231,7 +232,7 @@ for journey_slot in "${!journeys[@]}"; do
     }
     if ! printf '%s' "$capabilities_body" | python3 \
         "$workspace/.github/scripts/verify-journey-capabilities.py" \
-        "$workspace/fixtures/hermes/contracts/capabilities/success.json" "$journey"; then
+        "$workspace/fixtures/mercurio/contracts/capabilities/success.json" "$journey"; then
         log "Journey Gateway capability check failed for $journey."
         exit 1
     fi
@@ -280,7 +281,7 @@ for journey_slot in "${!journeys[@]}"; do
 
     java -Dfixture.repositoryRoot="$workspace" \
         -cp "$classpath" \
-        org.hermesnative.client.fixture.journey.JourneyVerifierKt \
+        org.mercurio.client.fixture.journey.JourneyVerifierKt \
         "https://127.0.0.1:18443/__fixture/telemetry" "$journey" "$keystore" ||
         {
             cp -r "$HOME/.maestro/tests" "$evidence_dir/${journey}-maestro-tests" 2>/dev/null || true
