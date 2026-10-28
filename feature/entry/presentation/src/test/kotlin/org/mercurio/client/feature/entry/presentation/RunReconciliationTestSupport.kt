@@ -220,7 +220,8 @@ internal fun openReconciledSession(
     awaitReconciliationState(holder) { it.sessionList?.sessions == listOf(gateway.session.toSessionItemUiState()) }
     holder.onEvent(EntryUiEvent.SessionClicked(gateway.session.id))
     awaitReconciliationState(holder) {
-        it.sessionList?.openedSession?.session?.id == gateway.session.id &&
+        it.sessionList?.openingSessionId == null &&
+            it.sessionList?.openedSession?.session?.id == gateway.session.id &&
             !it.sessionList!!.openedSession!!.isReconciliationInProgress
     }
 }
