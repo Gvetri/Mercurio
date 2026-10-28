@@ -13,11 +13,14 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
 import org.mercurio.client.feature.entry.domain.GatewayCredentialStore
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
+import org.mercurio.client.feature.entry.domain.HistoryCacheKey
+import org.mercurio.client.feature.entry.domain.HistoryCacheStore
 import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.mercurio.client.feature.entry.domain.Run
@@ -49,6 +52,13 @@ class EntryWiringRestartIntegrationTest {
     private val holders = mutableListOf<EntryStateHolder>()
     private val gateways = mutableSetOf<RestartGateway>()
     private val credentialStore = InMemoryGatewayCredentialStore()
+
+    @Before
+    fun clearSharedSubmissionState() {
+        val context = RuntimeEnvironment.getApplication()
+        val key = PendingRunSubmissionKey("https://gateway.example/profile", RestartGateway.SESSION_ID)
+        SharedPreferencesRunSubmissionUncertaintyStore(context).remove(key)
+    }
 
     @After
     fun finishHolderWork() {
@@ -192,6 +202,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(restartedHolder, endpoint, hasSavedEndpoint = true)
                 openSession(restartedHolder, gateway.session.id)
+                awaitCondition { gateway.statusRequests.contains(gateway.activeRun.id) }
                 awaitState(restartedHolder) {
                     it.sessionList?.openedSession?.let { opened -> !opened.isReconciliationInProgress } == true
                 }
@@ -480,6 +491,29 @@ class EntryWiringRestartIntegrationTest {
         }
     }
 
+    @Test
+    fun production_wiring_sends_after_a_leftover_unresolved_submission_is_cleared() {
+        val context = RuntimeEnvironment.getApplication()
+        val key = PendingRunSubmissionKey("https://gateway.example/profile", RestartGateway.SESSION_ID)
+        val store = SharedPreferencesRunSubmissionUncertaintyStore(context)
+        store.remove(key)
+        store.add(key, emptySet(), "leftover-attempt")
+        clearSharedSubmissionState()
+        val gateway = RestartGateway()
+        val holder = createHolder(context, gateway)
+        try {
+            connect(holder, "https://gateway.example/profile", hasSavedEndpoint = false)
+            openSession(holder, gateway.session.id)
+            holder.onEvent(EntryUiEvent.ComposerTextChanged("Send after the clear"))
+            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            awaitState(holder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
+            assertEquals(1, gateway.runRequests.size)
+        } finally {
+            holder.close()
+            store.remove(key)
+        }
+    }
+
     private fun createHolder(
         context: Context,
         gateway: RestartGateway,
@@ -498,6 +532,7 @@ class EntryWiringRestartIntegrationTest {
                     runGatewayFactory = { _, _ -> gateway },
                     coroutineScope = coroutineScope,
                     credentialStore = credentialStore,
+                    historyCacheStore = InMemoryHistoryCacheStore(),
                 ),
         ).also {
             holders += it
@@ -693,7 +728,7 @@ class EntryWiringRestartIntegrationTest {
             if (blockCreate) {
                 runStarted.countDown()
                 try {
-                    check(releaseCreate.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                    check(releaseCreate.await(RELEASE_GUARD_MILLIS, TimeUnit.MILLISECONDS)) {
                         "Run was not released."
                     }
                 } finally {
@@ -707,7 +742,7 @@ class EntryWiringRestartIntegrationTest {
             statusRequests += runId
             if (blockStatus) {
                 statusStarted.countDown()
-                check(releaseStatus.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                check(releaseStatus.await(RELEASE_GUARD_MILLIS, TimeUnit.MILLISECONDS)) {
                     "Run status was not released."
                 }
             }
@@ -778,8 +813,43 @@ class EntryWiringRestartIntegrationTest {
         }
     }
 
+    private class InMemoryHistoryCacheStore : HistoryCacheStore {
+        private val transcripts = mutableMapOf<HistoryCacheKey, List<GatewayHistoryMessage>>()
+        private val sessionLists = mutableMapOf<String, List<Session>>()
+
+        override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> = transcripts[key].orEmpty()
+
+        override fun write(
+            key: HistoryCacheKey,
+            messages: List<GatewayHistoryMessage>,
+        ) {
+            transcripts[key] = messages
+        }
+
+        override fun readSessionList(endpoint: String): List<Session> = sessionLists[endpoint].orEmpty()
+
+        override fun writeSessionList(
+            endpoint: String,
+            sessions: List<Session>,
+        ) {
+            sessionLists[endpoint] = sessions
+        }
+
+        override fun clearEndpoint(endpoint: String) {
+            sessionLists.remove(endpoint)
+            transcripts.keys.removeAll { it.endpoint == endpoint }
+        }
+
+        override fun clear() {
+            transcripts.clear()
+            sessionLists.clear()
+        }
+    }
+
     private companion object {
         const val BOUNDED_AWAIT_TIMEOUT_MILLIS = 60_000L
+
+        const val RELEASE_GUARD_MILLIS = 5_000L
 
         const val SLOW_GATEWAY_SIGNAL_MILLIS = 5_500L
     }
