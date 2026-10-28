@@ -179,11 +179,7 @@ class HistoryCachePopulationTest {
             awaitSessions(holder, gateway.sessionId.value)
             holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
             awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
-
-            assertEquals(
-                "message-1",
-                cache.cachedTranscript(endpoint, gateway.sessionId.value).single().id,
-            )
+            awaitCachedTranscriptMessage(cache, endpoint, gateway.sessionId.value, "message-1")
 
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
             assertTrue(gateway.refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
