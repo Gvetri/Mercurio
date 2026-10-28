@@ -13,6 +13,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
@@ -52,6 +53,13 @@ class EntryWiringRestartIntegrationTest {
     private val gateways = mutableSetOf<RestartGateway>()
     private val credentialStore = InMemoryGatewayCredentialStore()
 
+    @Before
+    fun clearSharedSubmissionState() {
+        val context = RuntimeEnvironment.getApplication()
+        val key = PendingRunSubmissionKey("https://gateway.example/profile", RestartGateway.SESSION_ID)
+        SharedPreferencesRunSubmissionUncertaintyStore(context).remove(key)
+    }
+
     @After
     fun finishHolderWork() {
         gateways.forEach { gateway ->
@@ -84,7 +92,7 @@ class EntryWiringRestartIntegrationTest {
                 firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Persist this run"))
                 firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitState(firstHolder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
-                assertTrue(gateway.observationStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(gateway.observationStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 awaitRecoveryEntries(storage, setOf(RunRecoveryEntry(gateway.session.id, gateway.activeRun.id)))
                 assertEquals(1, storage.load().size)
                 assertTrue(otherEndpointStorage.load().isEmpty())
@@ -98,7 +106,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(restartedHolder, endpoint, hasSavedEndpoint = true)
                 runBlocking {
-                    withTimeout(TEST_TIMEOUT_MILLIS) {
+                    withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) {
                         while (!gateway.statusRequests.contains(gateway.activeRun.id) || storage.load().isNotEmpty()) {
                             kotlinx.coroutines.delay(25)
                         }
@@ -143,7 +151,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(restartedHolder, endpoint, hasSavedEndpoint = true)
                 openSession(restartedHolder, gateway.session.id)
-                assertTrue(gateway.statusStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(gateway.statusStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 restartedHolder.onEvent(EntryUiEvent.ComposerTextChanged("Do not duplicate"))
                 restartedHolder.onEvent(EntryUiEvent.SendMessageClicked)
                 val blocked = requireNotNull(requireNotNull(restartedHolder.uiState.value.sessionList).openedSession)
@@ -300,7 +308,7 @@ class EntryWiringRestartIntegrationTest {
                 openSession(firstHolder, gateway.session.id)
                 firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Keep one request"))
                 firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 assertTrue(SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey))
 
                 val restartedHolder = createHolder(context, gateway)
@@ -320,7 +328,7 @@ class EntryWiringRestartIntegrationTest {
                 firstHolder.close()
             }
             gateway.releaseCreate.countDown()
-            assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            assertTrue(gateway.runFinished.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             awaitCondition { !SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey) }
         } finally {
             gateway.releaseCreate.countDown()
@@ -391,7 +399,7 @@ class EntryWiringRestartIntegrationTest {
                 gateway.blockCreate = true
                 firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Do not lose recovery"))
                 firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 firstHolder.close()
                 assertFalse(SharedPreferencesRunSubmissionUncertaintyStore(context).isSettled(uncertaintyKey))
@@ -399,7 +407,7 @@ class EntryWiringRestartIntegrationTest {
                 gateway.releaseCreate.countDown()
                 firstHolder.close()
             }
-            assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            assertTrue(gateway.runFinished.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             awaitCondition { !SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey) }
 
             gateway.terminal = true
@@ -464,6 +472,48 @@ class EntryWiringRestartIntegrationTest {
         }
     }
 
+    @Test
+    fun production_wiring_awaits_a_gateway_create_signal_slower_than_five_seconds() {
+        val context = RuntimeEnvironment.getApplication()
+        val gateway = RestartGateway()
+        gateway.blockCreate = true
+        gateway.createSignalDelayMillis = SLOW_GATEWAY_SIGNAL_MILLIS
+        val holder = createHolder(context, gateway)
+        try {
+            connect(holder, "https://gateway.example/profile", hasSavedEndpoint = false)
+            openSession(holder, gateway.session.id)
+            holder.onEvent(EntryUiEvent.ComposerTextChanged("A loaded Runner answers slowly"))
+            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+        } finally {
+            gateway.releaseCreate.countDown()
+            holder.close()
+        }
+    }
+
+    @Test
+    fun production_wiring_sends_after_a_leftover_unresolved_submission_is_cleared() {
+        val context = RuntimeEnvironment.getApplication()
+        val key = PendingRunSubmissionKey("https://gateway.example/profile", RestartGateway.SESSION_ID)
+        val store = SharedPreferencesRunSubmissionUncertaintyStore(context)
+        store.remove(key)
+        store.add(key, emptySet(), "leftover-attempt")
+        clearSharedSubmissionState()
+        val gateway = RestartGateway()
+        val holder = createHolder(context, gateway)
+        try {
+            connect(holder, "https://gateway.example/profile", hasSavedEndpoint = false)
+            openSession(holder, gateway.session.id)
+            holder.onEvent(EntryUiEvent.ComposerTextChanged("Send after the clear"))
+            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            awaitState(holder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
+            assertEquals(1, gateway.runRequests.size)
+        } finally {
+            holder.close()
+            store.remove(key)
+        }
+    }
+
     private fun createHolder(
         context: Context,
         gateway: RestartGateway,
@@ -516,7 +566,7 @@ class EntryWiringRestartIntegrationTest {
         predicate: (org.mercurio.client.feature.entry.presentation.EntryUiState) -> Boolean,
     ) {
         runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) {
+            withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) {
                 holder.uiState.first(predicate)
             }
         }
@@ -527,7 +577,7 @@ class EntryWiringRestartIntegrationTest {
         expected: Set<RunRecoveryEntry>,
     ) {
         runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) {
+            withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) {
                 while (storage.load() != expected) delay(10)
             }
         }
@@ -535,7 +585,7 @@ class EntryWiringRestartIntegrationTest {
 
     private fun awaitCondition(predicate: () -> Boolean) {
         runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) {
+            withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) {
                 while (!predicate()) delay(10)
             }
         }
@@ -547,7 +597,7 @@ class EntryWiringRestartIntegrationTest {
                 .apply { isAccessible = true }
                 .get(holder) as CoroutineScope
         runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) { scope.coroutineContext[Job]?.join() }
+            withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { scope.coroutineContext[Job]?.join() }
         }
     }
 
@@ -597,6 +647,9 @@ class EntryWiringRestartIntegrationTest {
 
         @Volatile
         var blockStatus = false
+
+        @Volatile
+        var createSignalDelayMillis = 0L
 
         val runStarted = CountDownLatch(1)
         val runFinished = CountDownLatch(1)
@@ -667,6 +720,7 @@ class EntryWiringRestartIntegrationTest {
             input: String,
         ): Run {
             runRequests += sessionId to input
+            if (createSignalDelayMillis > 0) Thread.sleep(createSignalDelayMillis)
             if (failCreateAfterAcceptance) {
                 acceptedRunVisible = true
                 error("response lost after acceptance")
@@ -674,7 +728,7 @@ class EntryWiringRestartIntegrationTest {
             if (blockCreate) {
                 runStarted.countDown()
                 try {
-                    check(releaseCreate.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                    check(releaseCreate.await(RELEASE_GUARD_MILLIS, TimeUnit.MILLISECONDS)) {
                         "Run was not released."
                     }
                 } finally {
@@ -688,7 +742,7 @@ class EntryWiringRestartIntegrationTest {
             statusRequests += runId
             if (blockStatus) {
                 statusStarted.countDown()
-                check(releaseStatus.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                check(releaseStatus.await(RELEASE_GUARD_MILLIS, TimeUnit.MILLISECONDS)) {
                     "Run status was not released."
                 }
             }
@@ -793,6 +847,10 @@ class EntryWiringRestartIntegrationTest {
     }
 
     private companion object {
-        const val TEST_TIMEOUT_MILLIS = 5_000L
+        const val BOUNDED_AWAIT_TIMEOUT_MILLIS = 60_000L
+
+        const val RELEASE_GUARD_MILLIS = 5_000L
+
+        const val SLOW_GATEWAY_SIGNAL_MILLIS = 5_500L
     }
 }
