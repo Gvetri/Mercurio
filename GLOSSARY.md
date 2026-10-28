@@ -47,3 +47,15 @@ _Avoid_: URI handler, app link, intent URL
 **Canonical scheme**:
 The one URI scheme the client owns (`mercurio`). Deep links use it; a future interactive sign-in redirect reuses it.
 _Avoid_: custom scheme, protocol
+
+**Inline image**:
+An image referenced by URL inside Message content and rendered in the transcript.
+_Avoid_: attachment, media file
+
+**Link preview**:
+A compact card of fetched title, site domain, optional description, and optional thumbnail shown for an HTTPS link in a Message.
+_Avoid_: embed, snippet, open graph card
+
+**Lightbox**:
+The full-screen viewer for a loaded Inline image, offering zoom, save, and share.
+_Avoid_: gallery, photo browser

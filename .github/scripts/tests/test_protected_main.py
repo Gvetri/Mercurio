@@ -234,11 +234,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         coverage_mutation_gate = (
             "${{ always() && (github.event.action != 'labeled' || "
             "github.event.label.name == 'run-maestro') && "
-            "(github.event_name != 'pull_request' || "
-            "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && "
-            "(contains(github.event.pull_request.labels.*.name, 'run-maestro') || "
-            "(needs.ui_paths.outputs.docs_only_changed != 'true' && "
-            "needs.ui_paths.outputs.dependency_files_changed != 'true')))) }}"
+            "github.event_name != 'pull_request' }}"
         )
         self.assertEqual(coverage_mutation_gate, jobs["coverage_mutation"][1])
         self.assertEqual(
@@ -387,11 +383,12 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             )
         coverage_condition = job_key(job_block(self.workflow, "coverage_mutation"), "if")
         assert coverage_condition is not None, "coverage_mutation must declare a condition"
-        self.assertIn(
-            "(needs.ui_paths.outputs.docs_only_changed != 'true' && "
-            "needs.ui_paths.outputs.dependency_files_changed != 'true')",
+        self.assertEqual(
+            "${{ always() && (github.event.action != 'labeled' || "
+            "github.event.label.name == 'run-maestro') && "
+            "github.event_name != 'pull_request' }}",
             coverage_condition,
-            "the coverage lane must also skip a dependency-only head",
+            "the coverage lane must never run on a pull request",
         )
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn("DOCS_ONLY_CHANGED: ${{ needs.ui_paths.outputs.docs_only_changed }}", aggregate)
