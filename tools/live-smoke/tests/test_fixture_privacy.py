@@ -19,7 +19,7 @@ class LeakingFixture:
             if argv[1] == "devices":
                 return CommandResult(tuple(argv), 0, "List of devices attached\nemulator-5554\tdevice\n", '', 0)
             if argv[1] == "-s" and argv[3] == "emu":
-                return CommandResult(tuple(argv), 0, "hnc-issue29-live\nOK\n", '', 0)
+                return CommandResult(tuple(argv), 0, "mercurio-issue29-live\nOK\n", '', 0)
             if argv[1] == "-s" and argv[3] == "shell":
                 return CommandResult(tuple(argv), 0, "1\n", '', 0)
             if argv[1] == "-s" and argv[3] == "pull":
@@ -32,12 +32,12 @@ class FixturePrivacyTest(unittest.TestCase):
     def test_secret_in_fixture_state_fails_instead_of_claiming_redacted_success(self):
         with tempfile.TemporaryDirectory() as root:
             gate = LiveSmokeGate(
-                SimpleNamespace(docker_bin='docker', adb_bin='adb', avd_name='hnc-issue29-live',
+                SimpleNamespace(docker_bin='docker', adb_bin='adb', avd_name='mercurio-issue29-live',
                                 device_serial='emulator-5554'),
                 runner=LeakingFixture(), env={})
             gate.record = {
                 'fixture': {'container': {'id': 'owned'}},
-                'device': {'serial': 'emulator-5554', 'avd_name': 'hnc-issue29-live'},
+                'device': {'serial': 'emulator-5554', 'avd_name': 'mercurio-issue29-live'},
             }
             gate._secrets = ['synthetic-provider-key', 'synthetic-gateway-key']
             with self.assertRaises(LiveSmokeError) as ctx:

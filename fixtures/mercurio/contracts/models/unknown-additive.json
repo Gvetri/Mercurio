@@ -1,0 +1,33 @@
+{
+  "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+  "response": {
+    "status": 200,
+    "body": {
+      "object": "hermes.api_server.run_models",
+      "default_model": "deepseek-v4-flash",
+      "future_body_field": "additive-value-body",
+      "models": [
+        {
+          "id": "deepseek-v4-flash",
+          "display_name": "DeepSeek V4 Flash",
+          "provider": "opencode-go",
+          "future_entry_field": "additive-value-entry",
+          "effort": {
+            "supported": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "default": "medium"
+          }
+        },
+        {
+          "id": "hermes-agent",
+          "display_name": "Hermes Agent",
+          "provider": null
+        }
+      ]
+    }
+  },
+  "future_additive_field": "additive-value"
+}

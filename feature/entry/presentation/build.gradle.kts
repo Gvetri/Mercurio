@@ -71,7 +71,7 @@ tasks.configureEach {
 }
 
 android {
-    namespace = "org.hermesnative.client.feature.entry.presentation"
+    namespace = "org.mercurio.client.feature.entry.presentation"
     compileSdk = 35
 
     defaultConfig {
@@ -126,7 +126,7 @@ dependencies {
     testImplementation(libs.kotlinx.serialization.json)
     testImplementation(libs.okhttp)
     testImplementation(project(":feature:entry:data"))
-    testImplementation(project(":fixtures:hermes:runner"))
+    testImplementation(project(":fixtures:mercurio:runner"))
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

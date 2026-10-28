@@ -1,6 +1,6 @@
 # Gateway contract fixtures
 
-The files under [`fixtures/hermes/contracts`](../fixtures/hermes/contracts) are
+The files under [`fixtures/mercurio/contracts`](../fixtures/mercurio/contracts) are
 small, repository-owned evidence for the supported Public Beta Gateway boundary.
 They are not generated from a running Gateway and they do not require a public
 network, a provider, or a credential.
@@ -9,7 +9,7 @@ network, a provider, or a credential.
 
 Each accepted JSON or SSE fixture contains exactly one `hermes_revision` field.
 Its value must match the immutable provenance in
-[`fixtures/hermes/pinned-fixture.properties`](../fixtures/hermes/pinned-fixture.properties).
+[`fixtures/mercurio/pinned-fixture.properties`](../fixtures/mercurio/pinned-fixture.properties).
 The validator rejects a missing field, duplicate provenance metadata, an
 `image_digest` field when `hermes_revision` is selected, or a value that does
 not match the descriptor.
@@ -36,9 +36,10 @@ adapters must use these shapes and must not infer additional routes or fields.
 | Session pin | `PATCH /api/sessions/{session_id}` with `pinned: true` |
 | Session unpin | `PATCH /api/sessions/{session_id}` with `pinned: false` |
 | Session delete | `DELETE /api/sessions/{session_id}` returning the `hermes.session.deleted` object |
-| Run create | `POST /v1/runs` with `session_id` and `input`; the response carries the authoritative Run ID and status |
+| Run create | `POST /v1/runs` with `session_id` and `input`, plus the optional `model` and `effort` keys that are omitted when unset; the response carries the authoritative Run ID and status |
 | Run status | `GET /v1/runs/{run_id}` |
 | Run observation | `GET /v1/runs/{run_id}/events` as Server-Sent Events |
+| Model catalog | `GET /api/models`, additive-optional, never a client-required endpoint; the supported response shape is defined in [Run model catalog](#run-model-catalog) |
 
 Session row responses (create, get, and patch) can omit the list-only `preview`
 field. Missing preview remains unavailable; it is not fabricated from history.
@@ -89,6 +90,64 @@ and steering events indicate an active Run but do not expose tool or provider
 administration. Other event types are ignored. The current adapter has no
 server event cursor or event-ID deduplication claim; it prevents duplicate
 observers locally. Unknown fields and events must not invent client behavior.
+
+### Run model catalog
+
+The Run model catalog is an additive-optional surface. The client never requires
+it and connection verification never depends on it: the manifest version stays
+`1` and the required endpoint table above is unchanged.
+
+The capability entry is the endpoint row
+
+| Endpoint name | Method | Path |
+| --- | --- | --- |
+| `run_models` | `GET` | `/api/models` |
+
+Detection uses the same case-insensitive exact method-and-path rule as required
+endpoints, applied to this optional row: the row is present with the exact
+pinned method and path, and the catalog is available; the row is absent or
+mismatched, and the catalog is unavailable without any failure. A bearer-
+authenticated `GET /api/models` (see the bare request in
+[`fixtures/mercurio/contracts/models`](../fixtures/mercurio/contracts/models))
+returns HTTP 200 with:
+
+- `object` — the fixed discriminator `hermes.api_server.run_models`;
+- `default_model` — string or null; the server's configured Run model, and the
+  truthful baseline the client shows when it is non-null;
+- `models[]` — a required, non-empty array; each entry carries `id` (a non-blank
+  string and the exact value the client sends in Run creation), `display_name`
+  (a non-blank UI string), and `provider` (string or null, informational only
+  and never credential material);
+- `effort` — an optional per-entry object; its presence means the server
+  declares effort support for that model. `supported` is a non-empty ordered
+  array of server-owned strings that the client never hardcodes, and `default`
+  is a string or null that must be a member of `supported` when non-null. An
+  entry without `effort` is selectable with no effort control.
+
+Unknown additive keys at any level of the catalog response are allowed and
+ignored, exactly as on the rest of the boundary. The catalog shape, the
+`run_models` row, and the two Run-create request shapes (unset and selected)
+are pinned by fixtures and contract tests, not inferred from a live Gateway.
+
+Absence is fail-closed in a fixed ladder:
+
+1. No `run_models` row in the discovered `endpoints` table — the catalog is
+   never fetched and model selection stays hidden.
+2. The row is advertised but `GET /api/models` returns a non-200 status or a
+   transport error — selection stays hidden and connection verification is
+   unaffected.
+3. A 200 response with an empty or malformed `models` array — the parser fails
+   closed to `INVALID_RESPONSE` internally, the catalog is unavailable,
+   selection stays hidden, and the connection stays healthy.
+4. A catalog entry without its optional `effort` object — that model is
+   selectable with no effort control.
+
+Run creation accepts the optional `model` and `effort` keys per Run. An unset
+selection is omitted from the request body; a required contract field is never
+sent as null. The pinned two-key body in
+`fixtures/mercurio/contracts/runs/create-request.json` is the omitted case and
+`fixtures/mercurio/contracts/runs/create-request-model-effort.json` pins the
+selected case.
 
 ## Identity and data policy
 

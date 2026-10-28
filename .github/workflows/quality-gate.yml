@@ -218,21 +218,37 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon
+
+  buildsrc_contracts:
+    name: buildsrc-contracts
+    needs: [ui_paths]
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
       - name: Verify the buildSrc quality self-test contracts
         run: >-
           ./gradlew -p buildSrc test
-          --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
-          --tests org.hermesnative.client.buildlogic.QualityVerificationFailClosedTest
-          --tests org.hermesnative.client.buildlogic.CoverageEvidenceTest
-          --tests org.hermesnative.client.buildlogic.MutationEvidenceTest
-          --tests org.hermesnative.client.buildlogic.BoundaryDoubleVerifierTest
-          --tests org.hermesnative.client.buildlogic.ReportEvidenceTest
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest
+          --tests org.mercurio.client.buildlogic.CoverageEvidenceTest
+          --tests org.mercurio.client.buildlogic.MutationEvidenceTest
+          --tests org.mercurio.client.buildlogic.BoundaryDoubleVerifierTest
+          --tests org.mercurio.client.buildlogic.ReportEvidenceTest
           --no-daemon
 
   coverage_mutation:
     name: coverage-mutation
     needs: [ui_paths]
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.docs_only_changed != 'true'))) }}
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || (needs.ui_paths.outputs.docs_only_changed != 'true' && needs.ui_paths.outputs.dependency_files_changed != 'true')))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -339,6 +355,9 @@ jobs:
     outputs:
       ui_paths_changed: ${{ steps.ui_paths.outputs.ui_paths }}
       docs_only_changed: ${{ steps.docs_only.outputs.docs_only }}
+      dependency_files_changed: ${{ steps.lane_decisions.outputs.dependency_only }}
+      ci_files_changed: ${{ steps.lane_decisions.outputs.ci_files }}
+      build_logic_changed: ${{ steps.lane_decisions.outputs.build_logic }}
     steps:
       - name: Detect modified UI paths
         id: ui_paths
@@ -349,7 +368,7 @@ jobs:
               - 'app/src/main/**'
               - 'feature/entry/presentation/**'
               - 'feature/entry/wiring/src/main/res/**'
-              - 'fixtures/hermes/journey/**'
+              - 'fixtures/mercurio/journey/**'
       - name: Detect the changed files of the pull request
         id: changed_files
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
@@ -383,9 +402,43 @@ jobs:
           print("Classified %d changed file(s) against the documentation surface: docs-only=%s." % (len(changed_files), decision), file=sys.stderr)
           ')"
           printf '%s\n' "docs_only=$decision" >> "$GITHUB_OUTPUT"
+      - name: Classify the lane-routing decisions
+        id: lane_decisions
+        env:
+          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
+        run: |
+          set -euo pipefail
+          decisions="$(python3 -c '
+          import json, os, sys
+          try:
+              changed_files = json.loads(os.environ["CHANGED_FILES"])
+          except (KeyError, ValueError, TypeError) as error:
+              print("The changed-file answer is unreadable (%s); failing closed to the full gate." % error, file=sys.stderr)
+              sys.exit(1)
+          if not isinstance(changed_files, list) or not all(isinstance(path, str) for path in changed_files):
+              print("The changed-file answer is not a list of file paths; failing closed to the full gate.", file=sys.stderr)
+              sys.exit(1)
+          def is_control_plane(path):
+              return "/.github/" in "/" + path
+          def is_build_logic(path):
+              return path.startswith("buildSrc/")
+          def is_dependency_file(path):
+              if is_control_plane(path) or is_build_logic(path):
+                  return False
+              return path == "gradle.properties" or path.endswith(".gradle.kts") or path.startswith("gradle/")
+          dependency_only = bool(changed_files) and all(is_dependency_file(path) for path in changed_files)
+          ci_files = any(is_control_plane(path) for path in changed_files)
+          build_logic = any(is_build_logic(path) for path in changed_files)
+          print("Classified %d changed file(s) for lane routing: dependency-only=%s ci-files=%s build-logic=%s." % (len(changed_files), dependency_only, ci_files, build_logic), file=sys.stderr)
+          print("dependency_only=%s" % str(dependency_only).lower())
+          print("ci_files=%s" % str(ci_files).lower())
+          print("build_logic=%s" % str(build_logic).lower())
+          ')"
+          printf '%s\n' "$decisions" >> "$GITHUB_OUTPUT"
       - name: Report the UI path decision
         run: |
           printf '%s\n' "UI paths changed: ${{ steps.ui_paths.outputs.ui_paths }}."
+          printf '%s\n' "Dependency-only: ${{ steps.lane_decisions.outputs.dependency_only }}. CI files: ${{ steps.lane_decisions.outputs.ci_files }}. Build logic: ${{ steps.lane_decisions.outputs.build_logic }}."
 
   api24_instrumentation:
     name: api24-instrumentation
@@ -573,10 +626,36 @@ jobs:
 
   maestro_journeys:
     name: maestro-journeys
-    needs: [api24_instrumentation, ui_paths]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (contains(github.event.pull_request.labels.*.name, 'run-maestro') || needs.ui_paths.outputs.ui_paths_changed == 'true'))) }}
+    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test, maestro_shard_1, maestro_shard_2, maestro_shard_3]
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || (needs.ui_paths.result != 'failure' && needs.formatting.result != 'failure' && needs.static_analysis.result != 'failure' && needs.detekt.result != 'failure' && needs.unit_tests.result != 'failure' && needs.fixture_descriptor.result != 'failure' && needs.fixture_lifecycle.result != 'failure' && needs.fixture_contract.result != 'failure' && needs.android_build.result != 'failure' && needs.coverage_mutation.result != 'failure' && needs.compose_test.result != 'failure')) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 5
+    steps:
+      - name: Verify every maestro shard succeeded
+        env:
+          SHARD_RESULTS: ${{ needs.maestro_shard_1.result }} ${{ needs.maestro_shard_2.result }} ${{ needs.maestro_shard_3.result }}
+        run: |
+          set -euo pipefail
+          shard_number=0
+          for result in $SHARD_RESULTS; do
+            shard_number=$((shard_number + 1))
+            if [ "$result" != success ]; then
+              printf 'Required maestro shard %s result: %s\n' "$shard_number" "$result" >&2
+              exit 1
+            fi
+          done
+          if [ "$shard_number" -ne 3 ]; then
+            printf 'Expected 3 maestro shard results but read %s.\n' "$shard_number" >&2
+            exit 1
+          fi
+          printf '%s\n' 'All maestro shards passed.'
+
+  maestro_shard_1:
+    name: maestro-journeys-shard-1-of-3
+    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       MAESTRO_CLI_VERSION: '2.10.0'
     steps:
@@ -608,7 +687,7 @@ jobs:
       - name: Run deterministic Maestro journeys
         id: journeys
         continue-on-error: true
-        timeout-minutes: 55
+        timeout-minutes: 40
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 24
@@ -620,7 +699,7 @@ jobs:
           disable-animations: true
           script: |
             chmod +x .github/scripts/journey-run.sh
-            .github/scripts/journey-run.sh
+            .github/scripts/journey-run.sh 1 3
       - name: Redact journey failure evidence
         id: redact_journey_evidence
         if: ${{ always() && steps.journeys.outcome != 'success' }}
@@ -634,7 +713,7 @@ jobs:
         if: ${{ always() && steps.journeys.outcome != 'success' && steps.redact_journey_evidence.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: journey-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          name: journey-evidence-shard-1-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/journey-evidence
           if-no-files-found: warn
           retention-days: 14
@@ -651,7 +730,187 @@ jobs:
         if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: journey-retry-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          name: journey-retry-evidence-shard-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/journey-evidence
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Fail when journeys fail
+        if: ${{ steps.journeys.outcome != 'success' }}
+        run: |
+          printf '%s\n' 'Deterministic emulator journeys failed. See the journey evidence artifact.' >&2
+          exit 1
+
+  maestro_shard_2:
+    name: maestro-journeys-shard-2-of-3
+    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MAESTRO_CLI_VERSION: '2.10.0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the exact candidate APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Record candidate APK evidence
+        run: |
+          mkdir -p artifacts/journey-evidence
+          sha256sum app/build/outputs/apk/debug/app-debug.apk > artifacts/journey-evidence/apk-sha256.txt
+          cat artifacts/journey-evidence/apk-sha256.txt
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Cache pinned Maestro CLI archive
+        uses: actions/cache@v4
+        with:
+          path: maestro.zip
+          key: maestro-cli-${{ env.MAESTRO_CLI_VERSION }}
+      - name: Run deterministic Maestro journeys
+        id: journeys
+        continue-on-error: true
+        timeout-minutes: 40
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 24
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          force-avd-creation: true
+          emulator-options: -no-window -no-audio -no-boot-anim -writable-system
+          disable-animations: true
+          script: |
+            chmod +x .github/scripts/journey-run.sh
+            .github/scripts/journey-run.sh 2 3
+      - name: Redact journey failure evidence
+        id: redact_journey_evidence
+        if: ${{ always() && steps.journeys.outcome != 'success' }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/redact-test-reports.py "$GITHUB_WORKSPACE" \
+            'artifacts/journey-evidence/*.log' 'artifacts/journey-evidence/**/*.log' \
+            'artifacts/journey-evidence/*.json' 'artifacts/journey-evidence/**/*.json' \
+            'artifacts/journey-evidence/*.txt' 'artifacts/journey-evidence/**/*.txt'
+      - name: Upload journey failure evidence
+        if: ${{ always() && steps.journeys.outcome != 'success' && steps.redact_journey_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-evidence-shard-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/journey-evidence
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Redact retried journey evidence
+        id: redact_retried_journey_evidence
+        if: ${{ always() && steps.journeys.outcome == 'success' && hashFiles('artifacts/journey-evidence/*-attempt1*') != '' }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/redact-test-reports.py "$GITHUB_WORKSPACE" \
+            'artifacts/journey-evidence/*.log' 'artifacts/journey-evidence/**/*.log' \
+            'artifacts/journey-evidence/*.json' 'artifacts/journey-evidence/**/*.json' \
+            'artifacts/journey-evidence/*.txt' 'artifacts/journey-evidence/**/*.txt'
+      - name: Upload retried journey evidence
+        if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-retry-evidence-shard-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/journey-evidence
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Fail when journeys fail
+        if: ${{ steps.journeys.outcome != 'success' }}
+        run: |
+          printf '%s\n' 'Deterministic emulator journeys failed. See the journey evidence artifact.' >&2
+          exit 1
+
+  maestro_shard_3:
+    name: maestro-journeys-shard-3-of-3
+    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
+    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MAESTRO_CLI_VERSION: '2.10.0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the exact candidate APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Record candidate APK evidence
+        run: |
+          mkdir -p artifacts/journey-evidence
+          sha256sum app/build/outputs/apk/debug/app-debug.apk > artifacts/journey-evidence/apk-sha256.txt
+          cat artifacts/journey-evidence/apk-sha256.txt
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Cache pinned Maestro CLI archive
+        uses: actions/cache@v4
+        with:
+          path: maestro.zip
+          key: maestro-cli-${{ env.MAESTRO_CLI_VERSION }}
+      - name: Run deterministic Maestro journeys
+        id: journeys
+        continue-on-error: true
+        timeout-minutes: 40
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 24
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          force-avd-creation: true
+          emulator-options: -no-window -no-audio -no-boot-anim -writable-system
+          disable-animations: true
+          script: |
+            chmod +x .github/scripts/journey-run.sh
+            .github/scripts/journey-run.sh 3 3
+      - name: Redact journey failure evidence
+        id: redact_journey_evidence
+        if: ${{ always() && steps.journeys.outcome != 'success' }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/redact-test-reports.py "$GITHUB_WORKSPACE" \
+            'artifacts/journey-evidence/*.log' 'artifacts/journey-evidence/**/*.log' \
+            'artifacts/journey-evidence/*.json' 'artifacts/journey-evidence/**/*.json' \
+            'artifacts/journey-evidence/*.txt' 'artifacts/journey-evidence/**/*.txt'
+      - name: Upload journey failure evidence
+        if: ${{ always() && steps.journeys.outcome != 'success' && steps.redact_journey_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-evidence-shard-3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/journey-evidence
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Redact retried journey evidence
+        id: redact_retried_journey_evidence
+        if: ${{ always() && steps.journeys.outcome == 'success' && hashFiles('artifacts/journey-evidence/*-attempt1*') != '' }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/redact-test-reports.py "$GITHUB_WORKSPACE" \
+            'artifacts/journey-evidence/*.log' 'artifacts/journey-evidence/**/*.log' \
+            'artifacts/journey-evidence/*.json' 'artifacts/journey-evidence/**/*.json' \
+            'artifacts/journey-evidence/*.txt' 'artifacts/journey-evidence/**/*.txt'
+      - name: Upload retried journey evidence
+        if: ${{ always() && steps.redact_retried_journey_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-retry-evidence-shard-3-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/journey-evidence
           if-no-files-found: warn
           retention-days: 14
@@ -700,6 +959,7 @@ jobs:
       - fixture_contract
       - android_build
       - architecture_check
+      - buildsrc_contracts
       - coverage_mutation
       - commit_message
       - compose_test
@@ -767,6 +1027,7 @@ jobs:
           ARCHITECTURE_CHECK_RESULT: ${{ needs.architecture_check.result }}
           COVERAGE_MUTATION_RESULT: ${{ needs.coverage_mutation.result }}
           COMPOSE_TEST_RESULT: ${{ needs.compose_test.result }}
+          BUILDSRC_CONTRACTS_RESULT: ${{ needs.buildsrc_contracts.result }}
           API24_INSTRUMENTATION_RESULT: ${{ needs.api24_instrumentation.result }}
           MAESTRO_JOURNEYS_RESULT: ${{ needs.maestro_journeys.result }}
           FORK_GUARD_RESULT: ${{ needs.fork_guard.result }}
@@ -776,6 +1037,9 @@ jobs:
           UI_PATHS_RESULT: ${{ needs.ui_paths.result }}
           UI_PATHS_CHANGED: ${{ needs.ui_paths.outputs.ui_paths_changed }}
           DOCS_ONLY_CHANGED: ${{ needs.ui_paths.outputs.docs_only_changed }}
+          DEPENDENCY_ONLY_CHANGED: ${{ needs.ui_paths.outputs.dependency_files_changed }}
+          CI_FILES_CHANGED: ${{ needs.ui_paths.outputs.ci_files_changed }}
+          BUILD_LOGIC_CHANGED: ${{ needs.ui_paths.outputs.build_logic_changed }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_DRAFT: ${{ github.event.pull_request.draft }}
           EVENT_FORK: ${{ github.event.pull_request.head.repo.fork }}
@@ -841,6 +1105,30 @@ jobs:
                 exit 1
                 ;;
             esac
+            dependency_only_decision="$DEPENDENCY_ONLY_CHANGED"
+            case "$dependency_only_decision" in
+              true|false) ;;
+              *)
+                printf 'Dependency-file detection must report true or false for this run, but reported %s.\n' "${dependency_only_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
+            ci_files_decision="$CI_FILES_CHANGED"
+            case "$ci_files_decision" in
+              true|false) ;;
+              *)
+                printf 'CI-file detection must report true or false for this run, but reported %s.\n' "${ci_files_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
+            build_logic_decision="$BUILD_LOGIC_CHANGED"
+            case "$build_logic_decision" in
+              true|false) ;;
+              *)
+                printf 'Build-logic detection must report true or false for this run, but reported %s.\n' "${build_logic_decision:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
             if [ "$EVENT_FORK" = true ]; then
               expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
@@ -853,6 +1141,7 @@ jobs:
             else
               require draft_validation "$DRAFT_VALIDATION_RESULT"
               require commit_message "$COMMIT_MESSAGE_RESULT"
+              require conformance "$CONFORMANCE_RESULT"
               if [ "$docs_only_decision" = true ] && [[ "${EVENT_LABELS:-}" != *'"run-maestro"'* ]]; then
                 expected_state=skipped
               else
@@ -869,19 +1158,38 @@ jobs:
               "$FIXTURE_CONTRACT_RESULT" \
               "$ANDROID_BUILD_RESULT" \
               "$ARCHITECTURE_CHECK_RESULT" \
-              "$COVERAGE_MUTATION_RESULT" \
-              "$COMPOSE_TEST_RESULT" \
-              "$CONFORMANCE_RESULT"; do
+              "$COMPOSE_TEST_RESULT"; do
               if [ "$result" != "$expected_state" ]; then
                 printf 'Required quality check result: %s\n' "$result" >&2
                 exit 1
               fi
             done
+            if [ "$EVENT_DRAFT" = true ]; then
+              coverage_expected_state=skipped
+            elif [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* ]]; then
+              coverage_expected_state=success
+            elif [ "$docs_only_decision" = true ] || [ "$dependency_only_decision" = true ]; then
+              coverage_expected_state=skipped
+            else
+              coverage_expected_state=success
+            fi
+            if [ "$COVERAGE_MUTATION_RESULT" != "$coverage_expected_state" ]; then
+              printf 'Check coverage_mutation must report %s for this run, but reported %s.\n' "$coverage_expected_state" "$COVERAGE_MUTATION_RESULT" >&2
+              exit 1
+            fi
+            if [ "$EVENT_DRAFT" != true ] && [[ "$ci_files_decision" == true || "$build_logic_decision" == true ]]; then
+              test "$BUILDSRC_CONTRACTS_RESULT" = success
+            else
+              test "$BUILDSRC_CONTRACTS_RESULT" = skipped
+            fi
             if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* || "$ui_paths_decision" == true ]]; then
               test "$API24_INSTRUMENTATION_RESULT" = success
-              test "$MAESTRO_JOURNEYS_RESULT" = success
             else
               test "$API24_INSTRUMENTATION_RESULT" = skipped
+            fi
+            if [ "$EVENT_DRAFT" != true ] && [[ "${EVENT_LABELS:-}" == *'"run-maestro"'* ]]; then
+              test "$MAESTRO_JOURNEYS_RESULT" = success
+            else
               test "$MAESTRO_JOURNEYS_RESULT" = skipped
             fi
           else
@@ -895,7 +1203,6 @@ jobs:
               "$FIXTURE_CONTRACT_RESULT" \
               "$ANDROID_BUILD_RESULT" \
               "$ARCHITECTURE_CHECK_RESULT" \
-              "$COVERAGE_MUTATION_RESULT" \
               "$COMPOSE_TEST_RESULT" \
               "$CONFORMANCE_RESULT"; do
               if [ "$result" != success ]; then
@@ -907,6 +1214,8 @@ jobs:
             expect fork_guard "$FORK_GUARD_RESULT" skipped
             expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
             expect ui_paths "$UI_PATHS_RESULT" skipped
+            expect coverage_mutation "$COVERAGE_MUTATION_RESULT" success
+            test "$BUILDSRC_CONTRACTS_RESULT" = success
             if [ "$EVENT_NAME" = push ]; then
               test "$API24_INSTRUMENTATION_RESULT" = skipped
               test "$MAESTRO_JOURNEYS_RESULT" = skipped

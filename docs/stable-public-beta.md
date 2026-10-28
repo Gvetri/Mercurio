@@ -108,7 +108,7 @@ provider credentials, or live smoke invocation. Only the publisher has
 
 After full preflight the publisher creates a draft `stable-beta-vX.Y.Z` prerelease
 for the selected source. It reads the exact release ID back; uploads only
-`hermes-native-client.apk`, `SHA256SUMS`, `signing-metadata.json`; reads the asset
+`mercurio.apk`, `SHA256SUMS`, `signing-metadata.json`; reads the asset
 inventory, downloads and hashes every uploaded byte, and verifies the APK again.
 Only then does it publish and read back title, body, prerelease/draft flags,
 assets, and tag target. The name is **Stable Public Beta vX.Y.Z**. The notes
@@ -142,7 +142,7 @@ python3 .github/scripts/tests/test_stable_public_beta.py
 python3 .github/scripts/tests/test_nightly_release.py
 python3 -m unittest discover -s .github/scripts/tests -p 'test_*sign*.py'
 actionlint .github/workflows/stable-public-beta.yml
-./gradlew -p buildSrc test --tests org.hermesnative.client.buildlogic.QualityGateConfigurationTest
+./gradlew -p buildSrc test --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest
 ```
 
 The Python suites require JDK 21, Android SDK Platform 35, Build Tools 35.0.0,

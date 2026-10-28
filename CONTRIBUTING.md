@@ -2,7 +2,7 @@
 
 ## Public scope
 
-Hermes Native Client is an independent Android client. Contributions must keep the public repository self-contained and must not add private organization details, real Gateway endpoints, credentials, provider secrets, local Hermes runtime code, desktop web interface code, or WebView-based desktop reuse.
+Mercurio is an independent Android client. Contributions must keep the public repository self-contained and must not add private organization details, real Gateway endpoints, credentials, provider secrets, local Hermes runtime code, desktop web interface code, or WebView-based desktop reuse.
 
 The client connects to a pre-existing Hermes Gateway. It does not host the Gateway or embed a local Hermes runtime.
 
@@ -34,7 +34,7 @@ Run the local deterministic gate before submitting a change:
 ```
 
 The gate enforces the scopes and thresholds declared in
-`buildSrc/src/main/kotlin/org/hermesnative/client/buildlogic/QualityPolicy.kt`; see
+`buildSrc/src/main/kotlin/org/mercurio/client/buildlogic/QualityPolicy.kt`; see
 [Quality gates](docs/quality-gates.md) for the required checks and how to change a declared value.
 The verification tasks also run on their own:
 
@@ -61,12 +61,31 @@ The repository's coding rules — including the comments policy — and what enf
 
 `main` is protected, so create one issue-scoped branch per change, named
 `<type>/<issue>-<short-description>` such as `feat/25-protected-main-workflow`, and open a pull
-request against `main`. While the pull request is a draft it runs `formatCheck` and `:app:lintDebug`
+request against `main`. Deliver one pull request per issue. Integration branches are not allowed: a
+branch that accumulates several issues or tickets before review holds too many files, turns every
+review into a large cumulative diff, and ties unrelated fixes together. A multi-ticket effort may
+share its full specification context, but each issue ships as its own self-contained vertical
+slice — a change that works and reviews on its own — through its own issue-scoped pull request. A
+change that depends on an unmerged pull request waits for that merge and then bases on the updated
+`main` instead of stacking on the open branch.
+
+While the pull request is a draft it runs `formatCheck` and `:app:lintDebug`
 only; marking it ready for review runs the complete gate against the same head, and only the
 aggregate `quality-gate` status is required. Merging is squash-only, the squash subject is the
 pull-request title, and both that title and every commit must be a Conventional Commit. Do not merge
 or cherry-pick an external fork directly: carry the change onto an in-repository branch first. See
 [The protected main branch and the pull-request workflow](docs/protected-main-workflow.md).
+
+## Emulator journeys
+
+The Maestro journey suite runs on the nightly schedule and on a manual dispatch, not on ordinary pull
+requests. A pull request asks for it with the `run-maestro` label. Add that label when the change
+touches a key area: the app shell, a user-visible screen, a user-visible string or resource, the
+journey fixtures, or the state, Gateway, and wiring code that those journeys assert. Agents add the
+label for those paths without being asked. Add it before the push that starts the gate: a label added
+while a run is in flight cancels that run. See
+[Requesting the journey lane](docs/deterministic-emulator-journeys.md#requesting-the-journey-lane)
+for the key areas and their reasons.
 
 ## Release signing
 

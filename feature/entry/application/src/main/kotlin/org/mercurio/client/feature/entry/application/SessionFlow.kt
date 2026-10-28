@@ -1,0 +1,87 @@
+package org.mercurio.client.feature.entry.application
+
+import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
+import org.mercurio.client.feature.entry.domain.GatewayException
+import org.mercurio.client.feature.entry.domain.Session
+import org.mercurio.client.feature.entry.domain.SessionGatewayPort
+import org.mercurio.client.feature.entry.domain.SessionHistory
+import org.mercurio.client.feature.entry.domain.SessionId
+import org.mercurio.client.feature.entry.domain.SessionListRequest
+import org.mercurio.client.feature.entry.domain.SessionPage
+import org.mercurio.client.feature.entry.domain.SessionPinResult
+
+class LoadSessionList(
+    private val gateway: SessionGatewayPort,
+) {
+    fun execute(request: SessionListRequest = SessionListRequest()): SessionPage = gateway.listSessions(request)
+}
+
+class CreateSession(
+    private val gateway: SessionGatewayPort,
+) {
+    fun execute(title: String?): Session = gateway.createSession(title)
+}
+
+class RenameSession(
+    private val gateway: SessionGatewayPort,
+) {
+    fun execute(
+        sessionId: SessionId,
+        title: String,
+    ): Session = gateway.renameSession(sessionId, title)
+}
+
+class DeleteSession(
+    private val gateway: SessionGatewayPort,
+) {
+    fun execute(sessionId: SessionId) = gateway.deleteSession(sessionId)
+}
+
+class PinSession(
+    private val gateway: SessionGatewayPort,
+) {
+    fun execute(sessionId: SessionId): SessionPinResult = gateway.pinSession(sessionId)
+}
+
+class UnpinSession(
+    private val gateway: SessionGatewayPort,
+) {
+    fun execute(sessionId: SessionId): SessionPinResult = gateway.unpinSession(sessionId)
+}
+
+data class OpenedSession(
+    val session: Session,
+    val history: SessionHistory,
+)
+
+class OpenSession(
+    private val gateway: SessionGatewayPort,
+) {
+    fun execute(sessionId: SessionId): OpenedSession =
+        OpenedSession(
+            session = executeSession(sessionId),
+            history = executeHistory(sessionId),
+        )
+
+    fun executeSession(sessionId: SessionId): Session {
+        val session = gateway.openSession(sessionId)
+        if (session.id != sessionId) {
+            throw invalidResponse("session.id does not match the requested Session")
+        }
+        return session
+    }
+
+    fun executeHistory(sessionId: SessionId): SessionHistory {
+        val history = gateway.loadSessionHistory(sessionId)
+        if (history.sessionId != sessionId) {
+            throw invalidResponse("session_id does not match the requested Session")
+        }
+        return history
+    }
+
+    private fun invalidResponse(detail: String): GatewayException =
+        GatewayException(
+            GatewayErrorCategory.INVALID_RESPONSE,
+            "Invalid Gateway response while opening a Session: $detail.",
+        )
+}

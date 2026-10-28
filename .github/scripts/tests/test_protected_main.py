@@ -27,7 +27,6 @@ HEAVY_JOBS = (
     "fixture_contract",
     "android_build",
     "architecture_check",
-    "coverage_mutation",
     "compose_test",
 )
 DECLARED_CHECKS = tuple(
@@ -114,8 +113,37 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         aggregate = job_block(self.workflow, "quality-gate")
         needs = aggregate.split("    needs:\n", 1)[1].split("    runs-on:", 1)[0] + "\n"
         declared = re.findall(r"^      - ([a-z0-9_]+)$", needs, re.MULTILINE)
-        self.assertEqual(sorted(DECLARED_CHECKS), sorted(declared))
-        self.assertEqual(len(DECLARED_CHECKS), len(declared), "the declaration and the needs list must not differ")
+        self.assertEqual(sorted([*DECLARED_CHECKS, "buildsrc_contracts"]), sorted(declared))
+        self.assertEqual(len(DECLARED_CHECKS) + 1, len(declared), "the declaration plus the contracts job and the needs list must not differ")
+
+    def test_the_buildsrc_contracts_job_routes_ci_and_build_logic_changes(self):
+        jobs = jobs_of(self.workflow)
+        self.assertEqual("buildsrc-contracts", jobs["buildsrc_contracts"][0])
+        contracts = job_block(self.workflow, "buildsrc_contracts")
+        self.assertEqual(
+            "${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
+            "github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || "
+            "github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && "
+            "!github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || "
+            "needs.ui_paths.outputs.build_logic_changed == 'true'))) }}",
+            job_key(contracts, "if"),
+            "the contracts job must run on the nightly, dispatched, and push validation and on ready in-repository CI or build-logic heads",
+        )
+        self.assertEqual("[ui_paths]", job_key(contracts, "needs"))
+        self.assertIn("./gradlew -p buildSrc test", contracts)
+        self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", contracts)
+        architecture = job_block(self.workflow, "architecture_check")
+        self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
+        self.assertNotIn("./gradlew -p buildSrc test", architecture)
+        aggregate = job_block(self.workflow, "quality-gate")
+        self.assertIn("      - buildsrc_contracts\n", aggregate)
+        self.assertIn("BUILDSRC_CONTRACTS_RESULT: ${{ needs.buildsrc_contracts.result }}", aggregate)
+        self.assertIn("DEPENDENCY_ONLY_CHANGED: ${{ needs.ui_paths.outputs.dependency_files_changed }}", aggregate)
+        self.assertIn("CI_FILES_CHANGED: ${{ needs.ui_paths.outputs.ci_files_changed }}", aggregate)
+        self.assertIn("BUILD_LOGIC_CHANGED: ${{ needs.ui_paths.outputs.build_logic_changed }}", aggregate)
+        self.assertIn("Dependency-file detection must report true or false for this run", aggregate)
+        self.assertIn('if [ "$COVERAGE_MUTATION_RESULT" != "$coverage_expected_state" ]; then', aggregate)
+        self.assertIn('[[ "$ci_files_decision" == true || "$build_logic_decision" == true ]]; then', aggregate)
 
     def test_the_aggregate_gate_is_the_single_required_status(self):
         jobs = jobs_of(self.workflow)
@@ -203,6 +231,21 @@ class TestProtectedMainWorkflow(unittest.TestCase):
                 job_key(job_block(self.workflow, job), "needs"),
                 f"{job} must wait for the pull-request decisions",
             )
+        coverage_mutation_gate = (
+            "${{ always() && (github.event.action != 'labeled' || "
+            "github.event.label.name == 'run-maestro') && "
+            "(github.event_name != 'pull_request' || "
+            "(!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && "
+            "(contains(github.event.pull_request.labels.*.name, 'run-maestro') || "
+            "(needs.ui_paths.outputs.docs_only_changed != 'true' && "
+            "needs.ui_paths.outputs.dependency_files_changed != 'true')))) }}"
+        )
+        self.assertEqual(coverage_mutation_gate, jobs["coverage_mutation"][1])
+        self.assertEqual(
+            "[ui_paths]",
+            job_key(job_block(self.workflow, "coverage_mutation"), "needs"),
+            "coverage_mutation must wait for the pull-request decisions",
+        )
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn('expected_state=success', aggregate)
         label_guard = "(github.event.action != 'labeled' || github.event.label.name == 'run-maestro')"
@@ -217,21 +260,52 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "${{ always() && " + label_guard + " && (" + emulator_gate + ") }}",
             job_key(job_block(self.workflow, "api24_instrumentation"), "if"),
         )
+        journey_gate = (
+            "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
+            "(github.event_name == 'pull_request' && !github.event.pull_request.draft && "
+            "!github.event.pull_request.head.repo.fork && "
+            "contains(github.event.pull_request.labels.*.name, 'run-maestro'))"
+        )
         self.assertEqual(
             "${{ always() && needs.api24_instrumentation.result == 'success' && "
             + label_guard
             + " && ("
-            + emulator_gate
-            + ") }}",
+            + journey_gate
+            + ") && (github.event_name != 'pull_request' || ("
+            + " && ".join(
+                f"needs.{lane}.result != 'failure'"
+                for lane in (
+                    "ui_paths", "formatting", "static_analysis", "detekt", "unit_tests",
+                    "fixture_descriptor", "fixture_lifecycle", "fixture_contract",
+                    "android_build", "coverage_mutation", "compose_test",
+                )
+            )
+            + ")) }}",
             job_key(job_block(self.workflow, "maestro_journeys"), "if"),
+            "a failed required lane must skip the shard aggregate on pull requests while nightly validations run to completion, and a changed UI path must never start the journey lane",
         )
+        for shard in ("maestro_shard_1", "maestro_shard_2", "maestro_shard_3"):
+            self.assertEqual(
+                "${{ always() && needs.api24_instrumentation.result == 'success' && "
+                + label_guard
+                + " && ("
+                + journey_gate
+                + ") && (github.event_name != 'pull_request' "
+                "|| !contains(needs.*.result, 'failure')) }}",
+                job_key(job_block(self.workflow, shard), "if"),
+                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion, and a changed UI path must never start a journey shard",
+            )
         self.assertEqual(
             "[ui_paths]",
             job_key(job_block(self.workflow, "api24_instrumentation"), "needs"),
         )
         self.assertEqual(
-            "[api24_instrumentation, ui_paths]",
+            "[api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
+            "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, "
+            "android_build, coverage_mutation, compose_test, "
+            "maestro_shard_1, maestro_shard_2, maestro_shard_3]",
             job_key(job_block(self.workflow, "maestro_journeys"), "needs"),
+            "the shard aggregate must wait for every lane and every shard",
         )
         self.assertIn('expected_state=skipped', aggregate)
         self.assertIn('if [ "$EVENT_BASE_REF" != main ]', aggregate)
@@ -264,7 +338,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
                 "app/src/main/**",
                 "feature/entry/presentation/**",
                 "feature/entry/wiring/src/main/res/**",
-                "fixtures/hermes/journey/**",
+                "fixtures/mercurio/journey/**",
             ],
             re.findall(r"^              - '(.+)'$", filters, re.MULTILINE),
         )
@@ -311,6 +385,14 @@ class TestProtectedMainWorkflow(unittest.TestCase):
                 condition,
                 f"{job} must skip a docs-only head unless the run-maestro label keeps precedence",
             )
+        coverage_condition = job_key(job_block(self.workflow, "coverage_mutation"), "if")
+        assert coverage_condition is not None, "coverage_mutation must declare a condition"
+        self.assertIn(
+            "(needs.ui_paths.outputs.docs_only_changed != 'true' && "
+            "needs.ui_paths.outputs.dependency_files_changed != 'true')",
+            coverage_condition,
+            "the coverage lane must also skip a dependency-only head",
+        )
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn("DOCS_ONLY_CHANGED: ${{ needs.ui_paths.outputs.docs_only_changed }}", aggregate)
         self.assertIn('Docs-only detection must report true or false for this run', aggregate)
@@ -546,8 +628,12 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_checkout_steps_stay_immutable_and_credential_free(self):
         jobs = jobs_of(self.workflow)
         with_checkout = [job for job in jobs if "actions/checkout@" in job_block(self.workflow, job)]
-        self.assertEqual(sorted(set(jobs) - {"fork_guard", "ui_paths"}), sorted(with_checkout))
-        self.assertEqual(len(DECLARED_CHECKS) + 2, len(jobs))
+        self.assertEqual(
+            sorted(set(jobs) - {"fork_guard", "ui_paths", "maestro_journeys"}),
+            sorted(with_checkout),
+            "only the shard aggregate may lack checkout: it reads needs results and never touches the repository",
+        )
+        self.assertEqual(len(DECLARED_CHECKS) + 6, len(jobs))
         self.assertIn("quality-gate", with_checkout)
         for job, block in ((job, job_block(self.workflow, job)) for job in jobs):
             keys = [line.strip().split(":", 1)[0] for line in block.splitlines() if re.match(r"^    [a-z0-9_\\-]+: ", line)]
@@ -717,7 +803,10 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
                     "type": "required_status_checks",
                     "parameters": {
                         "strict_required_status_checks_policy": True,
-                        "required_status_checks": [{"context": "quality-gate", "integration_id": 15368}],
+                        "required_status_checks": [
+                            {"context": "quality-gate", "integration_id": 15368},
+                            {"context": "pr-template", "integration_id": 15368},
+                        ],
                     },
                 },
             ],
@@ -824,7 +913,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         ]
         completed = self.run_check()
         self.assertEqual(1, completed.returncode)
-        self.assertIn("must require exactly the 'quality-gate' status", completed.stderr)
+        self.assertIn("must require exactly the ['pr-template', 'quality-gate'] statuses", completed.stderr)
 
     def test_a_bypass_actor_fails(self):
         self.routes["/repos/Gvetri/hermes-native-client/rulesets/22461074"] = {

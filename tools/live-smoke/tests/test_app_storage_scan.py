@@ -18,7 +18,7 @@ from livesmoke.orchestrate import LiveSmokeGate  # noqa: E402
 from livesmoke.proc import CommandResult  # noqa: E402
 from test_config import make_inputs  # noqa: E402
 
-APP_PATH = "/data/user/0/org.hermesnative.client"
+APP_PATH = "/data/user/0/org.mercurio.client"
 PROVIDER_KEY = "synthetic-provider-key-for-tests"
 
 
@@ -39,7 +39,7 @@ class AppStorageRunner:
             if argv[1] == "devices":
                 return CommandResult(tuple(argv), 0, "List of devices attached\nemulator-5554\tdevice\n", "", 0)
             if argv[1] == "-s" and argv[3] == "emu":
-                return CommandResult(tuple(argv), 0, "hnc-issue29-live\nOK\n", "", 0)
+                return CommandResult(tuple(argv), 0, "mercurio-issue29-live\nOK\n", "", 0)
             if argv[1] == "-s" and argv[3] == "shell":
                 return CommandResult(tuple(argv), 0, "1\n", "", 0)
             if argv[1] == "-s" and argv[3] == "pull":
@@ -52,7 +52,7 @@ class AppStorageRunner:
         return CommandResult(tuple(argv), 0, "", "", 0)
 
 
-def make_gate(root, runner, *, serial="emulator-5554", avd_name="hnc-issue29-live"):
+def make_gate(root, runner, *, serial="emulator-5554", avd_name="mercurio-issue29-live"):
     inputs = make_inputs(root)
     gate = LiveSmokeGate(inputs, runner=runner, env={})
     gate.record = {
@@ -77,7 +77,7 @@ class AppStorageScanTests(unittest.TestCase):
             )
             surface = gate.record["redaction"]["surfaces"]["device_app_storage"]
             self.assertEqual(surface["path"], APP_PATH)
-            self.assertEqual(surface["package"], "org.hermesnative.client")
+            self.assertEqual(surface["package"], "org.mercurio.client")
             self.assertEqual(surface["serial"], "emulator-5554")
             self.assertTrue(surface["pulled"])
             self.assertTrue(surface["scanned"])
