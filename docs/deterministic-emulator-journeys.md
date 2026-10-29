@@ -161,6 +161,14 @@ read timeout and was observed hanging a journey's driver install on the API 24
 emulator; every adb call is bounded for the same reason, because `adb install`
 can itself stall.
 
+The trust-store sequence waits for a connected adb device, drives `adb root`
+in a bounded retry, and proceeds only once `adb shell id -u` reports `0`. The
+emulator action reports the device as booted before adbd accepts connections
+on a cold boot, so an unguarded first `adb root` fails with
+`adb: unable to connect for root: closed`. A device that never reaches a root
+shell fails the job with the current `adb devices` state instead of waiting
+out the job timeout.
+
 Before any flow starts, the runner probes `/health` directly — it is not a
 client capability — and then `/v1/capabilities` with the `X-Journey-Probe:
 readiness` header, whose traffic the fake Gateway does not record as
