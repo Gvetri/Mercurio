@@ -54,53 +54,45 @@ internal fun parseInline(text: String): List<MarkdownSpan> {
     val literal = StringBuilder()
     val linkBrackets = if (text.indexOf(LINK_OPEN) >= 0) LinkBrackets(text) else null
 
-    fun flushLiteral() {
-        if (literal.isNotEmpty()) {
-            spans += MarkdownSpan(text = literal.toString())
-            literal.clear()
-        }
-    }
-
     var index = 0
     while (index < text.length) {
         val bold = emphasisedRange(text, index, BOLD_DELIMITER)
         val code = emphasisedRange(text, index, CODE_DELIMITER)
         val italic = emphasisedRange(text, index, ITALIC_DELIMITER)
+        val math = inlineMathAt(text, index)
         when {
-            text.startsWith(IMAGE_PREFIX, index) -> {
-                val labelBracket = index + 1
-                val labelEnd = linkBrackets?.matchingLabelEnds?.get(labelBracket) ?: -1
-                val image = linkAt(text, labelBracket, linkBrackets, labelEnd)
-                val end = image?.endIndex ?: index + IMAGE_PREFIX.length
-                literal.append(text, index, end)
-                index = end
-            }
+            text.startsWith(IMAGE_PREFIX, index) -> index = consumeImage(text, index, linkBrackets, literal, spans)
             text.startsWith(LINK_OPEN, index) -> {
                 val link = linkAt(text, index, linkBrackets)
                 if (link == null) {
                     literal.append(text[index])
                     index++
                 } else {
-                    flushLiteral()
+                    flushLiteral(literal, spans)
                     val destination = allowedExternalLinkDestination(link.destination)
                     spans += parseInline(link.label).map { span -> span.copy(link = destination) }
                     index = link.endIndex
                 }
             }
             bold != null -> {
-                flushLiteral()
+                flushLiteral(literal, spans)
                 spans += parseInline(text.substring(bold)).map { span -> span.copy(bold = true) }
                 index = bold.last + 1 + BOLD_DELIMITER.length
             }
             code != null -> {
-                flushLiteral()
+                flushLiteral(literal, spans)
                 spans += MarkdownSpan(text = text.substring(code), code = true)
                 index = code.last + 1 + CODE_DELIMITER.length
             }
             italic != null -> {
-                flushLiteral()
+                flushLiteral(literal, spans)
                 spans += parseInline(text.substring(italic)).map { span -> span.copy(italic = true) }
                 index = italic.last + 1 + ITALIC_DELIMITER.length
+            }
+            math != null -> {
+                flushLiteral(literal, spans)
+                spans += mathSpan(text, math)
+                index = math.endIndex
             }
             else -> {
                 literal.append(text[index])
@@ -108,9 +100,51 @@ internal fun parseInline(text: String): List<MarkdownSpan> {
             }
         }
     }
-    flushLiteral()
+    flushLiteral(literal, spans)
     return spans
 }
+
+private fun flushLiteral(
+    literal: StringBuilder,
+    spans: MutableList<MarkdownSpan>,
+) {
+    if (literal.isNotEmpty()) {
+        spans += MarkdownSpan(text = literal.toString())
+        literal.clear()
+    }
+}
+
+private fun consumeImage(
+    text: String,
+    index: Int,
+    linkBrackets: LinkBrackets?,
+    literal: StringBuilder,
+    spans: MutableList<MarkdownSpan>,
+): Int {
+    val labelBracket = index + 1
+    val labelEnd = linkBrackets?.matchingLabelEnds?.get(labelBracket) ?: -1
+    val image = linkAt(text, labelBracket, linkBrackets, labelEnd)
+    if (image == null) {
+        literal.append(text, index, index + IMAGE_PREFIX.length)
+        return index + IMAGE_PREFIX.length
+    }
+    flushLiteral(literal, spans)
+    spans +=
+        MarkdownSpan(
+            text = text.substring(index, image.endIndex),
+            element = InlineElement.Image(alt = image.label, destination = image.destination),
+        )
+    return image.endIndex
+}
+
+private fun mathSpan(
+    text: String,
+    math: InlineMath,
+): MarkdownSpan =
+    MarkdownSpan(
+        text = text.substring(math.startIndex, math.endIndex),
+        element = InlineElement.Math(expression = math.expression),
+    )
 
 private data class LinkMatch(
     val label: String,

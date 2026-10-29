@@ -49,6 +49,23 @@ class MarkdownContentTest {
     }
 
     @Test
+    fun pipe_tables_and_display_math_render_their_literal_source_text() {
+        val table = "| Name | Value |\n| ---- | ----- |\n| a | 1 |"
+        val math = "\$\$\nE = mc^2\n\$\$"
+        composeTestRule.setContent {
+            HermesTheme {
+                MarkdownContent(
+                    markdown = "$table\n\n$math",
+                    actions = RecordingActions().asMessageActions(),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("| Name | Value | | ---- | ----- | | a | 1 |").assertIsDisplayed()
+        composeTestRule.onNodeWithText("\$\$ E = mc^2 \$\$").assertIsDisplayed()
+    }
+
+    @Test
     fun a_code_block_stays_readable_in_a_horizontally_scrollable_region() {
         val code = "val total = \"a\" + \"b\" ".repeat(60)
         composeTestRule.setContent {

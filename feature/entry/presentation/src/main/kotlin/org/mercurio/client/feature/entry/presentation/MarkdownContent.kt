@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
  * text: headings, blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links,
  * and fenced code blocks. The content is never interpreted as markup beyond that subset,
  * so no HTML, script, or other executable content can run, and no WebView is involved.
+ * Pipe tables and `$$…$$` display math parse into their own blocks but still render as
+ * their literal source text, until their dedicated renderers land.
  *
  * Link destinations are carried as annotations built from [allowedExternalLinkDestination];
  * a blocked destination is rendered as its inert label and cannot be selected.
@@ -73,6 +75,8 @@ internal fun MarkdownContent(
                         actions = actions,
                     )
                 is MarkdownBlock.CodeBlock -> MarkdownCodeBlock(block = block, onCopy = actions.copy)
+                is MarkdownBlock.Table -> MarkdownParagraph(spans = block.spans, actions = actions)
+                is MarkdownBlock.DisplayMath -> MarkdownParagraph(spans = block.spans, actions = actions)
             }
         }
     }

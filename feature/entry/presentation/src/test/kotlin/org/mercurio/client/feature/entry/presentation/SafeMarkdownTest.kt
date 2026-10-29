@@ -321,6 +321,233 @@ class SafeMarkdownTest {
         )
         assertEquals("Title\nIntro text\na quote\n\nan item", blocks.plainText())
     }
+
+    @Test
+    fun a_pipe_table_parses_into_a_structured_table_block() {
+        val blocks = parseSafeMarkdown("| Name | Value |\n| ---- | ----- |\n| a | 1 |\n| b | 2 |")
+
+        val table = blocks.single() as MarkdownBlock.Table
+        assertEquals(listOf("Name", "Value"), table.header)
+        assertEquals(listOf(listOf("a", "1"), listOf("b", "2")), table.rows)
+    }
+
+    @Test
+    fun a_pipe_table_keeps_its_literal_source_text_until_its_renderer_lands() {
+        val source = "| Name | Value |\n| ---- | ----- |\n| a | 1 |"
+
+        val blocks = parseSafeMarkdown(source)
+
+        assertEquals(listOf("Table"), blocks.map { it::class.simpleName })
+        assertEquals(source.replace("\n", " "), blocks.plainText())
+    }
+
+    @Test
+    fun a_table_without_a_delimiter_row_stays_literal_text() {
+        val source = "| Name | Value |\n| a | 1 |"
+
+        val blocks = parseSafeMarkdown(source)
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals(source.replace("\n", " "), blocks.plainText())
+    }
+
+    @Test
+    fun a_table_whose_header_and_delimiter_disagree_on_columns_stays_literal() {
+        val source = "| Name | Value |\n| --- | --- | --- |"
+
+        val blocks = parseSafeMarkdown(source)
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals(source.replace("\n", " "), blocks.plainText())
+    }
+
+    @Test
+    fun a_table_run_containing_a_plain_line_stays_literal_text() {
+        val source = "| a | b |\n| --- | --- |\nplain line"
+
+        val blocks = parseSafeMarkdown(source)
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals(source.replace("\n", " "), blocks.plainText())
+    }
+
+    @Test
+    fun a_table_next_to_a_fence_keeps_its_own_block() {
+        val blocks = parseSafeMarkdown("| a | b |\n| --- | --- |\n```\n|x|\n```")
+
+        assertEquals(listOf("Table", "CodeBlock"), blocks.map { it::class.simpleName })
+        assertEquals("|x|", (blocks[1] as MarkdownBlock.CodeBlock).code)
+    }
+
+    @Test
+    fun ragged_table_rows_pad_or_trim_to_the_header_width() {
+        val blocks = parseSafeMarkdown("| a | b |\n| --- | --- |\n| only |\n| x | y | z |")
+
+        val table = blocks.single() as MarkdownBlock.Table
+        assertEquals(listOf(listOf("only", ""), listOf("x", "y")), table.rows)
+    }
+
+    @Test
+    fun a_well_formed_image_construct_becomes_a_structured_element() {
+        val blocks = parseSafeMarkdown("Shot: ![chart](https://example.com/chart.png)")
+
+        val spans = (blocks.single() as MarkdownBlock.Paragraph).spans
+        val image = spans.single { it.element != null }
+        assertEquals(
+            InlineElement.Image(alt = "chart", destination = "https://example.com/chart.png"),
+            image.element,
+        )
+        assertEquals("![chart](https://example.com/chart.png)", image.text)
+        assertEquals("Shot: ![chart](https://example.com/chart.png)", blocks.plainText())
+        assertTrue(spans.all { it.link == null })
+    }
+
+    @Test
+    fun a_malformed_image_construct_stays_literal_without_an_element() {
+        val content = "Broken ![chart and ![alt](https://example.com"
+
+        val blocks = parseSafeMarkdown(content)
+
+        assertEquals(content, blocks.plainText())
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun inline_math_becomes_a_structured_element_and_keeps_its_delimiters() {
+        val blocks = parseSafeMarkdown("Energy \$E = mc^2\$ here")
+
+        val spans = (blocks.single() as MarkdownBlock.Paragraph).spans
+        val math = spans.single { it.element != null }
+        assertEquals(InlineElement.Math(expression = "E = mc^2"), math.element)
+        assertEquals("\$E = mc^2\$", math.text)
+        assertEquals("Energy \$E = mc^2\$ here", blocks.plainText())
+    }
+
+    @Test
+    fun emphasis_inside_a_dollar_run_keeps_rendering_as_emphasis() {
+        val blocks = parseSafeMarkdown("\$**bold**\$")
+
+        assertEquals("\$bold\$", blocks.plainText())
+        assertEquals(listOf("bold"), blocks.spans().filter { it.bold }.map { it.text })
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun a_link_inside_a_dollar_run_keeps_its_destination() {
+        val blocks = parseSafeMarkdown("\$[lbl](https://example.com)\$")
+
+        assertEquals("\$lbl\$", blocks.plainText())
+        assertEquals(listOf("https://example.com"), blocks.spans().mapNotNull { it.link })
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun code_inside_a_dollar_run_keeps_rendering_as_code() {
+        val blocks = parseSafeMarkdown("\$`c`\$")
+
+        assertEquals("\$c\$", blocks.plainText())
+        assertEquals(listOf("c"), blocks.spans().filter { it.code }.map { it.text })
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun display_math_becomes_a_block_with_its_literal_fallback() {
+        val blocks = parseSafeMarkdown("\$\$\nE = mc^2\n\$\$")
+
+        val math = blocks.single() as MarkdownBlock.DisplayMath
+        assertEquals("E = mc^2", math.expression)
+        assertEquals("\$\$ E = mc^2 \$\$", blocks.plainText())
+    }
+
+    @Test
+    fun empty_or_unclosed_display_math_stays_literal_text() {
+        val empty = parseSafeMarkdown("\$\$")
+        val unclosed = parseSafeMarkdown("\$\$\nx + y")
+
+        assertEquals(listOf("Paragraph"), empty.map { it::class.simpleName })
+        assertEquals(listOf("Paragraph"), unclosed.map { it::class.simpleName })
+        assertEquals("\$\$", empty.plainText())
+        assertEquals("\$\$ x + y", unclosed.plainText())
+    }
+
+    @Test
+    fun unpaired_dollar_delimiters_stay_literal_text() {
+        val content = "Costs \$5 today and \$ x \$ and \$x"
+
+        val blocks = parseSafeMarkdown(content)
+
+        assertEquals(content, blocks.plainText())
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun fence_content_never_becomes_table_image_or_math_markup() {
+        val source = "| a | b |\n| --- | --- |\n![chart](https://example.com/chart.png)\n\$E = mc^2\$"
+
+        val blocks = parseSafeMarkdown("```\n$source\n```")
+
+        assertEquals(listOf("CodeBlock"), blocks.map { it::class.simpleName })
+        assertEquals(source, (blocks.single() as MarkdownBlock.CodeBlock).code)
+    }
+
+    @Test
+    fun image_and_math_markup_adjacent_to_a_fence_stay_literal_paragraph_content() {
+        val source = "Shot: ![chart](https://example.com/chart.png)\n```kotlin\nval x = 1\n```\nValue \$y\$ here"
+
+        val blocks = parseSafeMarkdown(source)
+
+        assertEquals(listOf("Paragraph", "CodeBlock", "Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals("val x = 1", (blocks[1] as MarkdownBlock.CodeBlock).code)
+        assertEquals(
+            listOf(
+                InlineElement.Image(alt = "chart", destination = "https://example.com/chart.png"),
+                InlineElement.Math(expression = "y"),
+            ),
+            blocks.spans().mapNotNull { it.element },
+        )
+    }
+
+    @Test
+    fun table_image_and_math_markup_inside_an_unterminated_fence_stay_code() {
+        val source = "![chart](https://example.com/chart.png)\n\$y\$\n| a | b |"
+
+        val blocks = parseSafeMarkdown("```\n$source")
+
+        assertEquals(listOf("CodeBlock"), blocks.map { it::class.simpleName })
+        assertEquals(source, (blocks.single() as MarkdownBlock.CodeBlock).code)
+    }
+
+    @Test
+    fun display_math_inside_a_paragraph_run_stays_literal_text() {
+        val content = "See \$\$E = mc^2\$\$ above"
+
+        val blocks = parseSafeMarkdown(content)
+
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals(content, blocks.plainText())
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun inline_code_keeps_pipe_image_and_math_markup_literal() {
+        val blocks = parseSafeMarkdown("`| a | b |` `![img](u)` `\$x\$`")
+
+        assertEquals(
+            listOf("| a | b |", "![img](u)", "\$x\$"),
+            blocks.spans().filter { it.code }.map { it.text },
+        )
+        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test(timeout = 1_500)
+    fun many_unpaired_dollar_delimiters_do_not_make_parsing_quadratic() {
+        val content = "\$a ".repeat(99_999) + "\$a"
+
+        val blocks = parseSafeMarkdown(content)
+
+        assertEquals(content, blocks.plainText())
+    }
 }
 
 private fun List<MarkdownSpan>.text(): String = joinToString(separator = "") { it.text }
@@ -335,6 +562,8 @@ private fun List<MarkdownBlock>.spans(): List<MarkdownSpan> =
             is MarkdownBlock.NumberedList -> block.items.flatMap { it.spans }
             is MarkdownBlock.CodeBlock -> emptyList()
             is MarkdownBlock.HorizontalRule -> emptyList()
+            is MarkdownBlock.Table -> block.spans
+            is MarkdownBlock.DisplayMath -> block.spans
         }
     }
 
@@ -348,5 +577,7 @@ private fun List<MarkdownBlock>.plainText(): String =
             is MarkdownBlock.NumberedList -> block.items.joinToString(separator = "\n") { item -> item.spans.text() }
             is MarkdownBlock.CodeBlock -> block.code
             is MarkdownBlock.HorizontalRule -> ""
+            is MarkdownBlock.Table -> block.spans.joinToString(separator = "") { it.text }
+            is MarkdownBlock.DisplayMath -> block.spans.joinToString(separator = "") { it.text }
         }
     }
