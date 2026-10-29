@@ -130,7 +130,9 @@ CA_HASH=$(openssl x509 -inform PEM -subject_hash_old \
   -in fixtures/mercurio/journey-tls/journey-ca.pem | head -1)
 adb push fixtures/mercurio/journey-tls/journey-ca.pem \
   "/system/etc/security/cacerts/${CA_HASH}.0"
-adb reboot   # then wait for boot
+# No reboot: the app is installed after this step, so its first process reads
+# the live trust store. Rebooting with the writable-system overlay active can
+# leave the emulator unreachable.
 
 # 5. Install the APK and run the journey flow.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -161,13 +163,16 @@ read timeout and was observed hanging a journey's driver install on the API 24
 emulator; every adb call is bounded for the same reason, because `adb install`
 can itself stall.
 
-The trust-store sequence waits for a connected adb device, drives `adb root`
-in a bounded retry, and proceeds only once `adb shell id -u` reports `0`. The
-emulator action reports the device as booted before adbd accepts connections
-on a cold boot, so an unguarded first `adb root` fails with
-`adb: unable to connect for root: closed`. A device that never reaches a root
-shell fails the job with the current `adb devices` state instead of waiting
-out the job timeout.
+The trust-store sequence drives `adb root` in a bounded retry, and proceeds
+only once `adb shell id -u` reports `0`. The emulator action reports the
+device as booted before adbd accepts connections on a cold boot, so an
+unguarded first `adb root` fails with `adb: unable to connect for root:
+closed`. The sequence then remounts `/system`, pushes the CA, and verifies the
+file on the live system partition. It does not restart the guest: the app is
+installed after this step, so its first process reads the live trust store,
+and a restart with the writable-system overlay active can leave the emulator
+unreachable. A device that never reaches a root shell fails the job with the
+current `adb devices` state instead of waiting out the job timeout.
 
 Before any flow starts, the runner probes `/health` directly — it is not a
 client capability — and then `/v1/capabilities` with the `X-Journey-Probe:

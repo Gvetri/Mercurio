@@ -13,14 +13,6 @@ flow_dir="$workspace/fixtures/mercurio/journey/flows"
 
 log() { printf '%s\n' "$*"; }
 
-wait_for_adb_device() {
-    if ! timeout 120 adb wait-for-device >/dev/null 2>&1; then
-        log "Emulator adb device did not become available $1. Device state:"
-        adb devices || true
-        exit 1
-    fi
-}
-
 require_root_adb() {
     for _ in $(seq 1 10); do
         timeout 30 adb root >/dev/null 2>&1 || true
@@ -137,20 +129,6 @@ trap finish_gateway EXIT
 
 log "Installing the journey test CA into the emulator system trust store."
 require_root_adb "before installing the TLS CA"
-timeout 120 adb reboot >/dev/null || true
-wait_for_adb_device "after rebooting to prepare the trust store"
-for _ in $(seq 1 120); do
-    if [ "$(timeout 30 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
-        break
-    fi
-    sleep 2
-done
-if [ "$(timeout 30 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; then
-    log "Emulator did not boot before installing the TLS CA. Device state:"
-    adb devices || true
-    exit 1
-fi
-require_root_adb "after rebooting to prepare the trust store"
 if ! timeout 120 adb remount >/dev/null; then
     log "Emulator /system partition did not remount writable for the TLS CA. Device state:"
     adb devices || true
@@ -158,36 +136,19 @@ if ! timeout 120 adb remount >/dev/null; then
 fi
 ca_hash="$(openssl x509 -inform PEM -subject_hash_old -in "$ca_file" | head -1)"
 ca_device_path="/system/etc/security/cacerts/${ca_hash}.0"
-timeout 120 adb push "$ca_file" "$ca_device_path" >/dev/null
-timeout 30 adb shell chmod 644 "$ca_device_path"
-timeout 120 adb reboot >/dev/null || true
-wait_for_adb_device "after installing the TLS CA"
-boot_ok=""
-for boot_attempt in 1 2; do
-    for _ in $(seq 1 120); do
-        if [ "$(timeout 30 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
-            boot_ok=1
-            break
-        fi
-        sleep 2
-    done
-    if [ "$boot_ok" = "1" ]; then
-        break
-    fi
-    if [ "$boot_attempt" = "1" ]; then
-        log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."
-        timeout 120 adb reboot >/dev/null || true
-        wait_for_adb_device "after the trust store boot retry"
-    fi
-done
-if [ "$boot_ok" != "1" ]; then
-    log "Emulator did not boot after installing the TLS trust store. Device state:"
+if ! timeout 120 adb push "$ca_file" "$ca_device_path" >/dev/null; then
+    log "Failed to push the journey test CA into the system trust store. Device state:"
     adb devices || true
     exit 1
 fi
-require_root_adb "after installing the TLS CA"
+if ! timeout 30 adb shell chmod 644 "$ca_device_path"; then
+    log "Failed to set the journey test CA permissions. Device state:"
+    adb devices || true
+    exit 1
+fi
 if ! timeout 30 adb shell test -f "$ca_device_path"; then
-    log "Journey test CA was not retained after emulator reboot."
+    log "The journey test CA is not present on the live system partition. Device state:"
+    adb devices || true
     exit 1
 fi
 
