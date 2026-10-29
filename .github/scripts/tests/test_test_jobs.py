@@ -34,6 +34,12 @@ def maestro_region(workflow):
     return workflow.split("  maestro_journeys:\n", 1)[1].split("\n  create_nightly_failure_issue:", 1)[0]
 
 
+def trust_store_region(runner):
+    return runner.split('log "Installing the journey test CA into the emulator system trust store."', 1)[1].split(
+        'log "Installing the exact candidate APK."', 1
+    )[0]
+
+
 def maestro_umbrella_block(workflow):
     return maestro_region(workflow).split("\n  maestro_shard_1:", 1)[0]
 
@@ -56,10 +62,6 @@ def journey_attempts(journey, *, retried=JOURNEY_RETRY_TARGET, max_attempts=JOUR
 def fake_adb_script(root_failures=0, root_works=True):
     root_outcome = 'touch "$ADB_ROOT_MARKER"' if root_works else "exit 1"
     return f"""#!/usr/bin/env bash
-if [[ "$*" == *"getprop sys.boot_completed"* ]]; then
-    printf '1\\n'
-    exit 0
-fi
 if [[ "$*" == *"shell id -u"* ]]; then
     if [[ -n "${{ADB_ROOT_MARKER:-}}" && ! -f "$ADB_ROOT_MARKER" ]]; then
         printf '1\\n'
@@ -267,37 +269,38 @@ class TestJobs(unittest.TestCase):
         self.assertLess(timeout_call, artifact_copy)
         self.assertIn('log "Maestro journey timed out after 300 seconds: $journey"', runner)
 
-    def test_journey_runner_checks_ca_persistence_after_reboot(self):
+    def test_journey_runner_remounts_and_installs_the_ca_on_the_live_system_partition(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
-        ca_check = runner.index('if ! timeout 30 adb shell test -f "$ca_device_path"; then')
-        self.assertLess(runner.rindex("sys.boot_completed"), ca_check)
-        self.assertLess(ca_check, runner.index('timeout 180 adb install --no-streaming -r "$apk"'))
-
-    def test_journey_runner_remounts_before_ca_install_and_reboots_afterward(self):
-        runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
-        prepare_reboot = runner.index("adb reboot")
-        prepare_boot = runner.index("sys.boot_completed")
         remount = runner.index("adb remount")
-        install = runner.index('adb push "$ca_file"')
+        push = runner.index('adb push "$ca_file"')
         chmod = runner.index("adb shell chmod 644")
-        trust_reboot = runner.index("adb reboot", chmod)
-        trust_boot = runner.index("sys.boot_completed", trust_reboot)
-        retry_reboot = runner.rindex("adb reboot")
+        ca_check = runner.index('if ! timeout 30 adb shell test -f "$ca_device_path"; then')
         apk_install = runner.index('timeout 180 adb install --no-streaming -r "$apk"')
-        self.assertLess(prepare_reboot, prepare_boot)
-        self.assertLess(prepare_boot, remount)
-        self.assertLess(remount, install)
-        self.assertLess(install, chmod)
-        self.assertLess(chmod, trust_reboot)
-        self.assertLess(trust_reboot, trust_boot)
-        self.assertLess(trust_boot, retry_reboot)
-        self.assertLess(retry_reboot, apk_install)
+        self.assertLess(remount, push)
+        self.assertLess(push, chmod)
+        self.assertLess(chmod, ca_check)
+        self.assertLess(ca_check, apk_install)
+
+    def test_journey_runner_does_not_restart_the_guest_for_the_trust_store(self):
+        runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
+        trust_store = trust_store_region(runner)
+        self.assertNotIn(
+            "adb reboot",
+            trust_store,
+            "a guest restart with the writable-system overlay active can leave the emulator unreachable",
+        )
+        self.assertNotIn(
+            "sys.boot_completed",
+            trust_store,
+            "the trust store install must not wait for a boot; the app starts after this step",
+        )
+        self.assertNotIn("for boot_attempt in 1 2", runner)
+        self.assertNotIn("retrying the boot wait", runner)
 
     def test_journey_runner_confirms_a_root_shell_before_touching_the_trust_store(self):
         runner = JOURNEY_RUNNER.read_text()
-        self.assertIn("wait_for_adb_device() {", runner)
         self.assertIn("require_root_adb() {", runner)
-        self.assertLess(runner.index("wait_for_adb_device() {"), runner.index("adb root"))
+        self.assertLess(runner.index("require_root_adb() {"), runner.index("adb root"))
         helper = runner.split("require_root_adb() {", 1)[1].split("\n}", 1)[0]
         self.assertIn("for _ in $(seq 1 10)", helper)
         self.assertIn("adb shell id -u", helper)
@@ -305,22 +308,19 @@ class TestJobs(unittest.TestCase):
         self.assertIn('log "Emulator adbd did not provide a root shell', helper)
         self.assertIn("adb devices", helper)
         self.assertNotIn("\nadb root >/dev/null\n", runner)
-        trust_store = runner.split('log "Installing the journey test CA into the emulator system trust store."', 1)[1]
+        trust_store = trust_store_region(runner)
         root_guard = trust_store.index('require_root_adb "before installing the TLS CA"')
         self.assertLess(root_guard, trust_store.index("adb remount"))
         self.assertLess(root_guard, trust_store.index('adb push "$ca_file"'))
 
-    def test_journey_runner_bounds_every_device_wait_in_the_trust_store_sequence(self):
-        runner = JOURNEY_RUNNER.read_text()
-        trust_store = runner.split('log "Installing the journey test CA into the emulator system trust store."', 1)[1]
-        trust_store = trust_store.split('log "Installing the exact candidate APK."', 1)[0]
+    def test_journey_runner_bounds_every_device_call_in_the_trust_store_sequence(self):
+        runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
         unbounded = [
             line.strip()
-            for line in trust_store.splitlines()
-            if line.strip().startswith(("adb wait-for-device", "adb reboot", "adb shell getprop", "adb shell test -f"))
+            for line in trust_store_region(runner).splitlines()
+            if re.search(r"(^|[\s!;(])adb ", re.sub(r"timeout [0-9]+ adb |adb devices", "", line))
         ]
-        self.assertEqual([], unbounded, "every device call in the trust store sequence must carry a timeout")
-        self.assertIn("timeout 30 adb shell getprop sys.boot_completed", trust_store)
+        self.assertEqual([], unbounded, "every adb call in the trust store sequence must carry a timeout")
 
     def test_journey_runner_recovers_when_the_first_root_call_races_the_emulator_boot(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -751,20 +751,6 @@ class TestJobs(unittest.TestCase):
         self.assertIn("journey_attempt", runner)
         self.assertIn('"$journey" = "session-lifecycle"', runner)
         self.assertEqual(1, runner.count('test --no-reinstall-driver "$flow_dir/$journey.yaml"'))
-
-    def test_journey_runner_retries_the_post_tls_boot_wait_once(self):
-        runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
-        self.assertIn("for boot_attempt in 1 2", runner)
-        self.assertEqual(1, runner.count("for boot_attempt in 1 2"))
-        self.assertEqual(1, runner.count("retrying the boot wait"))
-        self.assertIn(
-            'log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."',
-            runner,
-        )
-        exhausted = runner.split('log "Emulator did not boot after installing the TLS trust store. Device state:"', 1)[1]
-        self.assertIn("adb devices", exhausted, "an exhausted boot retry must report the device state")
-        self.assertIn("exit 1", exhausted, "an exhausted boot retry must still fail closed")
-        self.assertNotIn("before installing the TLS CA; retrying", runner)
 
     def test_journey_attempt_rule_bounds_the_retried_journey_to_two_attempts(self):
         self.assertEqual(2, journey_attempts(JOURNEY_RETRY_TARGET))
