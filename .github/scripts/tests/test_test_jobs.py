@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import textwrap
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -50,6 +51,42 @@ def shard_journeys(journeys, shard):
 
 def journey_attempts(journey, *, retried=JOURNEY_RETRY_TARGET, max_attempts=JOURNEY_MAX_ATTEMPTS):
     return max_attempts if journey == retried else 1
+
+
+def fake_adb_script(root_failures=0, root_works=True):
+    root_outcome = 'touch "$ADB_ROOT_MARKER"' if root_works else "exit 1"
+    return f"""#!/usr/bin/env bash
+if [[ "$*" == *"getprop sys.boot_completed"* ]]; then
+    printf '1\\n'
+    exit 0
+fi
+if [[ "$*" == *"shell id -u"* ]]; then
+    if [[ -n "${{ADB_ROOT_MARKER:-}}" && ! -f "$ADB_ROOT_MARKER" ]]; then
+        printf '1\\n'
+    else
+        printf '0\\n'
+    fi
+    exit 0
+fi
+if [[ "$*" == "root" ]]; then
+    root_count=0
+    [[ -f "$ADB_ROOT_COUNT" ]] && read -r root_count < "$ADB_ROOT_COUNT"
+    root_count=$((root_count + 1))
+    printf '%s\\n' "$root_count" > "$ADB_ROOT_COUNT"
+    if [[ "$root_count" -le "{root_failures}" ]]; then
+        printf 'adb: unable to connect for root: closed\\n' >&2
+        exit 1
+    fi
+    {root_outcome}
+    exit 0
+fi
+if [[ "$*" == "devices" ]]; then
+    printf 'List of devices attached\\nemulator-5554\\tdevice\\n'
+    exit 0
+fi
+exit 0
+"""
+
 
 
 class TestJobs(unittest.TestCase):
@@ -232,7 +269,7 @@ class TestJobs(unittest.TestCase):
 
     def test_journey_runner_checks_ca_persistence_after_reboot(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
-        ca_check = runner.index('if ! adb shell test -f "$ca_device_path"; then')
+        ca_check = runner.index('if ! timeout 30 adb shell test -f "$ca_device_path"; then')
         self.assertLess(runner.rindex("sys.boot_completed"), ca_check)
         self.assertLess(ca_check, runner.index('timeout 180 adb install --no-streaming -r "$apk"'))
 
@@ -255,6 +292,72 @@ class TestJobs(unittest.TestCase):
         self.assertLess(trust_reboot, trust_boot)
         self.assertLess(trust_boot, retry_reboot)
         self.assertLess(retry_reboot, apk_install)
+
+    def test_journey_runner_confirms_a_root_shell_before_touching_the_trust_store(self):
+        runner = JOURNEY_RUNNER.read_text()
+        self.assertIn("wait_for_adb_device() {", runner)
+        self.assertIn("require_root_adb() {", runner)
+        self.assertLess(runner.index("wait_for_adb_device() {"), runner.index("adb root"))
+        helper = runner.split("require_root_adb() {", 1)[1].split("\n}", 1)[0]
+        self.assertIn("for _ in $(seq 1 10)", helper)
+        self.assertIn("adb shell id -u", helper)
+        self.assertIn('= "0"', helper)
+        self.assertIn('log "Emulator adbd did not provide a root shell', helper)
+        self.assertIn("adb devices", helper)
+        self.assertNotIn("\nadb root >/dev/null\n", runner)
+        trust_store = runner.split('log "Installing the journey test CA into the emulator system trust store."', 1)[1]
+        root_guard = trust_store.index('require_root_adb "before installing the TLS CA"')
+        self.assertLess(root_guard, trust_store.index("adb remount"))
+        self.assertLess(root_guard, trust_store.index('adb push "$ca_file"'))
+
+    def test_journey_runner_bounds_every_device_wait_in_the_trust_store_sequence(self):
+        runner = JOURNEY_RUNNER.read_text()
+        trust_store = runner.split('log "Installing the journey test CA into the emulator system trust store."', 1)[1]
+        trust_store = trust_store.split('log "Installing the exact candidate APK."', 1)[0]
+        unbounded = [
+            line.strip()
+            for line in trust_store.splitlines()
+            if line.strip().startswith(("adb wait-for-device", "adb reboot", "adb shell getprop", "adb shell test -f"))
+        ]
+        self.assertEqual([], unbounded, "every device call in the trust store sequence must carry a timeout")
+        self.assertIn("timeout 30 adb shell getprop sys.boot_completed", trust_store)
+
+    def test_journey_runner_recovers_when_the_first_root_call_races_the_emulator_boot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(workspace, "", 0, root_failures=1)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh")],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("All deterministic journeys passed.", result.stdout)
+            self.assertNotIn("did not provide a root shell", result.stdout)
+            self.assertGreaterEqual(int((workspace / "adb-root.count").read_text().strip()), 2)
+
+    def test_journey_runner_fails_fast_when_adbd_never_provides_a_root_shell(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(workspace, "", 0, root_works=False)
+            started = time.monotonic()
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh")],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            elapsed = time.monotonic() - started
+            self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+            self.assertIn("Emulator adbd did not provide a root shell before installing the TLS CA.", result.stdout)
+            self.assertIn("emulator-5554", result.stdout)
+            self.assertNotIn("Installing the exact candidate APK.", result.stdout)
+            self.assertLess(elapsed, 60)
 
     def test_journey_runner_captures_telemetry_before_reaping_gateway_after_health_failure(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -281,12 +384,7 @@ class TestJobs(unittest.TestCase):
                 #!/usr/bin/env bash
                 exit 0
             """)
-            add_executable("adb", """
-                #!/usr/bin/env bash
-                if [[ "$*" == *"getprop sys.boot_completed"* ]]; then
-                    printf '1\\n'
-                fi
-            """)
+            add_executable("adb", fake_adb_script())
             add_executable("openssl", """
                 #!/usr/bin/env bash
                 printf 'fixture-hash\\n'
@@ -339,6 +437,7 @@ class TestJobs(unittest.TestCase):
                 "HOME": str(workspace),
                 "MAESTRO_CLI_VERSION": "test",
                 "CAPABILITIES_BODY": json.dumps(capabilities),
+                "ADB_ROOT_COUNT": str(workspace / "adb-root.count"),
             }
             result = subprocess.run(
                 ["bash", str(ROOT / ".github/scripts/journey-run.sh")],
@@ -373,7 +472,7 @@ class TestJobs(unittest.TestCase):
                     except ProcessLookupError:
                         pass
 
-    def _prepare_journey_runner_fixture(self, workspace, fail_journey, fail_times):
+    def _prepare_journey_runner_fixture(self, workspace, fail_journey, fail_times, root_failures=0, root_works=True):
         gateway_pid_file = workspace / "gateway.pid"
         classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
         classpath_file.parent.mkdir(parents=True)
@@ -395,14 +494,7 @@ class TestJobs(unittest.TestCase):
             executable.chmod(0o755)
 
         add_executable("gradlew", "#!/usr/bin/env bash\nexit 0\n")
-        add_executable(
-            "adb",
-            """#!/usr/bin/env bash
-            if [[ "$*" == *"getprop sys.boot_completed"* ]]; then
-                printf '1\\n'
-            fi
-            """,
-        )
+        add_executable("adb", fake_adb_script(root_failures=root_failures, root_works=root_works))
         add_executable("openssl", "#!/usr/bin/env bash\nprintf 'fixture-hash\\n'\n")
         add_executable(
             "curl",
@@ -481,6 +573,8 @@ class TestJobs(unittest.TestCase):
             "MAESTRO_COUNT_DIR": str(count_dir),
             "MAESTRO_FAIL_JOURNEY": fail_journey,
             "MAESTRO_FAIL_TIMES": str(fail_times),
+            "ADB_ROOT_COUNT": str(workspace / "adb-root.count"),
+            "ADB_ROOT_MARKER": str(workspace / "adb-root.marker"),
         }
         return environment, count_dir
 
@@ -667,11 +761,9 @@ class TestJobs(unittest.TestCase):
             'log "Emulator did not boot after installing the TLS trust store; retrying the boot wait."',
             runner,
         )
-        self.assertIn(
-            'log "Emulator did not boot after installing the TLS trust store."\n    exit 1',
-            runner,
-            "an exhausted boot retry must still fail closed",
-        )
+        exhausted = runner.split('log "Emulator did not boot after installing the TLS trust store. Device state:"', 1)[1]
+        self.assertIn("adb devices", exhausted, "an exhausted boot retry must report the device state")
+        self.assertIn("exit 1", exhausted, "an exhausted boot retry must still fail closed")
         self.assertNotIn("before installing the TLS CA; retrying", runner)
 
     def test_journey_attempt_rule_bounds_the_retried_journey_to_two_attempts(self):
