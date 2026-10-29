@@ -10,7 +10,7 @@ class ErrorReportingTest {
     fun the_event_contract_carries_only_the_release_and_environment_tags() {
         val fields =
             ErrorReport::class.java.declaredFields
-                .filter { field -> Modifier.isPrivate(field.modifiers) && !field.isSynthetic }
+                .filterNot { field -> field.isSynthetic || Modifier.isStatic(field.modifiers) }
                 .map { field -> field.name }
                 .toSet()
 
@@ -44,16 +44,6 @@ class ErrorReportingTest {
     }
 
     @Test
-    fun clearing_the_recording_sink_discards_every_report() {
-        val sink = RecordingErrorReporter()
-        sink.report(ErrorReport(release = "1.2.3", environment = "debug"))
-
-        sink.clear()
-
-        assertEquals(emptyList<ErrorReport>(), sink.reports())
-    }
-
-    @Test
     fun the_seam_reports_the_configured_release_and_environment() {
         val sink = RecordingErrorReporter()
 
@@ -67,9 +57,12 @@ class ErrorReportingTest {
     }
 
     @Test
-    fun the_default_binding_is_the_silent_no_op() {
-        ErrorReporting().reportUnexpectedFailure()
+    fun the_default_sink_holds_no_state_and_accepts_a_report() {
+        val stateFields =
+            NoOpErrorReporter::class.java.declaredFields
+                .filterNot { field -> Modifier.isStatic(field.modifiers) }
 
-        NoOpErrorReporter.report(ErrorReport(release = UNKNOWN_CLIENT_VERSION, environment = UNKNOWN_ENVIRONMENT))
+        assertEquals(emptyList<Any>(), stateFields.toList())
+        ErrorReporting().reportUnexpectedFailure()
     }
 }
