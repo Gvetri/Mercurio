@@ -211,6 +211,7 @@ internal fun EntryStateHolder.updateSubmittedRunUi(
                 current.copy(
                     openedSession =
                         opened.copy(
+                            messages = opened.messages.withLocalUser(localUserMessage(application.run)),
                             composerText = sessionDrafts[application.sessionId].orEmpty(),
                             latestRun = knownRuns.latestRun() ?: application.run,
                             activeRuns = knownRuns.activeRuns(),
