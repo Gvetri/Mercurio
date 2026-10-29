@@ -424,6 +424,33 @@ class SafeMarkdownTest {
     }
 
     @Test
+    fun emphasis_inside_a_dollar_run_keeps_rendering_as_emphasis() {
+        val blocks = parseSafeMarkdown("\$**bold**\$")
+
+        assertEquals("\$bold\$", blocks.plainText())
+        assertEquals(listOf("bold"), blocks.spans().filter { it.bold }.map { it.text })
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun a_link_inside_a_dollar_run_keeps_its_destination() {
+        val blocks = parseSafeMarkdown("\$[lbl](https://example.com)\$")
+
+        assertEquals("\$lbl\$", blocks.plainText())
+        assertEquals(listOf("https://example.com"), blocks.spans().mapNotNull { it.link })
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
+    fun code_inside_a_dollar_run_keeps_rendering_as_code() {
+        val blocks = parseSafeMarkdown("\$`c`\$")
+
+        assertEquals("\$c\$", blocks.plainText())
+        assertEquals(listOf("c"), blocks.spans().filter { it.code }.map { it.text })
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
     fun display_math_becomes_a_block_with_its_literal_fallback() {
         val blocks = parseSafeMarkdown("\$\$\nE = mc^2\n\$\$")
 

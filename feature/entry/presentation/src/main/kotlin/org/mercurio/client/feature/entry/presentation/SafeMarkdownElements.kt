@@ -8,6 +8,8 @@ private const val TABLE_PIPE = '|'
 
 private val DELIMITER_CELL = Regex("""^:?-+:?$""")
 
+private val INLINE_MARKUP_CHARACTERS = setOf('*', '`', '[')
+
 /**
  * The structured block a paragraph run is, or null when the run stays a literal
  * paragraph. A construct is recognised only when the whole run is that construct,
@@ -70,15 +72,21 @@ internal data class InlineMath(
     val expression: String,
 )
 
+/**
+ * The inline math run at [startIndex], or null when there is none or its expression
+ * carries Markdown markup: such a run stays the markup the literal parse renders today.
+ */
 internal fun inlineMathAt(
     text: String,
     startIndex: Int,
 ): InlineMath? {
     val contentStart = startIndex + 1
     val endIndex = if (opensInlineMath(text, startIndex)) nextDollarClose(text, contentStart) else -1
-    if (endIndex <= contentStart) return null
-    val expression = text.substring(contentStart, endIndex)
-    return InlineMath(startIndex = startIndex, endIndex = endIndex + 1, expression = expression)
+    val expression = if (endIndex > contentStart) text.substring(contentStart, endIndex) else ""
+    val unmarked =
+        expression.isNotEmpty() &&
+            expression.none { character -> character in INLINE_MARKUP_CHARACTERS }
+    return if (unmarked) InlineMath(startIndex = startIndex, endIndex = endIndex + 1, expression = expression) else null
 }
 
 private fun opensInlineMath(
