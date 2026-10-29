@@ -382,7 +382,7 @@ class RunReconciliationStateHolderTest {
             assertTrue(pending.isRefreshing)
             assertTrue(pending.isStale)
             assertEquals("Partial", pending.activeResponse?.content)
-            assertTrue(pending.messages.isEmpty())
+            assertEquals(listOf(localUserMessageId(run.id)), pending.messages.map { it.id })
 
             gateway.releaseStatus.countDown()
             awaitReconciliationState(holder) {
