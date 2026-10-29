@@ -42,6 +42,26 @@ internal sealed interface MarkdownBlock {
         val language: String?,
         val code: String,
     ) : MarkdownBlock
+
+    /**
+     * A pipe table: the header row, the data rows padded or trimmed to the header
+     * width, and [spans] holding the literal source text the renderer still shows
+     * until a table renderer lands.
+     */
+    data class Table(
+        val header: List<String>,
+        val rows: List<List<String>>,
+        val spans: List<MarkdownSpan>,
+    ) : MarkdownBlock
+
+    /**
+     * A `$$…$$` display-math block: the expression without its delimiters, and [spans]
+     * holding the literal source text the renderer still shows until a math renderer lands.
+     */
+    data class DisplayMath(
+        val expression: String,
+        val spans: List<MarkdownSpan>,
+    ) : MarkdownBlock
 }
 
 /**
@@ -56,7 +76,8 @@ internal data class NumberedItem(
 /**
  * One run of literal message text. [link] is set only for a destination that
  * [allowedExternalLinkDestination] accepts; every other link target stays as its
- * inert label text.
+ * inert label text. [element] marks an inline construct the parser recognised;
+ * [text] still holds that construct's source verbatim, so an inert render is unchanged.
  */
 internal data class MarkdownSpan(
     val text: String,
@@ -64,7 +85,25 @@ internal data class MarkdownSpan(
     val italic: Boolean = false,
     val code: Boolean = false,
     val link: String? = null,
+    val element: InlineElement? = null,
 )
+
+/**
+ * An inline construct the parser recognised. The span keeps its literal source in
+ * [MarkdownSpan.text], so a renderer stays inert until it opts into handling the element.
+ */
+internal sealed interface InlineElement {
+    /** `![alt](destination)` with the label and the destination its source authored. */
+    data class Image(
+        val alt: String,
+        val destination: String,
+    ) : InlineElement
+
+    /** `$expression$` with the dollar delimiters dropped from [expression]. */
+    data class Math(
+        val expression: String,
+    ) : InlineElement
+}
 
 /**
  * The HTTPS destination an external browser intent may be built for, or null when the
@@ -91,20 +130,22 @@ private const val CODE_FENCE = "```"
 
 /**
  * Parses the supported Markdown subset of untrusted Gateway content: headings,
- * blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links, and fenced code
- * blocks. Unsupported constructs stay literal text, so nothing in the source can become
- * executable content.
+ * blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links, fenced code
+ * blocks, pipe tables, and math delimiters. Pipe tables and `$$…$$` display math become
+ * their own blocks, `![…](…)` and `$…$` become marked spans, and every one of them keeps
+ * its literal source text until its renderer lands. Unsupported constructs stay literal
+ * text, so nothing in the source can become executable content.
  */
 internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
     val lines = content.lines()
     val paragraphLines = mutableListOf<String>()
 
-    fun flushParagraph() {
-        if (paragraphLines.isNotEmpty()) {
-            blocks += MarkdownBlock.Paragraph(parseInline(paragraphLines.joinToString(separator = " ")))
-            paragraphLines.clear()
-        }
+    fun flushParagraphRun() {
+        if (paragraphLines.isEmpty()) return
+        val source = paragraphLines.joinToString(separator = " ")
+        blocks += structuredBlock(paragraphLines) ?: MarkdownBlock.Paragraph(parseInline(source))
+        paragraphLines.clear()
     }
 
     var index = 0
@@ -112,17 +153,17 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
         val line = lines[index]
         when {
             isFenceLine(line) -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (block, nextIndex) = readFenceBlock(lines, index, line)
                 blocks += block
                 index = nextIndex
             }
             line.isBlank() -> {
-                flushParagraph()
+                flushParagraphRun()
                 index++
             }
             ATX_HEADING.matches(line.trim()) -> {
-                flushParagraph()
+                flushParagraphRun()
                 blocks +=
                     MarkdownBlock.Heading(
                         level = line.trim().takeWhile { it == '#' }.length,
@@ -131,24 +172,24 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
                 index++
             }
             isBlockquoteLine(line) -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (spans, nextIndex) = readBlockquote(lines, index)
                 blocks += MarkdownBlock.Blockquote(spans)
                 index = nextIndex
             }
             isThematicBreak(line) -> {
-                flushParagraph()
+                flushParagraphRun()
                 blocks += MarkdownBlock.HorizontalRule
                 index++
             }
             bulletItem(line) != null -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (items, nextIndex) = readListItemRun(lines, index, ::bulletItem)
                 blocks += MarkdownBlock.BulletList(items)
                 index = nextIndex
             }
             numberedItem(line) != null -> {
-                flushParagraph()
+                flushParagraphRun()
                 val (items, nextIndex) = readListItemRun(lines, index, ::numberedItem)
                 blocks += MarkdownBlock.NumberedList(items)
                 index = nextIndex
@@ -159,7 +200,7 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
             }
         }
     }
-    flushParagraph()
+    flushParagraphRun()
     return blocks
 }
 
