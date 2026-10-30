@@ -10,7 +10,7 @@ from github_api_fixture import GitHubApiFixture
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / ".github/scripts/release-signing.py"
-REPOSITORY = "Gvetri/hermes-native-client"
+REPOSITORY = "Gvetri/Mercurio"
 SOURCE = "a" * 40
 REQUIRED_JOBS = (
     "formatting", "static-analysis", "detekt", "unit-tests", "fixture-descriptor",

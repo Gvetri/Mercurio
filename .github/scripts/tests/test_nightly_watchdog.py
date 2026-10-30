@@ -232,7 +232,7 @@ class NightlyWatchdogWorkflowTest(unittest.TestCase):
         self.assertIn("      actions: read", workflow)
         self.assertIn("      contents: read", workflow)
         self.assertIn("github.ref == 'refs/heads/main' && github.ref_protected", workflow)
-        self.assertIn("github.repository == 'Gvetri/hermes-native-client'", workflow)
+        self.assertIn("github.repository == 'Gvetri/Mercurio'", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("ref: ${{ github.sha }}", workflow)
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)

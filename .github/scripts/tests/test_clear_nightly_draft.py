@@ -10,7 +10,7 @@ from github_api_fixture import GitHubApiFixture
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / ".github/scripts/clear-nightly-draft.py"
-PREFIX = "/repos/Gvetri/hermes-native-client"
+PREFIX = "/repos/Gvetri/Mercurio"
 SOURCE = "a" * 40
 TAG = f"nightly-7002-{SOURCE}"
 
@@ -29,7 +29,7 @@ class ClearNightlyDraftTest(unittest.TestCase):
                 f"- Android version name: `nightly-7002-{SOURCE[:12]}`\n- Device architecture: ARM64\n"
                 f"- APK SHA-256: `{'b' * 64}`\n"
                 f"- Signing certificate SHA-256: `{(ROOT / '.github/release-certificate.sha256').read_text().strip()}`\n"
-                "- Deterministic validation: https://github.com/Gvetri/hermes-native-client/actions/runs/123 (attempt 1)\n"
+                "- Deterministic validation: https://github.com/Gvetri/Mercurio/actions/runs/123 (attempt 1)\n"
             ),
             "assets": [{"id": 10, "name": "mercurio.apk", "state": "uploaded",
                         "uploader": {"login": "github-actions[bot]", "id": 41898282},

@@ -330,7 +330,7 @@ reopens it, at most three times, before the unchanged `Pin Session` step.
 
 ## Keyboard window contract
 
-For [issue #72](https://github.com/Gvetri/hermes-native-client/issues/72),
+For [issue #72](https://github.com/Gvetri/Mercurio/issues/72),
 `MainActivity` explicitly requests `android:windowSoftInputMode="adjustResize"`
 in the [manifest](../app/src/main/AndroidManifest.xml). The Activity still calls
 `enableEdgeToEdge()`. Resize provides the input method editor (IME) insets that
@@ -349,7 +349,7 @@ fallback remains limited to detecting keyboard visibility; it does not select
 an Activity window policy. Do not add a second root IME padding or change the
 Gateway/state holder to compensate for a window-policy defect.
 
-The [historical A/B report on PR #71](https://github.com/Gvetri/hermes-native-client/pull/71#issuecomment-5848540026)
+The [historical A/B report on PR #71](https://github.com/Gvetri/Mercurio/pull/71#issuecomment-5848540026)
 found an API 24 arm64 Rename failure after adding resize to an older shell.
 That report is a regression warning, not proof that the current shell fails.
 Changing this contract requires all 25 deterministic API 24 journeys, including

@@ -516,7 +516,7 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "status": status,
             "completed_at": completed_at,
             "details_url": (
-                f"https://github.com/Gvetri/hermes-native-client/actions/runs/{run_id}"
+                f"https://github.com/Gvetri/Mercurio/actions/runs/{run_id}"
                 if run_id
                 else "https://example.com/not-an-actions-run"
             ),
@@ -664,7 +664,7 @@ class TestVerifyConventionalCommits(unittest.TestCase):
             environment = dict(os.environ)
             environment.update(
                 {
-                    "GITHUB_REPOSITORY": "Gvetri/hermes-native-client",
+                    "GITHUB_REPOSITORY": "Gvetri/Mercurio",
                     "GITHUB_EVENT_NAME": event_name,
                     "GITHUB_EVENT_PATH": str(event_path),
                     "GITHUB_API_URL": self.api.url,
@@ -684,7 +684,7 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         return [{"sha": f"{index:040x}", "commit": {"message": message}} for index, message in enumerate(messages, start=1)]
 
     def test_a_conventional_title_and_commits_pass(self):
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(
             ["feat: protect main", "fix(ci): pin the concurrency group\n\nBody text.", "Merge branch 'main' into feat/25"]
         )
         completed = self.run_check()
@@ -693,14 +693,14 @@ class TestVerifyConventionalCommits(unittest.TestCase):
 
     def test_an_unconventional_title_fails(self):
         self.event["pull_request"]["title"] = "protect main"
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(["feat: protect main"])
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(["feat: protect main"])
         completed = self.run_check()
         self.assertEqual(1, completed.returncode)
         self.assertIn("The squash-merge title", completed.stderr)
         self.assertIn("is not a Conventional Commit", completed.stderr)
 
     def test_an_undeclared_type_and_an_uppercase_scope_fail(self):
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(
             ["feature: protect main", "fix(CI): pin the group", "fix: protect main."]
         )
         completed = self.run_check()
@@ -710,7 +710,7 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertIn("must not end with a period", completed.stderr)
 
     def test_an_empty_commit_list_fails_closed(self):
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = []
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = []
         completed = self.run_check()
         self.assertEqual(1, completed.returncode)
         self.assertIn("failed closed", completed.stderr)
@@ -721,11 +721,11 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertIn("GitHub API answered 404", completed.stderr)
 
     def test_the_checker_validates_the_live_title_from_the_api(self):
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25"] = {
+        self.routes["/repos/Gvetri/Mercurio/pulls/25"] = {
             "number": 25,
             "title": "protect main",
         }
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(
             ["feat: protect main"]
         )
         completed = self.run_check()
@@ -734,21 +734,21 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertIn("'protect main' is not a Conventional Commit", completed.stderr)
 
     def test_an_unavailable_title_api_falls_back_to_the_payload_title(self):
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(
             ["feat: protect main"]
         )
         completed = self.run_check()
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertIn("/repos/Gvetri/hermes-native-client/pulls/25", self.api.requests)
+        self.assertIn("/repos/Gvetri/Mercurio/pulls/25", self.api.requests)
         self.assertIn("Commit-message verification passed.", completed.stdout)
 
     def test_a_payload_title_that_differs_from_the_live_title_passes(self):
         self.event["pull_request"]["title"] = "protect main"
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25"] = {
+        self.routes["/repos/Gvetri/Mercurio/pulls/25"] = {
             "number": 25,
             "title": "chore: commit-message gate validates the live PR title",
         }
-        self.routes["/repos/Gvetri/hermes-native-client/pulls/25/commits"] = self.commits(
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(
             ["feat: protect main"]
         )
         completed = self.run_check()
@@ -756,7 +756,7 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertIn("Commit-message verification passed.", completed.stdout)
 
     def test_a_push_validates_the_commits_it_introduced(self):
-        self.routes["/repos/Gvetri/hermes-native-client/compare/aaa...bbb"] = {
+        self.routes["/repos/Gvetri/Mercurio/compare/aaa...bbb"] = {
             "total_commits": 2,
             "commits": self.commits(["feat: protect main (#25)", "docs: describe the protected-main workflow"]),
         }
@@ -765,7 +765,7 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertIn("Verified 2 pushed commit message(s).", completed.stdout)
 
     def test_a_truncated_push_comparison_fails_closed(self):
-        self.routes["/repos/Gvetri/hermes-native-client/compare/aaa...bbb"] = {
+        self.routes["/repos/Gvetri/Mercurio/compare/aaa...bbb"] = {
             "total_commits": 251,
             "commits": self.commits(["feat: protect main"]),
         }
@@ -784,8 +784,8 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
 
     def setUp(self):
         self.routes = {
-            "/repos/Gvetri/hermes-native-client": {"default_branch": "main"},
-            "/repos/Gvetri/hermes-native-client/rules/branches/main": [
+            "/repos/Gvetri/Mercurio": {"default_branch": "main"},
+            "/repos/Gvetri/Mercurio/rules/branches/main": [
                 {"type": "deletion"},
                 {"type": "non_fast_forward"},
                 {
@@ -807,20 +807,20 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
                     },
                 },
             ],
-            "/repos/Gvetri/hermes-native-client/rulesets": [
+            "/repos/Gvetri/Mercurio/rulesets": [
                 {"id": 22461074, "name": "Main", "target": "branch", "enforcement": "active"}
             ],
-            "/repos/Gvetri/hermes-native-client/rulesets/22461074": {"id": 22461074, "name": "Main", "bypass_actors": []},
-            "/repos/Gvetri/hermes-native-client/actions/permissions/workflow": {
+            "/repos/Gvetri/Mercurio/rulesets/22461074": {"id": 22461074, "name": "Main", "bypass_actors": []},
+            "/repos/Gvetri/Mercurio/actions/permissions/workflow": {
                 "default_workflow_permissions": "read",
                 "can_approve_pull_request_reviews": False,
             },
-            "/repos/Gvetri/hermes-native-client/actions/permissions/fork-pr-contributor-approval": {
+            "/repos/Gvetri/Mercurio/actions/permissions/fork-pr-contributor-approval": {
                 "approval_policy": "all_external_contributors"
             },
         }
         self.owner_routes = {
-            "/repos/Gvetri/hermes-native-client": {
+            "/repos/Gvetri/Mercurio": {
                 "default_branch": "main",
                 "allow_squash_merge": True,
                 "allow_merge_commit": False,
@@ -838,7 +838,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         environment = dict(os.environ)
         environment.update(
             {
-                "GITHUB_REPOSITORY": "Gvetri/hermes-native-client",
+                "GITHUB_REPOSITORY": "Gvetri/Mercurio",
                 "GITHUB_API_URL": api_url or self.api.url,
                 "GITHUB_TOKEN": "test-token",
             }
@@ -894,9 +894,9 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertEqual("The workflow must cancel an obsolete run\nRepository conformance failed.\n", completed.stderr)
 
     def test_a_weakened_rule_fails(self):
-        self.routes["/repos/Gvetri/hermes-native-client/rules/branches/main"] = [
+        self.routes["/repos/Gvetri/Mercurio/rules/branches/main"] = [
             rule
-            for rule in self.routes["/repos/Gvetri/hermes-native-client/rules/branches/main"]
+            for rule in self.routes["/repos/Gvetri/Mercurio/rules/branches/main"]
             if rule["type"] != "non_fast_forward"
         ]
         completed = self.run_check()
@@ -904,7 +904,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertIn("must prohibit force pushes", completed.stderr)
 
     def test_an_extra_required_status_fails(self):
-        self.routes["/repos/Gvetri/hermes-native-client/rules/branches/main"][3]["parameters"]["required_status_checks"] = [
+        self.routes["/repos/Gvetri/Mercurio/rules/branches/main"][3]["parameters"]["required_status_checks"] = [
             {"context": "quality-gate"},
             {"context": "optional-report"},
         ]
@@ -913,7 +913,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertIn("must require exactly the ['pr-template', 'quality-gate'] statuses", completed.stderr)
 
     def test_a_bypass_actor_fails(self):
-        self.routes["/repos/Gvetri/hermes-native-client/rulesets/22461074"] = {
+        self.routes["/repos/Gvetri/Mercurio/rulesets/22461074"] = {
             "id": 22461074,
             "name": "Main",
             "bypass_actors": [{"actor_type": "RepositoryRole", "bypass_mode": "always"}],
@@ -923,7 +923,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertIn("grants a bypass", completed.stderr)
 
     def test_a_write_capable_workflow_token_fails(self):
-        self.routes["/repos/Gvetri/hermes-native-client/actions/permissions/workflow"] = {
+        self.routes["/repos/Gvetri/Mercurio/actions/permissions/workflow"] = {
             "default_workflow_permissions": "write",
             "can_approve_pull_request_reviews": True,
         }
@@ -933,7 +933,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertIn("must not be able to approve pull requests", completed.stderr)
 
     def test_an_unapproved_fork_policy_fails(self):
-        self.routes["/repos/Gvetri/hermes-native-client/actions/permissions/fork-pr-contributor-approval"] = {
+        self.routes["/repos/Gvetri/Mercurio/actions/permissions/fork-pr-contributor-approval"] = {
             "approval_policy": "first_time_contributors"
         }
         completed = self.run_check(owner=True)
@@ -942,8 +942,8 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
 
     def test_the_pull_request_run_needs_no_administration_access(self):
         for route in (
-            "/repos/Gvetri/hermes-native-client/actions/permissions/workflow",
-            "/repos/Gvetri/hermes-native-client/actions/permissions/fork-pr-contributor-approval",
+            "/repos/Gvetri/Mercurio/actions/permissions/workflow",
+            "/repos/Gvetri/Mercurio/actions/permissions/fork-pr-contributor-approval",
         ):
             del self.routes[route]
         completed = self.run_check()
@@ -958,19 +958,19 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertIn("Verified that an external-fork run requires maintainer approval.", completed.stdout)
 
     def test_an_enabled_merge_commit_fails_the_owner_run(self):
-        self.owner_routes["/repos/Gvetri/hermes-native-client"]["allow_merge_commit"] = True
+        self.owner_routes["/repos/Gvetri/Mercurio"]["allow_merge_commit"] = True
         completed = self.run_check(owner=True)
         self.assertEqual(1, completed.returncode)
         self.assertIn("must disable allow_merge_commit", completed.stderr)
 
     def test_an_unreadable_actions_setting_fails_closed_in_the_owner_run(self):
-        del self.routes["/repos/Gvetri/hermes-native-client/actions/permissions/workflow"]
+        del self.routes["/repos/Gvetri/Mercurio/actions/permissions/workflow"]
         completed = self.run_check(owner=True)
         self.assertEqual(1, completed.returncode)
         self.assertIn("failed closed", completed.stderr)
 
     def test_an_unprotected_branch_fails(self):
-        self.routes["/repos/Gvetri/hermes-native-client/rules/branches/main"] = []
+        self.routes["/repos/Gvetri/Mercurio/rules/branches/main"] = []
         completed = self.run_check()
         self.assertEqual(1, completed.returncode)
         self.assertIn("failed closed", completed.stderr)

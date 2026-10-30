@@ -172,7 +172,7 @@ The repository Actions settings need the Administration permission, which a work
 hold, so the owner verifies them explicitly:
 
 ```text
-GITHUB_REPOSITORY=Gvetri/hermes-native-client GITHUB_TOKEN="$(gh auth token)" \
+GITHUB_REPOSITORY=Gvetri/Mercurio GITHUB_TOKEN="$(gh auth token)" \
   python3 .github/scripts/verify-repository-conformance.py --owner
 ```
 

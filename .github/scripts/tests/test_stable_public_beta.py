@@ -54,7 +54,7 @@ class StableBetaTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.repo = "Gvetri/hermes-native-client"
+        self.repo = "Gvetri/Mercurio"
         self.prefix = f"/repos/{self.repo}"
         self.start, self.source, self.end, self.head = (letter * 40 for letter in "abcd")
         self.milestone = {"id": 75, "number": 42, "state": "closed", "closed_at": "2026-10-03T11:00:00Z"}

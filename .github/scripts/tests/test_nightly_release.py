@@ -119,7 +119,7 @@ class NightlyPreparationTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.old, self.selected, self.new = "a" * 40, "b" * 40, "c" * 40
-        self.repository = "Gvetri/hermes-native-client"
+        self.repository = "Gvetri/Mercurio"
         prefix = f"/repos/{self.repository}"
         self.selected_run = {
             "id": 123, "run_attempt": 1, "workflow_id": 45,
@@ -1260,7 +1260,7 @@ class NightlyPreparationTest(unittest.TestCase):
 class NightlyGenerationTest(unittest.TestCase):
     def test_partial_reruns_cannot_reuse_the_prepared_version_code(self):
         environment = {
-            "PATH": os.environ["PATH"], "GITHUB_REPOSITORY": "Gvetri/hermes-native-client",
+            "PATH": os.environ["PATH"], "GITHUB_REPOSITORY": "Gvetri/Mercurio",
             "GITHUB_REF": "refs/heads/main", "GITHUB_REF_PROTECTED": "true",
             "GITHUB_EVENT_NAME": "schedule", "GITHUB_RUN_NUMBER": "7", "GITHUB_RUN_ATTEMPT": "2",
             "RELEASE_VERSION_CODE": "7002", "RELEASE_GENERATION_ATTEMPT": "2",

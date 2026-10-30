@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: ${{ github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    if: ${{ github.repository == 'Gvetri/Mercurio' && github.ref == 'refs/heads/main' && github.ref_protected }}
     runs-on: ubuntu-latest
     timeout-minutes: 190
     permissions:
@@ -46,7 +46,7 @@ jobs:
 
   report_validation_failure:
     needs: prepare
-    if: ${{ always() && needs.prepare.result == 'failure' && needs.prepare.outputs.validation_failed == 'true' && github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    if: ${{ always() && needs.prepare.result == 'failure' && needs.prepare.outputs.validation_failed == 'true' && github.repository == 'Gvetri/Mercurio' && github.ref == 'refs/heads/main' && github.ref_protected }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
