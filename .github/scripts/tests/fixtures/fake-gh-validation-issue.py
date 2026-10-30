@@ -8,9 +8,9 @@ import urllib.request
 from issue_store import IssueStore
 
 args = sys.argv[1:]
-repository = "repos/Gvetri/hermes-native-client"
+repository = "repos/Gvetri/Mercurio"
 state = Path("issue.json")
-store = IssueStore(state, "Gvetri/hermes-native-client", 60)
+store = IssueStore(state, "Gvetri/Mercurio", 60)
 if args[:3] in (["api", "--method", "POST"], ["api", "--method", "PATCH"]):
     method = args[2]
     assert args[3] == repository + ("/issues" if method == "POST" else "/issues/60")

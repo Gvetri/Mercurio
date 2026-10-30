@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   report_nightly_starvation:
-    if: ${{ github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected }}
+    if: ${{ github.repository == 'Gvetri/Mercurio' && github.ref == 'refs/heads/main' && github.ref_protected }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

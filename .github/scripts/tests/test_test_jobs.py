@@ -1389,7 +1389,7 @@ class IssueAdapterContractTest(unittest.TestCase):
                 environment = {**os.environ, "HOME": directory,
                                "PATH": str(binary) + os.pathsep + os.environ["PATH"]}
                 environment.pop("PYTHONPATH", None)
-                endpoint = "repos/Gvetri/hermes-native-client/issues"
+                endpoint = "repos/Gvetri/Mercurio/issues"
 
                 def invoke(arguments, payload=None):
                     command = ["gh", "api", *arguments]

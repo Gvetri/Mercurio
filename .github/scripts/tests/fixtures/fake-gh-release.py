@@ -15,9 +15,9 @@ if arguments[0] == "api":
     if arguments[1:3] == ["--method", "DELETE"]:
         release = json.loads(state.read_text())
         operation, tag = "delete", release["tag_name"]
-        assert arguments == ["api", "--method", "DELETE", f"repos/Gvetri/hermes-native-client/releases/{release['id']}"]
+        assert arguments == ["api", "--method", "DELETE", f"repos/Gvetri/Mercurio/releases/{release['id']}"]
     else:
-        assert arguments == ["api", "--method", "POST", "repos/Gvetri/hermes-native-client/releases", "--input", "-"]
+        assert arguments == ["api", "--method", "POST", "repos/Gvetri/Mercurio/releases", "--input", "-"]
         payload = json.load(sys.stdin)
         assert set(payload) == {"tag_name", "target_commitish", "name", "body", "draft", "prerelease", "make_latest"}
         assert payload["draft"] is True and payload["prerelease"] is True and payload["make_latest"] == "false"
@@ -25,7 +25,7 @@ if arguments[0] == "api":
 else:
     assert arguments[0] == "release"
     operation, tag = arguments[1:3]
-    assert arguments[arguments.index("--repo") + 1] == "Gvetri/hermes-native-client"
+    assert arguments[arguments.index("--repo") + 1] == "Gvetri/Mercurio"
 assert "--clobber" not in arguments
 with (root / "operations").open("a") as log:
     log.write(operation + "\n")
@@ -44,7 +44,7 @@ if operation == "create":
         "name": payload["name"] if payload else value("--title"),
         "body": payload["body"] if payload else Path(value("--notes-file")).read_text(),
         "draft": True, "prerelease": True, "assets": [],
-        "html_url": f"https://github.com/Gvetri/hermes-native-client/releases/tag/{tag}",
+        "html_url": f"https://github.com/Gvetri/Mercurio/releases/tag/{tag}",
     }
     state.write_text(json.dumps(release))
     if payload is not None:

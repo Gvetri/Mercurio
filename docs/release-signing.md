@@ -46,7 +46,7 @@ the reusable job even when environment secrets exist (see
 values in the signing environment; do not add repository-wide copies. The called
 job's environment supplies the values, overriding the empty caller context.
 The unattended path also requires the exact caller workflow reference
-`Gvetri/hermes-native-client/.github/workflows/nightly-release.yml@refs/heads/main`.
+`Gvetri/Mercurio/.github/workflows/nightly-release.yml@refs/heads/main`.
 Preparation chooses one of the two fixed environments; callers cannot pass an
 environment name or a flag that bypasses approval.
 The reusable result exposes the
