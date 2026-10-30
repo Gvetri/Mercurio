@@ -54,7 +54,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: ${{ github.repository == 'Gvetri/hermes-native-client' && github.ref == 'refs/heads/main' && github.ref_protected && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') }}
+    if: ${{ github.repository == 'Gvetri/Mercurio' && github.ref == 'refs/heads/main' && github.ref_protected && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

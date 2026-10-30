@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
-REPOSITORY = "Gvetri/hermes-native-client"
+REPOSITORY = "Gvetri/Mercurio"
 
 
 class ReleaseError(Exception):

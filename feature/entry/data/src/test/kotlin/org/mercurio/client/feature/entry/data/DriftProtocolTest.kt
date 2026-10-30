@@ -271,7 +271,7 @@ class DriftProtocolTest {
         val issue = LocalIssueLedger(ledgerFile, repositoryRoot).openIssues().single()
 
         val command =
-            DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot))
+            DriftIssueFiler("Gvetri/Mercurio", LocalIssueLedger(ledgerFile, repositoryRoot))
                 .ghCreateCommand(issue)
 
         assertEquals(
@@ -280,7 +280,7 @@ class DriftProtocolTest {
                 "issue",
                 "create",
                 "--repo",
-                "Gvetri/hermes-native-client",
+                "Gvetri/Mercurio",
                 "--label",
                 DRIFT_ISSUE_LABEL,
                 "--title",
@@ -302,7 +302,7 @@ class DriftProtocolTest {
     @Test
     fun filer_files_exactly_one_issue_per_divergence_across_reruns() {
         val ledgerFile = ledgerFile("filer-idempotent")
-        val filer = DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot))
+        val filer = DriftIssueFiler("Gvetri/Mercurio", LocalIssueLedger(ledgerFile, repositoryRoot))
         val commands = mutableListOf<List<String>>()
 
         DriftProtocol.reconcile(mismatchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
@@ -334,7 +334,7 @@ class DriftProtocolTest {
 
         DriftProtocol.reconcile(matchedEntries(), LocalIssueLedger(ledgerFile, repositoryRoot))
         val urls =
-            DriftIssueFiler("Gvetri/hermes-native-client", LocalIssueLedger(ledgerFile, repositoryRoot))
+            DriftIssueFiler("Gvetri/Mercurio", LocalIssueLedger(ledgerFile, repositoryRoot))
                 .fileOpenIssues { commands ->
                     commands
                     "https://tracker.invalid/issues/1"

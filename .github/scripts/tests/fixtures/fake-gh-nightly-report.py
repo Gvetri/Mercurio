@@ -12,14 +12,14 @@ assert arguments[0] == "api"
 root = Path.home() / "report-fixture"
 root.mkdir(exist_ok=True)
 issue_file = root / "issue.json"
-store = IssueStore(issue_file, "Gvetri/hermes-native-client", 17)
+store = IssueStore(issue_file, "Gvetri/Mercurio", 17)
 endpoint = next(item for item in arguments if item.startswith("repos/"))
 with (root / "requests").open("a") as log:
     log.write(" ".join(arguments) + "\n")
 if "--method" in arguments:
     method = arguments[arguments.index("--method") + 1]
     assert method in {"POST", "PATCH"}
-    assert endpoint in {"repos/Gvetri/hermes-native-client/issues", "repos/Gvetri/hermes-native-client/issues/17"}
+    assert endpoint in {"repos/Gvetri/Mercurio/issues", "repos/Gvetri/Mercurio/issues/17"}
     assert (method == "PATCH") == issue_file.exists()
     payload = json.load(sys.stdin)
     issue = store.patch(payload) if method == "PATCH" else store.create(payload)

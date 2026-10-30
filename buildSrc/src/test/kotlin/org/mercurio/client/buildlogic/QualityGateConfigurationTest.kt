@@ -635,7 +635,7 @@ class QualityGateConfigurationTest {
                     startEpoch = "0",
                     expectedCategory = "cancellation",
                     expectedResult = "cancellation",
-                    artifactUrl = "https://github.com/Gvetri/hermes-native-client/actions/runs/47/artifacts/1",
+                    artifactUrl = "https://github.com/Gvetri/Mercurio/actions/runs/47/artifacts/1",
                 ),
                 Api24OutcomeScenario(
                     name = "cancellation during emulator",
@@ -647,7 +647,7 @@ class QualityGateConfigurationTest {
                     startEpoch = "0",
                     expectedCategory = "cancellation",
                     expectedResult = "cancellation",
-                    artifactUrl = "https://github.com/Gvetri/hermes-native-client/actions/runs/47/artifacts/2",
+                    artifactUrl = "https://github.com/Gvetri/Mercurio/actions/runs/47/artifacts/2",
                 ),
                 Api24OutcomeScenario(
                     name = "success",
@@ -659,7 +659,7 @@ class QualityGateConfigurationTest {
                     startEpoch = "0",
                     expectedCategory = "success",
                     expectedResult = "pass",
-                    artifactUrl = "https://github.com/Gvetri/hermes-native-client/actions/runs/47/artifacts/3",
+                    artifactUrl = "https://github.com/Gvetri/Mercurio/actions/runs/47/artifacts/3",
                 ),
                 Api24OutcomeScenario(
                     name = "failure",
@@ -671,7 +671,7 @@ class QualityGateConfigurationTest {
                     startEpoch = "0",
                     expectedCategory = "test_failure",
                     expectedResult = "failure",
-                    artifactUrl = "https://github.com/Gvetri/hermes-native-client/actions/runs/47/artifacts/4",
+                    artifactUrl = "https://github.com/Gvetri/Mercurio/actions/runs/47/artifacts/4",
                 ),
                 Api24OutcomeScenario(
                     name = "timeout",
@@ -683,7 +683,7 @@ class QualityGateConfigurationTest {
                     startEpoch = "1",
                     expectedCategory = "timeout",
                     expectedResult = "timeout",
-                    artifactUrl = "https://github.com/Gvetri/hermes-native-client/actions/runs/47/artifacts/5",
+                    artifactUrl = "https://github.com/Gvetri/Mercurio/actions/runs/47/artifacts/5",
                 ),
             )
 
@@ -715,7 +715,7 @@ class QualityGateConfigurationTest {
                         "GITHUB_OUTPUT" to outputFile.toString(),
                         "GITHUB_STEP_SUMMARY" to summaryFile.toString(),
                         "GITHUB_SERVER_URL" to "https://github.com",
-                        "GITHUB_REPOSITORY" to "Gvetri/hermes-native-client",
+                        "GITHUB_REPOSITORY" to "Gvetri/Mercurio",
                         "GITHUB_RUN_ID" to "47",
                         "GITHUB_RUN_ATTEMPT" to "1",
                         "GITHUB_SHA" to "test-sha",

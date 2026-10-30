@@ -24,7 +24,7 @@ feature unavailable. This Gateway does not support the client contract.**
 Stable releases are published as GitHub **prereleases** named **Stable Public Beta vX.Y.Z**. To
 install one:
 
-1. Open the repository's [releases page](https://github.com/Gvetri/hermes-native-client/releases).
+1. Open the repository's [releases page](https://github.com/Gvetri/Mercurio/releases).
 2. Pick the newest release named **Stable Public Beta vX.Y.Z**. A release named **Nightly** is a
    development snapshot, not a stable release.
 3. Download `mercurio.apk` and `SHA256SUMS` from that release.
