@@ -23,6 +23,40 @@ Absent, empty, or blank, the value resolves to no DSN and the port falls back to
 The value is read only by the adapter in the wiring layer, and it never enters the application or
 domain layers.
 
+A DSN the SDK rejects is treated the same way: the backend does not install, no event is ever sent,
+and the app runs normally. Only a working DSN turns reporting on.
+
+## Deliberate delivery check
+
+Prove real delivery from a real build once per backend change; the deterministic journeys use a
+recording sink and deliberately prove nothing about the network.
+
+1. Build a debug APK with the DSN, as above, and install it.
+2. Raise one deliberate report through the debug probe:
+
+```text
+adb shell am start -a android.intent.action.VIEW -d 'mercurio-journey://error-reporting?live=1'
+```
+
+3. The probe screen reports `Live error report raised` once the port has taken the report. Without
+   the `live` argument the same deep link binds the recording sink and delivers nothing.
+4. In Sentry, open the project's issues and confirm one `Unexpected client failure` event whose
+   release is the installed build and whose environment is the build type. If it does not arrive,
+   check the DSN value before assuming an app defect.
+
+## What the scrubber does and does not remove
+
+Before an event leaves the device, the adapter drops breadcrumbs, user identity, request data,
+extras and the server name, and removes any tag whose name names a session, draft, credential,
+token, password, authorization, cookie, gateway, host or DSN. What remains is the event's own
+content: its release, its environment, the exception and its stack frames, plus the device and OS
+context the SDK fills in.
+
+It does not scan free text: an exception message or stack frame that embeds a Gateway endpoint is
+reported as written, and `contexts` is left intact for device and OS detail. Generated failure
+messages must therefore stay free of endpoints and of Session content — the reporting port's own
+contract already carries nothing but release and environment.
+
 ## Watching consumption
 
 The free Developer plan allows 5,000 errors and 5,000,000 spans per month with 30-day retention.
