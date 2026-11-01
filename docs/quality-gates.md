@@ -245,10 +245,10 @@ and a skipped detekt verification.
 `./gradlew commentPolicyVerify` runs `.github/scripts/verify-comments.py` over every tracked file.
 Each file gets a language-aware reading — a Kotlin lexer that separates KDoc from block and line
 comments, a YAML reader that treats a block-scalar body as content and reads a `run` or `script`
-scalar as shell, and quote- and heredoc-aware readers for shell and Python — so a marker inside a
+scalar as shell, a heredoc-aware shell reader, and a quote-aware Python reader — so a marker inside a
 string, a URL, a heredoc, or a block scalar is not a comment. KDoc is the only allowed comment form; a
-tool directive (`# noqa`, `# shellcheck`, `# syntax=`), a license header, and the generated or
-vendored files the class table excludes pass.
+tool directive that starts the comment (`# noqa`, `# shellcheck`, `# syntax=`), a license header above
+the first code, and the generated or vendored files the class table excludes pass.
 
 A violation reports the file, the line, the comment kind, and the remedy: delete the comment, or move
 its constraint into a test, a check, or `docs/` first. The verifier fails closed on its own scope too:
