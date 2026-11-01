@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
@@ -152,7 +153,7 @@ class SessionActionMenuIntegrationTest {
         gateway.paginationEnabled = true
         val holder = showConnectedSession(gateway, opened = true)
         try {
-            composeTestRule.onNodeWithText("Message").performTextReplacement("Keep this draft")
+            composeTestRule.onNodeWithTag("conversation-message-input").performTextReplacement("Keep this draft")
             composeTestRule.waitForIdle()
             assertEquals(listOf(FIRST, SECOND), holder.uiState.value.sessionList?.sessions?.map { it.id })
 
