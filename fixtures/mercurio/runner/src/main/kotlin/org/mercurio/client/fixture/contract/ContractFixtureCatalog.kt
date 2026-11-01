@@ -1,17 +1,5 @@
 package org.mercurio.client.fixture.contract
 
-import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
-
-enum class ContractFixtureFormat {
-    JSON,
-    SSE,
-}
-
-data class ContractFixtureDefinition(
-    val path: String,
-    val format: ContractFixtureFormat,
-)
-
 object ContractFixtureCatalog {
     val definitions =
         listOf(
@@ -63,8 +51,4 @@ object ContractFixtureCatalog {
             ContractFixtureDefinition("malformed/mismatched-run-status-response.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("malformed/mismatched-run-event.sse", ContractFixtureFormat.SSE),
         )
-}
-
-object SupportedGatewayCapabilities {
-    val required = PublicBetaGatewayCapabilityManifest.current.requirements.map { it.endpoint }.distinct()
 }
