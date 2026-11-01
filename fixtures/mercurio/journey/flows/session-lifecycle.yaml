@@ -25,8 +25,10 @@ name: session-lifecycle
     text: "New session"
     index: 0
 - tapOn: "Rename"
-- tapOn: "Session title"
-- eraseText: 40
+- tapOn:
+    text: "Session title"
+    point: "90%,50%"
+- eraseText: 60
 - inputText: "Lifecycle Session"
 - hideKeyboard
 - tapOn: "Confirm rename"
@@ -51,8 +53,10 @@ name: session-lifecycle
 - tapOn: "Unpin"
 - longPressOn: "Lifecycle Session"
 - tapOn: "Rename"
-- tapOn: "Session title"
-- eraseText: 40
+- tapOn:
+    text: "Session title"
+    point: "90%,50%"
+- eraseText: 60
 - inputText: "Managed Session"
 - hideKeyboard
 - tapOn: "Confirm rename"
@@ -75,8 +79,10 @@ name: session-lifecycle
 - takeScreenshot: session-lifecycle-05-after-managed-delete
 - longPressOn: "Alpha Session"
 - tapOn: "Rename"
-- tapOn: "Session title"
-- eraseText: 40
+- tapOn:
+    text: "Session title"
+    point: "90%,50%"
+- eraseText: 60
 - inputText: "Renamed Session"
 - hideKeyboard
 - tapOn: "Confirm rename"
