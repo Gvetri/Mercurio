@@ -97,9 +97,9 @@ areas, add the label: the nightly schedule runs the whole suite against `main` e
   requires exactly one captured report whose release is the installed client version
   and whose environment is the debug build type, so the seam is proven without the
   shipped backend, a live DSN, or Sentry quota. The debug build trusts the repository's
-  journey CA for `10.0.2.2` alone through a debug-only network security config, so the
-  delivery does not depend on the emulator's system trust store, which Android 14 loads
-  from the Conscrypt APEX rather than `/system/etc/security/cacerts`.
+  journey CA for the emulator's host alias alone through a debug-only network security
+  config, so the delivery does not depend on the emulator's system trust store, which
+  Android 14 loads from the Conscrypt APEX rather than `/system/etc/security/cacerts`.
 - Unsupported capability surfaces are exercised: an additive unknown
   capability keeps the supported contract usable (the journey opens a Session,
   sends a message, and reaches a succeeded terminal state), and a missing
