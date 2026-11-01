@@ -30,16 +30,15 @@ private const val SESSION_LIST_PANE_WEIGHT = 2f
 private const val CONVERSATION_PANE_WEIGHT = 3f
 
 /** Which surface the shell shows for the current list state. */
-internal enum class SessionShellMode { SessionList, OpenedSession, CreateSession }
+internal enum class SessionShellMode { SessionList, OpenedSession }
 
 /**
- * Derives the active surface once. Creation and an open conversation are mutually
- * exclusive: starting creation closes the conversation.
+ * Derives the active surface once. An open conversation replaces the list on a
+ * phone; a Session creation never leaves the list.
  */
 internal fun SessionListUiState.shellMode(): SessionShellMode =
     when {
         openedSession != null -> SessionShellMode.OpenedSession
-        createSession != null -> SessionShellMode.CreateSession
         else -> SessionShellMode.SessionList
     }
 
@@ -85,8 +84,6 @@ private fun SessionShellBackHandling(
             }
         state.shellMode() == SessionShellMode.OpenedSession ->
             ShellBackHandler { onEvent(EntryUiEvent.ReturnToSessionListClicked) }
-        state.shellMode() == SessionShellMode.CreateSession ->
-            ShellBackHandler { onEvent(EntryUiEvent.CancelCreateSessionClicked) }
         else -> Unit
     }
 }

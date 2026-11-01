@@ -64,7 +64,7 @@ class ShellIntegrationTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
         composeTestRule.onNodeWithText("Back to Sessions").assertDoesNotExist()
         assertFalse(composeTestRule.activity.isFinishing)
     }

@@ -80,7 +80,6 @@ internal fun SessionDetailSummary(
         mutation = detail.mutation,
         enabled = detail.actionsEnabled && detail.mutation?.pendingAction == null,
         onEvent = onEvent,
-        showMenu = false,
     )
     if (!groupRunWithRefresh && state.latestRun != null) {
         Spacer(modifier = Modifier.height(12.dp))

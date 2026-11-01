@@ -29,7 +29,7 @@ name: connection
 - assertVisible: "Verify Gateway Connection"
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - assertVisible: "Alpha Session"
 - launchApp
@@ -41,7 +41,7 @@ name: connection
 - assertVisible: "Verify Gateway Connection"
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - takeScreenshot: connection-sessions-after-restart
 - tapOn: "Settings"
@@ -52,5 +52,5 @@ name: connection
 - tapOn: "Cancel"
 - assertVisible: ".*App version.*"
 - tapOn: "Back to Sessions"
-- assertVisible: "Sessions"
+- assertVisible: "mercurio"
 - takeScreenshot: connection-remove-cancelled

@@ -13,7 +13,7 @@ name: failed-offline-send
 - takeScreenshot: failed-offline-send-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Offline Session"
 - extendedWaitUntil:
@@ -37,7 +37,7 @@ name: failed-offline-send
 - hideKeyboard
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Offline Session"
 - extendedWaitUntil:

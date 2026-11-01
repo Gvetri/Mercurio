@@ -54,6 +54,7 @@ internal fun EntryStateHolder.openSession(sessionId: SessionId) {
                         sessionList.copy(
                             openingSessionId = sessionId,
                             errorCategory = null,
+                            creationErrorCategory = null,
                         ),
                 )
             createSessionJob {
@@ -257,6 +258,7 @@ internal fun EntryStateHolder.returnToSessionList() {
                             current.copy(
                                 createSession = null,
                                 errorCategory = null,
+                                creationErrorCategory = null,
                             ),
                     )
             }
@@ -282,6 +284,7 @@ internal fun EntryStateHolder.returnToSessionList() {
                         openedSession = null,
                         openingSessionId = null,
                         errorCategory = null,
+                        creationErrorCategory = null,
                     ),
             )
     }

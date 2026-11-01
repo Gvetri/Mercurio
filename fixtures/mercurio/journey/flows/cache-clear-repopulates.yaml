@@ -19,17 +19,15 @@ name: cache-clear-repopulates
     visible: "Synthetic cached conversation"
     timeout: 30000
 - tapOn: "Back to Sessions"
-- tapOn: "Refresh"
+- swipe:
+    start: "50%, 35%"
+    end: "50%, 80%"
+    duration: 800
 - extendedWaitUntil:
-    visible: "The displayed Session data may be stale."
-    timeout: 30000
-- extendedWaitUntil:
-    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
+    visible: "gateway :: offline"
     timeout: 30000
 - assertVisible: "Alpha Session"
 - takeScreenshot: cache-clear-repopulates-preserved-list
-- tapOn: "Alpha Session"
-- tapOn: "Back to Sessions"
 - tapOn: "Settings"
 - extendedWaitUntil:
     visible: ".*App version.*"
@@ -39,21 +37,23 @@ name: cache-clear-repopulates
 - tapOn: '^Clear$'
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
-    visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
+    visible: "gateway :: offline"
     timeout: 30000
-- assertNotVisible: "The displayed Sessions are cached on this device. They are not live."
 - assertVisible: "Alpha Session"
 - takeScreenshot: cache-clear-repopulates-cleared-offline
-- tapOn: '^(Refresh|Try again)$'
+- swipe:
+    start: "50%, 35%"
+    end: "50%, 80%"
+    duration: 800
+- swipe:
+    start: "50%, 35%"
+    end: "50%, 80%"
+    duration: 800
 - extendedWaitUntil:
-    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
+    visible: "gateway :: ready"
     timeout: 30000
+- assertVisible: "1 session · connected"
 - assertVisible: "Alpha Session"
-- tapOn: '^(Refresh|Try again)$'
-- extendedWaitUntil:
-    visible: "Alpha Session"
-    timeout: 30000
-- assertNotVisible: "The displayed Sessions are cached on this device. They are not live."
 - takeScreenshot: cache-clear-repopulates-recovered-list
 - tapOn: "Alpha Session"
 - extendedWaitUntil:

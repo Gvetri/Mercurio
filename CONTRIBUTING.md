@@ -127,21 +127,32 @@ Markdown rendering contracts.
 | `connection_remove_confirmation_wide_light` | Gateway connection | The confirmation centered on the wide two-pane window |
 | `connection_remove_confirmation_wide_dark` | Gateway connection | The same wide confirmation on the dark token set |
 | `connection_storage_retry_short_ime_200_light` | Gateway connection | Short-window storage retry at 200% font scale, scrolled to the retained failure message |
-| `empty_session_list` | Session list | Valid empty Gateway response |
-| `populated_session_list` | Session list | Pinned and unpinned server metadata |
-| `session_list_unavailable` | Session list | Stale data, unavailable state, and retry |
+| `session_list_populated_light` | Session list | Pinned and unpinned server metadata in the approved composition |
+| `session_list_populated_dark` | Session list | The same list on the dark token set |
+| `session_list_selected_row_light` | Session list | The selected-row component tint on the light token set |
+| `session_list_selected_row_dark` | Session list | The selected-row component tint on the dark token set |
+| `session_list_empty_light` | Session list | Valid empty Gateway response |
+| `session_list_empty_dark` | Session list | The same empty state on the dark token set |
+| `session_list_no_match_light` | Session list | Local search with no match and the clear control |
+| `session_list_no_match_dark` | Session list | The same no-match state on the dark token set |
+| `session_list_loading_light` | Session list | First read in progress with skeleton rows and the list-end footer |
+| `session_list_loading_dark` | Session list | The same loading state on the dark token set |
+| `session_list_unavailable_light` | Session list | Cached rows with the offline status strip |
+| `session_list_unavailable_dark` | Session list | The same unavailable state on the dark token set |
+| `session_list_pending_title_light` | Session list | An untitled Session row with the pending-title preview |
+| `session_list_pending_title_dark` | Session list | The same pending-title state on the dark token set |
+| `session_list_row_actions_light` | Session list | A held row with its anchored context menu |
+| `session_list_row_actions_dark` | Session list | The same context menu on the dark token set |
+| `session_list_delete_confirmation_light` | Session list | The delete confirm dialog over the list |
+| `session_list_delete_confirmation_dark` | Session list | The same dialog on the dark token set |
+| `session_list_refreshing_light` | Session list | The pull-to-refresh indicator over a readable list |
+| `session_list_refreshing_dark` | Session list | The same refreshing state on the dark token set |
+| `session_list_loading_more_light` | Session list | The 48 dp list-end footer while the next page loads |
+| `session_list_loading_more_dark` | Session list | The same footer on the dark token set |
+| `session_list_rename_light` | Session list | The inline rename editor with the filled check/cross pair |
+| `session_list_rename_dark` | Session list | The same inline editor on the dark token set |
 | `session_list_settings_open` | Session list | The Settings surface open over the list |
-| `session_list_row_menu_open` | Session list | Row action menu open over the list |
 | `gateway_removal_confirmation` | Session list | D-02 Gateway-removal confirmation dialog |
-| `create_session` | Session list | In-memory title draft before confirmation |
-| `create_session_empty` | Session list | Blank optional title with the Untitled Session fallback |
-| `create_session_failure` | Session list | Confirmed creation failure with the retained title and explicit retry |
-| `create_session_dark` | Session list | The same dialog on the dark token set |
-| `create_session_two_pane` | Session list | The dialog beside the populated list in the two-pane layout |
-| `create_session_short_window_long_error` | Session list | Constrained-height witness at twice the font scale (long draft, actions reachable) |
-| `create_session_short_window_long_error_scrolled` | Session list | The same witness scrolled to the retained failure message |
-| `rename_session_confirmation` | Session list | Inline modal-equivalent rename confirmation mode |
-| `delete_session_confirmation` | Session list | App-modal delete confirmation dialog |
 | `empty_session_detail` | Session detail | New Session with no history |
 | `session_detail_with_messages` | Session detail | Stable user and assistant history |
 | `session_detail_overflowing_transcript` | Session detail | A transcript longer than the pane, opened at its newest message |
@@ -175,15 +186,14 @@ token set.
 | `markdown_long_content_light` | `w411dp-h891dp-notnight` | Long multi-block response that scrolls natively instead of truncating |
 | `markdown_long_content_dark` | `w411dp-h891dp-night` | The same state on the dark token set |
 
-The Create Session surface is now the standard Material 3 `AlertDialog`: the
-`create_session*` states capture that real dialog window over the Session list (and beside
-it in the two-pane layout). The Gateway-removal confirmation
+The Session list has no creation dialog: `+ new session` creates the Session and keeps
+the list in place, and the new row carries the pending-title preview until the Gateway
+titles it. The Gateway-removal confirmation
 (`gateway_removal_confirmation`, and the `connection_remove_confirmation*` states over the
-retained Sessions surface) uses the same stock `AlertDialog` surface. The Delete
-confirmation uses the same stock `AlertDialog`, hosted at the entry root so it stays
-reachable in both layouts. The Rename confirmation stays inline: it renders as a
-conditional mode in the existing Compose state model and has no dialog overlay, so it stays
-covered without changing production behavior only to create a screenshot.
+retained Sessions surface) uses the stock `AlertDialog` surface. The Delete confirmation
+uses the same stock `AlertDialog`, hosted at the entry root so it stays reachable in both
+layouts. Rename stays inline: the row's title cell becomes the editor with the filled
+check and the neutral cross, so it stays covered without a dialog overlay.
 
 The matrix uses Robolectric SDK 35, native graphics mode, and synthetic in-memory values.
 Each capture declares its viewport qualifier: the default is `w411dp-h891dp-notnight`; the

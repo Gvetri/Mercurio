@@ -12,7 +12,7 @@ name: settings
 - hideKeyboard
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - assertVisible: "Alpha Session"
 - assertNotVisible: "Local diagnostics"
@@ -50,8 +50,8 @@ name: settings
 - assertVisible: ".*App version.*"
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - assertVisible: "Alpha Session"
-- assertVisible: "Create Session"
+- assertVisible: "new session"
 - takeScreenshot: settings-returned-to-sessions

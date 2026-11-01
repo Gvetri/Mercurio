@@ -13,7 +13,7 @@ name: capabilities-additive
 - takeScreenshot: capabilities-additive-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - assertVisible: "Alpha Session"
 - tapOn: "Alpha Session"

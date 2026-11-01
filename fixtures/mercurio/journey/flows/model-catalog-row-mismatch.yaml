@@ -13,7 +13,7 @@ name: model-catalog-row-mismatch
 - takeScreenshot: model-catalog-row-mismatch-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Mismatch Session"
 - extendedWaitUntil:

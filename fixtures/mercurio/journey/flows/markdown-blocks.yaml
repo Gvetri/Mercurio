@@ -13,7 +13,7 @@ name: markdown-blocks
 - takeScreenshot: markdown-blocks-00-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Blocks Session"
 - extendedWaitUntil:

@@ -13,11 +13,11 @@ name: session-list-first
 - takeScreenshot: session-list-first-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
-- assertVisible: "Sessions"
+- assertVisible: "mercurio"
 - assertVisible: "Alpha Session"
-- assertVisible: "Pinned"
+- assertVisible: "PINNED"
 - repeat:
     times: 4
     while:
@@ -30,4 +30,4 @@ name: session-list-first
           duration: 500
 - assertVisible: "Beta Session"
 - assertVisible: "Search Sessions"
-- assertVisible: "Create Session"
+- assertVisible: "new session"
