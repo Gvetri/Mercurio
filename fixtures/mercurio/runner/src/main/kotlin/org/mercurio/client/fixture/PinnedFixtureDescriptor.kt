@@ -2,11 +2,6 @@ package org.mercurio.client.fixture
 
 import java.io.File
 
-internal data class PinnedFixtureProvenance(
-    val field: String,
-    val value: String,
-)
-
 /** The validated repository-owned descriptor used to start a deterministic fixture. */
 class PinnedFixtureDescriptor internal constructor(
     val fields: Map<String, String>,

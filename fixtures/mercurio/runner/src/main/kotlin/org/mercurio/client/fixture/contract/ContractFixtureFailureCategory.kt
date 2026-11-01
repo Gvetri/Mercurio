@@ -9,9 +9,3 @@ enum class ContractFixtureFailureCategory {
     MISSING_REQUIRED_FIELD,
     INVALID_REQUIRED_FIELD_TYPE,
 }
-
-class ContractFixtureException(
-    val category: ContractFixtureFailureCategory,
-    message: String,
-    cause: Throwable? = null,
-) : IllegalArgumentException(message, cause)
