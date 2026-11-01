@@ -3,8 +3,10 @@ package org.mercurio.client.feature.entry.wiring
 import android.content.Context
 import io.sentry.SentryOptions.BeforeSendCallback
 import io.sentry.android.core.SentryAndroid
+import io.sentry.android.core.SentryAndroidOptions
 import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.application.NoOpErrorReporter
+import java.util.concurrent.atomic.AtomicBoolean
 
 fun interface SentryBackend {
     fun start(
@@ -16,13 +18,18 @@ fun interface SentryBackend {
 internal class AndroidSentryBackend(
     private val install: (Context, SentryReportingConfig) -> Unit = ::installSentryAndroid,
 ) : SentryBackend {
+    private val started = AtomicBoolean(false)
+    private val installed = AtomicBoolean(false)
+
     override fun start(
         context: Context,
         config: SentryReportingConfig,
     ): ErrorReporter {
         if (!config.isEnabled) return NoOpErrorReporter
-        install(context, config)
-        return SentryErrorReporter(config)
+        if (started.compareAndSet(false, true)) {
+            installed.set(runCatching { install(context, config) }.isSuccess)
+        }
+        return if (installed.get()) SentryErrorReporter(config) else NoOpErrorReporter
     }
 }
 
@@ -33,17 +40,22 @@ private fun installSentryAndroid(
     config: SentryReportingConfig,
 ) {
     val scrubber = ReportScrubber()
-    SentryAndroid.init(context) { options ->
-        options.dsn = config.dsn
-        options.release = config.release
-        options.environment = config.environment
-        options.tracesSampleRate = config.tracesSampleRate
-        options.isEnableAutoSessionTracking = config.sessionTrackingEnabled
-        options.setIgnoredErrors(config.ignoredErrors)
-        options.isAttachStacktrace = true
-        options.beforeSend =
-            BeforeSendCallback { event, _ ->
-                scrubber.scrub(event)
-            }
-    }
+    SentryAndroid.init(context) { options -> options.applyReporting(config, scrubber) }
+}
+
+internal fun SentryAndroidOptions.applyReporting(
+    config: SentryReportingConfig,
+    scrubber: ReportScrubber,
+) {
+    dsn = config.dsn
+    release = config.release
+    environment = config.environment
+    tracesSampleRate = config.tracesSampleRate
+    isEnableAutoSessionTracking = config.sessionTrackingEnabled
+    setIgnoredErrors(config.ignoredErrors)
+    isAttachStacktrace = true
+    beforeSend =
+        BeforeSendCallback { event, _ ->
+            scrubber.scrub(event)
+        }
 }
