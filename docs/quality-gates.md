@@ -235,6 +235,23 @@ the declaration, and the configuration, and `QualityVerificationFailClosedTest` 
 against a deliberate violation of each of the four rules, a clean tree, a committed baseline file,
 and a skipped detekt verification.
 
+## Design evidence
+
+The design flow in [Design delivery](design-delivery.md) adds no check and no status. Its evidence
+rides the checks that already exist:
+
+- The **code-versus-code** half is the `compose-jvm-tests` gate: `verifyRoborazziBaselineManifest`
+  and `verifyRoborazziDebug` compare every capture with the repository's own approved image, so the
+  screenshots in a design change are the baselines the gate reads.
+- The **design-versus-code** half is the reviewer checklist over the captures and the approved design
+  page. It is judgement over roles, the type scale, the spacing steps, the states, and both themes,
+  never a pixel diff across renderers, so it stays out of CI.
+- The **value check** compares the design package's token values with `HermesDesignTokens.kt` on the
+  build host before the pull request. It reads a private package, so it stays out of CI and its
+  result is recorded in the code issue.
+- The contract document itself is checked by the `conformance` job, which resolves its links and
+  anchors and applies the public documentation safety rules like every other page under `docs/`.
+
 ## Changing a declared value
 
 A declared threshold, scope entry, or allowance is a deliberate decision that belongs in the same

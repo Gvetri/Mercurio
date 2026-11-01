@@ -233,6 +233,24 @@ When a deliberate UI change requires a baseline update:
 Do not update a baseline to hide an unintended change. Keep the matrix small
 and stable instead of adding screenshots only to increase the count.
 
+## Design changes
+
+A change to a surface a user can see starts from a GitHub issue that approves the design first. The
+feature spec, the design issue, and the code issue are three linked issues, and the code issue stays
+blocked until the design issue closes. [Design delivery](docs/design-delivery.md) is the contract: the
+issue chain, the design name rule, the states matrix, the light and dark rule, the two screenshot
+checks, the evidence checklist, the stop rule, and the Impeccable gates. The issue templates are in
+`.github/ISSUE_TEMPLATE`.
+
+The `design` label marks a design issue and is the only label that authorizes a design change. A
+feature spec and a code issue carry `enhancement`, and `ready-for-agent` marks the code issue whose
+design issue has closed. The design source is private and is not part of this repository; a public
+issue carries the design name `mercurio/<screen>`, never a design path, a design link, or a host
+name.
+
+A pull request that touches a designed surface fills the design evidence section from the
+pull-request template in addition to the required sections.
+
 ## Module changes
 
 Keep feature logic in a feature-first vertical slice. Domain and application modules must remain plain Kotlin/JVM. Put concrete adapters in data, UDF state and Compose rendering in presentation, and implementation selection in wiring. Android-only persistence bridges may remain in wiring when the data module stays JVM-only; keep their feature behavior in data. Keep the app module a thin composition root.
