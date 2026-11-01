@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.domain.SessionPage
+import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSettingsTest {
     @Test
@@ -88,24 +89,17 @@ class EntryStateHolderSettingsTest {
     }
 
     @Test
-    fun opening_settings_is_rejected_while_creation_is_open() {
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession("session-one", "Listed title")), null))
-        val holder =
-            holder(
-                repository = FakeGatewayConnectionRepository(),
-                verifier = { _, _ ->
-                    clientManifestCapabilities()
-                },
-                gateway = gateway,
-            )
+    fun opening_settings_is_rejected_while_creation_is_submitting() {
+        val created = entrySession("created", title = "Created")
+        val gateway = BlockingCreateGateway(entrySession("session-one", title = "Listed title"), created)
+        val holder = blockingCreationHolder(gateway)
 
         try {
             verify(holder)
             awaitSessions(holder, "session-one")
             holder.onEvent(EntryUiEvent.CreateSessionClicked)
-            val withDialog = requireNotNull(holder.uiState.value.sessionList)
-            assertTrue(withDialog.createSession != null)
+            assertTrue(gateway.createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession != null)
 
             holder.onEvent(EntryUiEvent.OpenSettingsClicked)
 

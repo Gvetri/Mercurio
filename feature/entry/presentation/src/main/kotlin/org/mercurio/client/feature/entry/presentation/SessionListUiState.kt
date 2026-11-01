@@ -10,6 +10,7 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isRunRetryEligible
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.Instant
 
 enum class SessionListErrorCategory(
@@ -22,7 +23,7 @@ enum class SessionListErrorCategory(
 enum class SessionCreationErrorCategory(
     val safeMessage: String,
 ) {
-    GATEWAY_REQUEST_FAILED("Session was not created. Your title is preserved. Try again."),
+    GATEWAY_REQUEST_FAILED("Session was not created. Try again."),
 }
 
 enum class SessionMutationAction {
@@ -51,6 +52,8 @@ data class SessionItemUiState(
     val title: String,
     val preview: String?,
     val pinned: Boolean,
+    val lastActiveLabel: String = UNKNOWN_LAST_ACTIVE_LABEL,
+    val isPendingTitle: Boolean = false,
 )
 
 data class SessionMessageUiState(
@@ -122,9 +125,7 @@ data class OpenSessionUiState(
 )
 
 data class SessionCreationUiState(
-    val titleDraft: String = "",
     val isSubmitting: Boolean = false,
-    val errorCategory: SessionCreationErrorCategory? = null,
 )
 
 data class SessionRenameUiState(
@@ -153,6 +154,7 @@ data class SessionListUiState(
     val isCached: Boolean = false,
     val isUnavailable: Boolean = false,
     val errorCategory: SessionListErrorCategory? = null,
+    val creationErrorCategory: SessionCreationErrorCategory? = null,
     val showFirstUseGuidance: Boolean = false,
     val openingSessionId: SessionId? = null,
     val openedSession: OpenSessionUiState? = null,
@@ -198,15 +200,65 @@ internal val SessionListUiState.hasActiveRequest: Boolean
 internal fun SessionListUiState.allowsSessionMutation(): Boolean =
     !hasActiveRequest &&
         !isUnavailable &&
-        openedSession?.isRefreshing != true
+        openedSession?.isRefreshing != true &&
+        openedSession?.isReconciliationInProgress != true
 
-internal fun Session.toSessionItemUiState(): SessionItemUiState =
-    SessionItemUiState(
+internal fun SessionListUiState.showsNewSessionRowInEmptyState(): Boolean {
+    return searchQuery.isBlank() && !isUnavailable && !isStale
+}
+
+internal fun SessionListUiState.createSessionActionEnabled(): Boolean =
+    !isLoading &&
+        !isRefreshing &&
+        !isLoadingMore &&
+        !isUnavailable &&
+        openingSessionId == null &&
+        createSession == null &&
+        sessionMutations.isEmpty()
+
+internal fun Session.toSessionItemUiState(now: Instant = Instant.now()): SessionItemUiState {
+    val normalizedTitle = title?.trim().orEmpty()
+    val pendingTitle = normalizedTitle.isEmpty()
+    return SessionItemUiState(
         id = id,
-        title = title?.takeIf(String::isNotBlank) ?: "Untitled Session",
+        title = if (pendingTitle) PENDING_SESSION_TITLE else normalizedTitle,
         preview = preview?.takeIf(String::isNotBlank),
         pinned = pinned,
+        lastActiveLabel = relativeLastActiveLabel(lastActive, now),
+        isPendingTitle = pendingTitle,
     )
+}
+
+internal const val PENDING_SESSION_TITLE = "New session"
+internal const val UNKNOWN_LAST_ACTIVE_LABEL = "—"
+
+/**
+ * Formats the Gateway's last-active instant as the compact relative label the
+ * Session list time column renders. A missing value keeps the placeholder.
+ */
+internal fun relativeLastActiveLabel(
+    lastActive: Instant?,
+    now: Instant,
+): String {
+    if (lastActive == null) return UNKNOWN_LAST_ACTIVE_LABEL
+    val seconds = Duration.between(lastActive, now).seconds
+    return when {
+        seconds < MINUTE_SECONDS -> "now"
+        seconds < HOUR_SECONDS -> "${seconds / MINUTE_SECONDS}m"
+        seconds < DAY_SECONDS -> "${seconds / HOUR_SECONDS}h"
+        seconds < WEEK_SECONDS -> "${seconds / DAY_SECONDS}d"
+        seconds < MONTH_SECONDS -> "${seconds / WEEK_SECONDS}w"
+        seconds < YEAR_SECONDS -> "${seconds / MONTH_SECONDS}mo"
+        else -> "${seconds / YEAR_SECONDS}y"
+    }
+}
+
+private const val MINUTE_SECONDS = 60L
+private const val HOUR_SECONDS = 3_600L
+private const val DAY_SECONDS = 86_400L
+private const val WEEK_SECONDS = 604_800L
+private const val MONTH_SECONDS = 2_592_000L
+private const val YEAR_SECONDS = 31_536_000L
 
 internal fun GatewayHistoryMessage.toSessionMessageUiState(
     retryInput: String? = null,

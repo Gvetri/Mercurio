@@ -192,7 +192,7 @@ class SettingsScreenTest {
             listOf(EntryUiEvent.OpenSettingsClicked, EntryUiEvent.CloseSettingsClicked),
             events,
         )
-        composeTestRule.onNodeWithText("Search Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Search Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("First").assertIsDisplayed()
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
         composeTestRule.onNodeWithText("Run status notifications").assertDoesNotExist()

@@ -11,7 +11,7 @@ name: diagnostics-recording
 - assertVisible: "Verify Gateway Connection"
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - assertVisible: "Alpha Session"
 - takeScreenshot: diagnostics-before-opening

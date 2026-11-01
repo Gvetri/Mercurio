@@ -98,14 +98,6 @@ sealed interface EntryUiEvent {
 
     data object CreateSessionClicked : SessionMutation
 
-    data class CreateSessionTitleChanged(
-        val value: String,
-    ) : SessionMutation
-
-    data object ConfirmCreateSessionClicked : SessionMutation
-
-    data object CancelCreateSessionClicked : SessionMutation
-
     data class RenameSessionClicked(
         val sessionId: SessionId,
     ) : SessionMutation
@@ -497,9 +489,6 @@ class EntryStateHolder(
     private fun dispatchSessionMutationEvent(event: EntryUiEvent.SessionMutation) {
         when (event) {
             is EntryUiEvent.CreateSessionClicked -> showCreateSession()
-            is EntryUiEvent.CreateSessionTitleChanged -> updateCreateSessionTitle(event.value)
-            is EntryUiEvent.ConfirmCreateSessionClicked -> confirmCreateSession()
-            is EntryUiEvent.CancelCreateSessionClicked -> cancelCreateSession()
             is EntryUiEvent.RenameSessionClicked -> showRenameSession(event.sessionId)
             is EntryUiEvent.RenameSessionTitleChanged -> updateRenameSessionTitle(event.sessionId, event.value)
             is EntryUiEvent.ConfirmRenameSessionClicked -> confirmRenameSession(event.sessionId)

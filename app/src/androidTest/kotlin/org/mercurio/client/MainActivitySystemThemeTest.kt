@@ -43,7 +43,7 @@ class MainActivitySystemLightThemeTest {
         assertEquals(24, Build.VERSION.SDK_INT)
         assertLaunchTheme(
             expectedNightMode = Configuration.UI_MODE_NIGHT_NO,
-            expectedSurfaceColor = Color(0xFFF9F9FF),
+            expectedSurfaceColor = Color(0xFFECEEF1),
         )
     }
 
@@ -98,7 +98,7 @@ class MainActivitySystemDarkThemeTest {
         composeTestRule
             .onNodeWithText("Connect to a Hermes Gateway")
             .assertIsDisplayed()
-        assertSurfaceColor(composeTestRule.activity, Color(0xFF121318))
+        assertSurfaceColor(composeTestRule.activity, Color(0xFF2B2D30))
     }
 }
 

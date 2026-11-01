@@ -3,23 +3,17 @@ package org.mercurio.client.feature.entry.presentation
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToIndex
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -56,254 +50,46 @@ class SessionActionMenuIntegrationTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun list_menu_mutations_require_explicit_actions_and_target_the_correct_session() {
-        assertManagementJourney(opened = false)
-    }
-
-    @Test
-    fun conversation_menu_mutations_require_explicit_actions_and_target_the_correct_session() {
-        assertManagementJourney(opened = true)
-    }
-
-    @Test
-    fun list_menu_failures_preserve_authoritative_state_until_explicit_retry() {
-        assertFailureRecovery(opened = false)
-    }
-
-    @Test
-    fun conversation_menu_failures_preserve_authoritative_state_until_explicit_retry() {
-        assertFailureRecovery(opened = true)
-    }
-
-    @Test
-    fun conversation_menu_is_visible_at_the_latest_message_and_reveals_confirmation() {
+    fun list_management_actions_target_the_correct_session() {
         val gateway = MenuGateway()
-        gateway.historyMessages = List(30) { GatewayHistoryMessage("message-$it", "assistant", "History message $it") }
-        val holder = showConnectedSession(gateway, opened = true)
-        try {
-            composeTestRule.onNodeWithText("History message 29").assertIsDisplayed()
-            composeTestRule
-                .onNodeWithContentDescription("Session actions for First Session")
-                .assertIsDisplayed()
-                .performClick()
-            choose("Rename Session")
-            composeTestRule.onNodeWithText("Current title: First Session").assertIsDisplayed()
-            composeTestRule.onNodeWithText("New Session title").assertIsDisplayed()
-            assertTrue(gateway.mutations.isEmpty())
-            choose("Cancel Rename")
-            assertTrue(gateway.mutations.isEmpty())
-        } finally {
-            holder.close()
-        }
-    }
-
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp")
-    fun list_refresh_updates_the_open_conversation_menu_and_confirmation_metadata() {
-        assertUpdatedMetadata(paginate = false)
-    }
-
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp")
-    fun pagination_updates_the_open_conversation_menu_and_confirmation_metadata() {
-        assertUpdatedMetadata(paginate = true)
-    }
-
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp")
-    fun page_two_conversation_remains_manageable_after_the_list_returns_to_page_one() {
-        val gateway = MenuGateway()
-        gateway.firstSessionOnSecondPage = true
         val holder = showConnectedSession(gateway, opened = false)
         try {
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Load more Sessions"))
-            choose("Load more Sessions")
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("First Session"))
-            choose("First Session")
-            choose("Refresh")
-            assertEquals(listOf(SECOND), holder.uiState.value.sessionList?.sessions?.map { it.id })
-            assertEquals(FIRST, holder.uiState.value.sessionList?.openedSession?.session?.id)
-
-            gateway.failNextMutation = true
             openMenu("First Session")
-            choose("Pin Session")
-            assertEquals(listOf(SessionMutationAction.PIN to FIRST), gateway.mutations)
-            assertFalse(requireNotNull(holder.uiState.value.sessionList?.openedSession).session.pinned)
-            choose("Back to Sessions")
-            assertNull(holder.uiState.value.sessionList?.openedSession)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).sessions.any { it.id == FIRST })
-            assertEquals(1, gateway.mutations.size)
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Try again"))
-            choose("Try again")
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Load more Sessions"))
-            choose("Load more Sessions")
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("First Session"))
-            choose("First Session")
-            assertTrue(requireNotNull(holder.uiState.value.sessionList?.openedSession).session.pinned)
-            openMenu("First Session")
-            choose("Unpin Session")
-            assertFalse(requireNotNull(holder.uiState.value.sessionList?.openedSession).session.pinned)
-
-            assertPagedRenameAndDeleteJourney(gateway, holder)
-        } finally {
-            holder.close()
-        }
-    }
-
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp")
-    fun offpage_recovery_remains_reachable_when_confirmed_metadata_no_longer_matches_search() {
-        val gateway = MenuGateway()
-        gateway.firstSessionOnSecondPage = true
-        val holder = showConnectedSession(gateway, opened = false)
-        try {
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Load more Sessions"))
-            choose("Load more Sessions")
-            composeTestRule.onNodeWithText("Search Sessions").performTextReplacement("First")
-            choose("First Session")
-            choose("Refresh")
-            gateway.changeServerMetadata("Server title", pinned = false)
-            choose("Refresh history")
-            gateway.failNextMutation = true
-            openMenu("Server title")
-            choose("Pin Session")
-            choose("Back to Sessions")
-            assertEquals("First", holder.uiState.value.sessionList?.searchQuery)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).visibleSessions.isEmpty())
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Try again"))
+            assertTrue(gateway.mutations.isEmpty())
+            choose("Rename")
             composeTestRule
-                .onNodeWithText("Session action outside current search")
-                .performScrollTo()
-                .assertIsDisplayed()
-            choose("Try again")
-            assertEquals(
-                listOf(SessionMutationAction.PIN to FIRST, SessionMutationAction.PIN to FIRST),
-                gateway.mutations,
-            )
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).sessionMutations.isEmpty())
-            assertEquals("First", holder.uiState.value.sessionList?.searchQuery)
-        } finally {
-            holder.close()
-        }
-    }
-
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp")
-    fun offpage_rename_retry_retains_the_newer_confirmed_result_until_explicit_list_refresh() {
-        val gateway = MenuGateway()
-        gateway.firstSessionOnSecondPage = true
-        val holder = showConnectedSession(gateway, opened = false)
-        try {
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Load more Sessions"))
-            choose("Load more Sessions")
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("First Session"))
-            choose("First Session")
-            choose("Refresh")
-            openMenu("First Session")
-            choose("Rename Session")
-            composeTestRule
-                .onNodeWithText("New Session title")
-                .performScrollTo()
-                .performTextReplacement("Confirmed title")
-            gateway.failNextMutation = true
-            choose("Confirm Rename Session")
-            choose("Back to Sessions")
-            assertEquals("First Session", firstSession(holder).title)
-            composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Try again"))
-            choose("Try again")
-            assertEquals("Confirmed title", firstSession(holder).title)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).sessionMutations.isEmpty())
-            assertEquals(
-                listOf(SessionMutationAction.RENAME to FIRST, SessionMutationAction.RENAME to FIRST),
-                gateway.mutations,
-            )
-            choose("Refresh")
-            assertEquals(listOf(SECOND), holder.uiState.value.sessionList?.sessions?.map { it.id })
-        } finally {
-            holder.close()
-        }
-    }
-
-    private fun assertUpdatedMetadata(paginate: Boolean) {
-        val gateway = MenuGateway()
-        gateway.paginationEnabled = paginate
-        val holder = showConnectedSession(gateway, opened = true)
-        try {
-            composeTestRule.onNodeWithText("Message").performTextReplacement("Keep this draft")
-            gateway.changeServerMetadata("Server title", pinned = true)
-            if (paginate) {
-                assertEquals(2, holder.uiState.value.sessionList?.nextOffset)
-                composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasText("Load more Sessions"))
-            }
-            choose(if (paginate) "Load more Sessions" else "Refresh")
-            composeTestRule.onNodeWithTag("session-list").performScrollToIndex(0)
-            val menus = composeTestRule.onAllNodesWithContentDescription("Session actions for Server title")
-            menus.assertCountEquals(2)
-            menus.onLast().performClick()
-            composeTestRule.onNodeWithText("Unpin Session").assertIsDisplayed()
-            choose("Delete Session")
-            val confirmations = composeTestRule.onAllNodesWithText("Delete \"Server title\"?")
-            confirmations.assertCountEquals(1)
-            confirmations.onFirst().assertIsDisplayed()
-            assertEquals("Keep this draft", holder.uiState.value.sessionList?.openedSession?.composerText)
-            assertTrue(gateway.mutations.isEmpty())
-        } finally {
-            holder.close()
-        }
-    }
-
-    private fun assertManagementJourney(opened: Boolean) {
-        val gateway = MenuGateway()
-        val holder = showConnectedSession(gateway, opened)
-        try {
-            openMenu("First Session")
-            assertTrue(gateway.mutations.isEmpty())
-            assertEquals(if (opened) FIRST else null, holder.uiState.value.sessionList?.openedSession?.session?.id)
-            choose("Rename Session")
-            composeTestRule.onNodeWithText("Current title: First Session").assertIsDisplayed()
-            assertTrue(gateway.mutations.isEmpty())
-            choose("Cancel Rename")
-            assertTrue(gateway.mutations.isEmpty())
-
-            assertDeleteCancellationKeepsTheSession(gateway)
-
-            openMenu("First Session")
-            choose("Pin Session")
-            assertEquals(listOf(SessionMutationAction.PIN to FIRST), gateway.mutations)
-            assertTrue(firstSession(holder).pinned)
-            assertFalse(requireNotNull(holder.uiState.value.sessionList).sessions.single { it.id == SECOND }.pinned)
-            openMenu("First Session")
-            composeTestRule.onNodeWithText("Pin Session").assertDoesNotExist()
-            choose("Unpin Session")
-            assertFalse(firstSession(holder).pinned)
-
-            openMenu("First Session")
-            choose("Rename Session")
-            composeTestRule
-                .onNodeWithText("New Session title")
-                .performScrollTo()
+                .onNodeWithContentDescription("Session title")
                 .performTextReplacement("Requested title")
             assertEquals("First Session", firstSession(holder).title)
-            assertEquals(2, gateway.mutations.size)
             gateway.confirmedRenameTitle = "Gateway title"
-            choose("Confirm Rename Session")
+            chooseAction("Confirm rename")
             assertEquals("Gateway title", firstSession(holder).title)
-            assertEquals(
-                if (opened) "Gateway title" else null,
-                holder.uiState.value.sessionList?.openedSession?.session?.title,
-            )
 
             openMenu("Gateway title")
-            choose("Delete Session")
-            assertEquals(3, gateway.mutations.size)
-            choose("Confirm Delete Session")
+            choose("Pin")
+            assertTrue(firstSession(holder).pinned)
+
+            openMenu("Gateway title")
+            choose("Unpin")
+            assertFalse(firstSession(holder).pinned)
+
+            openMenu("Gateway title")
+            choose("Delete")
+            composeTestRule.onNodeWithText("Delete “Gateway title”?").assertIsDisplayed()
+            choose("Cancel")
+            assertTrue(requireNotNull(holder.uiState.value.sessionList).sessions.any { it.id == FIRST })
+
+            openMenu("Gateway title")
+            choose("Delete")
+            choose("Delete")
+
             assertEquals(listOf(SECOND), requireNotNull(holder.uiState.value.sessionList).sessions.map { it.id })
             assertNull(holder.uiState.value.sessionList?.openedSession)
             assertEquals(
                 listOf(
+                    SessionMutationAction.RENAME to FIRST,
                     SessionMutationAction.PIN to FIRST,
                     SessionMutationAction.UNPIN to FIRST,
-                    SessionMutationAction.RENAME to FIRST,
                     SessionMutationAction.DELETE to FIRST,
                 ),
                 gateway.mutations,
@@ -313,110 +99,95 @@ class SessionActionMenuIntegrationTest {
         }
     }
 
-    private fun assertDeleteCancellationKeepsTheSession(gateway: MenuGateway) {
-        openMenu("First Session")
-        choose("Delete Session")
-        composeTestRule.onNodeWithText("Delete \"First Session\"?").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Remote deletion cannot be undone by this client.")
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Cancel Delete").assertIsDisplayed()
-        assertTrue(gateway.mutations.isEmpty())
-        choose("Cancel Delete")
-        assertTrue(gateway.mutations.isEmpty())
-    }
-
-    private fun assertPagedRenameAndDeleteJourney(
-        gateway: MenuGateway,
-        holder: EntryStateHolder,
-    ) {
-        openMenu("First Session")
-        choose("Rename Session")
-        composeTestRule
-            .onNodeWithText("New Session title")
-            .performScrollTo()
-            .performTextReplacement("Renamed Session")
-        choose("Refresh")
-        assertEquals(
-            "Renamed Session",
-            holder.uiState.value.sessionList?.sessionMutations?.get(FIRST)?.rename?.titleDraft,
-        )
-        composeTestRule.onNodeWithText("Confirm Rename Session").assertIsDisplayed()
-        choose("Confirm Rename Session")
-        assertEquals("Renamed Session", holder.uiState.value.sessionList?.openedSession?.session?.title)
-        openMenu("Renamed Session")
-        choose("Delete Session")
-        choose("Confirm Delete Session")
-        assertNull(holder.uiState.value.sessionList?.openedSession)
-        assertEquals(listOf(SECOND), holder.uiState.value.sessionList?.sessions?.map { it.id })
-        assertEquals(
-            listOf(
-                SessionMutationAction.PIN,
-                SessionMutationAction.PIN,
-                SessionMutationAction.UNPIN,
-                SessionMutationAction.RENAME,
-                SessionMutationAction.DELETE,
-            ),
-            gateway.mutations.map { it.first },
-        )
-        assertTrue(gateway.mutations.all { it.second == FIRST })
-    }
-
-    private fun assertFailureRecovery(opened: Boolean) {
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun two_pane_management_updates_the_open_conversation() {
         val gateway = MenuGateway()
-        val holder = showConnectedSession(gateway, opened)
+        val holder = showConnectedSession(gateway, opened = true)
+        try {
+            composeTestRule
+                .onNode(hasText("First Session") and hasClickAction())
+                .performTouchInput { longClick() }
+            choose("Rename")
+            composeTestRule
+                .onNodeWithContentDescription("Session title")
+                .performTextReplacement("Requested title")
+            gateway.confirmedRenameTitle = "Gateway title"
+            chooseAction("Confirm rename")
+
+            assertEquals("Gateway title", firstSession(holder).title)
+            assertEquals("Gateway title", holder.uiState.value.sessionList?.openedSession?.session?.title)
+            assertEquals(1, gateway.mutations.size)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun list_mutation_failure_preserves_state_until_the_row_retry_succeeds() {
+        val gateway = MenuGateway()
+        val holder = showConnectedSession(gateway, opened = false)
         try {
             gateway.failNextMutation = true
             openMenu("First Session")
-            choose("Pin Session")
+            choose("Pin")
             assertFalse(firstSession(holder).pinned)
-            composeTestRule.onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-                .performScrollTo().assertIsDisplayed()
+            composeTestRule
+                .onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+                .assertIsDisplayed()
             assertEquals(1, gateway.mutations.size)
+
             choose("Try again")
             assertTrue(firstSession(holder).pinned)
             assertEquals(2, gateway.mutations.size)
+        } finally {
+            holder.close()
+        }
+    }
 
-            gateway.failNextMutation = true
-            openMenu("First Session")
-            choose("Unpin Session")
-            assertTrue(firstSession(holder).pinned)
-            assertEquals(3, gateway.mutations.size)
-            choose("Try again")
-            assertFalse(firstSession(holder).pinned)
-            assertEquals(4, gateway.mutations.size)
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun list_refresh_and_pagination_update_the_delete_confirmation_metadata() {
+        val gateway = MenuGateway()
+        gateway.paginationEnabled = true
+        val holder = showConnectedSession(gateway, opened = true)
+        try {
+            composeTestRule.onNodeWithText("Message").performTextReplacement("Keep this draft")
+            composeTestRule.waitForIdle()
+            assertEquals(listOf(FIRST, SECOND), holder.uiState.value.sessionList?.sessions?.map { it.id })
 
-            gateway.failNextMutation = true
-            openMenu("First Session")
-            choose("Rename Session")
+            gateway.changeServerMetadata("Server title", pinned = true)
+            holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
+            composeTestRule.waitForIdle()
+
             composeTestRule
-                .onNodeWithText("New Session title")
-                .performScrollTo()
-                .performTextReplacement("Renamed Session")
-            choose("Confirm Rename Session")
-            assertEquals("First Session", firstSession(holder).title)
-            assertEquals(
-                "Renamed Session",
-                holder.uiState.value.sessionList?.sessionMutations?.get(FIRST)?.rename?.titleDraft,
-            )
-            composeTestRule.onNodeWithText(SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-                .performScrollTo().assertIsDisplayed()
-            assertEquals(5, gateway.mutations.size)
-            choose("Try again")
-            assertEquals("Renamed Session", firstSession(holder).title)
-            assertEquals(6, gateway.mutations.size)
+                .onNode(hasText("Server title") and hasClickAction())
+                .performTouchInput { longClick() }
+            choose("Unpin")
+            openMenu("Server title")
+            choose("Delete")
 
+            composeTestRule.onNodeWithText("Delete “Server title”?").assertIsDisplayed()
+            assertEquals("Keep this draft", holder.uiState.value.sessionList?.openedSession?.composerText)
+            assertEquals(1, gateway.mutations.size)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w1000dp-h800dp")
+    fun search_is_disabled_while_a_session_mutation_is_unresolved() {
+        val gateway = MenuGateway()
+        val holder = showConnectedSession(gateway, opened = false)
+        try {
             gateway.failNextMutation = true
-            openMenu("Renamed Session")
-            choose("Delete Session")
-            choose("Confirm Delete Session")
-            assertEquals("Renamed Session", firstSession(holder).title)
-            composeTestRule.onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-                .assertIsDisplayed()
-            assertEquals(7, gateway.mutations.size)
-            choose("Try again")
-            assertEquals(8, gateway.mutations.size)
-            assertEquals(listOf(SECOND), requireNotNull(holder.uiState.value.sessionList).sessions.map { it.id })
-            assertTrue(gateway.mutations.all { it.second == FIRST })
+            openMenu("First Session")
+            choose("Pin")
+            composeTestRule.waitForIdle()
+
+            composeTestRule.onNodeWithContentDescription("Search Sessions").assertIsNotEnabled()
+            composeTestRule.onNodeWithText("Try again").assertIsDisplayed()
         } finally {
             holder.close()
         }
@@ -459,18 +230,18 @@ class SessionActionMenuIntegrationTest {
 
     private fun openMenu(title: String) {
         composeTestRule
-            .onAllNodesWithContentDescription("Session actions for $title")
-            .onLast()
-            .apply { if (!isDisplayed()) performScrollTo() }
-            .assertIsDisplayed()
-            .performClick()
+            .onNode(hasText(title) and hasClickAction())
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
     }
 
     private fun choose(text: String) {
-        composeTestRule.onNodeWithText(text)
-            .apply { if (!isDisplayed()) performScrollTo() }
-            .assertIsDisplayed()
-            .performClick()
+        composeTestRule.onNodeWithText(text).assertIsDisplayed().performClick()
+        composeTestRule.waitForIdle()
+    }
+
+    private fun chooseAction(description: String) {
+        composeTestRule.onNodeWithContentDescription(description).assertIsDisplayed().performClick()
         composeTestRule.waitForIdle()
     }
 

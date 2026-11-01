@@ -13,12 +13,16 @@ name: stale-recoverable
 - takeScreenshot: stale-recoverable-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - extendedWaitUntil:
-    visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
+    visible: "Sessions are unavailable"
     timeout: 30000
+- assertVisible: "gateway :: offline"
+- takeScreenshot: stale-recoverable-01-unavailable
 - tapOn: "Try again"
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
+- assertVisible: "gateway :: ready"
+- takeScreenshot: stale-recoverable-02-recovered

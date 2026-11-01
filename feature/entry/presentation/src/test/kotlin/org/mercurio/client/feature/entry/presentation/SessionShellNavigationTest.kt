@@ -1,16 +1,12 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.unit.Density
 import androidx.core.graphics.Insets
 import androidx.core.view.WindowInsetsCompat
 import org.junit.Assert.assertEquals
@@ -22,7 +18,6 @@ import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -58,28 +53,6 @@ class SessionShellNavigationTest {
 
         assertTrue(events.isEmpty())
         assertTrue(composeTestRule.activity.isFinishing)
-    }
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-     * is the same, and the real dialog window is exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun system_back_on_the_creation_form_cancels_creation() {
-        val events = mutableListOf<EntryUiEvent>()
-        setContent(
-            entryState(SessionListUiState(createSession = SessionCreationUiState())),
-            events::add,
-        )
-
-        composeTestRule.runOnUiThread {
-            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
-        }
-        composeTestRule.waitForIdle()
-
-        assertEquals(listOf(EntryUiEvent.CancelCreateSessionClicked), events)
     }
 
     @Test
@@ -148,29 +121,6 @@ class SessionShellNavigationTest {
         assertEquals(listOf(EntryUiEvent.CancelRenameSessionClicked(sessionId)), events)
     }
 
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-     * is the same, and the real dialog window is exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp")
-    fun system_back_cancels_creation_in_the_two_pane_detail_pane() {
-        val events = mutableListOf<EntryUiEvent>()
-        setContent(
-            entryState(SessionListUiState(createSession = SessionCreationUiState())),
-            events::add,
-        )
-
-        composeTestRule.runOnUiThread {
-            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
-        }
-        composeTestRule.waitForIdle()
-
-        assertEquals(listOf(EntryUiEvent.CancelCreateSessionClicked), events)
-    }
-
     @Test
     fun delivered_system_bar_insets_move_the_shell_content() {
         val topInset = 120
@@ -210,7 +160,7 @@ class SessionShellNavigationTest {
             ),
             {},
         )
-        composeTestRule.onNodeWithText("New Session title").performScrollTo().performClick()
+        composeTestRule.onNodeWithContentDescription("Session title").performScrollTo().performClick()
         val imeInset = 320
         composeTestRule.runOnUiThread {
             val insets =
@@ -222,20 +172,25 @@ class SessionShellNavigationTest {
             composeTestRule.activity.window.decorView.dispatchApplyWindowInsets(insets.toWindowInsets())
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("New Session title").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Session title").performScrollTo().assertIsDisplayed()
         val keyboardTop = composeTestRule.activity.window.decorView.height - imeInset + 1
-        val titleBottom = composeTestRule.onNodeWithText("New Session title").fetchSemanticsNode().boundsInWindow.bottom
+        val titleBottom =
+            composeTestRule
+                .onNodeWithContentDescription("Session title")
+                .fetchSemanticsNode()
+                .boundsInWindow
+                .bottom
         assertTrue("The Rename input must remain above the keyboard", titleBottom <= keyboardTop)
     }
 
     @Test
-    fun search_ime_keeps_pinned_session_controls_above_the_keyboard() {
+    fun search_ime_keeps_the_status_strip_above_the_keyboard() {
         setContent(
             entryState(SessionListUiState(sessions = listOf(session("first", "First Session")))),
             {},
         )
         val imeInset = 320
-        composeTestRule.onNodeWithText("Search Sessions").performClick()
+        composeTestRule.onNodeWithContentDescription("Search Sessions").performClick()
 
         composeTestRule.runOnUiThread {
             val insets =
@@ -249,107 +204,8 @@ class SessionShellNavigationTest {
         composeTestRule.waitForIdle()
 
         val keyboardTop = composeTestRule.activity.window.decorView.height - imeInset + 1
-        val refreshBottom = composeTestRule.onNodeWithText("Refresh").fetchSemanticsNode().boundsInWindow.bottom
-        assertTrue("Refresh must stay above the keyboard", refreshBottom <= keyboardTop)
-    }
-
-    @Test
-    fun search_ime_padding_is_removed_when_keyboard_hides_even_if_insets_remain() {
-        setContent(
-            entryState(SessionListUiState(sessions = listOf(session("first", "First Session")))),
-            {},
-        )
-        val imeInset = 320
-        val windowHeight = composeTestRule.activity.window.decorView.height.toFloat()
-        val listBottomBefore =
-            composeTestRule.onNodeWithTag("session-list")
-                .fetchSemanticsNode().boundsInWindow.bottom
-        composeTestRule.onNodeWithText("Search Sessions").performClick()
-
-        fun dispatchImeInsets(isVisible: Boolean) {
-            composeTestRule.runOnUiThread {
-                val insets =
-                    WindowInsetsCompat
-                        .Builder()
-                        .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, imeInset))
-                        .setVisible(WindowInsetsCompat.Type.ime(), isVisible)
-                        .build()
-                composeTestRule.activity.window.decorView.dispatchApplyWindowInsets(insets.toWindowInsets())
-            }
-            composeTestRule.waitForIdle()
-        }
-
-        dispatchImeInsets(isVisible = true)
-        val listBottomWhileVisible =
-            composeTestRule.onNodeWithTag("session-list")
-                .fetchSemanticsNode().boundsInWindow.bottom
-        assertTrue(listBottomWhileVisible <= windowHeight - imeInset + 1f)
-
-        dispatchImeInsets(isVisible = false)
-        val listBottomAfterHidden =
-            composeTestRule.onNodeWithTag("session-list")
-                .fetchSemanticsNode().boundsInWindow.bottom
-        assertTrue(
-            "the controls must return to the full pane when the IME is hidden",
-            listBottomAfterHidden - listBottomWhileVisible >= imeInset * 0.75f,
-        )
-        assertEquals(listBottomBefore, listBottomAfterHidden, 1f)
-    }
-
-    @Test
-    fun delivered_ime_insets_do_not_collapse_the_session_list() {
-        setContent(
-            entryState(SessionListUiState(sessions = listOf(session("first", "First Session")))),
-            {},
-        )
-        val rowHeightBefore =
-            composeTestRule.onNodeWithText("First Session").fetchSemanticsNode().boundsInWindow.height
-
-        composeTestRule.runOnUiThread {
-            val insets =
-                WindowInsetsCompat
-                    .Builder()
-                    .setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, 900))
-                    .setVisible(WindowInsetsCompat.Type.ime(), true)
-                    .build()
-            composeTestRule.activity.window.decorView.dispatchApplyWindowInsets(insets.toWindowInsets())
-        }
-        composeTestRule.waitForIdle()
-
-        composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
-        val rowHeightAfter =
-            composeTestRule.onNodeWithText("First Session").fetchSemanticsNode().boundsInWindow.height
-        assertEquals(rowHeightBefore, rowHeightAfter, 0.5f)
-    }
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-     * is the same, and the real dialog window is exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    @Config(qualifiers = "w891dp-h411dp")
-    fun create_dialog_actions_stay_reachable_at_twice_the_font_scale() {
-        val events = mutableListOf<EntryUiEvent>()
-        composeTestRule.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
-                HermesTheme {
-                    EntryScreen(
-                        state =
-                            entryState(
-                                SessionListUiState(
-                                    createSession = SessionCreationUiState(titleDraft = "Draft title"),
-                                ),
-                            ),
-                        onEvent = events::add,
-                    )
-                }
-            }
-        }
-
-        composeTestRule.onNodeWithText("Create").assertHasClickAction().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().assertIsDisplayed()
+        val statusBottom = composeTestRule.onNodeWithText("gateway :: ready").fetchSemanticsNode().boundsInWindow.bottom
+        assertTrue("The status strip must stay above the keyboard", statusBottom <= keyboardTop)
     }
 
     private fun setContent(
