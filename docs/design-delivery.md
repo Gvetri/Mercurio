@@ -160,4 +160,4 @@ there.
 - [Visual regression baselines](../CONTRIBUTING.md#visual-regression-baselines) — how a baseline is
   recorded and how the manifest is kept in step.
 - [Quality gates](quality-gates.md) — the checks that carry the design evidence.
-- [Glossary](../GLOSSARY.md) — the vocabulary this document uses for Session, Run, and Gateway.
+- [Glossary](../GLOSSARY.md) — the shared domain vocabulary of this repository.

@@ -27,6 +27,8 @@ uses the title verbatim as the subject on `main`.
 - Checklist result against the approved page:
 - Value check result:
 - Before and after captures:
+- Impeccable audit result:
+- Tradeoff note, or `none`:
 
 ## Risk
 
