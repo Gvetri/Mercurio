@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -48,12 +49,14 @@ internal fun MarkdownContent(
     markdown: String,
     actions: MessageActions,
     modifier: Modifier = Modifier,
+    blockSpacing: Dp? = null,
 ) {
-    val spacing = LocalHermesDesignTokens.current.spacing
+    val tokens = LocalHermesDesignTokens.current
+    val spacing = tokens.spacing
     val blocks = remember(markdown) { parseSafeMarkdown(markdown) }
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(spacing.s),
+        verticalArrangement = Arrangement.spacedBy(blockSpacing ?: spacing.s),
     ) {
         blocks.forEach { block ->
             when (block) {
@@ -87,8 +90,14 @@ private fun MarkdownParagraph(
     spans: List<MarkdownSpan>,
     actions: MessageActions,
 ) {
+    val tokens = LocalHermesDesignTokens.current
     Text(
-        text = spans.toAnnotatedString(linkColor = MaterialTheme.colorScheme.primary, onOpenLink = actions.openLink),
+        text =
+            spans.toAnnotatedString(
+                linkColor = MaterialTheme.colorScheme.primary,
+                onOpenLink = actions.openLink,
+                codeBackground = tokens.componentColors.inset,
+            ),
     )
 }
 
@@ -97,11 +106,13 @@ private fun MarkdownHeading(
     heading: MarkdownBlock.Heading,
     actions: MessageActions,
 ) {
+    val tokens = LocalHermesDesignTokens.current
     Text(
         text =
             heading.spans.toAnnotatedString(
                 linkColor = MaterialTheme.colorScheme.primary,
                 onOpenLink = actions.openLink,
+                codeBackground = tokens.componentColors.inset,
             ),
         style = headingStyle(heading.level),
         modifier = Modifier.semantics { heading() },
@@ -123,7 +134,8 @@ private fun MarkdownBlockquote(
     spans: List<MarkdownSpan>,
     actions: MessageActions,
 ) {
-    val spacing = LocalHermesDesignTokens.current.spacing
+    val tokens = LocalHermesDesignTokens.current
+    val spacing = tokens.spacing
     Row(
         modifier =
             Modifier
@@ -143,6 +155,7 @@ private fun MarkdownBlockquote(
                 spans.toAnnotatedString(
                     linkColor = MaterialTheme.colorScheme.primary,
                     onOpenLink = actions.openLink,
+                    codeBackground = tokens.componentColors.inset,
                 ),
             modifier = Modifier.weight(1f),
         )
@@ -159,7 +172,8 @@ private fun MarkdownList(
     items: List<RenderedItem>,
     actions: MessageActions,
 ) {
-    val spacing = LocalHermesDesignTokens.current.spacing
+    val tokens = LocalHermesDesignTokens.current
+    val spacing = tokens.spacing
     val linkColor = MaterialTheme.colorScheme.primary
     Column(
         modifier = Modifier.padding(start = spacing.m),
@@ -172,7 +186,12 @@ private fun MarkdownList(
             ) {
                 Text(text = item.marker)
                 Text(
-                    text = item.spans.toAnnotatedString(linkColor = linkColor, onOpenLink = actions.openLink),
+                    text =
+                        item.spans.toAnnotatedString(
+                            linkColor = linkColor,
+                            onOpenLink = actions.openLink,
+                            codeBackground = tokens.componentColors.inset,
+                        ),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -196,6 +215,7 @@ private const val HEADING_LEVEL_4 = 4
 private fun List<MarkdownSpan>.toAnnotatedString(
     linkColor: Color,
     onOpenLink: (String) -> Unit,
+    codeBackground: Color?,
 ): AnnotatedString =
     buildAnnotatedString {
         this@toAnnotatedString.forEach { span ->
@@ -205,7 +225,13 @@ private fun List<MarkdownSpan>.toAnnotatedString(
             if (start == end) return@forEach
             if (span.bold) addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
             if (span.italic) addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
-            if (span.code) addStyle(SpanStyle(fontFamily = FontFamily.Monospace), start, end)
+            if (span.code) {
+                addStyle(
+                    SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground ?: Color.Unspecified),
+                    start,
+                    end,
+                )
+            }
             span.link?.let { destination ->
                 addLink(
                     LinkAnnotation.Url(

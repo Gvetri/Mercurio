@@ -74,7 +74,7 @@ class MarkdownContentTest {
             }
         }
 
-        composeTestRule.onNodeWithText("kotlin").assertIsDisplayed()
+        composeTestRule.onNodeWithText("KOTLIN").assertIsDisplayed()
         val codeNode = composeTestRule.onNodeWithText(code)
         codeNode.assertIsDisplayed()
         val horizontalRange =
@@ -95,7 +95,7 @@ class MarkdownContentTest {
         }
 
         assertTrue("Nothing may be copied before the user acts", recorded.copied.isEmpty())
-        composeTestRule.onNodeWithText("Copy code").performClick()
+        composeTestRule.onNodeWithText("[ copy ]").performClick()
         assertEquals(listOf("val x = 1"), recorded.copied)
     }
 

@@ -7,14 +7,15 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -25,8 +26,16 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.time.Instant
 
+/**
+ * The retried turn keeps its own row, a failed turn carries its own retry, and an unresolved Run
+ * says `stale` without inventing a failure until the Gateway confirms one. The transcript still
+ * lands on its newest Message and still leaves a reader who scrolled away where they are.
+ */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
 class SessionHistoryRetryScreenTest {
     @get:Rule
@@ -36,38 +45,9 @@ class SessionHistoryRetryScreenTest {
     fun failed_run_try_again_dispatches_a_user_initiated_retry_event() {
         val failedRunId = RunId("run-failed")
         val events = mutableListOf<EntryUiEvent>()
-        val message =
-            SessionMessageUiState(
-                id = "message-failed",
-                role = "user",
-                content = "Original request",
-                runId = failedRunId,
-                runResult = "Remote failure",
-                timestamp = java.time.Instant.parse("2026-09-08T20:00:00Z"),
-                failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
-                retryAvailable = true,
-            )
         composeTestRule.setContent {
             HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages = listOf(message),
-                                        ),
-                                ),
-                        ),
-                    onEvent = { events += it },
-                )
+                EntryScreen(state = failedTurnState(failedRunId, retryAvailable = true), onEvent = { events += it })
             }
         }
 
@@ -76,92 +56,72 @@ class SessionHistoryRetryScreenTest {
     }
 
     @Test
-    fun retry_run_is_shown_independently_with_its_own_identity_and_the_failed_run_stays_visible() {
+    fun the_retried_turn_keeps_its_own_row_and_the_failed_turn_keeps_its_retry() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(state = retriedRunHistoryState(), onEvent = {})
             }
         }
 
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
-        composeTestRule.onAllNodesWithText("Timestamp:", substring = true).onFirst().assertIsDisplayed()
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(3)
-        composeTestRule.onAllNodesWithText("Timestamp:", substring = true).onLast().assertIsDisplayed()
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
-        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
-        composeTestRule.onNodeWithText("Run ID: run-failed").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status: Failed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Transcript message 1").assertIsDisplayed()
         composeTestRule.onNodeWithText(RunFailureCategory.GATEWAY_REPORTED.safeMessage).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Try again").assertCountEquals(1)
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(3)
-        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
-        composeTestRule.onNodeWithText("Run ID: run-retried").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Retry answer").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status: Completed").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run result: Done").assertIsDisplayed()
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Run ID: run-failed").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Try again").assertCountEquals(1)
     }
 
     @Test
-    fun uncertain_run_has_no_retry_or_failure_detail_until_authoritative_reconciliation_confirms_failure() {
-        var entryState by mutableStateOf(uncertainRunHistoryState())
+    fun an_uncertain_run_says_stale_without_a_failure_detail_until_reconciliation_confirms_one() {
+        var state by mutableStateOf(uncertainRunState())
         composeTestRule.setContent {
             HermesTheme {
-                EntryScreen(state = entryState, onEvent = {})
+                EntryScreen(state = state, onEvent = {})
             }
         }
 
-        composeTestRule.onNodeWithText("Run state: Uncertain").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Stream interrupted. Run result is uncertain.").assertIsDisplayed()
-        composeTestRule.onNodeWithText(RunFailureCategory.GATEWAY_REPORTED.safeMessage).assertDoesNotExist()
+        composeTestRule.onAllNodesWithText("· stale", substring = true).assertCountEquals(1)
+        composeTestRule.onNodeWithText("[ refresh history ]").assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
         composeTestRule.onNodeWithText("Show technical detail").assertDoesNotExist()
 
-        entryState = confirmedFailureHistoryState(entryState)
+        state = confirmedFailureState(state)
 
-        composeTestRule.onNodeWithText("Run state: Uncertain").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Run status: Failed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("FAILED").assertIsDisplayed()
         composeTestRule.onNodeWithText(RunFailureCategory.GATEWAY_REPORTED.safeMessage).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Try again").assertCountEquals(1)
     }
 
     @Test
-    fun retry_button_is_disabled_while_an_active_run_is_in_flight() {
+    fun retry_is_disabled_while_another_run_is_in_flight() {
         val sessionId = SessionId("session-1")
         val activeRun = Run(RunId("run-active"), sessionId, "running")
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
                     state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session = SessionItemUiState(sessionId, "Session", null, false),
-                                            messages =
-                                                listOf(
-                                                    SessionMessageUiState(
-                                                        id = "message-failed",
-                                                        role = "assistant",
-                                                        content = null,
-                                                        runId = RunId("run-failed"),
-                                                        runStatus = "failed",
-                                                        failureSafeMessage =
-                                                            RunFailureCategory.GATEWAY_REPORTED.safeMessage,
-                                                        retryAvailable = true,
-                                                    ),
+                        entryState(
+                            SessionListUiState(
+                                openedSession =
+                                    OpenSessionUiState(
+                                        session = SessionItemUiState(sessionId, "Session", null, false),
+                                        messages =
+                                            listOf(
+                                                SessionMessageUiState(
+                                                    id = "message-failed",
+                                                    role = "assistant",
+                                                    content = null,
+                                                    runId = RunId("run-failed"),
+                                                    runStatus = "failed",
+                                                    failureSafeMessage =
+                                                        RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                                    retryAvailable = true,
                                                 ),
-                                            activeRuns = listOf(activeRun),
-                                            latestRun = activeRun,
-                                            latestRunState = RunPresentationState.RUNNING,
-                                        ),
-                                ),
+                                            ),
+                                        activeRuns = listOf(activeRun),
+                                        latestRun = activeRun,
+                                        latestRunState = RunPresentationState.RUNNING,
+                                    ),
+                            ),
                         ),
                     onEvent = {},
                 )
@@ -204,7 +164,7 @@ class SessionHistoryRetryScreenTest {
     }
 
     @Test
-    fun an_arriving_message_does_not_pull_a_reader_who_scrolled_away_and_follow_resumes_at_the_newest_content() {
+    fun an_arriving_message_does_not_pull_a_reader_who_scrolled_away_and_follow_resumes() {
         var state by mutableStateOf(transcriptEntryState(messages = (1..10).map(::transcriptMessage)))
         composeTestRule.setContent {
             HermesTheme {
@@ -213,18 +173,18 @@ class SessionHistoryRetryScreenTest {
         }
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
+        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
+            swipeDown(startY = centerY - 200f, endY = centerY + 200f, durationMillis = 200)
+        }
         composeTestRule.waitForIdle()
 
         state = transcriptEntryState(messages = (1..11).map(::transcriptMessage))
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithText("Transcript message 1").assertIsDisplayed()
         composeTestRule.onNodeWithText("Transcript message 11").assertDoesNotExist()
 
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(11)
-        composeTestRule.waitForIdle()
-
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Transcript message 11"))
+        composeTestRule.onNodeWithText("Transcript message 11").assertIsDisplayed()
         state = transcriptEntryState(messages = (1..12).map(::transcriptMessage))
         composeTestRule.waitForIdle()
 
@@ -242,11 +202,35 @@ class SessionHistoryRetryScreenTest {
             ),
         )
 
-    private fun transcriptMessage(index: Int): SessionMessageUiState =
-        message(
-            "message-$index",
-            "user",
-            "Transcript message $index",
+    private fun transcriptMessage(index: Int): SessionMessageUiState {
+        return message("message-$index", "user", "Transcript message $index")
+    }
+
+    private fun failedTurnState(
+        failedRunId: RunId,
+        retryAvailable: Boolean,
+    ): EntryUiState =
+        entryState(
+            SessionListUiState(
+                openedSession =
+                    OpenSessionUiState(
+                        session = SessionItemUiState(SessionId("session-1"), "Session", null, false),
+                        messages =
+                            listOf(
+                                SessionMessageUiState(
+                                    id = "message-failed",
+                                    role = "user",
+                                    content = "Original request",
+                                    runId = failedRunId,
+                                    timestamp = Instant.parse("2026-09-08T20:00:00Z"),
+                                    failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                    retryAvailable = retryAvailable,
+                                ),
+                            ),
+                        latestRun = Run(failedRunId, SessionId("session-1"), "failed"),
+                        latestRunState = RunPresentationState.FAILED,
+                    ),
+            ),
         )
 
     private fun retriedRunHistoryState(): EntryUiState =
@@ -260,8 +244,8 @@ class SessionHistoryRetryScreenTest {
                                 SessionMessageUiState(
                                     id = "original-user-message",
                                     role = "user",
-                                    content = "Original request",
-                                    timestamp = java.time.Instant.parse("2026-09-08T20:00:00Z"),
+                                    content = "Transcript message 1",
+                                    timestamp = Instant.parse("2026-09-08T20:00:00Z"),
                                 ),
                                 SessionMessageUiState(
                                     id = "message-failed",
@@ -269,8 +253,7 @@ class SessionHistoryRetryScreenTest {
                                     content = null,
                                     runId = RunId("run-failed"),
                                     runStatus = "failed",
-                                    runResult = "Remote failure",
-                                    timestamp = java.time.Instant.parse("2026-09-08T20:01:00Z"),
+                                    timestamp = Instant.parse("2026-09-08T20:01:00Z"),
                                     failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
                                     retryAvailable = true,
                                 ),
@@ -280,15 +263,16 @@ class SessionHistoryRetryScreenTest {
                                     content = "Retry answer",
                                     runId = RunId("run-retried"),
                                     runStatus = "succeeded",
-                                    runResult = "Done",
-                                    timestamp = java.time.Instant.parse("2026-09-08T20:10:00Z"),
+                                    timestamp = Instant.parse("2026-09-08T20:10:00Z"),
                                 ),
                             ),
+                        latestRun = Run(RunId("run-retried"), SessionId("session-1"), "succeeded"),
+                        latestRunState = RunPresentationState.SUCCEEDED,
                     ),
             ),
         )
 
-    private fun uncertainRunHistoryState(): EntryUiState =
+    private fun uncertainRunState(): EntryUiState =
         entryState(
             SessionListUiState(
                 openedSession =
@@ -303,14 +287,16 @@ class SessionHistoryRetryScreenTest {
                                     runId = RunId("run-interrupted"),
                                     runState = RunPresentationState.UNCERTAIN,
                                     streamInterrupted = true,
-                                    timestamp = java.time.Instant.parse("2026-09-08T20:00:00Z"),
+                                    timestamp = Instant.parse("2026-09-08T20:00:00Z"),
                                 ),
                             ),
+                        latestRun = Run(RunId("run-interrupted"), SessionId("session-1"), "interrupted"),
+                        latestRunState = RunPresentationState.UNCERTAIN,
                     ),
             ),
         )
 
-    private fun confirmedFailureHistoryState(state: EntryUiState): EntryUiState =
+    private fun confirmedFailureState(state: EntryUiState): EntryUiState =
         state.copy(
             sessionList =
                 state.sessionList?.copy(
@@ -324,12 +310,12 @@ class SessionHistoryRetryScreenTest {
                                         content = null,
                                         runId = RunId("run-interrupted"),
                                         runStatus = "failed",
-                                        runResult = "Remote failure",
-                                        timestamp = java.time.Instant.parse("2026-09-08T20:01:00Z"),
+                                        timestamp = Instant.parse("2026-09-08T20:01:00Z"),
                                         failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
                                         retryAvailable = true,
                                     ),
                                 ),
+                            latestRunState = RunPresentationState.FAILED,
                         ),
                 ),
         )

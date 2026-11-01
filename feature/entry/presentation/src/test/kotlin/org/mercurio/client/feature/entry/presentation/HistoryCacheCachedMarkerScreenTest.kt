@@ -53,12 +53,8 @@ class HistoryCacheCachedMarkerScreenTest {
         setConnectedContent(cachedTranscriptList())
 
         composeTestRule.onNodeWithText("Cached transcript message").assertExists()
-        composeTestRule
-            .onNodeWithText("The displayed Session history is cached on this device. It is not live.")
-            .assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The displayed Session history may be stale.")
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("cached · unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ refresh ]").assertIsDisplayed()
     }
 
     @Test
