@@ -393,13 +393,6 @@ class EntryStateHolder(
         )
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
 
-    /**
-     * Carries the storage work that must finish even when the holder's own [scope] is cancelled:
-     * the writes a close owes, and the purges a removal owes. It shares the holder's dispatcher,
-     * so it runs on the same worker and never on the event thread. It is deliberately never
-     * cancelled — it holds no thread, and cancelling it would drop a confirmed removal or a
-     * close-time recovery marker.
-     */
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
 
@@ -460,12 +453,6 @@ class EntryStateHolder(
     internal val reconcilingSessions = mutableMapOf<SessionId, Long>()
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
 
-    /**
-     * Delivers one UI event on the caller's thread. The send, connection-removal, close, and
-     * model-picker paths enqueue their storage work on [scope] or [persistenceScope], so those
-     * handlers never read or write disk here. Other handlers keep their existing synchronous
-     * storage calls; widening this boundary is separate work.
-     */
     fun onEvent(event: EntryUiEvent) {
         when (event) {
             is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
@@ -578,8 +565,7 @@ class EntryStateHolder(
 
     /**
      * Releases the connection state and clears the removal confirmation so a closed holder never
-     * reports an open dialog. Teardown stays bounded: the maps clear synchronously, and the
-     * pending-submission writes it owes run on [persistenceScope] instead of the caller's thread.
+     * reports an open dialog.
      */
     fun close() {
         mutableUiState.value = mutableUiState.value.copy(isRemoveConfirmationOpen = false)

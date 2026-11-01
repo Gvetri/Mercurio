@@ -68,13 +68,6 @@ internal fun EntryStateHolder.sendMessage() {
     launchRunSubmission(input = input, recordDraft = true)
 }
 
-/**
- * A send with an unresolved submission re-reads the uncertainty store before it decides to
- * reconcile or to send again, so that branch runs on the worker. A plain send stays on the
- * caller's thread and performs no storage work there: it only claims the submission state and
- * enqueues the Run job. The flag is read under the session lock so the decision cannot straddle
- * a state change that would move the store read onto the caller's thread.
- */
 internal fun EntryStateHolder.dispatchSendMessage() {
     val retryPending =
         synchronized(sessionRequestLock) {

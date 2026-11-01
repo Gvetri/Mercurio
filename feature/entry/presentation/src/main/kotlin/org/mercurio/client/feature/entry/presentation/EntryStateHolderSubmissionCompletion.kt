@@ -47,11 +47,6 @@ internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
     }
 }
 
-/**
- * Runs on the holder's worker: it claims the submission in the uncertainty store, writes the
- * recovery draft, and reads the model selection before the Gateway call. Keeping those three
- * effects here is what lets a UI event enqueue a send without touching storage itself.
- */
 internal fun EntryStateHolder.prepareClaimedSubmission(work: RunSubmissionWork): RunSubmissionWork? {
     if (work.recordDraft) {
         runCatching { sessionDraftStore.write(sessionDraftKey(work.sessionId, work.requestEndpoint), work.input) }

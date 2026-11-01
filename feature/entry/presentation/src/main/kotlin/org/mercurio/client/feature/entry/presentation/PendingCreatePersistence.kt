@@ -9,20 +9,11 @@ internal data class PendingCreatePersistence(
     val started: Boolean,
 )
 
-/**
- * Captures the in-memory pending-create state so its markers can be written after the maps are
- * cleared. Callers hold [EntryStateHolder.sessionRequestLock], so a concurrent send cannot slip
- * a new entry between the snapshot and the clear.
- */
-internal fun EntryStateHolder.pendingCreateSnapshot(): List<PendingCreatePersistence> =
+internal fun EntryStateHolder.pendingCreateSnapshotLocked(): List<PendingCreatePersistence> =
     pendingCreateSessions.map { (key, pendingCreate) ->
         PendingCreatePersistence(key = key, pendingCreate = pendingCreate, started = key in pendingCreateStarted)
     }
 
-/**
- * Writes the captured pending-create markers on [EntryStateHolder.persistenceScope], so a close
- * never writes storage on the caller's thread. An empty snapshot starts nothing.
- */
 internal fun EntryStateHolder.persistPendingCreatesOffThread(pendingCreates: List<PendingCreatePersistence>) {
     if (pendingCreates.isEmpty()) return
     persistenceScope.launch { writePendingCreateMarkers(pendingCreates) }

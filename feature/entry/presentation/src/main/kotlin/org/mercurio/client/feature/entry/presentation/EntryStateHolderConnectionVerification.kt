@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -170,14 +171,6 @@ internal fun EntryStateHolder.removeGatewayConnection() {
     released.observations.forEach(RunEventObservation::close)
 }
 
-/**
- * Resets the connection state and its generations on the caller's thread, then hands the
- * storage effects to [persistenceScope], which survives a close and never runs on the event
- * thread. The marker write runs before the repository and endpoint purges, so a removed
- * connection cannot keep an uncertainty entry written after its own clear. The reset carries
- * the in-memory notification preference instead of re-reading its store, so the removal does
- * not touch that surface at all.
- */
 internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionState {
     val endpoint = mutableUiState.value.endpoint
     val released =
@@ -193,11 +186,14 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
                     )
             releasedState
         }
-    persistenceScope.launch {
-        runCatching { writePendingCreateMarkers(released.pendingCreates) }
-        runCatching { removeGatewayConnectionUseCase?.execute() }
-        runCatching { clearEndpointStores(endpoint) }
-    }.also { pendingRemovalJob = it }
+    val persistence =
+        persistenceScope.launch(start = CoroutineStart.LAZY) {
+            runCatching { writePendingCreateMarkers(released.pendingCreates) }
+            runCatching { removeGatewayConnectionUseCase?.execute() }
+            runCatching { clearEndpointStores(endpoint) }
+        }
+    pendingRemovalJob = persistence
+    persistence.start()
     return released
 }
 
@@ -210,7 +206,7 @@ internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnecti
         verificationJob = null
         sessionJob = null
         recoveryJob = null
-        val pendingCreates = pendingCreateSnapshot()
+        val pendingCreates = pendingCreateSnapshotLocked()
         pendingCreateStarted.clear()
         pendingCreateSessions.clear()
         sessionGateway = null

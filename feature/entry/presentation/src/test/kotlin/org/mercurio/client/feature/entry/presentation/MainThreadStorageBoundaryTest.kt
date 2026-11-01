@@ -26,15 +26,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-private const val PENDING_CREATE_WRITES = 2
+private const val SEND_CLAIM_AND_CLOSE_MARKER_ADDS = 2
 
-/**
- * Proves the four assessed storage paths never touch a store on the thread that delivers the
- * UI event: a send, a connection removal, a holder close, and a model-picker selection.
- *
- * The holder runs on [Dispatchers.Default], so a compliant implementation performs the storage
- * work on a worker thread while the test thread keeps playing the Android main thread.
- */
+/** The test thread plays the Android main thread; the holder runs on [Dispatchers.Default]. */
 internal class MainThreadStorageBoundaryTest {
     private val eventThread = Thread.currentThread()
     private val recorder = StorageCallRecorder()
@@ -47,7 +41,7 @@ internal class MainThreadStorageBoundaryTest {
     private val notificationSettingsStore = RecordingRunStatusNotificationSettingsStore(recorder)
 
     @Test
-    fun a_send_never_touches_storage_on_the_event_thread() {
+    fun a_send_keeps_run_storage_off_the_event_thread() {
         val holder = storageBoundaryHolder()
         try {
             open(holder, gateway, session.id)
@@ -119,6 +113,32 @@ internal class MainThreadStorageBoundaryTest {
             recorder.assertOperationsRanOffThread(eventThread, "uncertainty.add")
         } finally {
             blockedGateway.releaseRun.countDown()
+        }
+    }
+
+    @Test
+    fun connection_removal_writes_the_pending_marker_before_it_purges() {
+        val blockedGateway =
+            FakeGateway(listOf(session)).apply {
+                enqueueRun(activeRun())
+                blockRunCreation = true
+            }
+        val holder = storageBoundaryHolder(blockedGateway)
+        try {
+            open(holder, blockedGateway, session.id)
+            holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
+            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            assertTrue(blockedGateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            recorder.reset()
+
+            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+            assertTrue(selectionStore.cleared.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+
+            recorder.assertRanInOrder("uncertainty.add", "repository.clear", "uncertainty.clearEndpoint")
+        } finally {
+            blockedGateway.releaseRun.countDown()
+            holder.close()
         }
     }
 
@@ -212,6 +232,19 @@ private class StorageCallRecorder {
         }
     }
 
+    fun assertRanInOrder(vararg operations: String) {
+        val indexes =
+            operations.map { operation ->
+                val index = calls.indexOfFirst { it.operation == operation }
+                assertTrue("$operation never ran", index >= 0)
+                index
+            }
+        assertTrue(
+            "${operations.joinToString()} did not run in order: ${calls.map { it.operation }}",
+            indexes == indexes.sorted(),
+        )
+    }
+
     private data class StorageCall(val operation: String, val thread: Thread)
 }
 
@@ -298,7 +331,7 @@ private class RecordingModelSelectionStore(private val recorder: StorageCallReco
 
 private class RecordingUncertaintyStore(private val recorder: StorageCallRecorder) : RunSubmissionUncertaintyStore {
     private val keys = mutableSetOf<PendingRunSubmissionKey>()
-    private val adds = CountDownLatch(PENDING_CREATE_WRITES)
+    private val adds = CountDownLatch(SEND_CLAIM_AND_CLOSE_MARKER_ADDS)
 
     fun awaitAdds(): Boolean = adds.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
 

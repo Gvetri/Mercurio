@@ -24,7 +24,7 @@ internal fun EntryStateHolder.releaseConnectionState(): ReleasedConnectionState 
                     connectionRecoveryJobs,
                 ).flatten()
             val observationsToClose = runObservations.values.toList()
-            val pendingCreates = pendingCreateSnapshot()
+            val pendingCreates = pendingCreateSnapshotLocked()
             clearSessionStateForClose()
             ReleasedConnectionState(
                 jobs = requestJobs + supersededJobs,
