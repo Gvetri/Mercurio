@@ -17,6 +17,17 @@ uses the title verbatim as the subject on `main`.
      Covered code changed? Regenerate the coverage/mutation evidence in the same invocation
      (procedure in `docs/agents/local-quality-gate.md`). -->
 
+## Design evidence
+
+<!-- Required when the change touches a surface a user can see; write "Not a design change" when it
+     does not. The contract and the evidence table are in `docs/design-delivery.md`. -->
+
+- Design issue and design name:
+- States covered, in light and dark:
+- Checklist result against the approved page:
+- Value check result:
+- Before and after captures:
+
 ## Risk
 
 <!-- low, medium, or high — and why. -->
