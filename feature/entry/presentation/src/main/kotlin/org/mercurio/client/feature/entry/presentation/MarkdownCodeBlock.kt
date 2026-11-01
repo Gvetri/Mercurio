@@ -27,13 +27,14 @@ internal fun MarkdownCodeBlock(
     block: MarkdownBlock.CodeBlock,
     onCopy: (String) -> Unit,
 ) {
-    val spacing = LocalHermesDesignTokens.current.spacing
+    val tokens = LocalHermesDesignTokens.current
+    val spacing = tokens.spacing
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = tokens.syntaxColors.codeSurface,
                     shape = MaterialTheme.shapes.small,
                 )
                 .padding(spacing.s),

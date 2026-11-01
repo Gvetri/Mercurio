@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -52,7 +53,7 @@ class SessionShellTest {
         )
 
         composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithText("mercurio").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(1)
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
     }
@@ -72,7 +73,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
         composeTestRule.onNodeWithText("Second Session").assertIsDisplayed()
         composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
@@ -87,7 +88,7 @@ class SessionShellTest {
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun list_pane_controls_are_disabled_while_creation_is_open() {
+    fun list_pane_rows_and_the_new_session_row_are_disabled_while_creation_is_submitting() {
         setShellContent(
             sessionList =
                 SessionListUiState(
@@ -97,9 +98,8 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNode(hasText("Create Session") and hasClickAction()).assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Refresh").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Load more Sessions").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("new session").assertIsNotEnabled()
+        composeTestRule.onNode(hasText("First Session") and hasClickAction()).assertIsNotEnabled()
     }
 
     /**
@@ -110,7 +110,7 @@ class SessionShellTest {
     @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun settings_entry_is_disabled_while_creation_is_open() {
+    fun settings_entry_stays_available_while_creation_is_submitting() {
         setShellContent(
             sessionList =
                 SessionListUiState(
@@ -119,7 +119,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithContentDescription("Settings").assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription("Settings").assertIsEnabled()
     }
 
     @Test
@@ -132,7 +132,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
         composeTestRule.onNodeWithText("No Session selected").assertIsDisplayed()
         composeTestRule
             .onNodeWithText("Select a Session from the list to view its conversation.")
@@ -158,8 +158,6 @@ class SessionShellTest {
         composeTestRule
             .onNode(hasText("Second Session") and hasClickAction())
             .assertIsNotSelected()
-        composeTestRule.onAllNodesWithText("Open").assertCountEquals(1)
-        composeTestRule.onNodeWithText("Open").assertIsDisplayed()
     }
 
     @Test
@@ -174,7 +172,10 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithText("Open").assertIsDisplayed()
+        composeTestRule
+            .onNode(hasText(longTitle) and hasClickAction())
+            .assertIsDisplayed()
+            .assertIsSelected()
     }
 
     @Test
@@ -200,9 +201,9 @@ class SessionShellTest {
         }
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
-        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
     }
 
     @Test
@@ -228,10 +229,10 @@ class SessionShellTest {
         }
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
-        sessionList.assertHeightIsAtLeast(120.dp)
-        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
+        sessionList.assertHeightIsAtLeast(48.dp)
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
     }
 
     @Test
@@ -258,10 +259,10 @@ class SessionShellTest {
         }
 
         val sessionList = composeTestRule.onNodeWithTag("session-list")
-        sessionList.assertHeightIsAtLeast(120.dp)
-        composeTestRule.onNodeWithText("Try again").performScrollTo().assertIsDisplayed()
+        sessionList.assertHeightIsAtLeast(48.dp)
         sessionList.performScrollToIndex(0)
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
     }
 
     @Test
@@ -372,20 +373,17 @@ class SessionShellTest {
         val state = mutableStateOf(entryState(SessionListUiState(isLoading = true)))
         setShellContent(state)
 
-        composeTestRule.onNodeWithText("Loading Sessions…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("loading sessions…").assertIsDisplayed()
         composeTestRule.onNodeWithText("No Session selected").assertIsDisplayed()
 
         composeTestRule.runOnIdle { state.value = entryState(SessionListUiState()) }
-        composeTestRule.onNodeWithText("No Sessions on this Gateway").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No sessions").assertIsDisplayed()
 
         composeTestRule.runOnIdle {
             state.value = entryState(SessionListUiState(isStale = true, isUnavailable = true))
         }
         composeTestRule.onNodeWithText("Sessions are unavailable").assertIsDisplayed()
-        composeTestRule.onNodeWithText(
-            "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers.",
-        )
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
     }
 
     @Test
@@ -415,7 +413,7 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
         composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Send").assertIsDisplayed().assertHasClickAction()
     }
@@ -436,9 +434,9 @@ class SessionShellTest {
                 )
         }
         composeTestRule
-            .onNodeWithText("Create Session")
+            .onNodeWithText("new session")
             .assertHasClickAction()
-            .assertHeightIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(38.dp)
         composeTestRule
             .onNodeWithText("First Session")
             .assertHasClickAction()
@@ -452,19 +450,18 @@ class SessionShellTest {
             SessionListUiState(sessions = listOf(session("first", "First Session"))),
         )
 
-        composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
 
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
     }
 
     @Test
     @Config(qualifiers = "w891dp-h411dp")
-    fun short_landscape_window_reaches_the_list_controls_without_rows() {
+    fun short_landscape_window_reaches_the_empty_state_and_the_new_session_row() {
         setShellContent(sessionList = SessionListUiState())
 
-        composeTestRule.onNodeWithTag("session-list").performScrollToIndex(1)
-
-        composeTestRule.onNodeWithText("Refresh").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("No sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("new session").assertIsDisplayed().assertHasClickAction()
     }
 
     @Test
@@ -505,7 +502,7 @@ class SessionShellTest {
         setShellContent(sessionList = SessionListUiState(sessions = listOf(session("first", "First Session"))))
 
         composeTestRule.onNodeWithText("No Session selected").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
     }
 
     @Test
@@ -516,49 +513,18 @@ class SessionShellTest {
         composeTestRule.onNodeWithText("No Session selected").assertIsDisplayed()
     }
 
-    /**
-     * D07: creation keeps the notes-filtered list in place, and the cleared selection is not
-     * restored behind the standard dialog on either layout.
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-     * is the same, and the real dialog window is exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun create_dialog_opens_over_the_filtered_list_without_restoring_a_selection() {
-        setShellContent(
-            sessionList =
-                SessionListUiState(
-                    sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
-                    searchQuery = "notes",
-                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
-                ),
-        )
-
-        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
-        composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
-    }
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the asserted behavior
-     * is the same, and the real dialog window is exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun two_pane_create_dialog_keeps_the_filtered_list_and_the_cleared_selection() {
+    fun creation_stays_on_the_filtered_two_pane_list_without_restoring_a_selection() {
         setShellContent(
             sessionList =
                 SessionListUiState(
                     sessions = listOf(session("design-notes", "Design notes"), session("other", "Other session")),
                     searchQuery = "notes",
-                    createSession = SessionCreationUiState(titleDraft = "notes draft"),
+                    createSession = SessionCreationUiState(isSubmitting = true),
                 ),
         )
 
-        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Design notes", useUnmergedTree = true).assertExists()
         composeTestRule.onNodeWithText("Other session", useUnmergedTree = true).assertDoesNotExist()
         composeTestRule.onNodeWithText("No Session selected").assertExists()
@@ -589,7 +555,7 @@ class SessionShellTest {
 
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun list_pane_controls_are_disabled_while_the_open_conversation_reconciles() {
+    fun list_pane_rows_are_disabled_while_the_open_conversation_reconciles() {
         setShellContent(
             sessionList =
                 SessionListUiState(
@@ -604,8 +570,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithText("Refresh").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Load more Sessions").assertIsNotEnabled()
+        composeTestRule.onNode(hasText("First Session") and hasClickAction()).assertIsNotEnabled()
     }
 
     private fun phoneConfiguration(): Configuration =

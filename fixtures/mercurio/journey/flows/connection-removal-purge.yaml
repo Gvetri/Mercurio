@@ -42,5 +42,5 @@ name: connection-removal-purge
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
-- assertNotVisible: "The displayed Sessions are cached on this device. They are not live."
+- assertVisible: "gateway :: ready"
 - takeScreenshot: connection-removal-purge-reconnected

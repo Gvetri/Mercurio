@@ -13,7 +13,7 @@ name: sse-idle-gap-streaming
 - takeScreenshot: sse-idle-gap-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Alpha Session"
 - extendedWaitUntil:

@@ -320,10 +320,6 @@ class RunReconciliationStateHolderTest {
 
             val replacedRequest = privateField(holder, "sessionJob") as? Job
             holder.onEvent(EntryUiEvent.CreateSessionClicked)
-            awaitReconciliationState(holder) { it.sessionList?.createSession != null }
-            assertNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            registry.release.countDown()
-
             runBlocking { replacedRequest?.join() }
 
             assertFalse(

@@ -1,28 +1,25 @@
 package org.mercurio.client.feature.entry.presentation
 
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.unit.Density
+import androidx.compose.ui.test.performTouchInput
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -31,32 +28,15 @@ class EntryScreenSessionListTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun session_list_renders_server_metadata_pinned_first_and_untitled_fallback() {
+    fun session_list_renders_server_metadata_in_pinned_and_all_sessions_groups() {
         val events = mutableListOf<EntryUiEvent>()
         val state =
-            EntryUiState(
-                title = "Gateway connected",
-                supportingText = "The Gateway contract was verified successfully.",
-                actionLabel = "Connected",
-                isConnected = true,
-                sessionList =
-                    SessionListUiState(
-                        sessions =
-                            listOf(
-                                SessionItemUiState(
-                                    id = SessionId("pinned"),
-                                    title = "Pinned title",
-                                    preview = "Pinned preview",
-                                    pinned = true,
-                                ),
-                                SessionItemUiState(
-                                    id = SessionId("untitled"),
-                                    title = "Untitled Session",
-                                    preview = null,
-                                    pinned = false,
-                                ),
-                            ),
-                        showFirstUseGuidance = true,
+            connectedState(
+                sessions =
+                    listOf(
+                        item("pinned", "Pinned title", "Pinned preview", pinned = true, time = "1h"),
+                        item("untitled", "New session", null, time = "now", pending = true),
+                        item("plain", "Plain title", "Plain preview", time = "2d"),
                     ),
             )
 
@@ -66,25 +46,22 @@ class EntryScreenSessionListTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Sessions").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("Select a Session to open its Gateway history. Refresh to load the latest server state.")
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
+        composeTestRule.onNodeWithText("PINNED").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ALL SESSIONS · 2").assertIsDisplayed()
         composeTestRule.onNodeWithText("Pinned title").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Pinned preview").assertIsDisplayed()
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
-        composeTestRule
-            .onNodeWithText("Untitled Session")
-            .performScrollTo()
-            .assertIsDisplayed()
-            .assertHasClickAction()
-            .performClick()
-        composeTestRule.onNodeWithText("Untitled Session").assertIsDisplayed()
-        assertEquals(EntryUiEvent.SessionClicked(SessionId("untitled")), events.single())
+        composeTestRule.onNodeWithText("1h").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Generating title…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("new session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 sessions · connected").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: ready").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Plain title").performClick()
+        assertEquals(listOf(EntryUiEvent.SessionClicked(SessionId("plain"))), events)
     }
 
     @Test
-    fun screen_settings_entry_point_replaces_the_more_options_menu() {
+    fun settings_entry_point_is_the_bar_control_and_replaces_the_more_options_menu() {
         val events = mutableListOf<EntryUiEvent>()
         setConnectedListScreen(events)
 
@@ -95,212 +72,23 @@ class EntryScreenSessionListTest {
     }
 
     @Test
-    fun screen_settings_routes_change_credential_and_local_diagnostics() {
-        val events = mutableListOf<EntryUiEvent>()
-        setConnectedListScreen(events, isSettingsOpen = true)
-
-        composeTestRule.onNodeWithText("Change Gateway credential").assertIsEnabled().performClick()
-        composeTestRule.onNodeWithText("Local diagnostics").assertIsEnabled().performClick()
-
-        assertEquals(
-            listOf(
-                EntryUiEvent.ChangeGatewayCredentialClicked,
-                EntryUiEvent.OpenLocalDiagnosticsClicked,
-            ),
-            events,
-        )
-    }
-
-    @Test
-    fun gateway_removal_is_confirmed_before_the_existing_action_is_invoked_once() {
+    fun search_row_forwards_the_query_and_keeps_the_clear_control() {
         val events = mutableListOf<EntryUiEvent>()
         val state =
-            mutableStateOf(
-                EntryUiState(
-                    title = "Gateway connected",
-                    supportingText = "The Gateway contract was verified successfully.",
-                    actionLabel = "Connected",
-                    isConnected = true,
-                    isSettingsOpen = true,
-                    clientVersion = "demo-build.1",
-                    sessionList = SessionListUiState(),
-                ),
+            connectedState(
+                sessions = listOf(item("existing", "Existing Session", "Previous preview")),
             )
+        val current = androidx.compose.runtime.mutableStateOf(state)
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
-                    state = state.value,
-                    onEvent = { event ->
-                        events.add(event)
-                        if (event == EntryUiEvent.RemoveGatewayConnectionClicked) {
-                            state.value = state.value.copy(isRemoveConfirmationOpen = true)
-                        }
-                    },
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Remove Gateway Connection").performClick()
-
-        assertEquals(listOf(EntryUiEvent.RemoveGatewayConnectionClicked), events)
-        assertTrue(events.none { it == EntryUiEvent.ConfirmRemoveGatewayConnectionClicked })
-        composeTestRule
-            .onNodeWithText(
-                "Remove the saved endpoint and credential from this device. " +
-                    "Remote Sessions and Runs are not deleted or cancelled.",
-            )
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Remove").assertHasClickAction().performClick()
-
-        assertEquals(
-            listOf(
-                EntryUiEvent.RemoveGatewayConnectionClicked,
-                EntryUiEvent.ConfirmRemoveGatewayConnectionClicked,
-            ),
-            events,
-        )
-    }
-
-    @Test
-    fun gateway_removal_confirmation_cancel_changes_nothing() {
-        val events = mutableListOf<EntryUiEvent>()
-        val state =
-            mutableStateOf(
-                EntryUiState(
-                    title = "Gateway connected",
-                    supportingText = "The Gateway contract was verified successfully.",
-                    actionLabel = "Connected",
-                    isConnected = true,
-                    isSettingsOpen = true,
-                    clientVersion = "demo-build.1",
-                    sessionList = SessionListUiState(),
-                    isRemoveConfirmationOpen = true,
-                ),
-            )
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state = state.value,
-                    onEvent = { event ->
-                        events.add(event)
-                        if (event == EntryUiEvent.CancelRemoveGatewayConnectionClicked) {
-                            state.value = state.value.copy(isRemoveConfirmationOpen = false)
-                        }
-                    },
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
-
-        assertEquals(listOf(EntryUiEvent.CancelRemoveGatewayConnectionClicked), events)
-        composeTestRule.onNodeWithText("Remove").assertDoesNotExist()
-    }
-
-    private fun setConnectedListScreen(
-        events: MutableList<EntryUiEvent>,
-        isSettingsOpen: Boolean = false,
-    ) {
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            isSettingsOpen = isSettingsOpen,
-                            clientVersion = "demo-build.1",
-                            sessionList = SessionListUiState(),
-                        ),
-                    onEvent = events::add,
-                )
-            }
-        }
-    }
-
-    @Test
-    fun no_search_results_keep_the_query_visible_and_expose_clear_search() {
-        val events = mutableListOf<EntryUiEvent>()
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList = SessionListUiState(searchQuery = "missing session"),
-                        ),
-                    onEvent = events::add,
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Search Sessions").assertIsDisplayed()
-        composeTestRule.onNodeWithText("missing session").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No Sessions match this search").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Clear search").assertHasClickAction().performClick()
-
-        assertEquals(listOf(EntryUiEvent.ClearSessionSearchClicked), events)
-    }
-
-    @Test
-    fun unavailable_empty_session_list_uses_recovery_state_instead_of_valid_empty_state() {
-        val events = mutableListOf<EntryUiEvent>()
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    isStale = true,
-                                    isUnavailable = true,
-                                    errorCategory = SessionListErrorCategory.GATEWAY_UNAVAILABLE,
-                                ),
-                        ),
-                    onEvent = events::add,
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Sessions are unavailable").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No Sessions on this Gateway").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
-
-        assertEquals(listOf(EntryUiEvent.RefreshSessionListClicked), events)
-    }
-
-    @Test
-    fun search_control_forwards_the_current_query_and_keeps_it_visible() {
-        val events = mutableListOf<EntryUiEvent>()
-        val state =
-            mutableStateOf(
-                EntryUiState(
-                    title = "Gateway connected",
-                    supportingText = "The Gateway contract was verified successfully.",
-                    actionLabel = "Connected",
-                    isConnected = true,
-                    sessionList = SessionListUiState(),
-                ),
-            )
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state = state.value,
+                    state = current.value,
                     onEvent = { event ->
                         events += event
                         if (event is EntryUiEvent.SessionSearchQueryChanged) {
-                            state.value =
-                                state.value.copy(
-                                    sessionList = state.value.sessionList?.copy(searchQuery = event.value),
+                            current.value =
+                                current.value.copy(
+                                    sessionList = current.value.sessionList?.copy(searchQuery = event.value),
                                 )
                         }
                     },
@@ -308,217 +96,282 @@ class EntryScreenSessionListTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Search Sessions").performTextInput("needle")
-        composeTestRule.runOnIdle {
-            assertEquals("needle", requireNotNull(state.value.sessionList).searchQuery)
-        }
+        composeTestRule.onNodeWithText("search sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Search Sessions").performTextInput("needle")
         composeTestRule.onNodeWithText("needle").assertIsDisplayed()
         assertEquals(listOf(EntryUiEvent.SessionSearchQueryChanged("needle")), events)
+
+        events.clear()
+        composeTestRule.onNodeWithContentDescription("Clear search").performClick()
+        assertEquals(listOf(EntryUiEvent.ClearSessionSearchClicked), events)
     }
 
     @Test
-    fun search_controls_show_the_persistent_loaded_scope_caption() {
+    fun no_match_state_keeps_the_query_and_uses_the_loaded_scope_copy() {
         val events = mutableListOf<EntryUiEvent>()
-        setConnectedListScreen(events)
+        val state =
+            connectedState(
+                sessions = listOf(item("existing", "Existing Session", "Previous preview")),
+                searchQuery = "missing session",
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = events::add)
+            }
+        }
 
+        composeTestRule.onNodeWithText("missing session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No sessions match").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("Search loaded titles and previews.")
+            .onNodeWithText("Search covers the titles and previews already loaded.")
             .assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Clear search").assertHasClickAction().performClick()
+        assertEquals(listOf(EntryUiEvent.ClearSessionSearchClicked), events)
     }
 
     @Test
-    fun session_row_action_trigger_sits_inside_the_row_at_the_trailing_edge() {
+    fun empty_session_list_uses_the_approved_empty_copy_and_keeps_the_new_session_row() {
         val events = mutableListOf<EntryUiEvent>()
+        val state = connectedState(sessions = emptyList())
         composeTestRule.setContent {
             HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    sessions =
-                                        listOf(
-                                            SessionItemUiState(
-                                                id = SessionId("trigger"),
-                                                title = "Trigger Session",
-                                                preview = null,
-                                                pinned = false,
-                                            ),
-                                        ),
-                                ),
-                        ),
-                    onEvent = events::add,
-                )
+                EntryScreen(state = state, onEvent = events::add)
             }
         }
 
-        val rowBounds = composeTestRule.onNodeWithText("Trigger Session").fetchSemanticsNode().boundsInRoot
-        val triggerBounds =
-            composeTestRule
-                .onNodeWithContentDescription("Session actions for Trigger Session")
-                .fetchSemanticsNode()
-                .boundsInRoot
-
-        assertTrue(triggerBounds.top >= rowBounds.top)
-        assertTrue(triggerBounds.bottom <= rowBounds.bottom)
-        assertEquals(rowBounds.right, triggerBounds.right, 1f)
-        assertTrue(events.isEmpty())
+        composeTestRule.onNodeWithText("No sessions").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("The Gateway returned no sessions. Create one to start.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("0 sessions · connected").assertIsDisplayed()
+        composeTestRule.onNodeWithText("new session").assertHasClickAction().performClick()
+        assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
     }
 
     @Test
-    fun local_search_keeps_matching_sessions_visible_without_a_search_progress_state() {
+    fun unavailable_empty_list_uses_the_recovery_state_instead_of_the_valid_empty_state() {
+        val events = mutableListOf<EntryUiEvent>()
+        val state =
+            connectedState(
+                sessions = emptyList(),
+                isStale = true,
+                isUnavailable = true,
+            )
         composeTestRule.setContent {
             HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    sessions =
-                                        listOf(
-                                            SessionItemUiState(
-                                                id = SessionId("existing"),
-                                                title = "Existing Session",
-                                                preview = "Previous preview",
-                                                pinned = false,
-                                            ),
-                                        ),
-                                    searchQuery = "Existing",
-                                ),
-                        ),
-                    onEvent = {},
-                )
+                EntryScreen(state = state, onEvent = events::add)
             }
         }
 
-        composeTestRule.onNodeWithText("Existing Session").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Searching Sessions…").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Sessions are unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
+
+        assertEquals(listOf(EntryUiEvent.RefreshSessionListClicked), events)
     }
 
     @Test
-    fun session_list_search_and_pagination_controls_remain_usable_at_increased_font_scale() {
-        val events = mutableListOf<EntryUiEvent>()
+    fun cached_unavailable_list_keeps_the_rows_and_reports_the_offline_gateway() {
+        val state =
+            connectedState(
+                sessions = listOf(item("cached", "Cached Session", "Cached preview")),
+                isStale = true,
+                isUnavailable = true,
+                isCached = true,
+            )
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("Cached Session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 session · cached").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
+    }
+
+    @Test
+    fun loading_first_read_shows_skeleton_rows_and_the_footer_label() {
+        val state = connectedState(sessions = emptyList(), isLoading = true)
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("loading sessions…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("connecting…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: waiting").assertIsDisplayed()
+    }
+
+    @Test
+    fun pagination_uses_the_footer_and_has_no_load_more_control() {
+        val state =
+            connectedState(
+                sessions = listOf(item("first", "First Session", null)),
+                nextOffset = 20,
+                isLoadingMore = true,
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("Load more Sessions").assertDoesNotExist()
+        composeTestRule.onAllNodesWithText("loading more…").assertCountEquals(2)
+    }
+
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun holding_a_row_opens_the_context_menu_with_pin_rename_and_delete() {
+        val events = mutableListOf<EntryUiEvent>()
+        val state =
+            connectedState(
+                sessions = listOf(item("held", "Held Session", "Held preview")),
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = events::add)
+            }
+        }
+
+        composeTestRule.onNodeWithText("Held Session").performTouchInput { longClick() }
+
+        composeTestRule.onNodeWithText("Pin").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Rename").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").assertIsDisplayed().performClick()
+        assertEquals(listOf(EntryUiEvent.DeleteSessionClicked(SessionId("held"))), events)
+    }
+
+    @Test
+    fun inline_rename_offers_the_filled_check_and_the_neutral_cross() {
+        val events = mutableListOf<EntryUiEvent>()
+        val sessionId = SessionId("rename")
+        val state =
+            connectedState(
+                sessions = listOf(item("rename", "Rename me", null)),
+                sessionMutations =
+                    mapOf(
+                        sessionId to SessionMutationUiState(rename = SessionRenameUiState(titleDraft = "Renamed")),
+                    ),
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = events::add)
+            }
+        }
+
+        composeTestRule.onNodeWithText("Renamed").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Confirm rename").performClick()
+        composeTestRule.onNodeWithContentDescription("Cancel rename").performClick()
+
+        assertEquals(
+            listOf(
+                EntryUiEvent.ConfirmRenameSessionClicked(sessionId),
+                EntryUiEvent.CancelRenameSessionClicked(sessionId),
+            ),
+            events,
+        )
+    }
+
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun delete_confirmation_names_the_session_and_keeps_cancel_available() {
+        val events = mutableListOf<EntryUiEvent>()
+        val sessionId = SessionId("delete")
+        val state =
+            connectedState(
+                sessions = listOf(item("delete", "Delete me", null)),
+                sessionMutations = mapOf(sessionId to SessionMutationUiState(delete = SessionDeleteUiState())),
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = events::add)
+            }
+        }
+
+        composeTestRule.onNodeWithText("Delete “Delete me”?").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("The session and its transcript are removed from this client. This cannot be undone here.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
+        assertEquals(listOf(EntryUiEvent.CancelDeleteSessionClicked(sessionId)), events)
+    }
+
+    @Test
+    fun session_search_and_the_new_session_row_remain_reachable_at_increased_font_scale() {
+        val events = mutableListOf<EntryUiEvent>()
+        val state = connectedState(sessions = listOf(item("font-scaled", "Font scaled Session", null)))
+        composeTestRule.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides
+                    androidx.compose.ui.unit.Density(1f, 2f),
+            ) {
                 HermesTheme {
-                    EntryScreen(
-                        state =
-                            EntryUiState(
-                                title = "Gateway connected",
-                                supportingText = "The Gateway contract was verified successfully.",
-                                actionLabel = "Connected",
-                                isConnected = true,
-                                sessionList =
-                                    SessionListUiState(
-                                        sessions =
-                                            listOf(
-                                                SessionItemUiState(
-                                                    id = SessionId("font-scaled"),
-                                                    title = "Font scaled Session",
-                                                    preview = "Preview remains readable",
-                                                    pinned = false,
-                                                ),
-                                            ),
-                                        nextOffset = 1,
-                                    ),
-                            ),
-                        onEvent = events::add,
-                    )
+                    EntryScreen(state = state, onEvent = events::add)
                 }
             }
         }
 
-        composeTestRule.onNodeWithText("Search Sessions").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("Load more Sessions")
-            .assertIsDisplayed()
-            .assertHasClickAction()
-            .performClick()
-        assertEquals(listOf(EntryUiEvent.LoadMoreSessionsClicked), events)
+        composeTestRule.onNodeWithContentDescription("Search Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithText("new session").assertIsEnabled().performClick()
+        assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
     }
 
-    @Test
-    fun paginated_session_list_exposes_loading_more_feedback_and_action() {
-        val events = mutableListOf<EntryUiEvent>()
-        val state =
-            mutableStateOf(
+    private fun setConnectedListScreen(events: MutableList<EntryUiEvent>) {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = connectedState(sessions = emptyList()), onEvent = events::add)
+            }
+        }
+    }
+
+    private fun connectedState(
+        sessions: List<SessionItemUiState>,
+        searchQuery: String = "",
+        isLoading: Boolean = false,
+        isStale: Boolean = false,
+        isUnavailable: Boolean = false,
+        isCached: Boolean = false,
+        isLoadingMore: Boolean = false,
+        nextOffset: Int? = null,
+        sessionMutations: Map<SessionId, SessionMutationUiState> = emptyMap(),
+    ): EntryUiState =
+        EntryUiState(
+            title = "Gateway connected",
+            supportingText = "The Gateway contract was verified successfully.",
+            actionLabel = "Connected",
+            isConnected = true,
+            sessionList =
                 SessionListUiState(
-                    sessions =
-                        listOf(
-                            SessionItemUiState(
-                                id = SessionId("first"),
-                                title = "First Session",
-                                preview = null,
-                                pinned = false,
-                            ),
-                        ),
-                    nextOffset = 1,
+                    sessions = sessions,
+                    searchQuery = searchQuery,
+                    isLoading = isLoading,
+                    isStale = isStale,
+                    isUnavailable = isUnavailable,
+                    isCached = isCached,
+                    isLoadingMore = isLoadingMore,
+                    nextOffset = nextOffset,
+                    sessionMutations = sessionMutations,
                 ),
-            )
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList = state.value,
-                        ),
-                    onEvent = events::add,
-                )
-            }
-        }
+        )
 
-        composeTestRule.onNodeWithText("Load more Sessions").assertHasClickAction().performClick()
-        assertEquals(listOf(EntryUiEvent.LoadMoreSessionsClicked), events)
-
-        composeTestRule.runOnIdle {
-            state.value = state.value.copy(isLoadingMore = true)
-        }
-        composeTestRule
-            .onNodeWithText("Loading more Sessions…")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Load more Sessions").assertDoesNotExist()
-    }
-
-    @Test
-    fun empty_session_list_has_gateway_guidance_and_refresh_action_without_demo_content() {
-        val events = mutableListOf<EntryUiEvent>()
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    showFirstUseGuidance = true,
-                                ),
-                        ),
-                    onEvent = events::add,
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("No Sessions on this Gateway").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The Gateway returned no Sessions. Create one to get started.")
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Refresh").assertHasClickAction().performClick()
-        assertEquals(listOf(EntryUiEvent.RefreshSessionListClicked), events)
-    }
+    private fun item(
+        id: String,
+        title: String,
+        preview: String?,
+        pinned: Boolean = false,
+        time: String = "—",
+        pending: Boolean = false,
+    ): SessionItemUiState =
+        SessionItemUiState(
+            id = SessionId(id),
+            title = title,
+            preview = preview,
+            pinned = pinned,
+            lastActiveLabel = time,
+            isPendingTitle = pending,
+        )
 }

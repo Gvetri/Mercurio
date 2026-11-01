@@ -13,51 +13,36 @@ name: pagination-search
 - takeScreenshot: pagination-search-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - assertVisible: "Search Alpha One"
-- repeat:
-    times: 4
-    while:
-      notVisible:
-        text: "Search Beta Two"
-    commands:
-      - swipe:
-          start: "93%, 69%"
-          end: "93%, 57%"
-          duration: 500
 - assertVisible: "Search Beta Two"
 - assertNotVisible: "Search Gamma Three"
 - repeat:
-    times: 2
-    commands:
-      - swipe:
-          start: "93%, 69%"
-          end: "93%, 57%"
-          duration: 500
-- assertVisible: "Load more Sessions"
-- tapOn: "Load more Sessions"
-- extendedWaitUntil:
-    visible: "Search Gamma Three"
-    timeout: 30000
-- tapOn: "Search Sessions"
-- inputText: "Gamma"
-- hideKeyboard
-- repeat:
-    times: 6
+    times: 8
     while:
       notVisible:
         text: "Search Gamma Three"
     commands:
       - swipe:
-          start: "93%, 62%"
-          end: "93%, 74%"
+          start: "50%, 70%"
+          end: "50%, 35%"
           duration: 500
 - extendedWaitUntil:
     visible: "Search Gamma Three"
     timeout: 30000
+- assertVisible: "Search Delta Four"
+- takeScreenshot: pagination-search-01-second-page-loaded
+- tapOn: "Search Sessions"
+- inputText: "Gamma"
+- hideKeyboard
+- extendedWaitUntil:
+    visible: "Search Gamma Three"
+    timeout: 30000
 - assertNotVisible: "Search Alpha One"
+- takeScreenshot: pagination-search-02-filtered
 - tapOn: "Clear search"
 - extendedWaitUntil:
     visible: "Search Alpha One"
     timeout: 30000
+- takeScreenshot: pagination-search-03-cleared

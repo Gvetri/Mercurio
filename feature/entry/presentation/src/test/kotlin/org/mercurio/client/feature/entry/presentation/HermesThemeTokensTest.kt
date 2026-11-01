@@ -22,11 +22,17 @@ class HermesThemeTokensTest {
     @Test
     fun light_and_dark_token_sets_expose_the_hermes_design_scales() {
         listOf(HermesLightTokens, HermesDarkTokens).forEach { tokens ->
+            assertEquals(2.dp, tokens.spacing.xxs)
             assertEquals(4.dp, tokens.spacing.xs)
             assertEquals(8.dp, tokens.spacing.s)
             assertEquals(12.dp, tokens.spacing.m)
             assertEquals(16.dp, tokens.spacing.l)
             assertEquals(24.dp, tokens.spacing.xl)
+            assertEquals(32.dp, tokens.spacing.xxl)
+            assertEquals(48.dp, tokens.spacing.xxxl)
+            assertEquals(0.dp, tokens.elevation.level0)
+            assertEquals(3.dp, tokens.elevation.level2)
+            assertEquals(12.dp, tokens.elevation.level5)
             assertEquals(3.dp, tokens.elevation.raised)
             assertNotNull(tokens.typography.headlineMedium)
             assertNotNull(tokens.typography.bodyLarge)
@@ -47,7 +53,7 @@ class HermesThemeTokensTest {
             }
         }
 
-        assertEquals(Color(0xFFF9F9FF), background)
+        assertEquals(Color(0xFFECEEF1), background)
         assertEquals(24.dp, spacingXl)
     }
 
@@ -61,7 +67,7 @@ class HermesThemeTokensTest {
             }
         }
 
-        assertEquals(Color(0xFF121318), background)
+        assertEquals(Color(0xFF2B2D30), background)
     }
 
     @Test
@@ -77,8 +83,8 @@ class HermesThemeTokensTest {
             }
         }
 
-        assertEquals(Color(0xFF121318), darkBackground)
-        assertEquals(Color(0xFFF9F9FF), lightBackground)
+        assertEquals(Color(0xFF2B2D30), darkBackground)
+        assertEquals(Color(0xFFECEEF1), lightBackground)
     }
 
     @Test

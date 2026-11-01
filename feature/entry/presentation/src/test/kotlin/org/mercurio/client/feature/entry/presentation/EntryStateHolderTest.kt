@@ -301,7 +301,7 @@ class EntryStateHolderTest {
             listOf("pinned-older", "pinned-newer", "unpinned-older", "unpinned-newer"),
             sessionList.sessions.map { it.id.value },
         )
-        assertEquals("Untitled Session", sessionList.sessions.first().title)
+        assertEquals("New session", sessionList.sessions.first().title)
         assertEquals(listOf(SessionListRequest()), gateway.listRequests)
         assertTrue(sessionList.showFirstUseGuidance)
 
@@ -535,8 +535,6 @@ class EntryStateHolderTest {
         }
 
         holder.onEvent(EntryUiEvent.CreateSessionClicked)
-        holder.onEvent(EntryUiEvent.CreateSessionTitleChanged("Created"))
-        holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
         assertTrue(gateway.createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
         assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession?.isSubmitting == true)
 
@@ -548,8 +546,8 @@ class EntryStateHolderTest {
         assertEquals(listOf(SessionListRequest()), gateway.listRequests)
 
         gateway.completeCreate()
-        awaitState(holder, "the created Session") {
-            it.sessionList?.openedSession?.session?.id == created.id
+        awaitState(holder, "the created Session row") {
+            it.sessionList?.sessions?.any { session -> session.id == created.id } == true
         }
         holder.close()
     }

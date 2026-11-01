@@ -21,6 +21,8 @@ import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
+import java.math.BigDecimal
+import java.time.Instant
 
 internal object GatewayJsonParser {
     private val json = Json
@@ -242,6 +244,7 @@ private object GatewayJsonElements {
             title = GatewayJsonFields.requiredNullableString(session, "title", operation),
             preview = GatewayJsonFields.optionalString(session, "preview", operation),
             pinned = GatewayJsonFields.requiredBoolean(session, "pinned", operation),
+            lastActive = GatewayJsonFields.optionalEpochSeconds(session, "last_active", operation),
         )
     }
 
@@ -324,6 +327,8 @@ private object GatewayJsonElements {
 }
 
 private object GatewayJsonFields {
+    private const val NANOSECOND_SCALE = 9
+
     fun requireObjectField(
         root: JsonObject,
         path: String,
@@ -406,6 +411,28 @@ private object GatewayJsonFields {
         val value = root[path]
         if (value == null || value == JsonNull) return null
         return stringValue(value, path, operation)
+    }
+
+    fun optionalEpochSeconds(
+        root: JsonObject,
+        path: String,
+        operation: String,
+    ): Instant? {
+        val value = root[path]
+        if (value == null || value == JsonNull) return null
+        if (value !is JsonPrimitive || value.isString) {
+            invalid(operation, "field '$path' must be epoch seconds or null")
+        }
+        val seconds =
+            value.content.toBigDecimalOrNull()
+                ?: invalid(operation, "field '$path' must be epoch seconds or null")
+        return runCatching {
+            val wholeSeconds = seconds.toBigInteger().longValueExact()
+            val nanos = seconds.remainder(BigDecimal.ONE).movePointRight(NANOSECOND_SCALE).toLong()
+            Instant.ofEpochSecond(wholeSeconds, nanos)
+        }.getOrElse {
+            invalid(operation, "field '$path' must be finite epoch seconds")
+        }
     }
 
     fun stringValue(

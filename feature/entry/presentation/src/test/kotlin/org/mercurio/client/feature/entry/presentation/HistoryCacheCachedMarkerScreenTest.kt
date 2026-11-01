@@ -28,12 +28,8 @@ class HistoryCacheCachedMarkerScreenTest {
         )
 
         composeTestRule.onNodeWithText("Row Session 01").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The displayed Sessions are cached on this device. They are not live.")
-            .assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The displayed Session data may be stale.")
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("20 sessions · cached").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
     }
 
     @Test
@@ -48,9 +44,8 @@ class HistoryCacheCachedMarkerScreenTest {
         )
 
         composeTestRule.onNodeWithText("Row Session 01").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The displayed Sessions are cached on this device. They are not live.")
-            .assertDoesNotExist()
+        composeTestRule.onNodeWithText("20 sessions · connected").assertIsDisplayed()
+        composeTestRule.onNodeWithText("20 sessions · cached").assertDoesNotExist()
     }
 
     @Test
@@ -100,9 +95,7 @@ class HistoryCacheCachedMarkerScreenTest {
         )
 
         composeTestRule.onNodeWithText("Row Session 01").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The displayed Sessions are cached on this device. They are not live.")
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("20 sessions · cached").assertIsDisplayed()
     }
 
     @Test
@@ -123,7 +116,7 @@ class HistoryCacheCachedMarkerScreenTest {
     }
 
     @Test
-    fun a_cached_list_without_a_cached_transcript_keeps_its_marker_and_reports_the_session_unavailable() {
+    fun a_cached_list_without_a_cached_transcript_keeps_its_marker_and_no_open_error() {
         setConnectedContent(
             SessionListUiState(
                 sessions = cachedRows(),
@@ -135,15 +128,13 @@ class HistoryCacheCachedMarkerScreenTest {
         )
 
         composeTestRule.onNodeWithText("Row Session 01").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The displayed Sessions are cached on this device. They are not live.")
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("20 sessions · cached").assertIsDisplayed()
         composeTestRule
             .onNodeWithText(
                 "This Session could not be opened. It may have been removed. " +
                     "Return to the list or refresh.",
             )
-            .assertIsDisplayed()
+            .assertDoesNotExist()
     }
 
     private fun setConnectedContent(sessionList: SessionListUiState) {

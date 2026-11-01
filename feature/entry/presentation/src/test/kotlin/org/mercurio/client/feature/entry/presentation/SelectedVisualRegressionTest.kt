@@ -1,16 +1,17 @@
 package org.mercurio.client.feature.entry.presentation
 
-import android.content.res.Configuration
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -23,7 +24,6 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
@@ -157,328 +157,253 @@ class SelectedVisualRegressionTest {
     }
 
     @Test
-    fun empty_session_list() {
-        setContent(
-            EntryUiState(
-                title = "Gateway connected",
-                supportingText = "",
-                actionLabel = "",
-                sessionList = SessionListUiState(showFirstUseGuidance = true),
-            ),
-        )
-
+    fun session_list_populated_light() {
+        setContent(connectedState(SessionListUiState(sessions = designSessions())))
         capture()
     }
 
-    @Test
-    fun populated_session_list() {
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    sessions =
-                        listOf(
-                            session(
-                                id = "pinned-session",
-                                title = "Release checklist",
-                                preview = "Review the release checklist.",
-                                pinned = true,
-                            ),
-                            session(
-                                id = "follow-up-session",
-                                title = "Follow-up Session",
-                                preview = "Plan the next step.",
-                            ),
-                        ),
-                ),
-            ),
-        )
-
-        capture()
-    }
-
-    @Test
-    fun session_list_unavailable() {
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    isStale = true,
-                    isUnavailable = true,
-                    errorCategory = SessionListErrorCategory.GATEWAY_UNAVAILABLE,
-                ),
-            ),
-        )
-
-        capture()
-    }
-
-    /**
-     * The screen menu and the removal confirmation are popup windows: the paused
-     * looper cannot settle them (robolectric/robolectric#8460), so they use LEGACY
-     * and a screen capture, the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun session_list_settings_open() {
-        setContent(
-            sessionListMenuState().copy(isSettingsOpen = true, clientVersion = "demo-build.1"),
-        )
-
-        captureScreen()
-    }
-
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun session_list_row_menu_open() {
-        setContent(sessionListMenuState())
-
-        composeTestRule
-            .onNodeWithContentDescription("Session actions for Release checklist")
-            .performScrollTo()
-            .performClick()
-
-        captureScreen()
-    }
-
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun gateway_removal_confirmation() {
-        setContent(sessionListMenuState().copy(isRemoveConfirmationOpen = true))
-
-        captureScreen()
-    }
-
-    private fun sessionListMenuState(): EntryUiState =
-        connectedState(
-            SessionListUiState(
-                sessions =
-                    listOf(
-                        session(
-                            id = "pinned-session",
-                            title = "Release checklist",
-                            preview = "Review the release checklist.",
-                            pinned = true,
-                        ),
-                        session(
-                            id = "follow-up-session",
-                            title = "Follow-up Session",
-                            preview = "Plan the next step.",
-                        ),
-                    ),
-            ),
-        )
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-     * the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun create_session() {
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    createSession = SessionCreationUiState(titleDraft = "Release checklist"),
-                ),
-            ),
-        )
-
-        captureScreen()
-    }
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-     * the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun create_session_empty() {
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    createSession = SessionCreationUiState(),
-                ),
-            ),
-        )
-
-        captureScreen()
-    }
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-     * the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun create_session_failure() {
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    createSession =
-                        SessionCreationUiState(
-                            titleDraft = "Release checklist",
-                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
-                        ),
-                ),
-            ),
-        )
-
-        captureScreen()
-    }
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-     * the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
     @Config(qualifiers = "w411dp-h891dp-night")
-    fun create_session_dark() {
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    createSession = SessionCreationUiState(titleDraft = "Release checklist"),
-                ),
-            ),
-        )
-
-        captureScreen()
-    }
-
-    /**
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-     * the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp-notnight")
-    fun create_session_two_pane() {
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    sessions =
-                        listOf(
-                            session("release-checklist", "Release checklist", "Review the release checklist."),
-                        ),
-                    createSession = SessionCreationUiState(titleDraft = "Release checklist"),
-                ),
-            ),
-        )
-
-        captureScreen()
-    }
-
-    /**
-     * The smallest deterministic constrained-height witness: at twice the font scale in a very
-     * short window, the bounded dialog text region scrolls (long draft plus the failure message)
-     * instead of pushing the Create/Cancel row out of the dialog.
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-     * the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    @Config(qualifiers = "w411dp-h289dp-notnight")
-    fun create_session_short_window_long_error() {
-        val application = RuntimeEnvironment.getApplication()
-        val configuration = Configuration(application.resources.configuration)
-        configuration.fontScale = 2f
-        application.resources.updateConfiguration(configuration, application.resources.displayMetrics)
-
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    createSession =
-                        SessionCreationUiState(
-                            titleDraft = "A deliberately long draft title that the input must keep reachable",
-                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
-                        ),
-                ),
-            ),
-        )
-
-        captureScreen()
-    }
-
-    /**
-     * The justified end state of the same witness: the bounded text region scrolls to the
-     * retained failure message while the action row stays fixed and visible.
-     * Robolectric's paused looper cannot settle the standard dialog window with its text field
-     * (robolectric/robolectric#8460). Only the looper mode changes here; the captured dialog is
-     * the same production composition the device journeys exercise.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    @Config(qualifiers = "w411dp-h289dp-notnight")
-    fun create_session_short_window_long_error_scrolled() {
-        val application = RuntimeEnvironment.getApplication()
-        val configuration = Configuration(application.resources.configuration)
-        configuration.fontScale = 2f
-        application.resources.updateConfiguration(configuration, application.resources.displayMetrics)
-
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    createSession =
-                        SessionCreationUiState(
-                            titleDraft = "A deliberately long draft title that the input must keep reachable",
-                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
-                        ),
-                ),
-            ),
-        )
-
-        composeTestRule
-            .onNodeWithText(SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-            .performScrollTo()
-        captureScreen()
-    }
-
-    @Test
-    fun rename_session_confirmation() {
-        val sessionId = SessionId("rename-session")
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    sessions = listOf(session("rename-session", "Current title", "Current preview")),
-                    sessionMutations =
-                        mapOf(
-                            sessionId to
-                                SessionMutationUiState(
-                                    rename = SessionRenameUiState(titleDraft = "Updated title"),
-                                ),
-                        ),
-                ),
-            ),
-        )
-
+    fun session_list_populated_dark() {
+        setContent(connectedState(SessionListUiState(sessions = designSessions())), darkTheme = true)
         capture()
     }
 
     @Test
-    fun delete_session_confirmation() {
-        val sessionId = SessionId("delete-session")
-        setContent(
-            connectedState(
-                SessionListUiState(
-                    sessions = listOf(session("delete-session", "Remote Session", "Remote preview")),
-                    sessionMutations =
-                        mapOf(
-                            sessionId to
-                                SessionMutationUiState(
-                                    delete = SessionDeleteUiState(),
-                                ),
-                        ),
-                ),
-            ),
-        )
-
+    fun session_list_selected_row_light() {
+        selectedRowPane(darkTheme = false)
         capture()
     }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_selected_row_dark() {
+        selectedRowPane(darkTheme = true)
+        capture()
+    }
+
+    @Test
+    fun session_list_empty_light() {
+        setContent(connectedState(SessionListUiState()))
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_empty_dark() {
+        setContent(connectedState(SessionListUiState()), darkTheme = true)
+        capture()
+    }
+
+    @Test
+    fun session_list_no_match_light() {
+        setContent(connectedState(SessionListUiState(sessions = designSessions(), searchQuery = "release")))
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_no_match_dark() {
+        setContent(
+            connectedState(SessionListUiState(sessions = designSessions(), searchQuery = "release")),
+            darkTheme = true,
+        )
+        capture()
+    }
+
+    @Test
+    fun session_list_loading_light() {
+        setContent(connectedState(SessionListUiState(isLoading = true)))
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_loading_dark() {
+        setContent(connectedState(SessionListUiState(isLoading = true)), darkTheme = true)
+        capture()
+    }
+
+    @Test
+    fun session_list_unavailable_light() {
+        setContent(connectedState(unavailableListState()))
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_unavailable_dark() {
+        setContent(connectedState(unavailableListState()), darkTheme = true)
+        capture()
+    }
+
+    @Test
+    fun session_list_pending_title_light() {
+        setContent(connectedState(SessionListUiState(sessions = pendingTitleSessions())))
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_pending_title_dark() {
+        setContent(connectedState(SessionListUiState(sessions = pendingTitleSessions())), darkTheme = true)
+        capture()
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.LEGACY)
+    fun session_list_row_actions_light() {
+        setContent(connectedState(SessionListUiState(sessions = designSessions())))
+        composeTestRule.onNodeWithText("Gateway connection check").performTouchInput { longClick() }
+        captureScreen()
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_row_actions_dark() {
+        setContent(connectedState(SessionListUiState(sessions = designSessions())), darkTheme = true)
+        composeTestRule.onNodeWithText("Gateway connection check").performTouchInput { longClick() }
+        captureScreen()
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.LEGACY)
+    fun session_list_delete_confirmation_light() {
+        setContent(connectedState(deleteConfirmationState()))
+        captureScreen()
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_delete_confirmation_dark() {
+        setContent(connectedState(deleteConfirmationState()), darkTheme = true)
+        captureScreen()
+    }
+
+    @Test
+    fun session_list_refreshing_light() {
+        setContent(connectedState(SessionListUiState(sessions = designSessions(), isRefreshing = true)))
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_refreshing_dark() {
+        setContent(
+            connectedState(SessionListUiState(sessions = designSessions(), isRefreshing = true)),
+            darkTheme = true,
+        )
+        capture()
+    }
+
+    @Test
+    fun session_list_loading_more_light() {
+        setContent(
+            connectedState(
+                SessionListUiState(sessions = designSessions(), isLoadingMore = true, nextOffset = 20),
+            ),
+        )
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_loading_more_dark() {
+        setContent(
+            connectedState(
+                SessionListUiState(sessions = designSessions(), isLoadingMore = true, nextOffset = 20),
+            ),
+            darkTheme = true,
+        )
+        capture()
+    }
+
+    @Test
+    fun session_list_rename_light() {
+        setContent(connectedState(renameListState()))
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun session_list_rename_dark() {
+        setContent(connectedState(renameListState()), darkTheme = true)
+        capture()
+    }
+
+    private fun designSessions(): List<SessionItemUiState> =
+        listOf(
+            session("nightly", "Nightly pipeline triage", "Two failing tests; retry green", pinned = true, time = "1h"),
+            session("tokens", "Design system tokens", "Primary, surface and outline roles", pinned = true, time = "2d"),
+            session(
+                id = "new",
+                title = "New session",
+                preview = null,
+                time = "now",
+                pending = true,
+            ),
+            session("gateway", "Gateway connection check", "Endpoint and stored credential", time = "30m"),
+            session("release", "Release checklist", "0.9.3 after the review window", time = "1d"),
+            session("vision", "Vision capture backlog", "Six screens need fresh captures", time = "1w"),
+            session("routing", "Model routing notes", "Aux routes stay on the flash tier", time = "2w"),
+        )
+
+    private fun pendingTitleSessions(): List<SessionItemUiState> =
+        designSessions().filterNot { it.id.value == "new" } +
+            session(
+                id = "new",
+                title = "New session",
+                preview = null,
+                time = "now",
+                pending = true,
+            )
+
+    private fun unavailableListState(): SessionListUiState =
+        SessionListUiState(
+            sessions = designSessions().take(4),
+            isStale = true,
+            isUnavailable = true,
+            isCached = true,
+            errorCategory = SessionListErrorCategory.GATEWAY_UNAVAILABLE,
+        )
+
+    private fun deleteConfirmationState(): SessionListUiState =
+        SessionListUiState(
+            sessions = designSessions(),
+            sessionMutations =
+                mapOf(
+                    SessionId("tokens") to
+                        SessionMutationUiState(
+                            delete = SessionDeleteUiState(),
+                        ),
+                ),
+        )
+
+    private fun renameListState(): SessionListUiState =
+        SessionListUiState(
+            sessions = designSessions(),
+            sessionMutations =
+                mapOf(
+                    SessionId("tokens") to
+                        SessionMutationUiState(
+                            rename = SessionRenameUiState(titleDraft = "Design system tok"),
+                        ),
+                ),
+        )
+
+    private fun selectedRowPane(darkTheme: Boolean): Unit =
+        composeTestRule.setContent {
+            HermesTheme(darkTheme = darkTheme) {
+                SessionListPane(
+                    state = SessionListUiState(sessions = designSessions()),
+                    onEvent = {},
+                    modifier = Modifier.fillMaxSize(),
+                    selectedSessionId = SessionId("gateway"),
+                )
+            }
+        }
 
     @Test
     fun empty_session_detail() {
@@ -680,12 +605,16 @@ class SelectedVisualRegressionTest {
         title: String,
         preview: String? = null,
         pinned: Boolean = false,
+        time: String = "—",
+        pending: Boolean = false,
     ): SessionItemUiState =
         SessionItemUiState(
             id = SessionId(id),
             title = title,
             preview = preview,
             pinned = pinned,
+            lastActiveLabel = time,
+            isPendingTitle = pending,
         )
 
     private fun capture() {

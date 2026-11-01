@@ -4,18 +4,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasAnyDescendant
-import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -26,7 +21,6 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -35,7 +29,7 @@ class EntryScreenSessionFlowsTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun populated_and_empty_session_lists_expose_the_explicit_create_action() {
+    fun populated_and_empty_session_lists_expose_the_new_session_row() {
         val events = mutableListOf<EntryUiEvent>()
         val state =
             mutableStateOf(
@@ -65,70 +59,20 @@ class EntryScreenSessionFlowsTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Create Session").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithText("new session").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
 
         events.clear()
         composeTestRule.runOnIdle {
             state.value = state.value.copy(sessionList = SessionListUiState())
         }
-        composeTestRule.onNodeWithText("Create Session").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithText("new session").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
     }
 
-    /**
-     * The standard dialog window with its text field cannot settle under Robolectric's
-     * paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
-     * mode changes here; the asserted behavior is the same, and the real dialog window is
-     * exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
     @Test
-    fun create_session_dialog_supports_optional_title_confirmation_and_cancellation() {
+    fun creation_failure_stays_on_the_list_without_a_title_dialog() {
         val events = mutableListOf<EntryUiEvent>()
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    createSession = SessionCreationUiState(),
-                                ),
-                        ),
-                    onEvent = events::add,
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Title (optional)").performTextInput("Draft title")
-        composeTestRule.onNodeWithText("Create").assertHasClickAction().performClick()
-        assertEquals(
-            listOf(
-                EntryUiEvent.CreateSessionTitleChanged("Draft title"),
-                EntryUiEvent.ConfirmCreateSessionClicked,
-            ),
-            events,
-        )
-
-        events.clear()
-        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
-        assertEquals(listOf(EntryUiEvent.CancelCreateSessionClicked), events)
-    }
-
-    /**
-     * The standard dialog window with its text field cannot settle under Robolectric's
-     * paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
-     * mode changes here; the asserted behavior is the same, and the real dialog window is
-     * exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun create_session_dialog_is_the_standard_dialog_with_the_approved_copy() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
@@ -149,48 +93,7 @@ class EntryScreenSessionFlowsTest {
                                                 pinned = false,
                                             ),
                                         ),
-                                    createSession = SessionCreationUiState(),
-                                ),
-                        ),
-                    onEvent = {},
-                )
-            }
-        }
-
-        composeTestRule.onNode(isDialog() and hasAnyDescendant(hasText("Create Session"))).assertExists()
-        composeTestRule.onNode(hasText("Create Session") and hasClickAction()).assertExists()
-        composeTestRule.onNodeWithText("Title (optional)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Leave blank for Untitled Session.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().assertIsEnabled()
-        composeTestRule.onNodeWithText("Create").assertHasClickAction().assertIsEnabled()
-    }
-
-    /**
-     * The standard dialog window with its text field cannot settle under Robolectric's
-     * paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
-     * mode changes here; the asserted behavior is the same, and the real dialog window is
-     * exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun confirmed_creation_failure_preserves_the_draft_and_exposes_an_explicit_retry() {
-        val events = mutableListOf<EntryUiEvent>()
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    createSession =
-                                        SessionCreationUiState(
-                                            titleDraft = "Preserved title",
-                                            errorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
-                                        ),
+                                    creationErrorCategory = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED,
                                 ),
                         ),
                     onEvent = events::add,
@@ -198,58 +101,12 @@ class EntryScreenSessionFlowsTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Preserved title").assertIsDisplayed()
+        composeTestRule.onNode(isDialog()).assertDoesNotExist()
         composeTestRule
             .onNodeWithText(SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
-        assertEquals(listOf(EntryUiEvent.ConfirmCreateSessionClicked), events)
-
-        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
-        assertEquals(
-            listOf(
-                EntryUiEvent.ConfirmCreateSessionClicked,
-                EntryUiEvent.CancelCreateSessionClicked,
-            ),
-            events,
-        )
-    }
-
-    /**
-     * The standard dialog window with its text field cannot settle under Robolectric's
-     * paused looper at a fixed phone size (robolectric/robolectric#8460). Only the looper
-     * mode changes here; the asserted behavior is the same, and the real dialog window is
-     * exercised on a device by the journey layer.
-     */
-    @LooperMode(LooperMode.Mode.LEGACY)
-    @Test
-    fun creation_pending_state_disables_confirmation_and_cancellation_with_progress() {
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    createSession =
-                                        SessionCreationUiState(
-                                            titleDraft = "Draft title",
-                                            isSubmitting = true,
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Creating Session…").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Create").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Cancel").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("new session").assertHasClickAction().performClick()
+        assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
     }
 
     @Test
@@ -272,7 +129,7 @@ class EntryScreenSessionFlowsTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Loading Sessions…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("loading sessions…").assertIsDisplayed()
         composeTestRule.runOnIdle {
             state.value =
                 SessionListUiState(
@@ -291,9 +148,8 @@ class EntryScreenSessionFlowsTest {
                 )
         }
 
-        composeTestRule.onNodeWithText(SessionListErrorCategory.GATEWAY_UNAVAILABLE.safeMessage).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
-        assertEquals(EntryUiEvent.RefreshSessionListClicked, events.single())
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Stale Session").assertIsDisplayed()
     }
 
     @Test
@@ -342,7 +198,7 @@ class EntryScreenSessionFlowsTest {
     }
 
     @Test
-    fun refresh_is_disabled_while_a_session_is_opening() {
+    fun new_session_row_is_disabled_while_a_session_is_opening() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
@@ -371,7 +227,7 @@ class EntryScreenSessionFlowsTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Refresh").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("new session").assertIsNotEnabled()
     }
 
     @Test

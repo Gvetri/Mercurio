@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.domain
 
+import java.time.Instant
 import java.util.Locale
 
 @JvmInline
@@ -33,6 +34,7 @@ data class Session(
     val title: String?,
     val preview: String?,
     val pinned: Boolean,
+    val lastActive: Instant? = null,
 )
 
 data class SessionPage(

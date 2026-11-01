@@ -13,7 +13,7 @@ name: cache-run-isolation
 - takeScreenshot: cache-run-isolation-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Offline Session"
 - extendedWaitUntil:
@@ -39,9 +39,9 @@ name: cache-run-isolation
 - hideKeyboard
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
-- assertNotVisible: "The displayed Sessions are cached on this device. They are not live."
+- assertVisible: "gateway :: ready"
 - tapOn: "Offline Session"
 - extendedWaitUntil:
     visible: "Recover this offline draft"

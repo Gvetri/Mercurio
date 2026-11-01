@@ -13,14 +13,14 @@ name: accessibility-controls
 - takeScreenshot: accessibility-controls-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Settings"
 - assertVisible: "Run status notifications"
 - assertVisible: ".*App version.*"
 - tapOn: "Back to Sessions"
 - assertVisible: "Search Sessions"
-- assertVisible: "Create Session"
+- assertVisible: "new session"
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
     visible: "Back to Sessions"
@@ -30,16 +30,16 @@ name: accessibility-controls
 - assertVisible: "Back to Sessions"
 - back
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
-- tapOn: "Session actions for Alpha Session"
-- tapOn: "Delete Session"
-- assertVisible: "Confirm Delete Session"
-- assertVisible: "Cancel Delete"
+- longPressOn: "Alpha Session"
+- tapOn: "Delete"
+- assertVisible: "Delete"
+- assertVisible: "Cancel"
 - takeScreenshot: accessibility-controls-delete-confirmation
-- tapOn: "Cancel Delete"
+- tapOn: "Cancel"
 - assertVisible: "Alpha Session"
-- assertNotVisible: "Confirm Delete Session"
+- assertNotVisible: "Delete"
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
     visible: "Message"

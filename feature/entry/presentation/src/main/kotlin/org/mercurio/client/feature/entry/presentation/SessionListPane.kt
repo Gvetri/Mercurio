@@ -1,53 +1,32 @@
 package org.mercurio.client.feature.entry.presentation
 
-import android.graphics.Rect
-import android.os.Build
-import android.view.ViewTreeObserver
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Surface
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.mercurio.client.feature.entry.domain.SessionId
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * The approved Session list composition: the wordmark island, the list island,
+ * and the status strip. Pull-to-refresh re-reads the first page; the list end
+ * loads the next page through its footer.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SessionListPane(
     state: SessionListUiState,
@@ -55,159 +34,141 @@ internal fun SessionListPane(
     modifier: Modifier = Modifier,
     selectedSessionId: SessionId? = null,
 ) {
-    var searchFocused by remember { mutableStateOf(false) }
-    val imeVisible = paneImeVisible()
-    val renameInputOpen = state.sessionMutations.values.any { it.rename != null }
-    val paneModifier = if (imeVisible && (searchFocused || renameInputOpen)) modifier.imePadding() else modifier
-    BoxWithConstraints(modifier = paneModifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val pinnedHeaderMaxHeight = panePinnedHeaderMaxHeight(maxHeight)
-        var pinnedHeaderHeight by remember { mutableStateOf(0.dp) }
-        Column(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = pinnedHeaderMaxHeight)
-                        .onSizeChanged { pinnedHeaderHeight = with(density) { it.height.toDp() } }
-                        .verticalScroll(rememberScrollState()),
+    val tokens = LocalHermesDesignTokens.current
+    Column(
+        modifier = modifier.fillMaxSize().imePadding().padding(ISLAND_GUTTER),
+        verticalArrangement = Arrangement.spacedBy(ISLAND_GUTTER),
+    ) {
+        SessionListPaneHeader(state = state, onEvent = onEvent)
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { onEvent(EntryUiEvent.RefreshSessionListClicked) },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = tokens.colorScheme.surface,
+                shape = tokens.shapes.large,
             ) {
-                SessionListPaneHeader(
+                SessionListBody(
                     state = state,
                     onEvent = onEvent,
-                    onSearchFocusChanged = { searchFocused = it },
+                    selectedSessionId = selectedSessionId,
                 )
-                SessionListStatusTexts(state = state)
             }
-            val listState = rememberLazyListState()
-            LaunchedEffect(state.searchQuery) {
-                if (state.searchQuery.isEmpty()) listState.scrollToItem(0)
-            }
-            SessionListLazyBody(
-                state = state,
-                onEvent = onEvent,
-                selectedSessionId = selectedSessionId,
-                listState = listState,
-            )
         }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun paneImeVisible(): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        WindowInsets.isImeVisible
-    } else {
-        rememberLegacyImeVisibility()
+        SessionListStatusStrip(state = state)
     }
 }
 
 @Composable
-private fun ColumnScope.SessionListLazyBody(
+private fun SessionListBody(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     selectedSessionId: SessionId?,
-    listState: LazyListState,
 ) {
-    val spacing = LocalHermesDesignTokens.current.spacing
+    val listState = rememberLazyListState()
+    LaunchedEffect(state.searchQuery) {
+        if (state.searchQuery.isEmpty()) listState.scrollToItem(0)
+    }
     LazyColumn(
         state = listState,
-        modifier = Modifier.weight(1f).fillMaxWidth().testTag("session-list"),
-        verticalArrangement = Arrangement.Top,
+        modifier = Modifier.fillMaxSize().testTag("session-list"),
     ) {
-        sessionListItems(
-            state = state,
-            onEvent = onEvent,
-            selectedSessionId = selectedSessionId,
-            spacing = spacing,
-        )
+        val mutationOnly =
+            state.sessions.filter { session ->
+                session.id in state.sessionMutations && state.visibleSessions.none { it.id == session.id }
+            }
+        val visibleSessions = state.visibleSessions + mutationOnly
+        when {
+            state.isLoading && state.sessions.isEmpty() -> {
+                sessionListSkeletonItems()
+                item(key = "loading-footer") { SessionListFooter(label = "loading sessions…") }
+            }
+            state.visibleSessions.isEmpty() -> {
+                item(key = "empty") {
+                    Column(modifier = Modifier.fillParentMaxSize()) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            SessionListEmptyContent(state = state, onEvent = onEvent)
+                        }
+                        if (state.showsNewSessionRowInEmptyState()) {
+                            NewSessionRow(
+                                enabled = state.createSessionActionEnabled(),
+                                onEvent = onEvent,
+                            )
+                            SessionCreationErrorBanner(state = state)
+                        }
+                    }
+                }
+            }
+            else -> {
+                val pinned = visibleSessions.filter { it.pinned }
+                val unpinned = visibleSessions.filterNot { it.pinned }
+                if (pinned.isNotEmpty()) {
+                    item(key = "pinned-header") { SessionSectionHeader(label = "PINNED") }
+                    items(items = pinned, key = { session -> session.id.value }) { session ->
+                        SessionRow(
+                            row = sessionRowState(session, state, selectedSessionId, onEvent),
+                            onEvent = onEvent,
+                        )
+                    }
+                }
+                item(key = "all-sessions-header") {
+                    SessionSectionHeader(label = "ALL SESSIONS · ${unpinned.size}")
+                }
+                items(items = unpinned, key = { session -> session.id.value }) { session ->
+                    SessionRow(
+                        row = sessionRowState(session, state, selectedSessionId, onEvent),
+                        onEvent = onEvent,
+                    )
+                }
+                item(key = "new-session") {
+                    NewSessionRow(
+                        enabled = state.createSessionActionEnabled(),
+                        onEvent = onEvent,
+                    )
+                }
+                item(key = "creation-error") { SessionCreationErrorBanner(state = state) }
+                item(key = "footer") { SessionListFooterTrigger(state = state, onEvent = onEvent) }
+            }
+        }
     }
 }
 
-private fun LazyListScope.sessionListItems(
+private fun sessionRowState(
+    session: SessionItemUiState,
     state: SessionListUiState,
-    onEvent: (EntryUiEvent) -> Unit,
     selectedSessionId: SessionId?,
-    spacing: HermesSpacing,
-) {
-    items(
-        items = state.sessions.filter { it.id in state.sessionMutations && it !in state.visibleSessions },
-        key = { session -> "management-${session.id.value}" },
-    ) { session ->
-        Text(text = "Session action outside current search", style = MaterialTheme.typography.labelLarge)
-        Text(text = session.title, modifier = Modifier.semantics { heading() })
-        SessionActionControls(
-            session = session,
-            mutation = state.sessionMutations[session.id],
-            enabled = state.allowsSessionMutation(),
-            onEvent = onEvent,
-        )
-        Spacer(modifier = Modifier.height(spacing.s))
-    }
-    if (state.visibleSessions.isEmpty()) {
-        item { SessionListStateContent(state = state) }
-        item { SessionListPaginationFooterIfAvailable(state = state, onEvent = onEvent) }
-    } else {
-        if (state.isSearching) {
-            item {
-                Text(
-                    text = "Searching Sessions…",
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-                Spacer(modifier = Modifier.height(spacing.s))
-            }
-        }
-        items(
-            items = state.visibleSessions,
-            key = { session -> session.id.value },
-        ) { session ->
-            SessionRow(
-                row =
-                    SessionRowUiState(
-                        session = session,
-                        mutation = state.sessionMutations[session.id],
-                        selected = session.id == selectedSessionId,
-                        enabled = state.allowsSessionMutation(),
-                        onClick = { onEvent(EntryUiEvent.SessionClicked(session.id)) },
-                    ),
-                onEvent = onEvent,
-            )
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(spacing.s))
-        }
-        item {
-            SessionPaginationFooter(state = state, onEvent = onEvent)
-        }
-    }
-}
+    onEvent: (EntryUiEvent) -> Unit,
+): SessionRowUiState =
+    SessionRowUiState(
+        session = session,
+        mutation = state.sessionMutations[session.id],
+        selected = session.id == selectedSessionId,
+        enabled = state.allowsSessionMutation(),
+        onClick = { onEvent(EntryUiEvent.SessionClicked(session.id)) },
+    )
 
 @Composable
-private fun rememberLegacyImeVisibility(): Boolean {
-    val view = LocalView.current
-    var imeVisible by remember(view) { mutableStateOf(false) }
-    DisposableEffect(view) {
-        val visibleFrame = Rect()
-        val rootView = view.rootView
-        val listener =
-            ViewTreeObserver.OnGlobalLayoutListener {
-                view.getWindowVisibleDisplayFrame(visibleFrame)
-                val rootHeight = rootView.height
-                imeVisible =
-                    rootHeight > 0 &&
-                    rootHeight - visibleFrame.height() > rootHeight / IME_VISIBLE_HEIGHT_DIVISOR
-            }
-        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
-        listener.onGlobalLayout()
-        onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+private fun SessionListFooterTrigger(
+    state: SessionListUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val canLoadMore =
+        state.nextOffset != null &&
+            !state.isLoadingMore &&
+            !state.isUnavailable &&
+            state.sessionMutations.isEmpty()
+    LaunchedEffect(canLoadMore, state.nextOffset) {
+        if (canLoadMore) onEvent(EntryUiEvent.LoadMoreSessionsClicked)
     }
-    return imeVisible
+    when {
+        state.isLoadingMore -> SessionListFooter(label = "loading more…")
+        state.isLoading -> SessionListFooter(label = "loading sessions…")
+        else -> Unit
+    }
 }
 
-private const val IME_VISIBLE_HEIGHT_DIVISOR = 6
+private val ISLAND_GUTTER = 6.dp
 
 internal fun paneTailMaxHeight(available: Dp): Dp = (available - 120.dp).coerceAtLeast(minOf(48.dp, available))
-
-private fun panePinnedHeaderMaxHeight(available: Dp): Dp {
-    return (available - 120.dp - 48.dp).coerceAtLeast(minOf(24.dp, available))
-}

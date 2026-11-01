@@ -70,7 +70,7 @@ fun EntryScreen(
                 SessionShell(
                     state = sessionList,
                     onEvent = onEvent,
-                    modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.xl),
+                    modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.s),
                 )
             } else {
                 ConnectionContent(state = state, onEvent = onEvent)

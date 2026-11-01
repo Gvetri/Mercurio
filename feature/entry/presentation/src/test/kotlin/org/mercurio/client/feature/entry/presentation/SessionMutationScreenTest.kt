@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -24,7 +25,7 @@ class SessionMutationScreenTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun rename_confirmation_keeps_the_current_title_visible_and_exposes_accessible_actions() {
+    fun inline_rename_keeps_the_draft_and_exposes_accessible_actions() {
         val sessionId = SessionId("session-one")
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
@@ -43,15 +44,9 @@ class SessionMutationScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Current title").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Rename Session").assertIsDisplayed()
-        composeTestRule.onNodeWithText("New Session title").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm Rename Session").assertHasClickAction().performClick()
-        composeTestRule
-            .onNodeWithText("Cancel Rename")
-            .performScrollTo()
-            .assertHasClickAction()
-            .performClick()
+        composeTestRule.onNodeWithText("Draft title").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Confirm rename").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithContentDescription("Cancel rename").assertHasClickAction().performClick()
 
         assertEquals(
             listOf(
@@ -79,12 +74,12 @@ class SessionMutationScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Delete \"Remote Session\"?").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete “Remote Session”?").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("Remote deletion cannot be undone by this client.")
+            .onNodeWithText("The session and its transcript are removed from this client. This cannot be undone here.")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm Delete Session").assertHasClickAction().performClick()
-        composeTestRule.onNodeWithText("Cancel Delete").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithText("Delete").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithText("Cancel").assertHasClickAction().performClick()
 
         assertEquals(
             listOf(
@@ -120,9 +115,8 @@ class SessionMutationScreenTest {
 
         composeTestRule
             .onNodeWithText(SessionRenameErrorCategory.EMPTY_TITLE.safeMessage)
-            .performScrollTo()
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm Rename Session").assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Confirm rename").assertHasClickAction()
     }
 
     @Test
@@ -150,13 +144,12 @@ class SessionMutationScreenTest {
 
         composeTestRule
             .onNodeWithText(SessionRenameErrorCategory.CONTROL_CHARACTER.safeMessage)
-            .performScrollTo()
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm Rename Session").assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Confirm rename").assertHasClickAction()
     }
 
     @Test
-    fun failed_rename_exposes_an_accessible_retry_action() {
+    fun failed_rename_exposes_the_error_and_the_check_retries() {
         val sessionId = SessionId("session-one")
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
@@ -182,9 +175,8 @@ class SessionMutationScreenTest {
 
         composeTestRule
             .onNodeWithText(SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-            .performScrollTo()
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithContentDescription("Confirm rename").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.ConfirmRenameSessionClicked(sessionId)), events)
     }
 
@@ -269,12 +261,9 @@ class SessionMutationScreenTest {
             }
         }
 
-        composeTestRule
-            .onNodeWithText("Renaming Session…")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Confirm Rename Session").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Cancel Rename").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Renaming Session…").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Confirm rename").assertIsNotEnabled()
+        composeTestRule.onNodeWithContentDescription("Cancel rename").assertIsNotEnabled()
     }
 
     @Test

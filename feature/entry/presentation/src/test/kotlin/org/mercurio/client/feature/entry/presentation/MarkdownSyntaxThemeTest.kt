@@ -38,7 +38,7 @@ class MarkdownSyntaxThemeTest {
     @Test
     fun every_syntax_color_is_readable_on_the_code_panel_in_both_themes() {
         listOf(HermesLightTokens, HermesDarkTokens).forEach { tokens ->
-            val panel = tokens.colorScheme.surfaceVariant
+            val panel = tokens.syntaxColors.codeSurface
             val colors = with(tokens.syntaxColors) { listOf(keyword, string, number, comment, function) }
             colors.forEach { color ->
                 val ratio = contrastRatio(color, panel)

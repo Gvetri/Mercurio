@@ -15,30 +15,23 @@ name: offline-session-list
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
-- tapOn: "Refresh"
+- swipe:
+    start: "50%, 35%"
+    end: "50%, 80%"
+    duration: 800
 - extendedWaitUntil:
-    visible: "The displayed Session data may be stale."
-    timeout: 30000
-- extendedWaitUntil:
-    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
+    visible: "gateway :: offline"
     timeout: 30000
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
+- takeScreenshot: offline-session-list-01-offline-rows
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
     visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
     timeout: 30000
-- extendedWaitUntil:
-    visible: "This Session could not be opened. It may have been removed. Return to the list or refresh."
-    timeout: 30000
-- extendedWaitUntil:
-    visible: "Try again"
-    timeout: 30000
-- tapOn: "Try again"
-- extendedWaitUntil:
-    visible: "The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."
-    timeout: 30000
+- takeScreenshot: offline-session-list-02-stale-detail
+- tapOn: "Back to Sessions"
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
