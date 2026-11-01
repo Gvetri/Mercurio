@@ -6,7 +6,7 @@ import io.sentry.android.core.SentryAndroid
 import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.application.NoOpErrorReporter
 
-internal fun interface SentryBackend {
+fun interface SentryBackend {
     fun start(
         context: Context,
         config: SentryReportingConfig,

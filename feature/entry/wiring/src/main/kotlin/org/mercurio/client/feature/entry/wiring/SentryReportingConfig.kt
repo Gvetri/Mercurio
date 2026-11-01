@@ -1,7 +1,7 @@
 package org.mercurio.client.feature.entry.wiring
 
 /** Every value the reporting backend is initialised with, resolved once at the wiring boundary. */
-internal data class SentryReportingConfig(
+data class SentryReportingConfig(
     val dsn: String,
     val release: String,
     val environment: String,

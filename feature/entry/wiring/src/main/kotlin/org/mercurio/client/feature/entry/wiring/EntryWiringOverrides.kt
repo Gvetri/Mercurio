@@ -16,4 +16,5 @@ data class EntryWiringOverrides(
     val credentialStore: GatewayCredentialStore? = null,
     val historyCacheStore: HistoryCacheStore? = null,
     val errorReporter: ErrorReporter? = null,
+    val sentryBackend: SentryBackend? = null,
 )

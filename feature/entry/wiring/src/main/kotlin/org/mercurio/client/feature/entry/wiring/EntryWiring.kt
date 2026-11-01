@@ -71,6 +71,7 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
+                    errorReporting = createErrorReporting(context, overrides, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -112,8 +113,9 @@ private fun buildErrorReporting(
     clientVersion: String,
 ): ErrorReporting {
     val config = sentryReportingConfig(clientVersion)
+    val backend = overrides.sentryBackend ?: defaultSentryBackend
     return ErrorReporting(
-        reporter = overrides.errorReporter ?: defaultSentryBackend.start(context, config),
+        reporter = overrides.errorReporter ?: backend.start(context, config),
         release = config.release,
         environment = config.environment,
     )
