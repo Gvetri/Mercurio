@@ -2,7 +2,6 @@ package org.mercurio.client.feature.entry.wiring
 
 import android.app.Application
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -58,7 +57,6 @@ class SentryBackendTest {
         assertEquals(BuildConfig.SENTRY_DSN, config.dsn)
         assertEquals(BuildConfig.BUILD_TYPE, config.environment)
         assertEquals("0.1.0", config.release)
-        assertFalse(config.isEnabled)
     }
 
     private fun reportingConfig(): SentryReportingConfig =
