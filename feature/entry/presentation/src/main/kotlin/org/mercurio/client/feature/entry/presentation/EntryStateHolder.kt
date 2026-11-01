@@ -8,6 +8,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
@@ -327,6 +328,7 @@ enum class RunStatusNotificationExplanation(
 internal data class ReleasedConnectionState(
     val jobs: List<Job>,
     val observations: List<RunEventObservation>,
+    val pendingCreates: List<PendingCreatePersistence> = emptyList(),
 )
 
 data class EntryStateHolderDependencies(
@@ -390,7 +392,19 @@ class EntryStateHolder(
             initialState.toUiState().copy(runStatusNotifications = restoredRunStatusNotificationState()),
         )
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
+
+    /**
+     * Carries the storage work that must finish even when the holder's own [scope] is cancelled:
+     * the writes a close owes, and the purges a removal owes. It shares the holder's dispatcher,
+     * so it runs on the same worker and never on the event thread. It is deliberately never
+     * cancelled — it holds no thread, and cancelling it would drop a confirmed removal or a
+     * close-time recovery marker.
+     */
+    internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
+
+    @Volatile
+    internal var pendingRemovalJob: Job? = null
     internal var sessionJob: Job? = null
     internal var recoveryJob: Job? = null
     internal var sessionGateway: SessionGatewayPort? = null
@@ -446,6 +460,12 @@ class EntryStateHolder(
     internal val reconcilingSessions = mutableMapOf<SessionId, Long>()
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
 
+    /**
+     * Delivers one UI event on the caller's thread. The send, connection-removal, close, and
+     * model-picker paths enqueue their storage work on [scope] or [persistenceScope], so those
+     * handlers never read or write disk here. Other handlers keep their existing synchronous
+     * storage calls; widening this boundary is separate work.
+     */
     fun onEvent(event: EntryUiEvent) {
         when (event) {
             is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
@@ -453,7 +473,7 @@ class EntryStateHolder(
             is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
             is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
             is EntryUiEvent.Run -> dispatchRunEvent(event)
-            is EntryUiEvent.ModelPicker -> dispatchModelPickerEvent(event)
+            is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
             is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
             is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
         }
@@ -512,7 +532,7 @@ class EntryStateHolder(
     private fun dispatchRunEvent(event: EntryUiEvent.Run) {
         when (event) {
             is EntryUiEvent.ComposerTextChanged -> updateComposerText(event.value)
-            is EntryUiEvent.SendMessageClicked -> retryUncertainSubmissionOrSend()
+            is EntryUiEvent.SendMessageClicked -> dispatchSendMessage()
             is EntryUiEvent.StopRunClicked -> stopRunObservation()
             is EntryUiEvent.DiscardUnresolvedSendClicked -> showDiscardUnresolvedSendConfirmation()
             is EntryUiEvent.ConfirmDiscardUnresolvedSendClicked -> confirmDiscardUnresolvedSend()
@@ -558,13 +578,15 @@ class EntryStateHolder(
 
     /**
      * Releases the connection state and clears the removal confirmation so a closed holder never
-     * reports an open dialog.
+     * reports an open dialog. Teardown stays bounded: the maps clear synchronously, and the
+     * pending-submission writes it owes run on [persistenceScope] instead of the caller's thread.
      */
     fun close() {
         mutableUiState.value = mutableUiState.value.copy(isRemoveConfirmationOpen = false)
         val released = releaseConnectionState()
         released.jobs.forEach(Job::cancel)
         released.observations.forEach(RunEventObservation::close)
+        persistPendingCreatesOffThread(released.pendingCreates)
         scope.cancel()
     }
 }
@@ -627,13 +649,6 @@ internal data class RecoverySessionKey(
     val sessionId: SessionId,
 )
 
-internal data class PendingSubmissionPersistence(
-    val key: PendingRunSubmissionKey,
-    val recoveryKey: RecoverySessionKey,
-    val knownRunIds: Set<RunId>,
-    val attemptId: String,
-)
-
 internal data class PendingCreateState(
     val knownRunIds: Set<RunId>,
     val attemptId: String,
@@ -683,6 +698,7 @@ internal data class RunSubmissionWork(
     val attemptId: String,
     val knownRunIds: Set<RunId>,
     val selection: ModelSelection?,
+    val recordDraft: Boolean,
 )
 
 /**
@@ -693,11 +709,6 @@ internal data class ModelCatalogFetchRequest(
     val port: ModelGatewayPort,
     val endpoint: String,
     val connectionGeneration: Long,
-)
-
-internal data class PreparedRunSubmission(
-    val job: Job,
-    val persistence: PendingSubmissionPersistence,
 )
 
 internal data class SubmittedRunApplication(
