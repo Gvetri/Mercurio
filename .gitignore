@@ -23,6 +23,7 @@ secrets/
 
 !fixtures/mercurio/journey-tls/*.p12
 !fixtures/mercurio/journey-tls/*.pem
+!app/src/debug/res/raw/journey_ca.pem
 
 .scratch/
 coverage/

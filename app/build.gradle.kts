@@ -85,6 +85,7 @@ dependencies {
     androidTestImplementation(project(":feature:entry:domain"))
     androidTestImplementation(project(":feature:entry:data"))
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    debugImplementation(project(":feature:entry:application"))
     debugImplementation(project(":feature:entry:domain"))
 }
 
