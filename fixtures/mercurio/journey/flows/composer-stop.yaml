@@ -13,7 +13,7 @@ name: composer-stop
 - takeScreenshot: composer-stop-form-filled
 - tapOn: "Verify Gateway Connection"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Alpha Session"
 - extendedWaitUntil:

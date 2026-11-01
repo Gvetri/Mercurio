@@ -21,7 +21,7 @@ name: settings-cache-clear
 - assertNotVisible: "The displayed Session history is cached on this device. It is not live."
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
-    visible: "Sessions"
+    visible: "mercurio"
     timeout: 30000
 - tapOn: "Settings"
 - extendedWaitUntil:
@@ -49,5 +49,6 @@ name: settings-cache-clear
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
-- assertNotVisible: "The displayed Sessions are cached on this device. They are not live."
+- assertVisible: "1 session · connected"
+- assertNotVisible: "gateway :: offline"
 - takeScreenshot: settings-cache-clear-authoritative

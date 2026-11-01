@@ -21,6 +21,8 @@ import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
+import java.math.BigDecimal
+import java.time.Instant
 
 internal object GatewayJsonParser {
     private val json = Json
@@ -242,6 +244,7 @@ private object GatewayJsonElements {
             title = GatewayJsonFields.requiredNullableString(session, "title", operation),
             preview = GatewayJsonFields.optionalString(session, "preview", operation),
             pinned = GatewayJsonFields.requiredBoolean(session, "pinned", operation),
+            lastActive = optionalEpochSeconds(session, "last_active", operation),
         )
     }
 
@@ -320,6 +323,30 @@ private object GatewayJsonElements {
             invalid(operation, "message timestamp must be finite seconds or a string")
         }
         return value.content
+    }
+}
+
+private const val NANOSECOND_SCALE = 9
+
+private fun optionalEpochSeconds(
+    root: JsonObject,
+    path: String,
+    operation: String,
+): Instant? {
+    val value = root[path]
+    if (value == null || value == JsonNull) return null
+    if (value !is JsonPrimitive || value.isString) {
+        invalid(operation, "field '$path' must be epoch seconds or null")
+    }
+    val seconds =
+        value.content.toBigDecimalOrNull()
+            ?: invalid(operation, "field '$path' must be epoch seconds or null")
+    return runCatching {
+        val wholeSeconds = seconds.toBigInteger().longValueExact()
+        val nanos = seconds.remainder(BigDecimal.ONE).movePointRight(NANOSECOND_SCALE).toLong()
+        Instant.ofEpochSecond(wholeSeconds, nanos)
+    }.getOrElse {
+        invalid(operation, "field '$path' must be finite epoch seconds")
     }
 }
 

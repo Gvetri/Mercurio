@@ -28,6 +28,7 @@ adapters must use these shapes and must not infer additional routes or fields.
 | Connection authentication | Authenticated success and HTTP 401 authentication failure outcomes |
 | Session list | `GET /api/sessions` with server `limit` and `offset`; the response is `{"object": "list", "data": [...], "limit", "offset", "has_more"}` |
 | Session search | No general search parameter: the client filters the already-loaded rows locally by title and preview. The `title` query is an exact-title lookup, not a search surface. |
+| Session last active | The list projection's `last_active` epoch-seconds value feeds the row's relative time label; a missing value renders the placeholder. |
 | Session pagination | `offset` advances the window; `has_more` decides whether another page exists |
 | Session create | `POST /api/sessions` with an optional title and an authoritative returned Session ID |
 | Session open | The authoritative Session resource by Session ID (`GET /api/sessions/{session_id}`) |

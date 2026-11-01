@@ -23,10 +23,10 @@ internal fun DeleteSessionConfirmation(
     val delete = pending.mutation.delete ?: return
     AlertDialog(
         onDismissRequest = { onEvent(EntryUiEvent.CancelDeleteSessionClicked(pending.session.id)) },
-        title = { Text(text = "Delete \"${pending.session.title}\"?") },
+        title = { Text(text = "Delete “${pending.session.title}”?") },
         text = {
             Column {
-                Text(text = "Remote deletion cannot be undone by this client.")
+                Text(text = "The session and its transcript are removed from this client. This cannot be undone here.")
                 SessionMutationProgress(visible = delete.isSubmitting, label = "Deleting Session…", topSpacing = 4.dp)
                 SessionMutationErrorMessage(message = pending.mutation.errorCategory?.safeMessage, topSpacing = 4.dp)
             }
@@ -36,7 +36,7 @@ internal fun DeleteSessionConfirmation(
                 onClick = { onEvent(EntryUiEvent.ConfirmDeleteSessionClicked(pending.session.id)) },
                 enabled = pending.allowsMutation && !delete.isSubmitting,
             ) {
-                Text(text = if (pending.mutation.errorCategory == null) "Confirm Delete Session" else "Try again")
+                Text(text = if (pending.mutation.errorCategory == null) "Delete" else "Try again")
             }
         },
         dismissButton = {
@@ -44,7 +44,7 @@ internal fun DeleteSessionConfirmation(
                 onClick = { onEvent(EntryUiEvent.CancelDeleteSessionClicked(pending.session.id)) },
                 enabled = !delete.isSubmitting,
             ) {
-                Text(text = "Cancel Delete")
+                Text(text = "Cancel")
             }
         },
         modifier = modifier,

@@ -347,29 +347,31 @@ class JourneyScenarioTest {
     }
 
     @Test
-    fun pending_creation_flow_exercises_duplicate_back_and_outside_while_held() {
+    fun pending_creation_flow_ignores_a_duplicate_tap_while_held() {
         val flow = File(repositoryRoot, "fixtures/mercurio/journey/flows/pending-creation.yaml").readText()
         val pendingWindow =
-            flow.substringAfter("takeScreenshot: pending-creation-02-pending")
+            flow.substringAfter("takeScreenshot: pending-creation-01-request-started")
                 .substringBefore("extendedWaitUntil")
-        assertTrue("The duplicate confirm tap is missing.", pendingWindow.contains("- tapOn: \"Create\""))
-        assertTrue("The Back dismissal attempt is missing.", pendingWindow.contains("- back"))
-        assertTrue("The outside tap is missing.", pendingWindow.contains("point:"))
-        assertTrue("The still-pending assertion is missing.", pendingWindow.contains("\"Creating Session…\""))
+        assertTrue("The duplicate create tap is missing.", pendingWindow.contains("- tapOn: \"new session\""))
+        assertFalse(
+            "The removed creation dialog must not return.",
+            pendingWindow.contains("Title (optional)"),
+        )
     }
 
     @Test
-    fun pending_creation_flow_asserts_dialog_absence_after_result_open() {
+    fun pending_creation_flow_asserts_no_creation_dialog_after_the_row_settles() {
         val flow = File(repositoryRoot, "fixtures/mercurio/journey/flows/pending-creation.yaml").readText()
-        val settledWindow = flow.substringAfter("takeScreenshot: pending-creation-04-result-open")
-        val settleIndex = settledWindow.indexOf("waitForAnimationToEnd")
-        val absentIndex = settledWindow.indexOf("assertNotVisible: \"Creating Session…\"")
-        val settledScreenshotIndex = settledWindow.indexOf("takeScreenshot: pending-creation-05-result-settled")
-        assertTrue("The post-result settle is missing.", settleIndex >= 0)
-        assertTrue("The dialog-absence assertion does not follow the settle.", absentIndex > settleIndex)
-        assertTrue("The settled result frame does not follow the assertion.", settledScreenshotIndex > absentIndex)
+        val settledWindow = flow.substringAfter("takeScreenshot: pending-creation-02-created-row")
+        val absentProgressIndex = settledWindow.indexOf("assertNotVisible: \"Creating Session…\"")
+        val settledScreenshotIndex = settledWindow.indexOf("takeScreenshot: pending-creation-03-result-settled")
+        assertTrue("The creation progress absence assertion is missing.", absentProgressIndex >= 0)
         assertTrue(
-            "The dialog field label absence assertion is missing.",
+            "The settled result frame does not follow the assertion.",
+            settledScreenshotIndex > absentProgressIndex,
+        )
+        assertTrue(
+            "The dialog field absence assertion is missing.",
             settledWindow.contains("assertNotVisible: \"Title (optional)\""),
         )
     }

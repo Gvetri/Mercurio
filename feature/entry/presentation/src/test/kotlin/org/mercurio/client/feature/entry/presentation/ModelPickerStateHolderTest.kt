@@ -322,7 +322,10 @@ class ModelPickerStateHolderTest {
             assertEquals(0, gateway.fetchCount)
 
             holder.onEvent(EntryUiEvent.CreateSessionClicked)
-            holder.onEvent(EntryUiEvent.ConfirmCreateSessionClicked)
+            awaitRetryState(holder) { state ->
+                state.sessionList?.sessions?.any { session -> session.id == PICKER_CREATED_SESSION_ID } == true
+            }
+            holder.onEvent(EntryUiEvent.SessionClicked(PICKER_CREATED_SESSION_ID))
             awaitRetryState(holder) { it.sessionList?.openedSession?.session?.id == PICKER_CREATED_SESSION_ID }
             awaitPickerState(holder) { it.catalog != null }
 
