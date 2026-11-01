@@ -5,12 +5,22 @@ plugins {
     alias(libs.plugins.detekt)
 }
 
+val sentryDsn: String = providers.gradleProperty("mercurio.sentryDsn").orNull.orEmpty()
+require(sentryDsn.none { it == '"' || it == '\\' || it == '\n' || it == '\r' }) {
+    "mercurio.sentryDsn must not contain quotes, backslashes, or line breaks."
+}
+
 android {
     namespace = "org.mercurio.client.feature.entry.wiring"
     compileSdk = 35
 
     defaultConfig {
         minSdk = 24
+        buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
@@ -35,6 +45,7 @@ dependencies {
     implementation(project(":feature:entry:presentation"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.sentry.android.core)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 

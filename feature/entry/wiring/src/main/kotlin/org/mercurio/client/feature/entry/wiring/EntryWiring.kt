@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.LoadEntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
@@ -70,6 +71,7 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
+                    errorReporting = createErrorReporting(context, overrides, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -80,6 +82,13 @@ object EntryWiring {
                 ),
         )
     }
+
+    /** Binds the error-reporting port for this installation, without building the state holder. */
+    fun createErrorReporting(
+        context: Context,
+        overrides: EntryWiringOverrides = EntryWiringOverrides(),
+        clientVersion: String = androidClientVersion(context),
+    ): ErrorReporting = buildErrorReporting(context, overrides, clientVersion)
 
     private fun entryScope(
         coroutineScope: CoroutineScope?,
@@ -97,6 +106,20 @@ private fun buildRunRecoveryRegistry(
             SharedPreferencesRunRecoveryStorage(context) { endpoint }
         },
     )
+
+private fun buildErrorReporting(
+    context: Context,
+    overrides: EntryWiringOverrides,
+    clientVersion: String,
+): ErrorReporting {
+    val config = sentryReportingConfig(clientVersion)
+    val backend = overrides.sentryBackend ?: defaultSentryBackend
+    return ErrorReporting(
+        reporter = overrides.errorReporter ?: backend.start(context, config),
+        release = config.release,
+        environment = config.environment,
+    )
+}
 
 private fun buildVerifyGatewayConnection(
     repository: GatewayConnectionRepository,

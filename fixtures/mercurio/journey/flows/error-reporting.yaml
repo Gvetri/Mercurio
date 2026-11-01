@@ -1,0 +1,9 @@
+appId: org.mercurio.client
+name: error-reporting
+---
+- launchApp:
+    clearState: true
+- openLink: "mercurio-journey://error-reporting"
+- extendedWaitUntil:
+    visible: "Error report captured"
+    timeout: 30000

@@ -192,6 +192,7 @@ internal object JourneyInvariants {
             "markdown-blocks" to ::requireConnectionAttempted,
             "stale-recoverable" to ::requireConnectionAttempted,
             "diagnostics-recording" to JourneyDiagnosticsInvariants::verifyDiagnosticsRecording,
+            "error-reporting" to JourneyErrorReportingInvariants::verifyErrorReporting,
             "settings" to JourneyInvariants::verifySettings,
             "settings-cache-clear" to JourneyInvariants::verifySettingsCacheClear,
             "connection-removal-purge" to JourneyInvariants::verifyConnectionRemovalPurge,
@@ -624,6 +625,29 @@ private object JourneyDiagnosticsInvariants {
                     fields["path"]?.jsonPrimitive?.content == "/api/sessions"
             }
         check(loadedSessionList) { "The diagnostics journey never loaded the Session list." }
+    }
+}
+
+private object JourneyErrorReportingInvariants {
+    private const val EXPECTED_ENVIRONMENT = "debug"
+    private const val UNKNOWN_RELEASE = "unknown"
+
+    internal fun verifyErrorReporting(telemetry: JsonObject) {
+        val reports =
+            telemetry["error_reports"]?.jsonArray
+                ?: error("Telemetry has no error-report record.")
+        check(reports.size == 1) {
+            "The fake sink captured ${reports.size} error reports, expected exactly one."
+        }
+        val report = reports.single().jsonObject
+        val release = report.getValue("release").jsonPrimitive.content
+        val environment = report.getValue("environment").jsonPrimitive.content
+        check(release.isNotBlank() && release != UNKNOWN_RELEASE) {
+            "The captured error report carries no release tag."
+        }
+        check(environment == EXPECTED_ENVIRONMENT) {
+            "The captured error report carries environment '$environment', expected '$EXPECTED_ENVIRONMENT'."
+        }
     }
 }
 
