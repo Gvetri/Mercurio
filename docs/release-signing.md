@@ -131,6 +131,12 @@ the same stable release key:
 | `ANDROID_RELEASE_KEYSTORE_BASE64` | Base64 encoding of the encrypted PKCS#12 keystore |
 | `ANDROID_RELEASE_KEYSTORE_PASSWORD` | Keystore and private-key password |
 
+The release build also reads one repository-scoped **variable**, which is not a credential:
+`MERCURIO_SENTRY_DSN` holds the public Sentry DSN described in
+[the error-reporting runbook](error-reporting-runbook.md#release-builds). The build job passes it as
+the single `mercurio.sentryDsn` property and fails when the assembled APK does not carry it, so the
+variable must exist before a release can be signed.
+
 Do not create repository- or organization-scoped copies of these secrets. Do not
 put provider credentials, Gateway credentials, or live-provider smoke-test secrets
 in the environment. Neither validation nor release preparation runs live-provider

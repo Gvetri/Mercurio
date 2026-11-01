@@ -113,16 +113,22 @@ jobs:
           RELEASE_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
           RELEASE_VERSION_CODE: ${{ inputs.nightly_version_code }}
           RELEASE_GENERATION_ATTEMPT: ${{ inputs.generation_attempt }}
+          SENTRY_DSN: ${{ vars.MERCURIO_SENTRY_DSN }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
           if [ -n "$RELEASE_VERSION_CODE" ]; then
             python3 .github/scripts/release-signing.py generation
             ./gradlew :app:assembleRelease --no-daemon \
-              -PnightlyVersionCode="$RELEASE_VERSION_CODE" -PnightlySourceSha="$RELEASE_SOURCE_SHA"
+              -PnightlyVersionCode="$RELEASE_VERSION_CODE" -PnightlySourceSha="$RELEASE_SOURCE_SHA" \
+              -Pmercurio.sentryDsn="$SENTRY_DSN"
           else
-            ./gradlew :app:assembleRelease --no-daemon
+            ./gradlew :app:assembleRelease --no-daemon -Pmercurio.sentryDsn="$SENTRY_DSN"
           fi
+      - name: Verify the packaged artifact carries the release DSN
+        env:
+          SENTRY_DSN: ${{ vars.MERCURIO_SENTRY_DSN }}
+        run: python3 .github/scripts/verify-release-dsn.py app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Bind the unsigned APK checksum to this build
         id: digest
         run: |

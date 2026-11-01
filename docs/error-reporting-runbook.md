@@ -26,6 +26,21 @@ domain layers.
 A DSN the SDK rejects is treated the same way: the backend does not install, no event is ever sent,
 and the app runs normally. Only a working DSN turns reporting on.
 
+### Release builds
+
+The protected release workflow supplies the same property from the repository variable
+`MERCURIO_SENTRY_DSN`. It is a variable rather than a secret because the DSN is a public identifier:
+it permits submitting events and nothing else, and no auth token is involved in building or signing.
+
+That variable is mandatory for a release. After assembling the APK the workflow reads the packaged
+classes back and fails the build unless they carry exactly that DSN, so a Nightly cannot be signed or
+published silent. A missing, blank, or malformed variable stops the release instead of producing an
+artifact that reports nothing.
+
+Rotating the key therefore means creating the new client key in the project, updating the variable,
+and letting the next Nightly carry it; local builds and pull-request gates stay on their no-DSN
+default and remain silent.
+
 ## Deliberate delivery check
 
 Prove real delivery from a real build once per backend change; the deterministic journeys use a
