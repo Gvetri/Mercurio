@@ -366,7 +366,10 @@ class JourneyScenarioTest {
         val absentProgressIndex = settledWindow.indexOf("assertNotVisible: \"Creating Session…\"")
         val settledScreenshotIndex = settledWindow.indexOf("takeScreenshot: pending-creation-03-result-settled")
         assertTrue("The creation progress absence assertion is missing.", absentProgressIndex >= 0)
-        assertTrue("The settled result frame does not follow the assertion.", settledScreenshotIndex > absentProgressIndex)
+        assertTrue(
+            "The settled result frame does not follow the assertion.",
+            settledScreenshotIndex > absentProgressIndex,
+        )
         assertTrue(
             "The dialog field absence assertion is missing.",
             settledWindow.contains("assertNotVisible: \"Title (optional)\""),

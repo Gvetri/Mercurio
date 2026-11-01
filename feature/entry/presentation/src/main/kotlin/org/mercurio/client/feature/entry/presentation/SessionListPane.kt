@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,64 +77,93 @@ private fun SessionListBody(
         state = listState,
         modifier = Modifier.fillMaxSize().testTag("session-list"),
     ) {
-        val mutationOnly =
-            state.sessions.filter { session ->
-                session.id in state.sessionMutations && state.visibleSessions.none { it.id == session.id }
-            }
-        val visibleSessions = state.visibleSessions + mutationOnly
-        when {
-            state.isLoading && state.sessions.isEmpty() -> {
-                sessionListSkeletonItems()
-                item(key = "loading-footer") { SessionListFooter(label = "loading sessions…") }
-            }
-            state.visibleSessions.isEmpty() -> {
-                item(key = "empty") {
-                    Column(modifier = Modifier.fillParentMaxSize()) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            SessionListEmptyContent(state = state, onEvent = onEvent)
-                        }
-                        if (state.showsNewSessionRowInEmptyState()) {
-                            NewSessionRow(
-                                enabled = state.createSessionActionEnabled(),
-                                onEvent = onEvent,
-                            )
-                            SessionCreationErrorBanner(state = state)
-                        }
-                    }
-                }
-            }
-            else -> {
-                val pinned = visibleSessions.filter { it.pinned }
-                val unpinned = visibleSessions.filterNot { it.pinned }
-                if (pinned.isNotEmpty()) {
-                    item(key = "pinned-header") { SessionSectionHeader(label = "PINNED") }
-                    items(items = pinned, key = { session -> session.id.value }) { session ->
-                        SessionRow(
-                            row = sessionRowState(session, state, selectedSessionId, onEvent),
-                            onEvent = onEvent,
-                        )
-                    }
-                }
-                item(key = "all-sessions-header") {
-                    SessionSectionHeader(label = "ALL SESSIONS · ${unpinned.size}")
-                }
-                items(items = unpinned, key = { session -> session.id.value }) { session ->
-                    SessionRow(
-                        row = sessionRowState(session, state, selectedSessionId, onEvent),
-                        onEvent = onEvent,
-                    )
-                }
-                item(key = "new-session") {
-                    NewSessionRow(
-                        enabled = state.createSessionActionEnabled(),
-                        onEvent = onEvent,
-                    )
-                }
-                item(key = "creation-error") { SessionCreationErrorBanner(state = state) }
-                item(key = "footer") { SessionListFooterTrigger(state = state, onEvent = onEvent) }
+        sessionListContent(state = state, onEvent = onEvent, selectedSessionId = selectedSessionId)
+    }
+}
+
+private fun LazyListScope.sessionListContent(
+    state: SessionListUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+    selectedSessionId: SessionId?,
+) {
+    val mutationOnly =
+        state.sessions.filter { session ->
+            session.id in state.sessionMutations && state.visibleSessions.none { it.id == session.id }
+        }
+    when {
+        state.isLoading && state.sessions.isEmpty() -> {
+            sessionListSkeletonItems()
+            item(key = "loading-footer") { SessionListFooter(label = "loading sessions…") }
+        }
+        state.visibleSessions.isEmpty() -> {
+            item(key = "empty") {
+                SessionListEmptyItem(state = state, onEvent = onEvent)
             }
         }
+        else -> {
+            sessionRows(
+                sessions = state.visibleSessions + mutationOnly,
+                state = state,
+                selectedSessionId = selectedSessionId,
+                onEvent = onEvent,
+            )
+        }
     }
+}
+
+@Composable
+private fun LazyItemScope.SessionListEmptyItem(
+    state: SessionListUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    Column(modifier = Modifier.fillParentMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) {
+            SessionListEmptyContent(state = state, onEvent = onEvent)
+        }
+        if (state.showsNewSessionRowInEmptyState()) {
+            NewSessionRow(
+                enabled = state.createSessionActionEnabled(),
+                onEvent = onEvent,
+            )
+            SessionCreationErrorBanner(state = state)
+        }
+    }
+}
+
+private fun LazyListScope.sessionRows(
+    sessions: List<SessionItemUiState>,
+    state: SessionListUiState,
+    selectedSessionId: SessionId?,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val pinned = sessions.filter { it.pinned }
+    val unpinned = sessions.filterNot { it.pinned }
+    if (pinned.isNotEmpty()) {
+        item(key = "pinned-header") { SessionSectionHeader(label = "PINNED") }
+        items(items = pinned, key = { session -> session.id.value }) { session ->
+            SessionRow(
+                row = sessionRowState(session, state, selectedSessionId, onEvent),
+                onEvent = onEvent,
+            )
+        }
+    }
+    item(key = "all-sessions-header") {
+        SessionSectionHeader(label = "ALL SESSIONS · ${unpinned.size}")
+    }
+    items(items = unpinned, key = { session -> session.id.value }) { session ->
+        SessionRow(
+            row = sessionRowState(session, state, selectedSessionId, onEvent),
+            onEvent = onEvent,
+        )
+    }
+    item(key = "new-session") {
+        NewSessionRow(
+            enabled = state.createSessionActionEnabled(),
+            onEvent = onEvent,
+        )
+    }
+    item(key = "creation-error") { SessionCreationErrorBanner(state = state) }
+    item(key = "footer") { SessionListFooterTrigger(state = state, onEvent = onEvent) }
 }
 
 private fun sessionRowState(

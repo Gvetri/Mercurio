@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -46,46 +47,7 @@ internal fun SessionListPaneHeader(
                 .clip(tokens.shapes.large)
                 .background(tokens.colorScheme.surface),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = SESSION_BAR_HEIGHT)
-                    .padding(start = spacing.m, end = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "mercurio",
-                style = MaterialTheme.typography.titleSmall,
-                letterSpacing = 0.02.em,
-                color = tokens.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Box(
-                modifier =
-                    Modifier
-                        .width(SESSION_BAR_CONTROL_WIDTH)
-                        .heightIn(min = SESSION_BAR_CONTROL_HEIGHT)
-                        .clip(tokens.shapes.small)
-                        .background(tokens.componentColors.inset)
-                        .border(1.dp, tokens.colorScheme.outlineVariant, tokens.shapes.small)
-                        .clickable { onEvent(EntryUiEvent.OpenSettingsClicked) }
-                        .semantics { contentDescription = "Settings" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "::",
-                    style =
-                        MaterialTheme.typography.labelMedium.copy(
-                            fontSize = 15.sp,
-                            letterSpacing = 0.14.em,
-                        ),
-                    color = tokens.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        WordmarkBar(onEvent = onEvent)
         SessionSearchRow(
             state = state,
             onEvent = onEvent,
@@ -93,6 +55,58 @@ internal fun SessionListPaneHeader(
                 Modifier
                     .fillMaxWidth()
                     .padding(start = spacing.s, end = spacing.s, bottom = spacing.s),
+        )
+    }
+}
+
+@Composable
+private fun WordmarkBar(onEvent: (EntryUiEvent) -> Unit) {
+    val tokens = LocalHermesDesignTokens.current
+    val spacing = tokens.spacing
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = SESSION_BAR_HEIGHT)
+                .padding(start = spacing.m, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "mercurio",
+            style = MaterialTheme.typography.titleSmall,
+            letterSpacing = 0.02.em,
+            color = tokens.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        SettingsControl(onEvent = onEvent)
+    }
+}
+
+@Composable
+private fun SettingsControl(onEvent: (EntryUiEvent) -> Unit) {
+    val tokens = LocalHermesDesignTokens.current
+    Box(
+        modifier =
+            Modifier
+                .width(SESSION_BAR_CONTROL_WIDTH)
+                .heightIn(min = SESSION_BAR_CONTROL_HEIGHT)
+                .clip(tokens.shapes.small)
+                .background(tokens.componentColors.inset)
+                .border(1.dp, tokens.colorScheme.outlineVariant, tokens.shapes.small)
+                .clickable { onEvent(EntryUiEvent.OpenSettingsClicked) }
+                .semantics { contentDescription = "Settings" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "::",
+            style =
+                MaterialTheme.typography.labelMedium.copy(
+                    fontSize = 15.sp,
+                    letterSpacing = 0.14.em,
+                ),
+            color = tokens.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -121,50 +135,65 @@ private fun SessionSearchRow(
             style = MaterialTheme.typography.bodyMedium,
             color = tokens.colorScheme.onSurfaceVariant,
         )
-        BasicTextField(
-            value = state.searchQuery,
-            onValueChange = { onEvent(EntryUiEvent.SessionSearchQueryChanged(it)) },
-            enabled = state.sessionMutations.isEmpty(),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = tokens.colorScheme.onSurface),
-            cursorBrush = SolidColor(tokens.colorScheme.primary),
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .semantics { contentDescription = "Search Sessions" },
-            decorationBox = { innerTextField ->
-                Box(contentAlignment = Alignment.CenterStart) {
-                    if (state.searchQuery.isEmpty()) {
-                        Text(
-                            text = "search sessions",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = tokens.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    innerTextField()
-                }
-            },
-        )
+        SessionSearchField(state = state, onEvent = onEvent)
         if (state.searchQuery.isNotEmpty()) {
-            Box(
-                modifier =
-                    Modifier
-                        .widthIn(min = SESSION_SEARCH_CLEAR_SIZE)
-                        .heightIn(min = SESSION_SEARCH_CLEAR_SIZE)
-                        .clip(CircleShape)
-                        .clickable { onEvent(EntryUiEvent.ClearSessionSearchClicked) }
-                        .semantics { contentDescription = "Clear search" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "×",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = tokens.colorScheme.onSurfaceVariant,
-                )
-            }
+            SearchClearButton(onEvent = onEvent)
         }
+    }
+}
+
+@Composable
+private fun RowScope.SessionSearchField(
+    state: SessionListUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    BasicTextField(
+        value = state.searchQuery,
+        onValueChange = { onEvent(EntryUiEvent.SessionSearchQueryChanged(it)) },
+        enabled = state.sessionMutations.isEmpty(),
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = tokens.colorScheme.onSurface),
+        cursorBrush = SolidColor(tokens.colorScheme.primary),
+        modifier =
+            Modifier
+                .weight(1f)
+                .semantics { contentDescription = "Search Sessions" },
+        decorationBox = { innerTextField ->
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (state.searchQuery.isEmpty()) {
+                    Text(
+                        text = "search sessions",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                innerTextField()
+            }
+        },
+    )
+}
+
+@Composable
+private fun SearchClearButton(onEvent: (EntryUiEvent) -> Unit) {
+    val tokens = LocalHermesDesignTokens.current
+    Box(
+        modifier =
+            Modifier
+                .widthIn(min = SESSION_SEARCH_CLEAR_SIZE)
+                .heightIn(min = SESSION_SEARCH_CLEAR_SIZE)
+                .clip(CircleShape)
+                .clickable { onEvent(EntryUiEvent.ClearSessionSearchClicked) }
+                .semantics { contentDescription = "Clear search" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "×",
+            style = MaterialTheme.typography.bodyMedium,
+            color = tokens.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

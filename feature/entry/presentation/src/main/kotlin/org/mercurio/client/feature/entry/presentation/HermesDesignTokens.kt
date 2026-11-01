@@ -97,6 +97,7 @@ private val IbmPlexMono =
         Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
     )
 
+@Suppress("MagicNumber")
 private val HermesTypography =
     Typography(
         displayLarge = packDTextStyle(40f, 48f, FontWeight.Medium),

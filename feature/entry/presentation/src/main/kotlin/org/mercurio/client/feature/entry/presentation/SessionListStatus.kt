@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 
 /** The 24 dp status strip: the list count and state on the left, the Gateway state on the right. */
 @Composable
@@ -223,6 +224,29 @@ internal fun SessionListFooter(label: String) {
             )
         }
     }
+}
+
+@Composable
+internal fun SessionSectionHeader(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.16.em),
+        color = tokens.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(
+                    start = tokens.spacing.m,
+                    end = tokens.spacing.m,
+                    top = 10.dp,
+                    bottom = tokens.spacing.xs,
+                ),
+    )
 }
 
 internal fun LazyListScope.sessionListSkeletonItems() {

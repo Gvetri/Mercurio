@@ -600,6 +600,7 @@ class SelectedVisualRegressionTest {
             sessionList = sessionList,
         )
 
+    @Suppress("LongParameterList")
     private fun session(
         id: String,
         title: String,

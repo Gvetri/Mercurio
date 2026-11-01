@@ -328,6 +328,7 @@ class EntryScreenSessionListTest {
         }
     }
 
+    @Suppress("LongParameterList")
     private fun connectedState(
         sessions: List<SessionItemUiState>,
         searchQuery: String = "",
@@ -358,6 +359,7 @@ class EntryScreenSessionListTest {
                 ),
         )
 
+    @Suppress("LongParameterList")
     private fun item(
         id: String,
         title: String,

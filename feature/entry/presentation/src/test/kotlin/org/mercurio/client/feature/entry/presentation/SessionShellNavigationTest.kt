@@ -174,7 +174,12 @@ class SessionShellNavigationTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithContentDescription("Session title").performScrollTo().assertIsDisplayed()
         val keyboardTop = composeTestRule.activity.window.decorView.height - imeInset + 1
-        val titleBottom = composeTestRule.onNodeWithContentDescription("Session title").fetchSemanticsNode().boundsInWindow.bottom
+        val titleBottom =
+            composeTestRule
+                .onNodeWithContentDescription("Session title")
+                .fetchSemanticsNode()
+                .boundsInWindow
+                .bottom
         assertTrue("The Rename input must remain above the keyboard", titleBottom <= keyboardTop)
     }
 

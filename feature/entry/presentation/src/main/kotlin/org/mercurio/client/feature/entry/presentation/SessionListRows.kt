@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,8 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 
 /**
  * One 54 dp Session row: the 44 dp last-active column, the title, one preview
@@ -65,151 +63,115 @@ internal fun SessionRow(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
-    val component = tokens.componentColors
-    val mutation = row.mutation
-    val inlineRename = mutation?.rename != null
+    val inlineRename = row.mutation?.rename != null
     var menuOpen by remember { mutableStateOf(false) }
-    val held = menuOpen && !inlineRename
-    val rowBackground =
-        when {
-            held -> tokens.colorScheme.onSurface.copy(alpha = HELD_LAYER_ALPHA)
-            row.selected || inlineRename -> component.sessionSelected
-            else -> Color.Transparent
-        }
     Column(modifier = Modifier.fillMaxWidth()) {
         HorizontalDivider(color = tokens.colorScheme.outlineVariant)
         Box {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = SESSION_ROW_MIN_HEIGHT)
-                        .background(rowBackground)
-                        .combinedClickable(
-                            enabled = row.enabled && mutation?.pendingAction == null && !inlineRename,
-                            onClick = row.onClick,
-                            onLongClick = { menuOpen = true },
-                        )
-                        .semantics {
-                            this.selected = row.selected
-                            if (!inlineRename) {
-                                customActions =
-                                    listOf(
-                                        CustomAccessibilityAction("Show actions") {
-                                            menuOpen = true
-                                            true
-                                        },
-                                    )
-                            }
-                        }
-                        .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.s),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = row.session.lastActiveLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (row.selected) component.onSessionSelectedDim else tokens.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .width(SESSION_TIME_COLUMN)
-                            .then(
-                                if (row.session.lastActiveLabel == UNKNOWN_LAST_ACTIVE_LABEL) {
-                                    Modifier.clearAndSetSemantics {}
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                )
-                Spacer(modifier = Modifier.width(tokens.spacing.l))
-                Column(modifier = Modifier.weight(1f)) {
-                    if (inlineRename && mutation?.rename != null) {
-                        RenameSessionField(
-                            session = row.session,
-                            state = mutation.rename,
-                            enabled = row.enabled,
-                            onEvent = onEvent,
-                        )
-                    } else {
-                        Text(
-                            text = row.session.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (row.selected) component.onSessionSelected else tokens.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        val previewText =
-                            if (row.session.isPendingTitle) PENDING_TITLE_PREVIEW else row.session.preview
-                        if (previewText != null) {
-                            Spacer(modifier = Modifier.height(tokens.spacing.xxs))
-                            Text(
-                                text = previewText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color =
-                                    when {
-                                        row.session.isPendingTitle -> tokens.colorScheme.primary
-                                        row.selected -> component.onSessionSelectedDim
-                                        else -> tokens.colorScheme.onSurfaceVariant
-                                    },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-                if (inlineRename && mutation?.rename != null) {
-                    Spacer(modifier = Modifier.width(tokens.spacing.xs))
-                    InlineRenameActions(
-                        session = row.session,
-                        state = mutation.rename,
-                        enabled = row.enabled,
-                        onEvent = onEvent,
-                    )
-                }
-            }
-            DropdownMenu(
+            SessionRowContent(
+                row = row,
+                inlineRename = inlineRename,
+                held = menuOpen && !inlineRename,
+                onLongPress = { menuOpen = true },
+                onEvent = onEvent,
+            )
+            SessionRowMenu(
                 expanded = menuOpen && !inlineRename,
-                onDismissRequest = { menuOpen = false },
-                shape = tokens.shapes.extraSmall,
-                containerColor = tokens.colorScheme.surfaceContainerHigh,
-                tonalElevation = 0.dp,
-                shadowElevation = tokens.elevation.level2,
-                modifier = Modifier.width(SESSION_MENU_WIDTH),
-            ) {
-                SessionMenuItem(
-                    label = if (row.session.pinned) "Unpin" else "Pin",
-                    enabled = row.enabled && mutation?.pendingAction == null,
-                ) {
-                    menuOpen = false
-                    onEvent(
-                        if (row.session.pinned) {
-                            EntryUiEvent.UnpinSessionClicked(row.session.id)
-                        } else {
-                            EntryUiEvent.PinSessionClicked(row.session.id)
-                        },
-                    )
-                }
-                SessionMenuItem(
-                    label = "Rename",
-                    enabled = row.enabled && mutation?.pendingAction == null,
-                ) {
-                    menuOpen = false
-                    onEvent(EntryUiEvent.RenameSessionClicked(row.session.id))
-                }
-                HorizontalDivider(color = tokens.colorScheme.outlineVariant)
-                SessionMenuItem(
-                    label = "Delete",
-                    enabled = row.enabled && mutation?.pendingAction == null,
-                    destructive = true,
-                ) {
-                    menuOpen = false
-                    onEvent(EntryUiEvent.DeleteSessionClicked(row.session.id))
-                }
-            }
+                row = row,
+                onDismiss = { menuOpen = false },
+                onEvent = onEvent,
+            )
         }
         SessionRowMutationFeedback(
             session = row.session,
-            mutation = mutation,
+            mutation = row.mutation,
+            enabled = row.enabled,
+            onEvent = onEvent,
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SessionRowContent(
+    row: SessionRowUiState,
+    inlineRename: Boolean,
+    held: Boolean,
+    onLongPress: () -> Unit,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    val component = tokens.componentColors
+    val selected = row.selected || inlineRename
+    val background =
+        when {
+            held -> tokens.colorScheme.onSurface.copy(alpha = HELD_LAYER_ALPHA)
+            selected -> component.sessionSelected
+            else -> Color.Transparent
+        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = SESSION_ROW_MIN_HEIGHT)
+                .background(background)
+                .combinedClickable(
+                    enabled = row.enabled && row.mutation?.pendingAction == null && !inlineRename,
+                    onClick = row.onClick,
+                    onLongClick = onLongPress,
+                )
+                .semantics {
+                    this.selected = row.selected
+                    if (!inlineRename) {
+                        customActions =
+                            listOf(
+                                CustomAccessibilityAction("Show actions") {
+                                    onLongPress()
+                                    true
+                                },
+                            )
+                    }
+                }
+                .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SessionTimeColumn(row = row, selected = selected)
+        Spacer(modifier = Modifier.width(tokens.spacing.l))
+        SessionRowMiddle(
+            row = row,
+            inlineRename = inlineRename,
+            selected = selected,
+            onEvent = onEvent,
+        )
+    }
+}
+
+@Composable
+private fun RowScope.SessionRowMiddle(
+    row: SessionRowUiState,
+    inlineRename: Boolean,
+    selected: Boolean,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    val rename = row.mutation?.rename
+    Column(modifier = Modifier.weight(1f)) {
+        if (inlineRename && rename != null) {
+            RenameSessionField(
+                session = row.session,
+                state = rename,
+                enabled = row.enabled,
+                onEvent = onEvent,
+            )
+        } else {
+            SessionTitleAndPreview(row = row, selected = selected)
+        }
+    }
+    if (inlineRename && rename != null) {
+        Spacer(modifier = Modifier.width(tokens.spacing.xs))
+        InlineRenameActions(
+            session = row.session,
+            state = rename,
             enabled = row.enabled,
             onEvent = onEvent,
         )
@@ -217,30 +179,59 @@ internal fun SessionRow(
 }
 
 @Composable
-private fun SessionMenuItem(
-    label: String,
-    enabled: Boolean,
-    destructive: Boolean = false,
-    onClick: () -> Unit,
+private fun SessionTimeColumn(
+    row: SessionRowUiState,
+    selected: Boolean,
 ) {
     val tokens = LocalHermesDesignTokens.current
-    DropdownMenuItem(
-        text = {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color =
-                    when {
-                        !enabled -> tokens.colorScheme.onSurface.copy(alpha = DISABLED_CONTENT_ALPHA)
-                        destructive -> tokens.colorScheme.error
-                        else -> tokens.colorScheme.onSurface
+    Text(
+        text = row.session.lastActiveLabel,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (selected) tokens.componentColors.onSessionSelectedDim else tokens.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        modifier =
+            Modifier
+                .width(SESSION_TIME_COLUMN)
+                .then(
+                    if (row.session.lastActiveLabel == UNKNOWN_LAST_ACTIVE_LABEL) {
+                        Modifier.clearAndSetSemantics {}
+                    } else {
+                        Modifier
                     },
-            )
-        },
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.heightIn(min = SESSION_MENU_ITEM_HEIGHT),
+                ),
     )
+}
+
+@Composable
+private fun SessionTitleAndPreview(
+    row: SessionRowUiState,
+    selected: Boolean,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    Text(
+        text = row.session.title,
+        style = MaterialTheme.typography.titleMedium,
+        color = if (selected) tokens.componentColors.onSessionSelected else tokens.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+    val previewText =
+        if (row.session.isPendingTitle) PENDING_TITLE_PREVIEW else row.session.preview
+    if (previewText != null) {
+        Spacer(modifier = Modifier.height(tokens.spacing.xxs))
+        Text(
+            text = previewText,
+            style = MaterialTheme.typography.bodySmall,
+            color =
+                when {
+                    row.session.isPendingTitle -> tokens.colorScheme.primary
+                    selected -> tokens.componentColors.onSessionSelectedDim
+                    else -> tokens.colorScheme.onSurfaceVariant
+                },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable
@@ -266,7 +257,10 @@ private fun RenameSessionField(
                 ),
             cursorBrush = SolidColor(tokens.colorScheme.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onEvent(EntryUiEvent.ConfirmRenameSessionClicked(session.id)) }),
+            keyboardActions =
+                KeyboardActions(
+                    onDone = { onEvent(EntryUiEvent.ConfirmRenameSessionClicked(session.id)) },
+                ),
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -299,16 +293,14 @@ private fun InlineRenameActions(
         RenameAction(
             glyph = "✓",
             description = "Confirm rename",
-            background = tokens.colorScheme.primary,
-            contentColor = tokens.colorScheme.onPrimary,
+            positive = true,
             enabled = enabled && !state.isSubmitting,
             onClick = { onEvent(EntryUiEvent.ConfirmRenameSessionClicked(session.id)) },
         )
         RenameAction(
             glyph = "×",
             description = "Cancel rename",
-            background = tokens.colorScheme.surfaceContainerHighest,
-            contentColor = tokens.colorScheme.onSurfaceVariant,
+            positive = false,
             enabled = !state.isSubmitting,
             onClick = { onEvent(EntryUiEvent.CancelRenameSessionClicked(session.id)) },
         )
@@ -319,12 +311,13 @@ private fun InlineRenameActions(
 private fun RenameAction(
     glyph: String,
     description: String,
-    background: Color,
-    contentColor: Color,
+    positive: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val background = if (positive) tokens.colorScheme.primary else tokens.colorScheme.surfaceContainerHighest
+    val contentColor = if (positive) tokens.colorScheme.onPrimary else tokens.colorScheme.onSurfaceVariant
     Box(
         modifier =
             Modifier
@@ -402,29 +395,6 @@ private fun SessionRowMutationFeedback(
     }
 }
 
-@Composable
-internal fun SessionSectionHeader(
-    label: String,
-    modifier: Modifier = Modifier,
-) {
-    val tokens = LocalHermesDesignTokens.current
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.16.em),
-        color = tokens.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(
-                    start = tokens.spacing.m,
-                    end = tokens.spacing.m,
-                    top = 10.dp,
-                    bottom = tokens.spacing.xs,
-                ),
-    )
-}
-
 private fun SessionMutationAction.pendingMessage(): String =
     when (this) {
         SessionMutationAction.RENAME -> "Renaming Session…"
@@ -437,8 +407,5 @@ internal const val PENDING_TITLE_PREVIEW = "Generating title…"
 
 private val SESSION_ROW_MIN_HEIGHT = 54.dp
 private val SESSION_TIME_COLUMN = 44.dp
-private val SESSION_MENU_WIDTH = 216.dp
-private val SESSION_MENU_ITEM_HEIGHT = 44.dp
 private val RENAME_ACTION_SIZE = 32.dp
 private const val HELD_LAYER_ALPHA = 0.12f
-private const val DISABLED_CONTENT_ALPHA = 0.38f

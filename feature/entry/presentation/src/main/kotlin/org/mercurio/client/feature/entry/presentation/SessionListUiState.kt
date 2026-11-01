@@ -203,7 +203,9 @@ internal fun SessionListUiState.allowsSessionMutation(): Boolean =
         openedSession?.isRefreshing != true &&
         openedSession?.isReconciliationInProgress != true
 
-internal fun SessionListUiState.showsNewSessionRowInEmptyState(): Boolean = searchQuery.isBlank() && !isUnavailable && !isStale
+internal fun SessionListUiState.showsNewSessionRowInEmptyState(): Boolean {
+    return searchQuery.isBlank() && !isUnavailable && !isStale
+}
 
 internal fun SessionListUiState.createSessionActionEnabled(): Boolean =
     !isLoading &&
@@ -248,45 +250,6 @@ internal fun relativeLastActiveLabel(
         seconds < MONTH_SECONDS -> "${seconds / WEEK_SECONDS}w"
         seconds < YEAR_SECONDS -> "${seconds / MONTH_SECONDS}mo"
         else -> "${seconds / YEAR_SECONDS}y"
-    }
-}
-
-internal enum class GatewayStatus { READY, WAITING, OFFLINE }
-
-internal data class SessionListStatusUiState(
-    val segments: List<String>,
-    val gateway: String,
-    val gatewayStatus: GatewayStatus,
-)
-
-internal fun SessionListUiState.statusUiState(): SessionListStatusUiState {
-    val count = sessions.size
-    val countLabel = "$count ${if (count == 1) "session" else "sessions"} · ${if (isCached) "cached" else "connected"}"
-    return when {
-        isUnavailable || isStale ->
-            SessionListStatusUiState(
-                segments = listOf(countLabel),
-                gateway = "gateway :: offline",
-                gatewayStatus = GatewayStatus.OFFLINE,
-            )
-        (isLoading && sessions.isEmpty()) || isRefreshing ->
-            SessionListStatusUiState(
-                segments = listOf("connecting…"),
-                gateway = "gateway :: waiting",
-                gatewayStatus = GatewayStatus.WAITING,
-            )
-        isLoadingMore ->
-            SessionListStatusUiState(
-                segments = listOf("loading more…", countLabel),
-                gateway = "gateway :: ready",
-                gatewayStatus = GatewayStatus.READY,
-            )
-        else ->
-            SessionListStatusUiState(
-                segments = listOf(countLabel),
-                gateway = "gateway :: ready",
-                gatewayStatus = GatewayStatus.READY,
-            )
     }
 }
 
