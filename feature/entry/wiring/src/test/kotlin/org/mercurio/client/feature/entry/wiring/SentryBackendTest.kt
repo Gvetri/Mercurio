@@ -79,6 +79,15 @@ class SentryBackendTest {
         assertEquals(1, installs)
     }
 
+    @Test
+    fun a_failed_install_keeps_every_later_start_on_the_no_op_sink() {
+        val backend = AndroidSentryBackend { _, _ -> error("InvalidDsnException") }
+
+        backend.start(context, reportingConfig())
+
+        assertSame(NoOpErrorReporter, backend.start(context, reportingConfig()))
+    }
+
     private fun reportingConfig(): SentryReportingConfig =
         SentryReportingConfig(
             dsn = "https://synthetic-key@ingest.example.invalid/1",

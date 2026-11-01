@@ -48,8 +48,9 @@ adb shell am start -a android.intent.action.VIEW -d 'mercurio-journey://error-re
 
 Before an event leaves the device, the adapter drops breadcrumbs, user identity, request data,
 extras and the server name, and removes any tag whose name names a session, draft, credential,
-token, password, cookie, gateway or host. An event therefore carries its release, its environment,
-the exception and its stack frames.
+token, password, authorization, cookie, gateway, host or DSN. What remains is the event's own
+content: its release, its environment, the exception and its stack frames, plus the device and OS
+context the SDK fills in.
 
 It does not scan free text: an exception message or stack frame that embeds a Gateway endpoint is
 reported as written, and `contexts` is left intact for device and OS detail. Generated failure
