@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.mercurio.client.feature.entry.application.EntryState
-import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
@@ -353,7 +352,6 @@ data class EntryStateHolderDependencies(
     val runStatusNotificationPermission: RunStatusNotificationPermission? = null,
     val runStatusNotifier: RunStatusNotifier? = null,
     val localDiagnostics: LocalDiagnosticsPorts? = null,
-    val errorReporting: ErrorReporting? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -380,13 +378,7 @@ class EntryStateHolder(
     internal val runStatusNotificationPermission = dependencies.runStatusNotificationPermission
     internal val runStatusNotifier = dependencies.runStatusNotifier
     internal val localDiagnostics = dependencies.localDiagnostics
-    internal val errorReporting = dependencies.errorReporting
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
-
-    /** Reports one unexpected failure through the bound error-reporting sink. */
-    fun reportUnexpectedFailure() {
-        errorReporting?.reportUnexpectedFailure()
-    }
 
     /**
      * Requests the Android notification permission. Assigned by the app

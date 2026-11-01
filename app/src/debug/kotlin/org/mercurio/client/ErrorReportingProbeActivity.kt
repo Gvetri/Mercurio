@@ -54,35 +54,25 @@ class ErrorReportingProbeActivity : ComponentActivity() {
     }
 
     private fun captureLive(): Boolean {
-        val holder = EntryWiring.createEntryStateHolder(context = applicationContext)
-        return try {
-            holder.reportUnexpectedFailure()
-            true
-        } finally {
-            holder.close()
-        }
+        EntryWiring.createErrorReporting(context = applicationContext).reportUnexpectedFailure()
+        return true
     }
 
     private fun captureAndDeliver(): Boolean {
         val sink = RecordingErrorReporter()
-        val holder =
-            EntryWiring.createEntryStateHolder(
+        EntryWiring
+            .createErrorReporting(
                 context = applicationContext,
                 overrides = EntryWiringOverrides(errorReporter = sink),
-            )
-        return try {
-            holder.reportUnexpectedFailure()
-            sink.reports().takeIf(List<ErrorReport>::isNotEmpty)?.let(::deliver)
-                ?: false
-        } finally {
-            holder.close()
-        }
+            ).reportUnexpectedFailure()
+        return sink.reports().takeIf(List<ErrorReport>::isNotEmpty)?.let(::deliver) ?: false
     }
 
     private fun deliver(reports: List<ErrorReport>): Boolean {
-        val body = reports.joinToString(",", prefix = "[", postfix = "]") { report ->
-            """{"release":${report.release.asJsonString()},"environment":${report.environment.asJsonString()}}"""
-        }
+        val body =
+            reports.joinToString(",", prefix = "[", postfix = "]") { report ->
+                """{"release":${report.release.asJsonString()},"environment":${report.environment.asJsonString()}}"""
+            }
         val connection = URL(JOURNEY_ERROR_REPORT_URL).openConnection() as HttpURLConnection
         return try {
             connection.requestMethod = "POST"

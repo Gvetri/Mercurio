@@ -71,7 +71,6 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
-                    errorReporting = buildErrorReporting(context, overrides, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -82,6 +81,13 @@ object EntryWiring {
                 ),
         )
     }
+
+    /** Binds the error-reporting port for this installation, without building the state holder. */
+    fun createErrorReporting(
+        context: Context,
+        overrides: EntryWiringOverrides = EntryWiringOverrides(),
+        clientVersion: String = androidClientVersion(context),
+    ): ErrorReporting = buildErrorReporting(context, overrides, clientVersion)
 
     private fun entryScope(
         coroutineScope: CoroutineScope?,

@@ -633,8 +633,9 @@ private object JourneyErrorReportingInvariants {
     private const val UNKNOWN_RELEASE = "unknown"
 
     internal fun verifyErrorReporting(telemetry: JsonObject) {
-        val reports = telemetry["error_reports"]?.jsonArray
-            ?: error("Telemetry has no error-report record.")
+        val reports =
+            telemetry["error_reports"]?.jsonArray
+                ?: error("Telemetry has no error-report record.")
         check(reports.size == 1) {
             "The fake sink captured ${reports.size} error reports, expected exactly one."
         }
