@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.LoadEntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
@@ -70,6 +71,7 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
+                    errorReporting = buildErrorReporting(context, overrides, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -97,6 +99,19 @@ private fun buildRunRecoveryRegistry(
             SharedPreferencesRunRecoveryStorage(context) { endpoint }
         },
     )
+
+private fun buildErrorReporting(
+    context: Context,
+    overrides: EntryWiringOverrides,
+    clientVersion: String,
+): ErrorReporting {
+    val config = sentryReportingConfig(clientVersion)
+    return ErrorReporting(
+        reporter = overrides.errorReporter ?: defaultSentryBackend.start(context, config),
+        release = config.release,
+        environment = config.environment,
+    )
+}
 
 private fun buildVerifyGatewayConnection(
     repository: GatewayConnectionRepository,

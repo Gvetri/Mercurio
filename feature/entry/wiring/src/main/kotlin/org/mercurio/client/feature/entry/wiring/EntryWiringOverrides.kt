@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.wiring
 
 import kotlinx.coroutines.CoroutineScope
+import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
 import org.mercurio.client.feature.entry.domain.GatewayCredentialStore
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
@@ -14,4 +15,5 @@ data class EntryWiringOverrides(
     val coroutineScope: CoroutineScope? = null,
     val credentialStore: GatewayCredentialStore? = null,
     val historyCacheStore: HistoryCacheStore? = null,
+    val errorReporter: ErrorReporter? = null,
 )

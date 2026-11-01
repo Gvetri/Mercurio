@@ -20,6 +20,7 @@ espressoCore = "3.6.1"
 robolectric = "4.17"
 roborazzi = "1.60.0"
 konsist = "0.17.3"
+sentry = "8.16.0"
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
@@ -62,3 +63,4 @@ roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = 
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
 roborazzi-junit-rule = { module = "io.github.takahirom.roborazzi:roborazzi-junit-rule", version.ref = "roborazzi" }
 konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
+sentry-android-core = { module = "io.sentry:sentry-android-core", version.ref = "sentry" }
