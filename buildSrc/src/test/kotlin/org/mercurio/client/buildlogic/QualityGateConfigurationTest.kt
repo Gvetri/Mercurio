@@ -110,6 +110,11 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun release_artifact_carries_the_configured_dsn_before_signing() {
+        runPythonSuite(".github/scripts/tests/test_verify_release_dsn.py")
+    }
+
+    @Test
     fun the_conformance_job_verifies_the_published_documentation() {
         val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
         val conformance = workflow.substringAfter("  conformance:\n").substringBefore("  api24_instrumentation:\n")

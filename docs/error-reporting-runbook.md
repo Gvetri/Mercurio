@@ -115,10 +115,14 @@ Until then the free plan is the intended operating point.
 
 Moving to an existing GlitchTip instance is a DSN change plus one toggle:
 
-1. Set the build to the GlitchTip DSN with `-Pmercurio.sentryDsn=<glitchtip DSN>`.
-2. Turn session tracking off, because GlitchTip does not implement it.
-3. Rebuild the alert rules by hand; they do not migrate.
-4. Accept that historical events do not move — the free plan retains 30 days and nothing is
+1. Set the build to the GlitchTip DSN with `-Pmercurio.sentryDsn=<glitchtip DSN>`. A released build
+   reads `MERCURIO_SENTRY_DSN`, so the variable changes and the next Nightly carries it.
+2. Disable the Sentry client key once a Nightly carrying the GlitchTip DSN is published. Every build
+   already shipped still holds the old key, so leaving it enabled keeps accepting events that nobody
+   reads.
+3. Turn session tracking off, because GlitchTip does not implement it.
+4. Rebuild the alert rules by hand; they do not migrate.
+5. Accept that historical events do not move — the free plan retains 30 days and nothing is
    dual-shipped.
 
 No application or domain code changes, and no second backend runs in parallel.
