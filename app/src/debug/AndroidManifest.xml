@@ -6,6 +6,18 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|fontScale"
             android:exported="false" />
         <activity
+            android:name="org.mercurio.client.ErrorReportingProbeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="error-reporting"
+                    android:scheme="mercurio-journey" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name="androidx.activity.ComponentActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|fontScale|uiMode" />
     </application>

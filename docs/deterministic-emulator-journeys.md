@@ -90,6 +90,13 @@ areas, add the label: the nightly schedule runs the whole suite against `main` e
   endpoint, and the test-only TLS key pair are repository-owned test fixtures,
   never real credentials, and the TLS key pair is never used outside the
   emulator test boundary.
+- The error-reporting journey binds the recording sink at the reporting port in a
+  debug-only probe reached over the `mercurio-journey://error-reporting` deep link,
+  reports one unexpected failure through the wiring, and delivers what the sink
+  captured to the fake Gateway's `/__fixture/error-report` route. The verifier
+  requires exactly one captured report whose release is the installed client version
+  and whose environment is the debug build type, so the seam is proven without the
+  shipped backend, a live DSN, or Sentry quota.
 - Unsupported capability surfaces are exercised: an additive unknown
   capability keeps the supported contract usable (the journey opens a Session,
   sends a message, and reaches a succeeded terminal state), and a missing

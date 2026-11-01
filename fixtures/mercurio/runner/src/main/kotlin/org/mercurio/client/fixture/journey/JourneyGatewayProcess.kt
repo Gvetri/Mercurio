@@ -7,6 +7,10 @@ import com.sun.net.httpserver.HttpsServer
 import org.mercurio.client.fixture.GatewayHttpSupport
 import org.mercurio.client.fixture.GatewayProcess
 import org.mercurio.client.fixture.SyntheticGatewayRequest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.URI
@@ -125,6 +129,9 @@ class JourneyGatewayProcess private constructor(
                 record(exchange, behavior)
                 respond(exchange, HTTP_OK, behavior.telemetryJson())
             }
+            server.createContext("/__fixture/error-report") { exchange ->
+                recordErrorReports(exchange, behavior)
+            }
             server.createContext("/v1/capabilities") { exchange ->
                 record(exchange, behavior)
                 if (unauthorized(exchange, behavior)) {
@@ -193,6 +200,33 @@ private fun record(
     exchange: HttpExchange,
     behavior: JourneyGatewayBehavior,
 ): String? = GatewayHttpSupport.recordRequest(exchange, behavior.requests)
+
+private const val ERROR_REPORT_METHOD = "POST"
+
+private fun recordErrorReports(
+    exchange: HttpExchange,
+    behavior: JourneyGatewayBehavior,
+) {
+    if (exchange.requestMethod != ERROR_REPORT_METHOD) {
+        GatewayHttpSupport.respond(exchange, HTTP_METHOD_NOT_ALLOWED, """{"error":"method-not-allowed"}""")
+        return
+    }
+    val reports =
+        runCatching {
+            Json.parseToJsonElement(exchange.requestBody.readBytes().toString(Charsets.UTF_8)).jsonArray
+        }.getOrNull()
+    if (reports == null) {
+        GatewayHttpSupport.respond(exchange, HTTP_BAD_REQUEST, """{"error":"malformed-report"}""")
+        return
+    }
+    reports.forEach { element ->
+        val report = element.jsonObject
+        behavior.errorReports +=
+            report.getValue("release").jsonPrimitive.content to
+            report.getValue("environment").jsonPrimitive.content
+    }
+    GatewayHttpSupport.respond(exchange, HTTP_ACCEPTED, """{"recorded":${reports.size}}""")
+}
 
 private fun respond(
     exchange: HttpExchange,
@@ -819,6 +853,7 @@ internal class JourneyGatewayBehavior(
     val sessions = CopyOnWriteArrayList(scenario.sessions)
     val requests = CopyOnWriteArrayList<SyntheticGatewayRequest>()
     val sessionMutations = CopyOnWriteArrayList<Pair<String, String>>()
+    val errorReports = CopyOnWriteArrayList<Pair<String, String>>()
 
     @Volatile
     private var failNextSessionList = scenario.failNextSessionList
@@ -931,6 +966,13 @@ internal class JourneyGatewayBehavior(
             )
             append(']')
             append(""","interrupted_run_ids":[${interruptedRunIds.joinToString(",") { it.jsonValue() }}]""")
+            append(""","error_reports":[""")
+            append(
+                errorReports.joinToString(",") { (release, environment) ->
+                    """{"release":${release.jsonValue()},"environment":${environment.jsonValue()}}"""
+                },
+            )
+            append(']')
             append(""","sse_connections":{""")
             append(
                 scenario.runs.joinToString(",") { run ->
