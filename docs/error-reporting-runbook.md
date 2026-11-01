@@ -26,6 +26,21 @@ domain layers.
 A DSN the SDK rejects is treated the same way: the backend does not install, no event is ever sent,
 and the app runs normally. Only a working DSN turns reporting on.
 
+### Release builds
+
+The protected release workflow supplies the same property from the repository variable
+`MERCURIO_SENTRY_DSN`. It is a variable rather than a secret because the DSN is a public identifier:
+it permits submitting events and nothing else, and no auth token is involved in building or signing.
+
+That variable is mandatory for a release. After assembling the APK the workflow reads the packaged
+classes back and fails the build unless they carry exactly that DSN, so a Nightly cannot be signed or
+published silent. A missing, blank, or malformed variable stops the release instead of producing an
+artifact that reports nothing.
+
+Rotating the key therefore means creating the new client key in the project, updating the variable,
+and letting the next Nightly carry it; local builds and pull-request gates stay on their no-DSN
+default and remain silent.
+
 ## Deliberate delivery check
 
 Prove real delivery from a real build once per backend change; the deterministic journeys use a
@@ -100,10 +115,14 @@ Until then the free plan is the intended operating point.
 
 Moving to an existing GlitchTip instance is a DSN change plus one toggle:
 
-1. Set the build to the GlitchTip DSN with `-Pmercurio.sentryDsn=<glitchtip DSN>`.
-2. Turn session tracking off, because GlitchTip does not implement it.
-3. Rebuild the alert rules by hand; they do not migrate.
-4. Accept that historical events do not move — the free plan retains 30 days and nothing is
+1. Set the build to the GlitchTip DSN with `-Pmercurio.sentryDsn=<glitchtip DSN>`. A released build
+   reads `MERCURIO_SENTRY_DSN`, so the variable changes and the next Nightly carries it.
+2. Disable the Sentry client key once a Nightly carrying the GlitchTip DSN is published. Every build
+   already shipped still holds the old key, so leaving it enabled keeps accepting events that nobody
+   reads.
+3. Turn session tracking off, because GlitchTip does not implement it.
+4. Rebuild the alert rules by hand; they do not migrate.
+5. Accept that historical events do not move — the free plan retains 30 days and nothing is
    dual-shipped.
 
 No application or domain code changes, and no second backend runs in parallel.
