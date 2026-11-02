@@ -1251,12 +1251,6 @@ class QualityGateConfigurationTest {
             workflow.substringAfter("  maestro_journeys:\n").substringBefore("  maestro_shard_1:")
         val maestroShards =
             workflow.substringAfter("  maestro_shard_1:").substringBefore("  create_nightly_failure_issue:")
-        val laneNeeds =
-            "    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, " +
-                "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, " +
-                "coverage_mutation, compose_test]"
-        val aggregateNeeds =
-            laneNeeds.replace("compose_test]", "compose_test, maestro_shard_1, maestro_shard_2, maestro_shard_3]")
         val lanes =
             listOf(
                 "ui_paths",
@@ -1271,24 +1265,22 @@ class QualityGateConfigurationTest {
                 "coverage_mutation",
                 "compose_test",
             )
+        val shardKeys = (1..3).map { shard -> "maestro_shard_$shard" }
+        val laneNeeds = "    needs: [api24_instrumentation, ${lanes.joinToString(", ")}]"
+        val aggregateNeeds = "    needs: [api24_instrumentation, ${(lanes + shardKeys).joinToString(", ")}]"
+        val laneGuard = lanes.joinToString(" && ") { lane -> "needs.$lane.result != 'failure'" }
 
         assertTrue("The workflow must define a Maestro journey job.", workflow.contains("  maestro_journeys:\n"))
         assertTrue("The Maestro journey job must be named explicitly.", workflow.contains("    name: maestro-journeys\n"))
         assertEquals(
-            "The shard aggregate must wait for every lane and every shard it aggregates.",
-            aggregateNeeds,
-            maestroUmbrella.lineSequence().firstOrNull { it.startsWith("    needs: ") },
-        )
-        assertEquals(
-            "The shard aggregate must declare nothing beyond the lanes and the three shards.",
+            "The shard aggregate must declare nothing but the lanes and every shard it aggregates.",
             listOf(aggregateNeeds),
-            maestroUmbrella.lineSequence().filter { it.startsWith("    needs: ") }.toList(),
+            maestroUmbrella.lineSequence().filter { line -> line.startsWith("    needs: ") }.toList(),
         )
-        val shardNeedsLines = maestroShards.lineSequence().filter { it.startsWith("    needs: ") }.toList()
         assertEquals(
             "Every journey shard must wait for the lanes that conclude before it starts, and for nothing else.",
-            List(3) { laneNeeds },
-            shardNeedsLines,
+            shardKeys.map { laneNeeds },
+            maestroShards.lineSequence().filter { line -> line.startsWith("    needs: ") }.toList(),
         )
         assertTrue(
             "The shard aggregate must keep the label, API 24, schedule, manual, and ready-pull-request gate the shards use.",
@@ -1300,24 +1292,22 @@ class QualityGateConfigurationTest {
                 maestroUmbrella.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')") &&
                 !maestroUmbrella.contains("needs.ui_paths.outputs.ui_paths_changed"),
         )
-        lanes.forEach { lane ->
-            assertTrue(
-                "The shard aggregate must skip its pull-request run when $lane has already failed.",
-                maestroUmbrella.contains("needs.$lane.result != 'failure'"),
-            )
-        }
         assertTrue(
-            "The shard aggregate must flag a failed lane by name, so a lane it does not wait on cannot silence it.",
-            maestroUmbrella.contains("(github.event_name != 'pull_request' || (needs.ui_paths.result != 'failure'"),
+            "The shard aggregate must flag every failed lane by name, so a lane it does not wait on cannot silence it.",
+            maestroUmbrella.contains("(github.event_name != 'pull_request' || ($laneGuard))"),
+        )
+        assertTrue(
+            "The shard aggregate must gate on the lanes it names rather than on the outcome of every need.",
+            !maestroUmbrella.contains("!contains(needs.*.result, 'failure')"),
         )
         assertTrue(
             "Each shard must skip on the outcome of every lane it named, since it has no shard results to read.",
             maestroShards.contains("(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))"),
         )
-        (1..3).forEach { shard ->
+        (1..shardKeys.size).forEach { shard ->
             assertTrue(
                 "Shard $shard must run its own partition of the pinned journeys with the pinned runner script.",
-                maestroShards.contains("            .github/scripts/journey-run.sh $shard 3\n"),
+                maestroShards.contains("            .github/scripts/journey-run.sh $shard ${shardKeys.size}\n"),
             )
         }
         assertTrue(
