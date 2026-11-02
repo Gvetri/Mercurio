@@ -96,6 +96,13 @@ and press **Send**. Sending creates a Hermes Run on the Gateway. **Send** is dis
 submission or an active Run is in progress, and drafts stay in memory for the open Session. A failed
 submission preserves your draft so you can **Try again**.
 
+**Links.** The client accepts two external links: `mercurio://session/<id>` opens that Session, and
+`mercurio://compose` focuses the open Session's composer without sending. A link that names an
+unknown or foreign Session, or that arrives while the client is not connected to a Gateway, is
+discarded with a truthful message and never kept as a pending link. The client never verifies a
+saved connection by itself, so a link that starts the app from cold takes the connection form. A
+link never creates a Session.
+
 **Observation.** The client reports the Run state (**Queued**, **Running**, **Completed**,
 **Failed**, **Cancelled**) and streams the response as it arrives. An interrupted stream reports
 **Stream interrupted. Run result is uncertain.** rather than inventing a result.
