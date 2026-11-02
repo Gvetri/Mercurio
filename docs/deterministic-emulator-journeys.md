@@ -218,9 +218,9 @@ a flow change is pushed.
 The Chat composer exposes the input as the resource id `conversation-message-input`
 and the send action as the text control `[ send ]`; the run line carries
 `[ stop ]`, `[ refresh ]` and `[ refresh history ]`. The placeholder
-(`write a message`) is a decoration that composes whenever the field is empty, so
-a flow asserts it after the transcript is known to be empty and not while a
-reply is still streaming.
+(`write a message`) is a decoration that composes whenever the composer draft
+is empty, so a flow asserts it only after the field has been cleared - never
+while a reply is still streaming, when the draft state is the flow's own.
 
 The discriminating check is a hierarchy dump: the input node carries its resource
 id, while the bracket delimiters in the control labels are regex metacharacters.

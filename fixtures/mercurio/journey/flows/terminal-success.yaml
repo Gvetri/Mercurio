@@ -28,3 +28,4 @@ name: terminal-success
     visible: "idle"
     timeout: 30000
 - assertVisible: "Stable result"
+- assertVisible: "ASSISTANT"
