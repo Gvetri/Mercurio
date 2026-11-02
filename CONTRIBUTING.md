@@ -111,8 +111,9 @@ images with the JVM/Robolectric Compose test gate.
 that belong to the matrix. Each entry maps to one test method in
 `SelectedVisualRegressionTest`, in `SelectedShellVisualRegressionTest` for the
 shell window contracts, in `SelectedMarkdownVisualRegressionTest` for the
-Markdown rendering contracts, or in `SettingsDesignStatesTest` for the approved
-`mercurio/settings` states.
+Markdown rendering contracts, in `ChatDesignStatesTest` for the chat states, in
+`HistoryCacheVisualRegressionTest` for the cache states, or in
+`SettingsDesignStatesTest` for the approved `mercurio/settings` states.
 
 | State | Compose surface | Reason for inclusion |
 | --- | --- | --- |
