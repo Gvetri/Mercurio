@@ -18,5 +18,6 @@ internal data class ChatCallbacks(
     val actions: MessageActions,
     val retryEnabled: Boolean,
     val onRetry: (RunId) -> Unit,
+    val onTableExpand: (MarkdownBlock.Table) -> Unit,
     val onEvent: (EntryUiEvent) -> Unit,
 )

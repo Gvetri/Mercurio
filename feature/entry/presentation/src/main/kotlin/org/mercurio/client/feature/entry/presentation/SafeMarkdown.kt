@@ -45,13 +45,12 @@ internal sealed interface MarkdownBlock {
 
     /**
      * A pipe table: the header row, the data rows padded or trimmed to the header
-     * width, and [spans] holding the literal source text the renderer still shows
-     * until a table renderer lands.
+     * width, and the alignment each column's separator declared.
      */
     data class Table(
         val header: List<String>,
         val rows: List<List<String>>,
-        val spans: List<MarkdownSpan>,
+        val alignments: List<TableAlignment>,
     ) : MarkdownBlock
 
     /**
@@ -72,6 +71,9 @@ internal data class NumberedItem(
     val marker: String,
     val spans: List<MarkdownSpan>,
 )
+
+/** The alignment a table separator row declares for its column; an omitted marker means start. */
+internal enum class TableAlignment { Start, Center, End }
 
 /**
  * One run of literal message text. [link] is set only for a destination that
@@ -131,10 +133,10 @@ private const val CODE_FENCE = "```"
 /**
  * Parses the supported Markdown subset of untrusted Gateway content: headings,
  * blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links, fenced code
- * blocks, pipe tables, and math delimiters. Pipe tables and `$$…$$` display math become
- * their own blocks, `![…](…)` and `$…$` become marked spans, and every one of them keeps
- * its literal source text until its renderer lands. Unsupported constructs stay literal
- * text, so nothing in the source can become executable content.
+ * blocks, pipe tables, and math delimiters. A pipe table becomes its own block with the
+ * alignment its separator row declares; `$$…$$` display math still renders as its literal
+ * source text, and `![…](…)` and `$…$` become marked spans. Unsupported constructs stay
+ * literal text, so nothing in the source can become executable content.
  */
 internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
@@ -143,6 +145,13 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
 
     fun flushParagraphRun() {
         if (paragraphLines.isEmpty()) return
+        val leading = leadingPipeTable(paragraphLines)
+        if (leading != null) {
+            blocks += leading.first
+            paragraphLines.subList(0, leading.second).clear()
+            flushParagraphRun()
+            return
+        }
         val source = paragraphLines.joinToString(separator = " ")
         blocks += structuredBlock(paragraphLines) ?: MarkdownBlock.Paragraph(parseInline(source))
         paragraphLines.clear()

@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun ChatMessageBody(
     row: ChatRow,
-    actions: MessageActions,
+    callbacks: ChatCallbacks,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember(row.id) { mutableStateOf(false) }
@@ -43,8 +43,9 @@ internal fun ChatMessageBody(
                 row.body?.let { body ->
                     MarkdownContent(
                         markdown = body,
-                        actions = actions,
+                        actions = callbacks.actions,
                         blockSpacing = LocalHermesDesignTokens.current.spacing.xs,
+                        onTableExpand = callbacks.onTableExpand,
                     )
                 }
                 if (row.streaming) ChatStreamingCaret(modifier = Modifier.padding(top = 2.dp))
