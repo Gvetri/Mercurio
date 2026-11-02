@@ -112,7 +112,7 @@ class SettingsScreenTest {
         }
 
         composeTestRule
-            .onNodeWithContentDescription("Load pictures automatically")
+            .onNodeWithContentDescription("Automatic picture loading")
             .performScrollTo()
             .assertIsOn()
             .assertHasClickAction()

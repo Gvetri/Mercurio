@@ -187,7 +187,7 @@ private fun SettingsMediaSection(
                         },
                     ),
                 checked = state.autoLoadImages,
-                description = stringResource(R.string.settings_media_auto_load),
+                description = stringResource(R.string.settings_media_auto_load_description),
             ),
         onCheckedChange = { onEvent(EntryUiEvent.AutoLoadImagesToggleClicked) },
     )

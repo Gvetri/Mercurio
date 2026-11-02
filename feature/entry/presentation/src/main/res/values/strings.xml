@@ -92,6 +92,7 @@
     <string name="settings_section_about">ABOUT</string>
     <string name="settings_connection_actions">Connection actions</string>
     <string name="shell_connection_actions_mark" translatable="false">::</string>
+    <string name="settings_media_auto_load_description">Automatic picture loading</string>
     <string name="settings_run_status_notifications_description">Run status notifications</string>
     <string name="settings_connection_row">Connection</string>
     <string name="settings_connection_connected">Connected · gateway ready</string>
