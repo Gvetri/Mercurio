@@ -155,9 +155,9 @@ class JourneyScenarioTest {
     }
 
     @Test
-    fun retry_journey_uses_targeted_scroll_and_retries_unregistered_taps() {
+    fun retry_journey_resends_the_preserved_draft_after_a_failed_run() {
         val flow = File(repositoryRoot, "fixtures/mercurio/journey/flows/explicit-retry.yaml").readText()
-        assertTrue(flow.contains("text: \"Try again\"\n    retryTapIfNoChange: true"))
+        assertTrue(flow.contains("inputText: \"Retry this once more\""))
         assertTrue(flow.contains("scrollUntilVisible:"))
         assertFalse(flow.contains("- swipe:"))
     }
