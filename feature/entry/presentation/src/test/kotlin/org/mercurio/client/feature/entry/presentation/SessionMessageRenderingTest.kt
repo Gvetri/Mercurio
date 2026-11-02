@@ -482,6 +482,7 @@ class SessionMessageRenderingTest {
             actions = MessageActions(openLink = {}, copy = {}, share = {}),
             retryEnabled = false,
             onRetry = {},
+            onTableExpand = {},
             onEvent = {},
         )
 

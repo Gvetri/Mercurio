@@ -106,3 +106,9 @@ org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_27_mess
 org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_27_message_action_menu_light.png
 org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_29_font_scale_200_dark.png
 org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_29_font_scale_200_light.png
+org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_21_pipe_table_dark.png
+org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_21_pipe_table_light.png
+org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_30_table_viewer_dark.png
+org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_30_table_viewer_light.png
+org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_21_pipe_table_font_scale_200_dark.png
+org.mercurio.client.feature.entry.presentation.ChatDesignStatesTest.chat_21_pipe_table_font_scale_200_light.png

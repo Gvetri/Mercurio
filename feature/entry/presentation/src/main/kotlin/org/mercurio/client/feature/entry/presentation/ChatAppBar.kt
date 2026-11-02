@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -43,6 +44,42 @@ internal fun ChatAppBar(
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    ChatBar(
+        title = sessionTitle(session),
+        backDescription = stringResource(R.string.action_back_to_sessions),
+        onBack = { onEvent(EntryUiEvent.ReturnToSessionListClicked) },
+        modifier = modifier,
+    ) {
+        ChatSessionMenuControl(session = session, enabled = menuEnabled, onEvent = onEvent)
+    }
+}
+
+/** The full-screen table viewer's bar: the same bar, its title naming the table, and a back control. */
+@Composable
+internal fun ChatTableAppBar(
+    title: String,
+    session: SessionItemUiState,
+    menuEnabled: Boolean,
+    onEvent: (EntryUiEvent) -> Unit,
+    onBack: () -> Unit,
+) {
+    ChatBar(
+        title = title,
+        backDescription = stringResource(R.string.chat_back_to_transcript),
+        onBack = onBack,
+    ) {
+        ChatSessionMenuControl(session = session, enabled = menuEnabled, onEvent = onEvent)
+    }
+}
+
+@Composable
+private fun ChatBar(
+    title: String,
+    backDescription: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: @Composable RowScope.() -> Unit,
+) {
     val tokens = LocalHermesDesignTokens.current
     Row(
         modifier =
@@ -53,9 +90,9 @@ internal fun ChatAppBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(tokens.spacing.xxs),
     ) {
-        ChatBackControl(onClick = { onEvent(EntryUiEvent.ReturnToSessionListClicked) })
+        ChatBackControl(onClick = onBack, description = backDescription)
         Text(
-            text = sessionTitle(session),
+            text = title,
             style = MaterialTheme.typography.titleSmall,
             letterSpacing = 0.02.em,
             color = tokens.colorScheme.onSurface,
@@ -67,11 +104,7 @@ internal fun ChatAppBar(
                     .padding(start = tokens.spacing.xs)
                     .semantics { heading() },
         )
-        ChatSessionMenuControl(
-            session = session,
-            enabled = menuEnabled,
-            onEvent = onEvent,
-        )
+        trailing()
     }
 }
 

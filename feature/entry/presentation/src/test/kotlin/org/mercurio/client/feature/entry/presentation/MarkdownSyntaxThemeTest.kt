@@ -58,6 +58,7 @@ class MarkdownSyntaxThemeTest {
                 MarkdownContent(
                     markdown = "```kotlin\n$code\n```",
                     actions = RecordingActions().asMessageActions(),
+                    onTableExpand = {},
                 )
             }
         }

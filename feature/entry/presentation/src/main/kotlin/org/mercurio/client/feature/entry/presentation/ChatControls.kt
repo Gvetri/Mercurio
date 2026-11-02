@@ -154,16 +154,16 @@ internal fun ChatDotsControl(
 @Composable
 internal fun ChatBackControl(
     onClick: () -> Unit,
+    description: String,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalHermesDesignTokens.current
-    val backDescription = stringResource(R.string.action_back_to_sessions)
     Box(
         modifier =
             modifier
                 .widthIn(min = CHAT_TOUCH_TARGET)
                 .heightIn(min = CHAT_TOUCH_TARGET)
-                .semantics { contentDescription = backDescription }
+                .semantics { contentDescription = description }
                 .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

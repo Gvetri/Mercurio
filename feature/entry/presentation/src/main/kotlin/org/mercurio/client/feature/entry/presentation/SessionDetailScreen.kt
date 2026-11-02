@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -50,18 +51,17 @@ internal fun SessionDetailContent(
     val tokens = LocalHermesDesignTokens.current
     val state = detail.content
     val listState = rememberLazyListState()
-    val displayed =
-        remember(state.messages, state.activeResponse) {
-            state.messages + listOfNotNull(state.activeResponse)
-        }
-    val items = remember(displayed) { chatTranscriptItems(displayed) }
+    var openTable by remember(state.session.id) { mutableStateOf<MarkdownBlock.Table?>(null) }
+    BackHandler(enabled = openTable != null) { openTable = null }
+    val items = rememberChatItems(state.messages, state.activeResponse)
     val messageActions = rememberMessageActions()
     val callbacks =
-        remember(detail, messageActions) {
+        remember(detail, messageActions, state.session.id) {
             ChatCallbacks(
                 actions = messageActions,
                 retryEnabled = detail.retryEnabled(chatCanSubmit(detail)),
                 onRetry = { runId: RunId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
+                onTableExpand = { table -> openTable = table },
                 onEvent = onEvent,
             )
         }
@@ -69,28 +69,77 @@ internal fun SessionDetailContent(
     LaunchedEffect(items) {
         if (items.isNotEmpty() && followNewest) listState.pinNewestItemEnd(items.lastIndex)
     }
+    val table = openTable
     Column(
         modifier = modifier.fillMaxSize().padding(CHAT_ISLAND_GUTTER),
         verticalArrangement = Arrangement.spacedBy(CHAT_ISLAND_GUTTER),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = tokens.colorScheme.surface,
-            shape = tokens.shapes.large,
-        ) {
-            ChatAppBar(
+        ChatTopBar(
+            detail = detail,
+            table = table,
+            onCloseTable = { openTable = null },
+            onEvent = onEvent,
+        )
+        if (table == null) {
+            ChatMainIsland(
+                detail = detail,
+                items = items,
+                listState = listState,
+                callbacks = callbacks,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+        } else {
+            Surface(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                color = tokens.colorScheme.surface,
+                shape = tokens.shapes.large,
+            ) {
+                MarkdownTableViewer(
+                    block = table,
+                    actions = messageActions,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberChatItems(
+    messages: List<SessionMessageUiState>,
+    activeResponse: SessionMessageUiState?,
+): List<ChatTranscriptItem> =
+    remember(messages, activeResponse) {
+        chatTranscriptItems(messages + listOfNotNull(activeResponse))
+    }
+
+@Composable
+private fun ChatTopBar(
+    detail: SessionDetailState,
+    table: MarkdownBlock.Table?,
+    onCloseTable: () -> Unit,
+    onEvent: (EntryUiEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    val state = detail.content
+    val menuEnabled = detail.actionsEnabled && detail.mutation?.pendingAction == null
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = tokens.colorScheme.surface,
+        shape = tokens.shapes.large,
+    ) {
+        if (table == null) {
+            ChatAppBar(session = state.session, menuEnabled = menuEnabled, onEvent = onEvent)
+        } else {
+            ChatTableAppBar(
+                title = tableTitle(table.header.size).resolve(),
                 session = state.session,
-                menuEnabled = detail.actionsEnabled && detail.mutation?.pendingAction == null,
+                menuEnabled = menuEnabled,
                 onEvent = onEvent,
+                onBack = onCloseTable,
             )
         }
-        ChatMainIsland(
-            detail = detail,
-            items = items,
-            listState = listState,
-            callbacks = callbacks,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
     }
 }
 

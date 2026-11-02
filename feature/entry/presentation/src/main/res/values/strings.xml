@@ -157,6 +157,12 @@
     <string name="chat_reason_history_loading">Sending is unavailable until the history loads.</string>
     <string name="chat_reason_refreshing">Refreshing history.</string>
     <string name="chat_reason_stale_run">The Run result may be stale. Refresh history to resolve.</string>
+    <string name="chat_expand">[ expand ]</string>
+    <string name="chat_back_to_transcript">Back to transcript</string>
+    <plurals name="table_column_count">
+            <item quantity="one">Table · %1$d column</item>
+            <item quantity="other">Table · %1$d columns</item>
+        </plurals>
     <string name="chat_no_session_title">No Session selected</string>
     <string name="chat_no_session_body">Select a Session from the list to view its conversation.</string>
     <string name="chat_history_loading_title">Loading Session history…</string>
