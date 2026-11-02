@@ -5,13 +5,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.application.ErrorReport
 import org.mercurio.client.feature.entry.application.NoOpErrorReporter
 import org.mercurio.client.feature.entry.application.RecordingErrorReporter
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.NoOpHistoryCacheStore
+import org.mercurio.client.feature.entry.presentation.EntryUiEvent
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
@@ -131,7 +134,8 @@ class EntryWiringErrorReportingTest {
             )
 
         try {
-            assertEquals(1, store.reads)
+            assertTrue(store.reads >= 1)
+            assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
             assertEquals(
                 listOf(
                     SentryReportingConfig(
@@ -145,6 +149,29 @@ class EntryWiringErrorReportingTest {
             )
         } finally {
             holder.close()
+        }
+    }
+
+    @Test
+    fun a_fresh_install_asks_the_question_and_the_answer_survives_a_restart() {
+        val first = EntryWiring.createEntryStateHolder(context = context)
+        try {
+            assertTrue(first.uiState.value.isErrorReportingConsentRequired)
+            first.onEvent(EntryUiEvent.ErrorReportingConsentDeclined)
+        } finally {
+            first.close()
+        }
+
+        assertEquals(
+            ErrorReportingConsent.Declined,
+            SharedPreferencesErrorReportingConsentStore(context).read(),
+        )
+
+        val restarted = EntryWiring.createEntryStateHolder(context = context)
+        try {
+            assertFalse(restarted.uiState.value.isErrorReportingConsentRequired)
+        } finally {
+            restarted.close()
         }
     }
 }

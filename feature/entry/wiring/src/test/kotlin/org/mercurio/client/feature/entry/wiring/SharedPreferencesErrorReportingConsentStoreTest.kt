@@ -4,6 +4,8 @@ import android.app.Application
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config

@@ -13,6 +13,8 @@ import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
 import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
 import org.mercurio.client.feature.entry.domain.InstallSource
@@ -213,6 +215,10 @@ sealed interface EntryUiEvent {
     data object ConfirmClearDiagnosticsClicked : Diagnostics
 
     data object CancelClearDiagnosticsClicked : Diagnostics
+
+    data object ErrorReportingConsentGranted : EntryUiEvent
+
+    data object ErrorReportingConsentDeclined : EntryUiEvent
 }
 
 enum class EntryErrorCategory(
@@ -282,6 +288,7 @@ data class EntryUiState(
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
+    val isErrorReportingConsentRequired: Boolean = false,
 )
 
 /**
@@ -359,6 +366,7 @@ data class EntryStateHolderDependencies(
     val runStatusNotifier: RunStatusNotifier? = null,
     val localDiagnostics: LocalDiagnosticsPorts? = null,
     val errorReporting: ErrorReporting? = null,
+    val errorReportingConsentStore: ErrorReportingConsentStore? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -388,6 +396,7 @@ class EntryStateHolder(
     internal val runStatusNotifier = dependencies.runStatusNotifier
     internal val localDiagnostics = dependencies.localDiagnostics
     internal val errorReporting = dependencies.errorReporting
+    internal val errorReportingConsentStore = dependencies.errorReportingConsentStore
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
 
     init {
@@ -396,10 +405,13 @@ class EntryStateHolder(
 
     internal val mutableUiState =
         MutableStateFlow(
-            initialState.toUiState().copy(
-                runStatusNotifications = restoredRunStatusNotificationState(),
-                autoLoadImages = imageLoadingSettingsStore?.loadEnabled() ?: true,
-            ),
+            initialState
+                .toUiState()
+                .copy(
+                    runStatusNotifications = restoredRunStatusNotificationState(),
+                    autoLoadImages = imageLoadingSettingsStore?.loadEnabled() ?: true,
+                    isErrorReportingConsentRequired = restoredErrorReportingConsentRequired(),
+                ),
         )
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
 
@@ -476,6 +488,10 @@ class EntryStateHolder(
             is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
             is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
             is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
+            is EntryUiEvent.ErrorReportingConsentGranted ->
+                recordErrorReportingConsent(ErrorReportingConsent.Granted)
+            is EntryUiEvent.ErrorReportingConsentDeclined ->
+                recordErrorReportingConsent(ErrorReportingConsent.Declined)
         }
     }
 
