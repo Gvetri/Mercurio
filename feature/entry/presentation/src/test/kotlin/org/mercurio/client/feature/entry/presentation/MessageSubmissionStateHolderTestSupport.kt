@@ -142,6 +142,7 @@ internal class FakeGateway(
     val runFinished = CountDownLatch(1)
     val releaseRun = CountDownLatch(1)
     var blockRunCreation = false
+    var onCreateRun: (() -> Unit)? = null
 
     fun enqueueRun(run: Run) {
         runResults += Result.success(run)
@@ -184,6 +185,7 @@ internal class FakeGateway(
         input: String,
     ): Run {
         runRequests += sessionId to input
+        onCreateRun?.invoke()
         if (blockRunCreation) {
             runStarted.countDown()
             check(releaseRun.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {

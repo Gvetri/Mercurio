@@ -1,7 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -413,27 +413,27 @@ class MessageSubmissionStateHolderTest {
         runTest {
             val session = session("session-late-attempt")
             val run = Run(RunId("run-late-attempt"), session.id, "starting")
-            val gateway =
-                FakeGateway(listOf(session)).apply {
-                    enqueueRun(run)
-                    blockRunCreation = true
-                }
             val store = ProcessRunSubmissionUncertaintyStore
             val key = PendingRunSubmissionKey("https://gateway.example/profile", session.id)
             store.remove(key)
-            val holder = holder(gateway, Dispatchers.Default, uncertaintyStore = store)
+            lateinit var holder: EntryStateHolder
+            val gateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRun(run)
+                    onCreateRun = {
+                        holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
+                        val staleAttemptId = requireNotNull(store.attemptId(key))
+                        assertTrue(store.remove(key, staleAttemptId))
+                        assertTrue(store.add(key, emptySet(), "new-attempt"))
+                    }
+                }
+            holder = holder(gateway, StandardTestDispatcher(testScheduler), uncertaintyStore = store)
 
             try {
-                open(holder, gateway, session.id)
+                openWithVirtualTime(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Original attempt"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                val staleAttemptId = requireNotNull(store.attemptId(key))
-
-                holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
-                assertTrue(store.remove(key, staleAttemptId))
-                assertTrue(store.add(key, emptySet(), "new-attempt"))
-                gateway.releaseRun.countDown()
+                advanceUntilIdle()
 
                 awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
                 val settled = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
@@ -451,6 +451,7 @@ class MessageSubmissionStateHolderTest {
                     ),
                 )
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                advanceUntilIdle()
                 awaitState(holder) { it.sessionList?.openedSession?.isRefreshing == false }
 
                 val refreshed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
@@ -459,8 +460,6 @@ class MessageSubmissionStateHolderTest {
                 assertEquals("new-attempt", store.attemptId(key))
                 assertTrue(refreshed.hasUnresolvedSubmission)
             } finally {
-                gateway.releaseRun.countDown()
-                store.remove(key)
                 holder.close()
             }
         }
