@@ -28,10 +28,7 @@ name: offline-session-list
 - takeScreenshot: offline-session-list-01-offline-rows
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
-    visible: "The displayed Session data may be stale. Gateway actions are unavailable until the connection recovers."
+    visible: "gateway :: offline"
     timeout: 30000
-- takeScreenshot: offline-session-list-02-stale-detail
-- tapOn: "Back to Sessions"
-- extendedWaitUntil:
-    visible: "Alpha Session"
-    timeout: 30000
+- assertVisible: "Alpha Session"
+- takeScreenshot: offline-session-list-02-offline-row-preserved

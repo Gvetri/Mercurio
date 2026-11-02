@@ -15,7 +15,7 @@
   "run_events"
  ],
  "fail_after_first_session_list": true,
- "offline_recovers_after_blocked_session_lists": 2,
+ "offline_recovers_after_blocked_session_lists": 3,
  "fail_after_first_session_open": true,
  "offline_recovers_after_blocked_session_opens": 1,
  "sessions": [

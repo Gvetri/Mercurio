@@ -43,10 +43,11 @@ name: model-picker-refusal
 - back
 - assertVisible: "DeepSeek V4 Flash"
 - takeScreenshot: model-picker-refusal-selected
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Refuse this"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Message was not sent. The selected model was refused. Choose another model, then try again."
     timeout: 30000
@@ -66,14 +67,14 @@ name: model-picker-refusal
 - tapOn: "Server default"
 - back
 - assertVisible: "Server default"
-- tapOn: "Refresh history to resolve"
+- tapOn: '\[ try again \]'
 - extendedWaitUntil:
-    visible: "Send"
+    visible: '\[ send \]'
     timeout: 30000
 - assertNotVisible: "Message outcome is uncertain. The Gateway may have received it. No automatic retry was made."
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Stable refusal recovery"
     timeout: 30000
-- assertVisible: "Run state: Succeeded"
+- assertVisible: "idle"
 - assertNotVisible: "Message was not sent. The selected model was refused. Choose another model, then try again."

@@ -20,35 +20,34 @@ name: confirmed-send
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- assertVisible: "No messages in this Session."
-- tapOn: "Message"
+- assertVisible: "No messages yet"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Polish ping"
 - hideKeyboard
 - takeScreenshot: confirmed-send-draft
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: "Run state: Succeeded"
+    visible: "idle"
     timeout: 30000
 - assertVisible: "Polish reply"
-- assertVisible: "Latest Run"
+- tapOn: "Message actions for message-ux-1"
+- assertVisible: "Copy message"
+- back
 - tapOn:
     id: "conversation-message-input"
 - extendedWaitUntil:
-    visible: "Write a message"
+    visible: "write a message"
     timeout: 30000
 - takeScreenshot: confirmed-send-composer-cleared
 - hideKeyboard
-- assertNotVisible: ".*run-ux-1.*"
-- tapOn:
-    text: "Show run ID"
-    index: 0
+- assertNotVisible: "Copy message"
+- tapOn: "Message actions for message-ux-1"
 - extendedWaitUntil:
-    visible: "Run ID: run-ux-1"
+    visible: "Copy message"
     timeout: 30000
 - takeScreenshot: confirmed-send-run-id-disclosed
-- tapOn:
-    text: "Hide run ID"
-    index: 0
+- back
 - extendedWaitUntil:
-    notVisible: "Run ID: run-ux-1"
+    notVisible: "Copy message"
     timeout: 30000
