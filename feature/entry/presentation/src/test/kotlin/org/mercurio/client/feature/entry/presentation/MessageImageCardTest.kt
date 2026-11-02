@@ -177,7 +177,7 @@ class MessageImageCardTest {
     private fun services(
         port: MessageImagePort,
         decoder: MessageImageDecoder,
-    ): MessageImageServices = MessageImageServices(port, decoder)
+    ): MessageImageServices = MessageImageServices(port::fetch, decoder)
 
     private fun fetched(): MessageImageFetch.Fetched = MessageImageFetch.Fetched(byteArrayOf(1, 2, 3), "image/png")
 

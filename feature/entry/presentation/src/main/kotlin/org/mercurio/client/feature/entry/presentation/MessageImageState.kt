@@ -5,7 +5,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import org.mercurio.client.feature.entry.domain.MessageImageFetch
-import org.mercurio.client.feature.entry.domain.MessageImagePort
 
 /**
  * The truthful terminal state of one Message image. Nothing but a loaded bitmap can reach
@@ -42,7 +41,7 @@ internal val MessageImageFailure.messageRes: Int
  * the viewport, which cancels the request instead of letting it finish unseen.
  */
 internal class MessageImageServices(
-    private val port: MessageImagePort,
+    private val loadImage: suspend (String) -> MessageImageFetch,
     private val decoder: MessageImageDecoder,
     private val concurrency: Semaphore = Semaphore(MAX_CONCURRENT_IMAGE_LOADS),
     private val timeoutMillis: Long = IMAGE_LOAD_TIMEOUT_MILLIS,
@@ -50,7 +49,7 @@ internal class MessageImageServices(
     suspend fun load(destination: String): MessageImageState =
         concurrency.withPermit {
             withTimeoutOrNull(timeoutMillis) {
-                when (val fetch = port.fetch(destination)) {
+                when (val fetch = loadImage(destination)) {
                     is MessageImageFetch.Fetched -> fetch.bytes.toImageState()
                     is MessageImageFetch.Refused -> MessageImageState.Failed(MessageImageFailure.LOAD)
                 }

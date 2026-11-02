@@ -33,20 +33,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import org.mercurio.client.feature.entry.domain.MessageImagePort
+import org.mercurio.client.feature.entry.domain.MessageImageFetch
 
 /**
- * Provides the Message image loader to the renderer. The port carries the fetch guardrails, the
- * decoder is the Coil bitmap decoder, and the renderer never reaches either an HTTP stack or the
- * platform's own network API.
+ * Provides the Message image loader to the renderer. [loadImage] is the domain port's fetch
+ * function, so the renderer holds no port itself; the decoder is the Coil bitmap decoder and the
+ * renderer reaches neither an HTTP stack nor the platform's own network API.
  */
 @Composable
 fun MessageImageProvider(
-    port: MessageImagePort,
+    loadImage: suspend (String) -> MessageImageFetch,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val services = remember(port, context) { MessageImageServices(port, CoilMessageImageDecoder(context)) }
+    val services = remember(loadImage, context) { MessageImageServices(loadImage, CoilMessageImageDecoder(context)) }
     CompositionLocalProvider(LocalMessageImageServices provides services, content = content)
 }
 
