@@ -157,8 +157,12 @@ class JourneyScenarioTest {
     @Test
     fun retry_journey_resends_the_preserved_draft_after_a_failed_run() {
         val flow = File(repositoryRoot, "fixtures/mercurio/journey/flows/explicit-retry.yaml").readText()
+        assertTrue(flow.contains("visible: \".*· failed\""))
         assertTrue(flow.contains("inputText: \"Retry this once more\""))
+        assertTrue(flow.contains("- tapOn: '\\[ send \\]'"))
+        assertTrue(flow.contains("visible: \"Stable retry success\""))
         assertTrue(flow.contains("scrollUntilVisible:"))
+        assertFalse(flow.contains("text: \"Try again\""))
         assertFalse(flow.contains("- swipe:"))
     }
 
