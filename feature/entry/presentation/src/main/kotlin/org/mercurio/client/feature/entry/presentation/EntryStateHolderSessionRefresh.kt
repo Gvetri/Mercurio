@@ -220,3 +220,24 @@ internal fun EntryStateHolder.loadMorePageJob(
             showSessionListFailure(request.generation, request.offset, preserveSessions = true)
         }
     }
+
+internal fun EntryStateHolder.showOpenedSessionFailure(requestGeneration: Long) {
+    updateCurrentSessionRequest(requestGeneration) { current ->
+        current.openedSession?.let { openedSession ->
+            val cachedMessages =
+                openedSession.messages.ifEmpty { cachedTranscriptUiMessages(openedSession.session.id) }
+            current.copy(
+                openedSession =
+                    openedSession.copy(
+                        isRefreshing = false,
+                        isStale = true,
+                        isCached =
+                            openedSession.isCached ||
+                                (openedSession.messages.isEmpty() && cachedMessages.isNotEmpty()),
+                        messages = cachedMessages,
+                        errorCategory = SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED,
+                    ),
+            )
+        } ?: current
+    }
+}

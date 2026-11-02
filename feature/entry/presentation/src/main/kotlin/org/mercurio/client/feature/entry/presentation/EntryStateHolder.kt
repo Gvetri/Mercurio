@@ -46,6 +46,10 @@ import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface EntryUiEvent {
+    data class InboundUri(
+        val rawUri: String?,
+    ) : EntryUiEvent
+
     sealed interface Connection : EntryUiEvent
 
     data object AddGatewayConnectionClicked : Connection
@@ -277,6 +281,7 @@ data class EntryUiState(
     val autoLoadImages: Boolean = true,
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
+    val inboundLinkNotice: InboundLinkNoticeCategory? = null,
 )
 
 /**
@@ -428,6 +433,8 @@ class EntryStateHolder(
     internal val connectionRecoveryFailedSessions = mutableSetOf<SessionId>()
     internal val recoverySessionCounts = mutableMapOf<SessionId, Int>()
     internal var nextRecoveryClaimId = 0L
+    internal var nextComposerFocusRequestId = 0L
+    internal var inboundLinkListRequestInterrupted = false
     internal val recoveryClaims = mutableMapOf<RecoveryEntryKey, RecoveryClaim>()
     internal val recoveryHandledEntries = mutableSetOf<RecoveryEntryKey>()
     internal var recoveryLoadPending = false
@@ -460,6 +467,7 @@ class EntryStateHolder(
 
     fun onEvent(event: EntryUiEvent) {
         when (event) {
+            is EntryUiEvent.InboundUri -> handleInboundUri(event.rawUri)
             is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
             is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
             is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
@@ -814,6 +822,7 @@ internal data class SessionRequestContext(
     val generation: Long,
     val query: String,
     val offset: Int?,
+    val linked: Boolean = false,
 )
 
 internal data class CreateSessionRequest(

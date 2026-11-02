@@ -132,6 +132,7 @@ data class OpenSessionUiState(
     val latestRunRetryAvailable: Boolean = false,
     val activeResponse: SessionMessageUiState? = null,
     val isReconciliationInProgress: Boolean = false,
+    val composerFocusRequestId: Long = 0,
 )
 
 data class SessionCreationUiState(

@@ -55,6 +55,11 @@
     <string name="entry_action_connected">Connected</string>
     <string name="entry_connected_to_gateway">Connected to Gateway</string>
 
+    <string name="inbound_link_session_needs_connection">Connect to a Gateway to open Session links. This link was discarded.</string>
+    <string name="inbound_link_compose_needs_connection">Connect to a Gateway to use the composer. This link was discarded.</string>
+    <string name="inbound_link_session_unknown">This Session link could not be opened.</string>
+    <string name="inbound_link_compose_needs_session">Open a Session to use the composer.</string>
+
     <string name="connection_replacement_note">The current connection stays in place until the replacement is verified and saved securely.</string>
     <string name="connection_save_note">The credential is saved securely on this device after verification.</string>
     <string name="connection_endpoint_label">Gateway HTTPS endpoint</string>

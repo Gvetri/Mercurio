@@ -1,6 +1,7 @@
 package org.mercurio.client
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -33,6 +34,7 @@ class MainActivity : ComponentActivity() {
                 requestRunStatusNotificationPermission = { notificationPermissionRequests.tryEmit(Unit) },
             )
         messageImagePort = EntryWiring.createMessageImagePort()
+        applyInboundLink(intent)
         setContent {
             val notificationPermissionLauncher =
                 rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -55,8 +57,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyInboundLink(intent)
+    }
+
     override fun onDestroy() {
         entryStateHolder.close()
         super.onDestroy()
+    }
+
+    private fun applyInboundLink(inbound: Intent?) {
+        entryStateHolder.onEvent(EntryUiEvent.InboundUri(inbound?.data?.toString()))
     }
 }

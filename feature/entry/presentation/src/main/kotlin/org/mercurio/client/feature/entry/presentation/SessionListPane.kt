@@ -36,6 +36,7 @@ internal fun SessionListPane(
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
     selectedSessionId: SessionId? = null,
+    notice: InboundLinkNoticeCategory? = null,
 ) {
     val tokens = LocalHermesDesignTokens.current
     Column(
@@ -43,6 +44,9 @@ internal fun SessionListPane(
         verticalArrangement = Arrangement.spacedBy(ISLAND_GUTTER),
     ) {
         SessionListPaneHeader(state = state, onEvent = onEvent)
+        notice?.let { category ->
+            InboundLinkNoticeText(notice = category)
+        }
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = { onEvent(EntryUiEvent.RefreshSessionListClicked) },

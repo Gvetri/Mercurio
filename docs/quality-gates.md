@@ -21,9 +21,12 @@ trip the check before it measured anything (issue #238).
 
 ## Required checks
 
-`quality-gate` is the single required GitHub status. It fails unless every declared check below
-executed and passed for the event that triggered the run. A check the event routes out of the run
-must report `skipped`, and any other outcome fails the aggregate; see
+A pull request merges only when both required contexts pass: `quality-gate`, the aggregate of the
+checks below, and `pr-template`, the body check.
+[What a pull request must satisfy](agents/pull-request-checks.md) names what each verifies.
+`quality-gate` fails unless every declared check below executed and passed for the event that
+triggered the run. A check the event routes out of the run must report `skipped`, and any other
+outcome fails the aggregate; see
 [The protected main branch and the pull-request workflow](protected-main-workflow.md) for the routing.
 
 | GitHub status | Gradle entry point | Fails when |
@@ -39,7 +42,7 @@ must report `skipped`, and any other outcome fails the aggregate; see
 | `architecture-check` | `architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, unidirectional-data-flow, mock, or boundary-double rule is violated |
 | `compose-jvm-tests` | `:feature:entry:presentation:verifyRoborazziBaselineManifest :feature:entry:presentation:verifyRoborazziDebug` | A pinned Compose surface drifts from its approved baseline, or the baseline manifest and the snapshots disagree |
 | `coverage-mutation` | `coverageVerify mutationVerify` | Coverage or mutation evidence is missing, empty, stale, narrowed, below a declared threshold, or outside the declared production scope. Required on every `push` to `main`, on the nightly schedule, and on manual dispatch; skipped on every pull request, so a covered production change must regenerate and verify its evidence locally before it is reviewed |
-| `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
+| `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the pull-request template job stops running unconditionally or stops handing the author and body to `.github/scripts/verify-pr-template.py`, that check stops exempting Dependabot or starts exempting another bot while still rejecting a body that misses the template sections, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
 | `commit-message` | `.github/scripts/verify-conventional-commits.py` | The squash-merge title or a commit of the pull request is not a Conventional Commit, or the commit list of the pull request is unavailable, empty, or truncated |
 | `draft-validation` | `formatCheck :app:lintDebug` | The head of a draft pull request is unformatted or fails Android lint |
 | `fork-guard` | `.github/workflows/quality-gate.yml` | Never on its own: it reports the handling of an external-fork pull request, and the aggregate requires it for every pull request, then fails closed for an external fork |
@@ -73,7 +76,7 @@ complete gate.
 The aggregate job compares `.github/quality-gate/required-checks.txt` (plus the `buildsrc_contracts`
 support job) with its own `needs` list, so a check can neither be dropped from the declaration
 silently nor added without updating the declaration. Support jobs such as `buildsrc_contracts` are
-not declared GitHub statuses; the aggregate `quality-gate` remains the single required status. The
+not declared GitHub statuses; the required statuses are `quality-gate` and `pr-template`. The
 workflow contracts are self-tested in
 `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/QualityGateConfigurationTest.kt`, the
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,

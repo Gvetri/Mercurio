@@ -127,6 +127,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                     isConnected = true,
                     isGatewayConnectionConfigured = true,
                     errorCategory = null,
+                    inboundLinkNotice = null,
                     sessionList =
                         gateway?.let {
                             SessionListUiState(
