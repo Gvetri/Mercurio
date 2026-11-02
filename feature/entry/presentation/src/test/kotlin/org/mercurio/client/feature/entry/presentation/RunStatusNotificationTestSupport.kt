@@ -101,10 +101,9 @@ internal fun notificationHolder(
                 runStatusNotificationSettingsStore = settings.store,
                 runStatusNotificationPermission = settings.permission,
                 runStatusNotifier = settings.notifier,
+                requestRunStatusNotificationPermission = { settings.permissionRequests.incrementAndGet() },
             ),
-    ).also { holder ->
-        holder.requestRunStatusNotificationPermission = { settings.permissionRequests.incrementAndGet() }
-    }
+    )
 }
 
 internal fun connectAndOpenNotifiedSession(

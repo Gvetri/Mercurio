@@ -1194,6 +1194,10 @@ class QualityGateConfigurationTest {
             "architecture/presentation-untrusted-content",
             "architecture/app-external-file-boundary",
             "architecture/module-dependency-declarations",
+            "udf/composables-take-state-and-events",
+            "udf/one-state-writer",
+            "udf/immutable-state-types",
+            "udf/one-event-entry",
         ).forEach { rule ->
             assertTrue("The rule suite must name the $rule rule.", ruleSuite.contains(rule))
         }
@@ -1212,6 +1216,22 @@ class QualityGateConfigurationTest {
             "rejects_executable_web_content_in_presentation",
             "rejects_a_file_uri_handed_to_another_app",
             "rejects_a_forbidden_dependency_declaration_in_a_module_script",
+            "presentation_composables_take_state_and_events_only",
+            "presentation_state_has_one_writer",
+            "presentation_state_types_stay_immutable",
+            "presentation_exposes_one_event_entry",
+            "rejects_a_composable_that_takes_the_state_holder",
+            "rejects_a_composable_that_takes_a_domain_port",
+            "rejects_a_composable_scope_that_resolves_to_no_presentation_function",
+            "rejects_a_public_mutable_property_on_the_state_holder",
+            "rejects_a_state_write_outside_the_state_holder_files",
+            "rejects_a_state_write_through_the_update_helper",
+            "rejects_a_renamed_state_flow_written_outside_the_state_holder_files",
+            "rejects_a_state_type_with_a_mutable_property",
+            "rejects_a_state_type_with_a_mutable_collection",
+            "rejects_a_state_type_with_a_nested_mutable_collection",
+            "rejects_a_second_public_event_entry",
+            "rejects_an_event_callback_property",
         ).forEach { test ->
             assertTrue("The rule suite must declare the $test evidence.", ruleSuite.contains(test))
         }

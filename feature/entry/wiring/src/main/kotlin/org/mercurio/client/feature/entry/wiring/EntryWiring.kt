@@ -26,6 +26,7 @@ object EntryWiring {
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
         clientVersion: String = androidClientVersion(context),
+        requestRunStatusNotificationPermission: (() -> Unit)? = null,
     ): EntryStateHolder {
         val dataSource = SharedPreferencesGatewayConnectionDataSource(context)
         val credentialStore = overrides.credentialStore ?: AndroidKeyStoreGatewayCredentialStore(context)
@@ -79,6 +80,7 @@ object EntryWiring {
                     runStatusNotificationSettingsStore = SharedPreferencesRunStatusNotificationSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
+                    requestRunStatusNotificationPermission = requestRunStatusNotificationPermission,
                 ),
         )
     }

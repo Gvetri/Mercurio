@@ -31,7 +31,7 @@ must report `skipped`, and any other outcome fails the aggregate; see
 | `fixture-lifecycle` | `fixtureLifecycleTests journeyScenarioTests` | An executed fixture lifecycle or journey-scenario test fails, or the runner task did not execute |
 | `fixture-contract` | `fixtureContractTests` | A client-owned Gateway JSON or SSE contract fixture test fails |
 | `android-build` | `:app:compileDebugKotlin :app:compileReleaseKotlin` on main pushes; `:app:assembleDebug :app:assembleRelease` otherwise | A debug/release compilation fails, or a non-push application APK does not build |
-| `architecture-check` | `architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, mock, or boundary-double rule is violated |
+| `architecture-check` | `architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, unidirectional-data-flow, mock, or boundary-double rule is violated |
 | `compose-jvm-tests` | `:feature:entry:presentation:verifyRoborazziBaselineManifest :feature:entry:presentation:verifyRoborazziDebug` | A pinned Compose surface drifts from its approved baseline, or the baseline manifest and the snapshots disagree |
 | `coverage-mutation` | `coverageVerify mutationVerify` | Coverage or mutation evidence is missing, empty, stale, narrowed, below a declared threshold, or outside the declared production scope. Required on every `push` to `main`, on the nightly schedule, and on manual dispatch; skipped on every pull request, so a covered production change must regenerate and verify its evidence locally before it is reviewed |
 | `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
@@ -172,11 +172,12 @@ keeps no double check, so a new port belongs in the same change as its declarati
 `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt` in an isolated
 build directory, and fails unless the focused source exists, its report exists, is non-empty, and
 holds at least one executed, unskipped, passing test. The rules are Konsist checks: the layer graph
-runs through the Konsist architecture assertion, and the reference rules read the declared scopes
-through Konsist's declaration model. The declared rules are `architecture/layer-boundaries`,
+runs through the Konsist architecture assertion, and the reference and unidirectional-data-flow rules
+read the declared scopes through Konsist's declaration model. The declared rules are `architecture/layer-boundaries`,
 `architecture/domain-application-references`, `architecture/presentation-untrusted-content`,
-`architecture/app-external-file-boundary`, and `architecture/module-dependency-declarations`; see
-[Architecture boundaries](architecture.md) for what each one rejects.
+`architecture/app-external-file-boundary`, `architecture/module-dependency-declarations`,
+`udf/composables-take-state-and-events`, `udf/one-state-writer`, `udf/immutable-state-types`, and
+`udf/one-event-entry`; see [Architecture boundaries](architecture.md) for what each one rejects.
 
 Every rule also runs against a synthetic scope that carries one deliberate violation, and the suite
 asserts that the rule names itself and reports the violation, so a rule that stopped rejecting a
@@ -189,7 +190,7 @@ rule suite's test classpath. Konsist parses Kotlin sources, not Gradle Kotlin sc
 build scripts are read directly by the one rule that owns them.
 
 `QualityGateConfigurationTest` pins the wiring: the pinned Konsist version, the test-classpath
-declaration, the entry point the `architecture-check` job runs, the five rule names, and the
+declaration, the entry point the `architecture-check` job runs, the nine rule names, and the
 deliberate-violation evidence of every rule.
 
 ### Detekt
