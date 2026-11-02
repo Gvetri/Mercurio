@@ -16,6 +16,8 @@ WORKFLOW = ROOT / ".github/workflows/quality-gate.yml"
 REQUIRED_CHECKS = ROOT / ".github/quality-gate/required-checks.txt"
 COMMIT_SCRIPT = ROOT / ".github/scripts/verify-conventional-commits.py"
 CONFORMANCE_SCRIPT = ROOT / ".github/scripts/verify-repository-conformance.py"
+PR_TEMPLATE_WORKFLOW = ROOT / ".github/workflows/pr-template.yml"
+PR_TEMPLATE_CHECK = ROOT / ".github/scripts/verify-pr-template.py"
 
 HEAVY_JOBS = (
     "formatting",
@@ -848,7 +850,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.api.start()
         self.addCleanup(self.api.stop)
 
-    def run_check(self, api_url=None, owner=False, workflow=None):
+    def run_check(self, api_url=None, owner=False, workflow=None, overrides=None):
         if owner:
             self.routes.update(self.owner_routes)
         environment = dict(os.environ)
@@ -860,15 +862,26 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
             }
         )
         script = CONFORMANCE_SCRIPT
-        if workflow is not None:
+        if workflow is not None or overrides:
             directory = tempfile.TemporaryDirectory()
             self.addCleanup(directory.cleanup)
             copied_root = Path(directory.name)
-            for source in (CONFORMANCE_SCRIPT, WORKFLOW, REQUIRED_CHECKS):
+            for source in (
+                CONFORMANCE_SCRIPT,
+                WORKFLOW,
+                REQUIRED_CHECKS,
+                PR_TEMPLATE_WORKFLOW,
+                PR_TEMPLATE_CHECK,
+            ):
                 target = copied_root / source.relative_to(ROOT)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
-            (copied_root / WORKFLOW.relative_to(ROOT)).write_text(workflow)
+            if workflow is not None:
+                (copied_root / WORKFLOW.relative_to(ROOT)).write_text(workflow)
+            for relative, content in (overrides or {}).items():
+                target = copied_root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content)
             script = copied_root / CONFORMANCE_SCRIPT.relative_to(ROOT)
         command = ["python3", str(script)]
         if owner:
@@ -886,7 +899,45 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         completed = self.run_check()
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertIn("Verified the 4 enforced rule(s) protecting main", completed.stdout)
+        self.assertIn("Verified that the pr-template check runs unconditionally and exempts only Dependabot.", completed.stdout)
         self.assertIn("Repository conformance passed.", completed.stdout)
+
+    def test_an_if_on_the_pr_template_job_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "    runs-on: ubuntu-latest\n",
+            "    if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}\n"
+            "    runs-on: ubuntu-latest\n",
+            1,
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr_template job must run unconditionally", completed.stderr)
+
+    def test_dropping_the_author_hand_off_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "          PR_AUTHOR: ${{ github.event.pull_request.user.login }}\n", ""
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr_template job must pass PR_AUTHOR", completed.stderr)
+
+    def test_dropping_the_dependabot_identity_fails_conformance(self):
+        check = PR_TEMPLATE_CHECK.read_text().replace(
+            'EXEMPT_AUTHORS = frozenset({"dependabot[bot]"})', "EXEMPT_AUTHORS = frozenset()"
+        )
+        completed = self.run_check(overrides={".github/scripts/verify-pr-template.py": check})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr-template check must exit 0 for dependabot[bot]", completed.stderr)
+
+    def test_exempting_another_bot_identity_fails_conformance(self):
+        check = PR_TEMPLATE_CHECK.read_text().replace(
+            'EXEMPT_AUTHORS = frozenset({"dependabot[bot]"})',
+            'EXEMPT_AUTHORS = frozenset({"dependabot[bot]", "renovate[bot]"})',
+        )
+        completed = self.run_check(overrides={".github/scripts/verify-pr-template.py": check})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr-template check must exit 1 for renovate[bot]", completed.stderr)
+        self.assertNotIn("Verified that the pr-template check", completed.stdout)
 
     def test_removing_dispatch_isolation_fails_conformance(self):
         workflow = re.sub(
