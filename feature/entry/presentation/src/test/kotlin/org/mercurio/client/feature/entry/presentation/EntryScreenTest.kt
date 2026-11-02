@@ -167,7 +167,7 @@ class EntryScreenTest {
         val state =
             mutableStateOf(
                 EntryUiState(
-                    title = UiText.Resource(R.string.action_change_credential),
+                    title = UiText.Resource(R.string.entry_title_change_credential),
                     supportingText = UiText.Resource(R.string.entry_supporting_change_credential),
                     actionLabel = UiText.Resource(R.string.entry_action_verify_and_save),
                     connectionSetupRequested = true,
