@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.wiring
 
 import kotlinx.coroutines.CoroutineScope
 import org.mercurio.client.feature.entry.application.ErrorReporter
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
 import org.mercurio.client.feature.entry.domain.GatewayCredentialStore
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore

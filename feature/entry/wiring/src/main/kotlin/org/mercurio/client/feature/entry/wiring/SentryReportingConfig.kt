@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.wiring
 
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
+
 /** Every value the reporting backend is initialised with, resolved once at the wiring boundary. */
 data class SentryReportingConfig(
     val dsn: String,

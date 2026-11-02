@@ -19,6 +19,7 @@ import org.mercurio.client.feature.entry.data.EndpointScopedRunRecoveryRegistry
 import org.mercurio.client.feature.entry.data.HttpMessageImagePort
 import org.mercurio.client.feature.entry.data.RollingLocalDiagnosticsBuffer
 import org.mercurio.client.feature.entry.data.defaultMessageImageHttpTransport
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
 import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
 import org.mercurio.client.feature.entry.domain.MessageImagePort
@@ -41,8 +42,7 @@ object EntryWiring {
         val repository = DefaultGatewayConnectionRepository(dataSource, credentialStore)
         val recoveryEndpoint = AtomicReference(dataSource.loadEndpoint())
         val runRecoveryRegistry = buildRunRecoveryRegistry(context, recoveryEndpoint)
-        val installedBuildProvider = resolveInstalledBuildProvider(context, overrides)
-        val initialState = LoadEntryState(repository, installedBuildProvider).execute()
+        val initialState = LoadEntryState(repository, resolveInstalledBuildProvider(context, overrides)).execute()
         val clientVersion = initialState.clientVersion
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
@@ -50,6 +50,8 @@ object EntryWiring {
         val modelSelectionStore = SharedPreferencesModelSelectionStore(context)
         val historyCacheStore = overrides.historyCacheStore ?: buildHistoryCacheStore(context)
         val localDiagnosticsBuffer = buildLocalDiagnosticsBuffer(context)
+        val errorReportingConsentStore =
+            overrides.errorReportingConsentStore ?: SharedPreferencesErrorReportingConsentStore(context)
         return EntryStateHolder(
             initialState = initialState,
             verifyGatewayConnection = verifyGatewayConnection,
@@ -78,7 +80,8 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
-                    errorReporting = buildErrorReporting(context, overrides, clientVersion),
+                    errorReporting = buildErrorReporting(context, overrides, clientVersion, errorReportingConsentStore),
+                    errorReportingConsentStore = errorReportingConsentStore,
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -104,6 +107,8 @@ object EntryWiring {
                 resolveInstalledBuildProvider(context, overrides)
                     .installedBuild()
                     .versionNameOr(UNKNOWN_CLIENT_VERSION),
+            consentStore =
+                overrides.errorReportingConsentStore ?: SharedPreferencesErrorReportingConsentStore(context),
         )
 
     private fun entryScope(
@@ -138,9 +143,8 @@ private fun buildErrorReporting(
     context: Context,
     overrides: EntryWiringOverrides,
     clientVersion: String,
+    consentStore: ErrorReportingConsentStore,
 ): ErrorReporting {
-    val consentStore =
-        overrides.errorReportingConsentStore ?: SharedPreferencesErrorReportingConsentStore(context)
     val config =
         sentryReportingConfig(
             clientVersion = clientVersion,
