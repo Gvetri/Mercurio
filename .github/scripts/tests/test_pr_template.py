@@ -20,7 +20,6 @@ HEADINGS = ("## Summary", "## Testing", "## Risk", "## How to revert")
 TEMPLATE_BODY = "\n\n".join(f"{heading}\n\nA line." for heading in HEADINGS) + "\n"
 HUMAN_AUTHOR = "octocat"
 DEPENDABOT_BODY = "Bumps `io.sentry:sentry-android-core` from 8.16.0 to 8.61.1.\n"
-DEPENDABOT_HEADLINE = "Bump io.sentry:sentry-android-core from 8.16.0 to 8.61.1"
 
 
 def run_check(body=None, author=None):
