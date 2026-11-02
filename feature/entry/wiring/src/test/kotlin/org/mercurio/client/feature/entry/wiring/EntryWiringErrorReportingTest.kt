@@ -27,8 +27,11 @@ class EntryWiringErrorReportingTest {
         val reporting =
             EntryWiring.createErrorReporting(
                 context = context,
-                overrides = EntryWiringOverrides(errorReporter = sink),
-                clientVersion = "nightly-42-abc",
+                overrides =
+                    EntryWiringOverrides(
+                        errorReporter = sink,
+                        installedBuildProvider = FakeInstalledBuildProvider(versionName = "nightly-42-abc"),
+                    ),
             )
         reporting.reportUnexpectedFailure()
 
@@ -55,8 +58,8 @@ class EntryWiringErrorReportingTest {
                         coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
                         historyCacheStore = NoOpHistoryCacheStore,
                         sentryBackend = backend,
+                        installedBuildProvider = FakeInstalledBuildProvider(versionName = "0.1.0"),
                     ),
-                clientVersion = "0.1.0",
             )
 
         try {

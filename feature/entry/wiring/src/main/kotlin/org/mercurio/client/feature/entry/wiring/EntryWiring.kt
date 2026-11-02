@@ -9,6 +9,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.LoadEntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
+import org.mercurio.client.feature.entry.application.UNKNOWN_CLIENT_VERSION
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.data.DefaultGatewayClient
 import org.mercurio.client.feature.entry.data.DefaultGatewayConnectionRepository
@@ -25,14 +26,15 @@ object EntryWiring {
     fun createEntryStateHolder(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
-        clientVersion: String = androidClientVersion(context),
     ): EntryStateHolder {
         val dataSource = SharedPreferencesGatewayConnectionDataSource(context)
         val credentialStore = overrides.credentialStore ?: AndroidKeyStoreGatewayCredentialStore(context)
         val repository = DefaultGatewayConnectionRepository(dataSource, credentialStore)
         val recoveryEndpoint = AtomicReference(dataSource.loadEndpoint())
         val runRecoveryRegistry = buildRunRecoveryRegistry(context, recoveryEndpoint)
-        val initialState = LoadEntryState(repository).execute().copy(clientVersion = clientVersion)
+        val installedBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuild(context)
+        val initialState = LoadEntryState(repository, installedBuildProvider).execute()
+        val clientVersion = initialState.clientVersion
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
@@ -71,7 +73,7 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
-                    errorReporting = createErrorReporting(context, overrides, clientVersion),
+                    errorReporting = buildErrorReporting(context, overrides, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -87,8 +89,14 @@ object EntryWiring {
     fun createErrorReporting(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
-        clientVersion: String = androidClientVersion(context),
-    ): ErrorReporting = buildErrorReporting(context, overrides, clientVersion)
+    ): ErrorReporting {
+        val installedBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuild(context)
+        return buildErrorReporting(
+            context = context,
+            overrides = overrides,
+            clientVersion = installedBuildProvider.installedBuild().versionNameOr(UNKNOWN_CLIENT_VERSION),
+        )
+    }
 
     private fun entryScope(
         coroutineScope: CoroutineScope?,
