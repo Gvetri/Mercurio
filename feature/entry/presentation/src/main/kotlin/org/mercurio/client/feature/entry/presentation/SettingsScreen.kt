@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -99,7 +100,7 @@ private fun SettingsTopBar(
                             .widthIn(min = tokens.spacing.xxxl)
                             .heightIn(min = tokens.spacing.xxxl)
                             .clip(tokens.shapes.small)
-                            .clickable { menuOpen = true }
+                            .clickable(role = Role.Button) { menuOpen = true }
                             .semantics { contentDescription = actionsDescription },
                     contentAlignment = Alignment.Center,
                 ) {

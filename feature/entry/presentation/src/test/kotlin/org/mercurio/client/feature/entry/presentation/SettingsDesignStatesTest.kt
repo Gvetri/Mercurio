@@ -1,9 +1,10 @@
 package org.mercurio.client.feature.entry.presentation
 
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -32,7 +33,7 @@ import org.robolectric.annotation.GraphicsMode
 @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
 class SettingsDesignStatesTest {
     @get:Rule
-    val composeTestRule = createComposeRule()
+    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @get:Rule
     val roborazziRule = RoborazziRule()
@@ -87,6 +88,7 @@ class SettingsDesignStatesTest {
         fontScale: Float = 1f,
         beforeCapture: () -> Unit = {},
     ) {
+        composeTestRule.activity.actionBar?.hide()
         composeTestRule.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {

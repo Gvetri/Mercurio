@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -73,8 +74,8 @@ internal fun SettingsActionRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = tokens.spacing.xxxl)
-                .clickable(enabled = enabled, onClick = onClick)
+                .heightIn(min = SETTINGS_ACTION_ROW_HEIGHT)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                 .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -139,5 +140,7 @@ internal data class SettingsSwitchRowModel(
 private val SETTINGS_SECTION_HEADER_HEIGHT = 28.dp
 
 private val SETTINGS_ROW_HEIGHT = 56.dp
+
+private val SETTINGS_ACTION_ROW_HEIGHT = 48.dp
 
 private const val SETTINGS_DISABLED_CONTENT_ALPHA = 0.38f
