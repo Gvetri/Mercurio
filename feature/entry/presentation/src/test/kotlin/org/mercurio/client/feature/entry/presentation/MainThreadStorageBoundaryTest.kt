@@ -29,7 +29,6 @@ import java.util.concurrent.TimeUnit
 
 private const val SEND_CLAIM_AND_CLOSE_MARKER_ADDS = 2
 
-/** The test thread plays the Android main thread; the holder runs on [Dispatchers.Default]. */
 internal class MainThreadStorageBoundaryTest {
     private val eventThread = Thread.currentThread()
     private val recorder = StorageCallRecorder()

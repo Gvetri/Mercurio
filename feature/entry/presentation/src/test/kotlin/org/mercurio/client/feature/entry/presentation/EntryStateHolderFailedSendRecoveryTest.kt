@@ -12,7 +12,6 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.SessionDraftKey
 import org.mercurio.client.feature.entry.domain.SessionDraftStore
 
-/** Deterministic in-memory double for the persisted composer draft boundary. */
 internal class InMemorySessionDraftStore : SessionDraftStore {
     private val drafts = mutableMapOf<SessionDraftKey, String>()
 

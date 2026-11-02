@@ -304,15 +304,6 @@ internal class ScriptedSessionGateway(
         queuedPages += page
     }
 
-    fun awaitRequest(
-        request: SessionListRequest,
-        occurrence: Int = 0,
-    ) {
-        check(listRequests.count { it == request } > occurrence) {
-            "The gateway never received request $request occurrence $occurrence."
-        }
-    }
-
     override fun listSessions(request: SessionListRequest): SessionPage {
         val occurrence = requestOccurrences.merge(request, 1, Int::plus)!! - 1
         listRequests += request

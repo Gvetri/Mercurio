@@ -28,13 +28,7 @@ import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 
-/**
- * Journey-shaped isolation verification for #284: the traffic of the cache-run-isolation
- * and offline-cache-read journeys — connect, open, submit, reconcile after a restart —
- * replayed against presentation state. The authoritative traffic must be byte-identical
- * with a poisoned store behind it, must never mark a surface cached, and must never read
- * the store outside the sanctioned offline arms.
- */
+/** The #284 journey-shaped isolation verification. */
 class HistoryCacheIsolationJourneyTest {
     @Test
     fun the_run_isolation_journey_traffic_never_reads_or_marks_the_populated_cache() =

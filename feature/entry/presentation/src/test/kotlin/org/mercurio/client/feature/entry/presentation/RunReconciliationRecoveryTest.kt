@@ -1,10 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -385,11 +382,6 @@ class RunReconciliationRecoveryTest {
 
                 recoveryRegistry.releaseLoad.countDown()
                 assertTrue(recoveryRegistry.loadFinished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                runBlocking {
-                    withTimeout(RECONCILIATION_TIMEOUT_MILLIS) {
-                        delay(100)
-                    }
-                }
                 assertEquals(listOf(run.id), gateway.statusRequests)
             } finally {
                 gateway.releaseRun.countDown()
