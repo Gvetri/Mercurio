@@ -398,4 +398,55 @@ internal object ChatDesignFixtures {
                     ),
             ),
         )
+
+    fun tableAmongManyMessages(): SessionDetailState =
+        details(
+            content(
+                messages =
+                    listOf(
+                        SessionMessageUiState(
+                            id = "message-1",
+                            role = "user",
+                            content = "Start here.",
+                            timestamp = day,
+                        ),
+                        SessionMessageUiState(
+                            id = "message-2",
+                            role = "assistant",
+                            content = "First reply.",
+                            timestamp = day,
+                        ),
+                        SessionMessageUiState(
+                            id = "message-3",
+                            role = "user",
+                            content = "Show the roles table.",
+                            timestamp = day,
+                        ),
+                        SessionMessageUiState(
+                            id = "message-4",
+                            role = "assistant",
+                            content =
+                                "| role | design | app | delta |\n" +
+                                    "| --- | --- | --- | --- |\n" +
+                                    "| surface-container-high | #E3E6EA | #E6E8EB | +2 R |\n" +
+                                    "| outline-variant | #D7DBE0 | #D7DBE0 | match |\n" +
+                                    "| on-surface-variant | #5B6168 | #5B6168 | match |\n" +
+                                    "| error | #C7222D | #C3242F | +1 R |",
+                            timestamp = day,
+                        ),
+                        SessionMessageUiState(
+                            id = "message-5",
+                            role = "user",
+                            content = "After the table.",
+                            timestamp = later,
+                        ),
+                        SessionMessageUiState(
+                            id = "message-6",
+                            role = "assistant",
+                            content = "Last reply.",
+                            timestamp = later,
+                        ),
+                    ),
+            ),
+        )
 }

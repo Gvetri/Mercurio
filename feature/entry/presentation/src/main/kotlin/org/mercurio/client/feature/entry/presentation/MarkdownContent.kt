@@ -43,16 +43,15 @@ import androidx.compose.ui.unit.dp
  *
  * Link destinations are carried as annotations built from [allowedExternalLinkDestination];
  * a blocked destination is rendered as its inert label and cannot be selected. [onTableExpand]
- * carries a table wider than its row to the host's full-screen viewer; without it the card
- * keeps its in-place horizontal scroll and offers no control.
+ * carries a table wider than its row to the host's full-screen viewer.
  */
 @Composable
 internal fun MarkdownContent(
     markdown: String,
     actions: MessageActions,
+    onTableExpand: (MarkdownBlock.Table) -> Unit,
     modifier: Modifier = Modifier,
     blockSpacing: Dp? = null,
-    onTableExpand: ((MarkdownBlock.Table) -> Unit)? = null,
 ) {
     val tokens = LocalHermesDesignTokens.current
     val spacing = tokens.spacing
@@ -85,7 +84,7 @@ internal fun MarkdownContent(
                     MarkdownTableCard(
                         block = block,
                         actions = actions,
-                        onExpand = onTableExpand?.let { expand -> { expand(block) } },
+                        onExpand = { onTableExpand(block) },
                     )
                 is MarkdownBlock.DisplayMath -> MarkdownParagraph(spans = block.spans, actions = actions)
             }

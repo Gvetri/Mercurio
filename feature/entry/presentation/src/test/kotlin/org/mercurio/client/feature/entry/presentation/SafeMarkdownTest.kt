@@ -363,13 +363,13 @@ class SafeMarkdownTest {
     }
 
     @Test
-    fun a_table_run_containing_a_plain_line_stays_literal_text() {
-        val source = "| a | b |\n| --- | --- |\nplain line"
+    fun a_table_ends_at_the_first_line_that_is_not_a_row() {
+        val source = "| a | b |\n| --- | --- |\n| 1 | 2 |\nplain line"
 
         val blocks = parseSafeMarkdown(source)
 
-        assertEquals(listOf("Paragraph"), blocks.map { it::class.simpleName })
-        assertEquals(source.replace("\n", " "), blocks.plainText())
+        assertEquals(listOf("Table", "Paragraph"), blocks.map { it::class.simpleName })
+        assertEquals("plain line", (blocks[1] as MarkdownBlock.Paragraph).spans.text())
     }
 
     @Test

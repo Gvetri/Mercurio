@@ -8,21 +8,29 @@ private const val TABLE_ESCAPE = '\\'
 
 private val DELIMITER_CELL = Regex("""^:?-+:?$""")
 
-internal fun pipeTableBlock(lines: List<String>): MarkdownBlock.Table? {
-    val piped = lines.size >= MINIMUM_TABLE_LINES && lines.all { TABLE_PIPE in it }
-    val header = if (piped) tableCells(lines.first()) else emptyList()
-    val delimiter = if (piped) tableCells(lines[MINIMUM_TABLE_LINES - 1]) else emptyList()
+/**
+ * The pipe table a paragraph run starts with, and how many of its lines the table consumes.
+ * A table ends at the first line that is not a row, as GFM does, so prose written directly
+ * under the last row stays prose instead of turning the whole run literal.
+ */
+internal fun leadingPipeTable(lines: List<String>): Pair<MarkdownBlock.Table, Int>? {
+    val header = if (lines.size >= MINIMUM_TABLE_LINES) tableCells(lines[0]) else emptyList()
+    val delimiter = if (lines.size >= MINIMUM_TABLE_LINES) tableCells(lines[1]) else emptyList()
     val shaped =
-        piped &&
-            delimiter.isNotEmpty() &&
+        lines.size >= MINIMUM_TABLE_LINES &&
+            header.isNotEmpty() &&
+            delimiter.size == header.size &&
             delimiter.all { DELIMITER_CELL.matches(it) } &&
-            header.size == delimiter.size
+            TABLE_PIPE in lines[0]
     if (!shaped) return null
-    return MarkdownBlock.Table(
-        header = header,
-        rows = lines.drop(MINIMUM_TABLE_LINES).map { line -> tableRow(tableCells(line), header.size) },
-        alignments = delimiter.map(::tableAlignment),
-    )
+    val body = lines.drop(MINIMUM_TABLE_LINES).takeWhile { line -> TABLE_PIPE in line }
+    val table =
+        MarkdownBlock.Table(
+            header = header,
+            rows = body.map { line -> tableRow(tableCells(line), header.size) },
+            alignments = delimiter.map(::tableAlignment),
+        )
+    return table to MINIMUM_TABLE_LINES + body.size
 }
 
 private fun tableAlignment(cell: String): TableAlignment =

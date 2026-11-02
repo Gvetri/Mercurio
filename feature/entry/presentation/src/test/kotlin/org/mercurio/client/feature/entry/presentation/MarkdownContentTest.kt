@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -35,7 +36,7 @@ class MarkdownContentTest {
     fun emphasis_and_lists_render_as_native_text_without_markers() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "Safe **Markdown** text\n\n- first item\n- second item",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -53,7 +54,7 @@ class MarkdownContentTest {
         val math = "\$\$\nE = mc^2\n\$\$"
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = math,
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -68,7 +69,7 @@ class MarkdownContentTest {
         val code = "val total = \"a\" + \"b\" ".repeat(60)
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(markdown = "```kotlin\n$code\n```", actions = RecordingActions().asMessageActions())
+                TestMarkdownContent(markdown = "```kotlin\n$code\n```", actions = RecordingActions().asMessageActions())
             }
         }
 
@@ -88,7 +89,7 @@ class MarkdownContentTest {
         val recorded = RecordingActions()
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(markdown = "```\nval x = 1\n```", actions = recorded.asMessageActions())
+                TestMarkdownContent(markdown = "```\nval x = 1\n```", actions = recorded.asMessageActions())
             }
         }
 
@@ -101,7 +102,7 @@ class MarkdownContentTest {
     fun a_numbered_list_renders_the_authored_ordinals_instead_of_renumbering() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "5. five\n9. nine",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -117,7 +118,7 @@ class MarkdownContentTest {
     fun a_rendered_link_exposes_its_label_and_one_allowed_destination_annotation() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "[secure link](https://example.com/secure)",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -143,7 +144,7 @@ class MarkdownContentTest {
         val recorded = RecordingActions()
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "[secure link](https://example.com/secure)",
                     actions = recorded.asMessageActions(),
                 )
@@ -160,7 +161,7 @@ class MarkdownContentTest {
         val recorded = RecordingActions()
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "[unsafe](javascript:alert(1))",
                     actions = recorded.asMessageActions(),
                 )
@@ -185,7 +186,7 @@ class MarkdownContentTest {
     fun embedded_html_stays_literal_text_and_offers_no_executable_action() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "<script>alert(1)</script>",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -200,7 +201,7 @@ class MarkdownContentTest {
     fun long_content_is_fully_rendered_instead_of_truncated() {
         val content = (1..400).joinToString(separator = "\n\n") { index -> "Paragraph $index" }
         composeTestRule.setContent {
-            HermesTheme { MarkdownContent(markdown = content, actions = RecordingActions().asMessageActions()) }
+            HermesTheme { TestMarkdownContent(markdown = content, actions = RecordingActions().asMessageActions()) }
         }
 
         composeTestRule.onNodeWithText("Paragraph 1").assertExists()
@@ -212,7 +213,7 @@ class MarkdownContentTest {
         val code = "fun greet() {\n  // plan\n  val total = \"x\" + 2\n}"
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(markdown = "```kotlin\n$code\n```", actions = RecordingActions().asMessageActions())
+                TestMarkdownContent(markdown = "```kotlin\n$code\n```", actions = RecordingActions().asMessageActions())
             }
         }
 
@@ -234,7 +235,7 @@ class MarkdownContentTest {
         val kotlinCode = "val run = 1"
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "```python\n$pythonCode\n```\n\n```kotlin\n$kotlinCode\n```",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -255,7 +256,7 @@ class MarkdownContentTest {
         val code = "val x = 1"
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(markdown = "```\n$code\n```", actions = RecordingActions().asMessageActions())
+                TestMarkdownContent(markdown = "```\n$code\n```", actions = RecordingActions().asMessageActions())
             }
         }
 
@@ -270,7 +271,7 @@ class MarkdownContentTest {
         val code = "val x = 1"
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "```brainfuck\n$code\n```",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -290,7 +291,7 @@ class MarkdownContentTest {
     fun a_heading_renders_styled_text_without_its_marker() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "# Release Notes\n\nbody text",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -315,7 +316,7 @@ class MarkdownContentTest {
     fun a_blockquote_renders_its_text_without_the_quote_marker() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "> quoted wisdom\n\nbody text",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -336,7 +337,7 @@ class MarkdownContentTest {
     fun a_thematic_break_renders_without_literal_rule_text() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "Above the rule\n\n---\n\nBelow the rule",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -352,7 +353,7 @@ class MarkdownContentTest {
     fun list_items_render_indented_instead_of_flush_with_paragraphs() {
         composeTestRule.setContent {
             HermesTheme {
-                MarkdownContent(
+                TestMarkdownContent(
                     markdown = "Intro paragraph\n\n- first item",
                     actions = RecordingActions().asMessageActions(),
                 )
@@ -367,6 +368,14 @@ class MarkdownContentTest {
             listBounds.left > paragraphBounds.left,
         )
     }
+}
+
+@Composable
+private fun TestMarkdownContent(
+    markdown: String,
+    actions: MessageActions,
+) {
+    MarkdownContent(markdown = markdown, actions = actions, onTableExpand = {})
 }
 
 /** A deterministic recording double for the message actions; no mocking framework is used. */

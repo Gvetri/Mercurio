@@ -24,13 +24,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -50,15 +57,16 @@ internal fun MarkdownTableCard(
     block: MarkdownBlock.Table,
     actions: MessageActions,
     modifier: Modifier = Modifier,
-    onExpand: (() -> Unit)? = null,
+    onExpand: () -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
     val naturalWidths = rememberTableColumnWidths(block)
     val scrollState = rememberScrollState()
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val viewportWidth = maxWidth
-        val gridWidth = naturalWidths.total()
+        val gridWidth = naturalWidths.fold(0.dp) { total, width -> total + width }
         val widths = fillViewport(naturalWidths, viewportWidth)
+        val grid = TableGrid(widths = widths, alignments = block.alignments, scrollState = scrollState)
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = tokens.colorScheme.surface,
@@ -79,8 +87,22 @@ internal fun MarkdownTableCard(
                             .semantics { collectionInfo = block.collectionInfo() }
                             .testTag(TABLE_GRID_TAG),
                 ) {
-                    val grid = TableGrid(widths = widths, alignments = block.alignments, scrollState = scrollState)
-                    TableGridRows(block = block, grid = grid, actions = actions)
+                    TableRowCells(
+                        cells = block.header,
+                        rowIndex = 0,
+                        header = true,
+                        grid = grid,
+                        actions = actions,
+                    )
+                    block.rows.forEachIndexed { index, row ->
+                        TableRowCells(
+                            cells = row,
+                            rowIndex = index + 1,
+                            header = false,
+                            grid = grid,
+                            actions = actions,
+                        )
+                    }
                 }
             }
         }
@@ -149,7 +171,7 @@ private fun TableCaption(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = TABLE_HEAD_HEIGHT)
+                .heightIn(min = tokens.spacing.xl)
                 .padding(start = tokens.spacing.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -158,7 +180,8 @@ private fun TableCaption(
             style = MaterialTheme.typography.labelSmall,
             letterSpacing = 0.12.em,
             color = tokens.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = TABLE_CAPTION_LINES,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (onExpand != null) {
@@ -167,32 +190,6 @@ private fun TableCaption(
                 enabled = true,
                 onClick = onExpand,
                 modifier = Modifier.testTag(TABLE_EXPAND_TAG),
-            )
-        }
-    }
-}
-
-@Composable
-private fun TableGridRows(
-    block: MarkdownBlock.Table,
-    grid: TableGrid,
-    actions: MessageActions,
-) {
-    Column {
-        TableRowCells(
-            cells = block.header,
-            rowIndex = 0,
-            header = true,
-            grid = grid,
-            actions = actions,
-        )
-        block.rows.forEachIndexed { index, row ->
-            TableRowCells(
-                cells = row,
-                rowIndex = index + 1,
-                header = false,
-                grid = grid,
-                actions = actions,
             )
         }
     }
@@ -230,11 +227,7 @@ private fun TableCell(
     val sticky = spec.columnIndex == 0
     val background = if (spec.header) tokens.componentColors.inset else tokens.colorScheme.surface
     val linkColor = MaterialTheme.colorScheme.primary
-    val spans = remember(spec.text) { parseInline(spec.text) }
-    val annotated =
-        remember(spans, linkColor, actions) {
-            spans.toAnnotatedString(linkColor = linkColor, onOpenLink = actions.openLink, codeBackground = null)
-        }
+    val annotated = remember(spec.text, linkColor, actions) { tableCellText(spec.text, linkColor, actions.openLink) }
     Text(
         text = annotated,
         style = style,
@@ -255,10 +248,51 @@ private fun TableCell(
                 )
                 .background(background)
                 .drawBehind { if (sticky) drawStickyColumnEdge(tokens.colorScheme.outlineVariant) }
-                .padding(horizontal = TABLE_CELL_HORIZONTAL_PADDING, vertical = TABLE_CELL_VERTICAL_PADDING)
+                .padding(horizontal = tokens.spacing.s, vertical = tokens.spacing.xs)
                 .semantics {
+                    if (spec.header) heading()
                     collectionItemInfo = CollectionItemInfo(spec.rowIndex, 1, spec.columnIndex, 1)
                 },
+    )
+}
+
+internal fun tableCellText(
+    text: String,
+    linkColor: Color,
+    onOpenLink: (String) -> Unit,
+): AnnotatedString =
+    parseInline(text).toAnnotatedString(
+        linkColor = linkColor,
+        onOpenLink = onOpenLink,
+        codeBackground = null,
+    )
+
+internal fun MarkdownBlock.Table.collectionInfo(): CollectionInfo {
+    val rowCount = rows.size + 1
+    return CollectionInfo(rowCount = rowCount, columnCount = header.size)
+}
+
+internal fun tableTitle(columnCount: Int): String =
+    if (columnCount == 1) {
+        "Table · 1 column"
+    } else {
+        "Table · $columnCount columns"
+    }
+
+internal fun TableAlignment.textAlign(): TextAlign =
+    when (this) {
+        TableAlignment.Start -> TextAlign.Start
+        TableAlignment.Center -> TextAlign.Center
+        TableAlignment.End -> TextAlign.End
+    }
+
+internal fun DrawScope.drawStickyColumnEdge(color: Color) {
+    val stroke = 1.dp.toPx()
+    drawLine(
+        color = color,
+        start = Offset(size.width - stroke / 2, 0f),
+        end = Offset(size.width - stroke / 2, size.height),
+        strokeWidth = stroke,
     )
 }
 
@@ -275,12 +309,8 @@ private class TableCellSpec(
     val columnIndex: Int,
 )
 
-internal const val TABLE_EXPAND_TAG = "table-expand"
+private const val TABLE_EXPAND_TAG = "table-expand"
 
-internal const val TABLE_GRID_TAG = "table-grid"
+private const val TABLE_GRID_TAG = "table-grid"
 
-internal val TABLE_HEAD_HEIGHT = 24.dp
-
-internal val TABLE_CELL_HORIZONTAL_PADDING = 8.dp
-
-private val TABLE_CELL_VERTICAL_PADDING = 4.dp
+private const val TABLE_CAPTION_LINES = 2

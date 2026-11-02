@@ -145,6 +145,13 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
 
     fun flushParagraphRun() {
         if (paragraphLines.isEmpty()) return
+        val leading = leadingPipeTable(paragraphLines)
+        if (leading != null) {
+            blocks += leading.first
+            paragraphLines.subList(0, leading.second).clear()
+            flushParagraphRun()
+            return
+        }
         val source = paragraphLines.joinToString(separator = " ")
         blocks += structuredBlock(paragraphLines) ?: MarkdownBlock.Paragraph(parseInline(source))
         paragraphLines.clear()

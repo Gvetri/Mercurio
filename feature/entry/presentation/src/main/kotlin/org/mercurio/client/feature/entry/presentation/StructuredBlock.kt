@@ -7,9 +7,7 @@ private const val DISPLAY_MATH_DELIMITER = "$$"
  * paragraph. A construct is recognised only when the whole run is that construct,
  * so block grouping and rendered text stay exactly what the literal parse produced.
  */
-internal fun structuredBlock(lines: List<String>): MarkdownBlock? {
-    return displayMathBlock(lines) ?: pipeTableBlock(lines)
-}
+internal fun structuredBlock(lines: List<String>): MarkdownBlock? = displayMathBlock(lines)
 
 private fun displayMathBlock(lines: List<String>): MarkdownBlock.DisplayMath? {
     val source = lines.joinToString(separator = " ")

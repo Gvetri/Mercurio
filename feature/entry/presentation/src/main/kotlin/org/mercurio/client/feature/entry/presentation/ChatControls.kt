@@ -149,8 +149,8 @@ internal fun ChatDotsControl(
 @Composable
 internal fun ChatBackControl(
     onClick: () -> Unit,
+    description: String,
     modifier: Modifier = Modifier,
-    description: String = "Back to Sessions",
 ) {
     val tokens = LocalHermesDesignTokens.current
     Box(

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.text.LinkAnnotation
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -37,6 +39,7 @@ class MarkdownTableScreenTest {
                 MarkdownContent(
                     markdown = "| gate | compares |\n| --- | --- |\n| unit | cases |",
                     actions = RecordingActions().asMessageActions(),
+                    onTableExpand = {},
                 )
             }
         }
@@ -59,6 +62,7 @@ class MarkdownTableScreenTest {
                         "| mark | detail |\n| --- | --- |\n" +
                             "| **bold** | `code` and [docs](https://example.com/docs) |",
                     actions = recorded.asMessageActions(),
+                    onTableExpand = {},
                 )
             }
         }
@@ -87,6 +91,7 @@ class MarkdownTableScreenTest {
                             "| empty | body |\n| --- | --- |\n\n" +
                             "| a | b | c |\n| --- | --- | --- |\n| 1 |",
                     actions = RecordingActions().asMessageActions(),
+                    onTableExpand = {},
                 )
             }
         }
@@ -104,6 +109,7 @@ class MarkdownTableScreenTest {
                 MarkdownContent(
                     markdown = "| gate | compares |\n| --- | --- |\n| unit | cases |",
                     actions = RecordingActions().asMessageActions(),
+                    onTableExpand = {},
                 )
             }
         }
@@ -116,7 +122,9 @@ class MarkdownTableScreenTest {
         assertEquals(2, collectionInfo.rowCount)
         assertEquals(2, collectionInfo.columnCount)
         composeTestRule.onNodeWithText("gate").assert(hasCellPosition(row = 0, column = 0))
+        composeTestRule.onNodeWithText("gate").assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
         composeTestRule.onNodeWithText("unit").assert(hasCellPosition(row = 1, column = 0))
+        composeTestRule.onNodeWithText("unit").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Heading))
         composeTestRule.onNodeWithText("cases").assert(hasCellPosition(row = 1, column = 1))
     }
 
@@ -161,6 +169,66 @@ class MarkdownTableScreenTest {
         composeTestRule.onNodeWithText("Table · 4 columns").assertDoesNotExist()
         composeTestRule.onNodeWithText("[ send ]").assertExists()
         composeTestRule.onNodeWithText("Which checks gate the release?").assertExists()
+    }
+
+    @Test
+    fun back_returns_to_the_transcript_at_the_same_scroll_position() {
+        composeTestRule.setContent {
+            HermesTheme {
+                SessionDetailContent(detail = ChatDesignFixtures.tableAmongManyMessages(), onEvent = {})
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(4)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("SUN 01 NOV").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("table-expand").performClick()
+        composeTestRule.onNodeWithContentDescription("Back to transcript").performClick()
+        composeTestRule.onNodeWithText("SUN 01 NOV").assertDoesNotExist()
+        composeTestRule.onNodeWithText("role").assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "w840dp-h900dp-notnight")
+    fun the_viewer_fills_the_conversation_pane_in_a_two_pane_layout() {
+        val detail = ChatDesignFixtures.tableExpanded()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        EntryUiState(
+                            title = "Connected",
+                            supportingText = "Connected",
+                            actionLabel = "Connected",
+                            isConnected = true,
+                            sessionList =
+                                SessionListUiState(
+                                    sessions =
+                                        listOf(
+                                            SessionItemUiState(
+                                                id = ChatDesignFixtures.sessionId,
+                                                title = "Nightly release triage",
+                                                preview = null,
+                                                pinned = false,
+                                            ),
+                                        ),
+                                    openedSession = detail.content,
+                                ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.waitForIdle()
+        composeTestRule.onAllNodesWithText("Nightly release triage").assertCountEquals(2)
+        composeTestRule.onNodeWithTag("table-expand").performClick()
+        composeTestRule.onNodeWithText("Table · 4 columns").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Nightly release triage").assertCountEquals(1)
+        composeTestRule.onAllNodesWithText("[ send ]").assertCountEquals(0)
+        composeTestRule.onNodeWithContentDescription("Back to transcript").performClick()
+        composeTestRule.onAllNodesWithText("Nightly release triage").assertCountEquals(2)
     }
 
     private fun hasCellPosition(
