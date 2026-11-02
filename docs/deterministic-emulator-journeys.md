@@ -39,6 +39,20 @@ cancels that run, and the labeled run then validates the same head. A draft or e
 request starts no validation even with the label. When a change sits on a boundary between two key
 areas, add the label: the nightly schedule runs the whole suite against `main` either way.
 
+## Shards and evidence
+
+The lane runs as three parallel shard jobs. Each shard invokes
+`.github/scripts/journey-run.sh <shard> 3` and runs only the journeys whose pinned position
+belongs to it, so a failing journey stops its own shard and no other shard sees it.
+
+Before each journey the runner probes `GET /v1/capabilities` and sends the credential the
+scenario declares in `require_bearer_credential`, or no authorization header when the scenario
+declares none.
+
+Failure evidence is uploaded per shard: `journey-evidence-shard-<n>-<run>-<attempt>` for a
+failed shard, and `journey-retry-evidence-shard-<n>-<run>-<attempt>` when a journey recovered on
+its retry.
+
 ## Guarantees
 
 - Each journey starts the fake Gateway from its own explicit scenario file

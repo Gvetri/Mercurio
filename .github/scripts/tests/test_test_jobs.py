@@ -249,6 +249,42 @@ class TestJobs(unittest.TestCase):
         self.assertIn("Journey Gateway capability check failed", runner)
         self.assertIn('"require_bearer_credential"', runner)
 
+    def test_journey_runner_probes_capabilities_with_the_scenario_bearer_credential(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        scenario_dir = ROOT / "fixtures/mercurio/journey/scenarios"
+        credentials = [
+            json.loads((scenario_dir / f"{journey}.json").read_text()).get("require_bearer_credential")
+            for journey in journeys
+        ]
+        self.assertTrue(any(credentials), "at least one pinned journey must require a bearer credential")
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh")],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            calls = [call for call in (workspace / "curl.calls").read_text().splitlines() if "/v1/capabilities" in call]
+            self.assertEqual(len(journeys), len(calls), "every journey must probe the capability route exactly once")
+            for journey, credential, call in zip(journeys, credentials, calls):
+                if credential:
+                    self.assertIn(
+                        f"Authorization: Bearer {credential}",
+                        call,
+                        f"the capability probe for {journey} must send the credential its scenario declares",
+                    )
+                else:
+                    self.assertNotIn(
+                        "Authorization:",
+                        call,
+                        f"the capability probe for {journey} must not send a credential its scenario does not declare",
+                    )
+
     def test_journey_runner_reuses_a_restored_maestro_archive_and_ci_caches_it(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
         guard = runner.index('if [[ ! -f maestro.zip ]]')
@@ -283,16 +319,15 @@ class TestJobs(unittest.TestCase):
 
     def test_journey_runner_does_not_restart_the_guest_for_the_trust_store(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
-        trust_store = trust_store_region(runner)
         self.assertNotIn(
             "adb reboot",
-            trust_store,
+            runner,
             "a guest restart with the writable-system overlay active can leave the emulator unreachable",
         )
         self.assertNotIn(
             "sys.boot_completed",
-            trust_store,
-            "the trust store install must not wait for a boot; the app starts after this step",
+            runner,
+            "no runner step waits for a guest boot; the trust store install runs against the live guest and the app starts afterwards",
         )
         self.assertNotIn("for boot_attempt in 1 2", runner)
         self.assertNotIn("retrying the boot wait", runner)
@@ -484,6 +519,7 @@ class TestJobs(unittest.TestCase):
             copied = workspace / relative
             copied.parent.mkdir(parents=True, exist_ok=True)
             copied.write_text((ROOT / relative).read_text())
+        shutil.copytree(ROOT / "fixtures/mercurio/journey/scenarios", workspace / "fixtures/mercurio/journey/scenarios")
         capabilities = json.loads((ROOT / "fixtures/mercurio/contracts/capabilities/success.json").read_text())["response"]["body"]
         count_dir = workspace / "maestro.counts"
         count_dir.mkdir()
@@ -692,6 +728,52 @@ class TestJobs(unittest.TestCase):
             for other in sorted(observed):
                 if shard < other:
                     self.assertFalse(set(observed[shard]) & set(observed[other]), f"shards {shard} and {other} overlap")
+
+    def test_journey_runner_keeps_a_failed_shard_inside_its_own_journeys(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        shard = next(
+            candidate
+            for candidate in range(1, MAESTRO_SHARD_TOTAL + 1)
+            if JOURNEY_RETRY_TARGET in shard_journeys(journeys, candidate)
+        )
+        assigned = shard_journeys(journeys, shard)
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, JOURNEY_RETRY_TARGET, 99)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), str(shard), str(MAESTRO_SHARD_TOTAL)],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(f"Running deterministic journey shard {shard} of {MAESTRO_SHARD_TOTAL}.", result.stdout)
+            self.assertIn(f"Maestro journey failed on both attempts: {JOURNEY_RETRY_TARGET}", result.stdout)
+            self.assertNotIn("All deterministic journeys passed.", result.stdout)
+            self.assertEqual(str(JOURNEY_MAX_ATTEMPTS), (count_dir / JOURNEY_RETRY_TARGET).read_text().strip())
+            reached = assigned[: assigned.index(JOURNEY_RETRY_TARGET) + 1]
+            self.assertEqual(
+                sorted(reached),
+                sorted(path.name for path in count_dir.iterdir()),
+                "a failed shard must stop at its failing journey and never reach a journey outside its assignment",
+            )
+            evidence_dir = workspace / "artifacts/journey-evidence"
+            self.assertIn(
+                "Element not found: Pin Session",
+                (evidence_dir / f"{JOURNEY_RETRY_TARGET}-maestro-attempt1.log").read_text(),
+            )
+            self.assertIn(
+                "Element not found: Pin Session",
+                (evidence_dir / f"{JOURNEY_RETRY_TARGET}-maestro.log").read_text(),
+            )
+            self.assertTrue((evidence_dir / f"{JOURNEY_RETRY_TARGET}-maestro-tests").is_dir())
+            for outside in sorted(set(journeys) - set(assigned)):
+                self.assertFalse(
+                    any(path.name.startswith(f"{outside}-") for path in evidence_dir.iterdir()),
+                    f"shard {shard} must upload no evidence for the unassigned journey {outside}",
+                )
 
     def test_journey_runner_rejects_invalid_shard_selections(self):
         for arguments in (("0", "3"), ("4", "3"), ("x", "3"), ("2",), ("2", "0"), ("", "3")):

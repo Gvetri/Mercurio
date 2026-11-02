@@ -1324,25 +1324,69 @@ class QualityGateConfigurationTest {
     fun maestro_journeys_is_a_deterministic_api24_gated_check() {
         val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
         val requiredChecks = repositoryRoot.resolve(".github/quality-gate/required-checks.txt").readLines()
-        val maestroJob = workflow.substringAfter("  maestro_journeys:").substringBefore("  create_nightly_failure_issue:")
+        val maestroUmbrella =
+            workflow.substringAfter("  maestro_journeys:\n").substringBefore("  maestro_shard_1:")
+        val maestroShards =
+            workflow.substringAfter("  maestro_shard_1:").substringBefore("  create_nightly_failure_issue:")
+        val lanes =
+            listOf(
+                "ui_paths",
+                "formatting",
+                "static_analysis",
+                "detekt",
+                "unit_tests",
+                "fixture_descriptor",
+                "fixture_lifecycle",
+                "fixture_contract",
+                "android_build",
+                "coverage_mutation",
+                "compose_test",
+            )
+        val shardKeys = (1..3).map { shard -> "maestro_shard_$shard" }
+        val laneNeeds = "    needs: [api24_instrumentation, ${lanes.joinToString(", ")}]"
+        val aggregateNeeds = "    needs: [api24_instrumentation, ${(lanes + shardKeys).joinToString(", ")}]"
+        val laneGuard = lanes.joinToString(" && ") { lane -> "needs.$lane.result != 'failure'" }
 
-        assertTrue("The workflow must define a Maestro journey job.", workflow.contains("  maestro_journeys:"))
-        assertTrue("The Maestro journey job must be named explicitly.", workflow.contains("    name: maestro-journeys"))
-        assertTrue(
-            "The Maestro journey job must wait for a passing API 24 suite and run only on the nightly schedule, a manual run, or a ready pull request that carries the run-maestro label; a changed UI path must never start it, and a pull-request run must skip the journey when a required lane has already failed.",
-            maestroJob.contains(
-                "    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, " +
-                    "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, " +
-                    "coverage_mutation, compose_test]",
-            ) &&
-                maestroJob.contains("needs.api24_instrumentation.result == 'success'") &&
-                maestroJob.contains("github.event_name == 'schedule'") &&
-                maestroJob.contains("github.event_name == 'workflow_dispatch'") &&
-                maestroJob.contains("github.event_name == 'pull_request'") &&
-                maestroJob.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')") &&
-                !maestroJob.contains("needs.ui_paths.outputs.ui_paths_changed") &&
-                maestroJob.contains("(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))"),
+        assertTrue("The workflow must define a Maestro journey job.", workflow.contains("  maestro_journeys:\n"))
+        assertTrue("The Maestro journey job must be named explicitly.", workflow.contains("    name: maestro-journeys\n"))
+        assertEquals(
+            "The shard aggregate must declare nothing but the lanes and every shard it aggregates.",
+            listOf(aggregateNeeds),
+            maestroUmbrella.lineSequence().filter { line -> line.startsWith("    needs: ") }.toList(),
         )
+        assertEquals(
+            "Every journey shard must wait for the lanes that conclude before it starts, and for nothing else.",
+            shardKeys.map { laneNeeds },
+            maestroShards.lineSequence().filter { line -> line.startsWith("    needs: ") }.toList(),
+        )
+        assertTrue(
+            "The shard aggregate must keep the label, API 24, schedule, manual, and ready-pull-request gate the shards use.",
+            maestroUmbrella.contains("github.event.action != 'labeled' || github.event.label.name == 'run-maestro'") &&
+                maestroUmbrella.contains("needs.api24_instrumentation.result == 'success'") &&
+                maestroUmbrella.contains("github.event_name == 'schedule'") &&
+                maestroUmbrella.contains("github.event_name == 'workflow_dispatch'") &&
+                maestroUmbrella.contains("github.event_name == 'pull_request'") &&
+                maestroUmbrella.contains("contains(github.event.pull_request.labels.*.name, 'run-maestro')") &&
+                !maestroUmbrella.contains("needs.ui_paths.outputs.ui_paths_changed"),
+        )
+        assertTrue(
+            "The shard aggregate must flag every failed lane by name, so a lane it does not wait on cannot silence it.",
+            maestroUmbrella.contains("(github.event_name != 'pull_request' || ($laneGuard))"),
+        )
+        assertTrue(
+            "The shard aggregate must gate on the lanes it names rather than on the outcome of every need.",
+            !maestroUmbrella.contains("!contains(needs.*.result, 'failure')"),
+        )
+        assertTrue(
+            "Each shard must skip on the outcome of every lane it named, since it has no shard results to read.",
+            maestroShards.contains("(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))"),
+        )
+        (1..shardKeys.size).forEach { shard ->
+            assertTrue(
+                "Shard $shard must run its own partition of the pinned journeys with the pinned runner script.",
+                maestroShards.contains("            .github/scripts/journey-run.sh $shard ${shardKeys.size}\n"),
+            )
+        }
         assertTrue(
             "The Maestro journey job must run the pinned runner script.",
             workflow.contains(".github/scripts/journey-run.sh"),
