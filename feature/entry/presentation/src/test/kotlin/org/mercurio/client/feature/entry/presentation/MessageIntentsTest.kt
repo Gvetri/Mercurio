@@ -54,7 +54,7 @@ class MessageIntentsTest {
 
     @Test
     fun an_explicit_share_carries_only_the_selected_message_content() {
-        val chooser = messageShareIntent("Stable **result** text")
+        val chooser = messageShareIntent("Stable **result** text", "Share message")
 
         assertEquals(Intent.ACTION_CHOOSER, chooser.action)
         val send = requireNotNull(chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java))

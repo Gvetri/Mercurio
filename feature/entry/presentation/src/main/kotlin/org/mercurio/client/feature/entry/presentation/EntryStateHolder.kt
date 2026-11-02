@@ -208,14 +208,14 @@ sealed interface EntryUiEvent {
 }
 
 enum class EntryErrorCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    INVALID_ADDRESS("Invalid Gateway address. Enter one HTTPS Gateway endpoint."),
-    SECURE_CONNECTION_FAILED("Secure connection failed. Check the Gateway certificate and hostname."),
-    AUTHENTICATION_FAILED("Authentication failed. Check the Gateway credential."),
-    REQUIRED_FEATURE_UNAVAILABLE("Required feature unavailable. This Gateway does not support the client contract."),
-    GATEWAY_REQUEST_FAILED("Gateway request failed. Try again."),
-    CREDENTIAL_STORAGE_FAILED("Could not save the Gateway credential securely. Try again."),
+    INVALID_ADDRESS(R.string.error_invalid_address),
+    SECURE_CONNECTION_FAILED(R.string.error_secure_connection_failed),
+    AUTHENTICATION_FAILED(R.string.error_authentication_failed),
+    REQUIRED_FEATURE_UNAVAILABLE(R.string.error_required_feature_unavailable),
+    GATEWAY_REQUEST_FAILED(R.string.error_gateway_request_failed),
+    CREDENTIAL_STORAGE_FAILED(R.string.error_credential_storage_failed),
 }
 
 internal const val DEFAULT_SEND_TIMEOUT_MILLIS = 30_000L
@@ -251,9 +251,9 @@ object NoOpRunSubmissionUncertaintyStore : RunSubmissionUncertaintyStore {
 }
 
 data class EntryUiState(
-    val title: String,
-    val supportingText: String,
-    val actionLabel: String,
+    val title: UiText,
+    val supportingText: UiText,
+    val actionLabel: UiText,
     val connectionSetupRequested: Boolean = false,
     val isChangingCredential: Boolean = false,
     val endpoint: String = "",
@@ -306,9 +306,9 @@ data class LocalDiagnosticsPorts(
 
 /** Recoverable failure shown after an export that produced no snapshot. */
 enum class LocalDiagnosticsExportFailure(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    EXPORT_FAILED("Diagnostics export failed. The buffered diagnostics are preserved. Try again."),
+    EXPORT_FAILED(R.string.error_diagnostics_export_failed),
 }
 
 data class RunStatusNotificationsUiState(
@@ -317,12 +317,9 @@ data class RunStatusNotificationsUiState(
 )
 
 enum class RunStatusNotificationExplanation(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    PERMISSION_DENIED(
-        "Notifications are blocked for this app. Allow notifications in Android settings, " +
-            "then enable this option again.",
-    ),
+    PERMISSION_DENIED(R.string.error_notifications_blocked),
 }
 
 internal data class ReleasedConnectionState(
@@ -820,9 +817,9 @@ internal typealias SessionMutationMap = Map<SessionId, SessionMutationUiState>
 internal fun EntryState.toUiState(): EntryUiState =
     if (isGatewayConnectionConfigured || configuredEndpoint != null) {
         EntryUiState(
-            title = "Verify your Hermes Gateway",
-            supportingText = "Verify the saved HTTPS endpoint before opening Sessions.",
-            actionLabel = "Verify Gateway Connection",
+            title = UiText.Resource(R.string.entry_title_verify_saved),
+            supportingText = UiText.Resource(R.string.entry_supporting_verify_saved),
+            actionLabel = UiText.Resource(R.string.entry_action_verify),
             connectionSetupRequested = true,
             endpoint = configuredEndpoint.orEmpty(),
             bearerCredential = configuredCredential.orEmpty(),
@@ -831,9 +828,9 @@ internal fun EntryState.toUiState(): EntryUiState =
         )
     } else {
         EntryUiState(
-            title = "Connect to a Hermes Gateway",
-            supportingText = "Use an existing compatible gateway. This app does not run Hermes on your device.",
-            actionLabel = "Add Gateway Connection",
+            title = UiText.Resource(R.string.entry_title_connect),
+            supportingText = UiText.Resource(R.string.entry_supporting_connect),
+            actionLabel = UiText.Resource(R.string.entry_action_add_connection),
             clientVersion = clientVersion,
         )
     }

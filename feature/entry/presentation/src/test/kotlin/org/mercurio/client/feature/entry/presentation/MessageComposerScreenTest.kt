@@ -21,9 +21,16 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
+/**
+ * The composer's contract: one `[ send ]` text control that never turns into Stop, a field that
+ * stays editable while a Run is live, and a stated reason whenever sending is unavailable. Stop
+ * belongs to the run line; a failed turn carries its own retry.
+ */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp-notnight")
 class MessageComposerScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -31,40 +38,36 @@ class MessageComposerScreenTest {
     @Test
     fun explicit_send_emits_only_the_send_intent_and_shows_the_current_run() {
         val events = mutableListOf<EntryUiEvent>()
-        val run = Run(RunId("run-1"), SessionId("session-1"), "succeeded")
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
-                    state = connectedState(composerText = "Run this", latestRun = run),
+                    state = connectedState(composerText = "Run this"),
                     onEvent = events::add,
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status: Completed").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Send").assertHasClickAction().assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("idle").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: ready").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").assertHasClickAction().assertIsEnabled().performClick()
 
         assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
     }
 
     @Test
-    fun the_latest_run_identity_stays_behind_an_explicit_disclosure() {
+    fun the_run_identifier_never_reaches_the_row_or_the_run_line() {
         val run = Run(RunId("run-1"), SessionId("session-1"), "succeeded")
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
-                    state = connectedState(latestRun = run),
+                    state = connectedState(latestRun = run, latestRunState = RunPresentationState.SUCCEEDED),
                     onEvent = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status: Completed").assertIsDisplayed()
         composeTestRule.onNodeWithText("run-1", substring = true).assertDoesNotExist()
-        composeTestRule.onNodeWithText("Show run ID").performClick()
-        composeTestRule.onNodeWithText("Run ID: run-1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("idle").assertIsDisplayed()
     }
 
     @Test
@@ -79,13 +82,13 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Message").performImeAction()
+        composeTestRule.onNodeWithTag("conversation-message-input").performImeAction()
 
         assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
     }
 
     @Test
-    fun active_observed_run_replaces_send_with_the_stop_affordance() {
+    fun active_observed_run_keeps_send_in_place_and_offers_stop_on_the_run_line() {
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
             HermesTheme {
@@ -93,7 +96,7 @@ class MessageComposerScreenTest {
                     state =
                         connectedState(
                             composerText = "Running draft",
-                            latestRun = Run(RunId("run-1"), SessionId("session-1"), "running"),
+                            latestRun = Run(RunId("4b2a-run"), SessionId("session-1"), "running"),
                             latestRunState = RunPresentationState.RUNNING,
                         ),
                     onEvent = events::add,
@@ -101,9 +104,9 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Message").assertIsEnabled()
-        composeTestRule.onNodeWithText("Send").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Stop").assertHasClickAction().assertIsEnabled().performClick()
+        composeTestRule.onNodeWithTag("conversation-message-input").assertIsEnabled()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("[ stop ]").assertHasClickAction().assertIsEnabled().performClick()
 
         assertEquals(listOf<EntryUiEvent>(EntryUiEvent.StopRunClicked), events)
     }
@@ -125,8 +128,8 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Stop").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Send").assertHasClickAction().assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("[ stop ]").assertDoesNotExist()
+        composeTestRule.onNodeWithText("[ send ]").assertHasClickAction().assertIsEnabled().performClick()
 
         assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
     }
@@ -139,7 +142,7 @@ class MessageComposerScreenTest {
                     state =
                         connectedState(
                             composerText = "Draft",
-                            latestRun = Run(RunId("run-1"), SessionId("session-1"), "running"),
+                            latestRun = Run(RunId("4b2a-run"), SessionId("session-1"), "running"),
                             latestRunState = RunPresentationState.RUNNING,
                         ),
                     onEvent = {},
@@ -147,13 +150,13 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Message").assertIsEnabled()
-        composeTestRule.onNodeWithText("Send").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Stop").assertHasClickAction()
+        composeTestRule.onNodeWithTag("conversation-message-input").assertIsEnabled()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("[ stop ]").assertHasClickAction()
     }
 
     @Test
-    fun confirmed_failure_shows_the_safe_error_and_keeps_try_again_explicit() {
+    fun confirmed_failure_shows_the_safe_error_and_keeps_the_draft_sendable() {
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
             HermesTheme {
@@ -170,59 +173,49 @@ class MessageComposerScreenTest {
 
         composeTestRule.onNodeWithText("Keep this draft").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+            .onNodeWithText(copy(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Try again").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("[ send ]").assertIsEnabled().performClick()
 
         assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
     }
 
     @Test
-    fun known_failed_run_summary_exposes_the_explicit_retry_for_a_recoverable_original_input() {
+    fun a_failed_message_row_offers_the_explicit_retry() {
         val events = mutableListOf<EntryUiEvent>()
-        val run = Run(RunId("run-failed"), SessionId("session-1"), "failed")
+        val runId = RunId("run-failed")
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
-                    state =
-                        connectedState(
-                            latestRun = run,
-                            latestRunState = RunPresentationState.FAILED,
-                            latestRunRetryAvailable = true,
-                        ),
+                    state = failedMessageState(runId = runId, retryAvailable = true),
                     onEvent = events::add,
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Run state: Failed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("FAILED").assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertIsDisplayed().assertHasClickAction().performClick()
 
-        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.RetryRunClicked(RunId("run-failed"))), events)
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.RetryRunClicked(runId)), events)
     }
 
     @Test
-    fun known_failed_run_summary_offers_no_retry_without_a_recoverable_original_input() {
-        val run = Run(RunId("run-failed"), SessionId("session-1"), "failed")
+    fun a_failed_message_row_without_a_recoverable_input_offers_no_retry() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
-                    state =
-                        connectedState(
-                            latestRun = run,
-                            latestRunState = RunPresentationState.FAILED,
-                        ),
+                    state = failedMessageState(runId = RunId("run-failed"), retryAvailable = false),
                     onEvent = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Run state: Failed").assertIsDisplayed()
+        composeTestRule.onNodeWithText("FAILED").assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
     }
 
     @Test
-    fun unresolved_failed_send_keeps_the_resolve_action_pressable_and_offers_discard() {
+    fun unresolved_failed_send_keeps_the_discard_action_pressable() {
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
             HermesTheme {
@@ -237,13 +230,12 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Refresh history to resolve").assertIsEnabled()
+        composeTestRule
+            .onNodeWithText(copy(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
+            .assertIsDisplayed()
         composeTestRule.onNodeWithText("Discard unsent record").assertHasClickAction().performClick()
 
-        assertEquals(
-            listOf(EntryUiEvent.DiscardUnresolvedSendClicked),
-            events,
-        )
+        assertEquals(listOf(EntryUiEvent.DiscardUnresolvedSendClicked), events)
     }
 
     @Test
@@ -312,6 +304,33 @@ class MessageComposerScreenTest {
         assertEquals("conversation-discard-unsent", discard.config[SemanticsProperties.TestTag])
     }
 
+    private fun failedMessageState(
+        runId: RunId,
+        retryAvailable: Boolean,
+    ): EntryUiState =
+        entryState(
+            SessionListUiState(
+                openedSession =
+                    OpenSessionUiState(
+                        session = SessionItemUiState(SessionId("session-1"), "Session", null, false),
+                        messages =
+                            listOf(
+                                SessionMessageUiState(
+                                    id = "failed-message",
+                                    role = "assistant",
+                                    content = "Answer",
+                                    runId = runId,
+                                    runState = RunPresentationState.FAILED,
+                                    failureMessage = UiText.Resource(R.string.error_run_failed),
+                                    retryAvailable = retryAvailable,
+                                ),
+                            ),
+                        latestRun = Run(runId, SessionId("session-1"), "failed"),
+                        latestRunState = RunPresentationState.FAILED,
+                    ),
+            ),
+        )
+
     private fun connectedState(
         composerText: String = "",
         latestRun: Run? = null,
@@ -320,9 +339,9 @@ class MessageComposerScreenTest {
         sendErrorCategory: MessageSendErrorCategory? = null,
     ): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "Connected",
-            actionLabel = "Connected",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Resource(R.string.entry_action_connected),
+            actionLabel = UiText.Resource(R.string.entry_action_connected),
             isConnected = true,
             sessionList =
                 SessionListUiState(

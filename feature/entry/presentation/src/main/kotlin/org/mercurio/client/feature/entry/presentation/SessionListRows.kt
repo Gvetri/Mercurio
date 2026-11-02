@@ -36,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -102,6 +103,7 @@ private fun SessionRowContent(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val component = tokens.componentColors
+    val showActionsLabel = stringResource(R.string.sessions_show_actions)
     val selected = row.selected || inlineRename
     val background =
         when {
@@ -125,7 +127,7 @@ private fun SessionRowContent(
                     if (!inlineRename) {
                         customActions =
                             listOf(
-                                CustomAccessibilityAction("Show actions") {
+                                CustomAccessibilityAction(showActionsLabel) {
                                     onLongPress()
                                     true
                                 },
@@ -185,7 +187,7 @@ private fun SessionTimeColumn(
 ) {
     val tokens = LocalHermesDesignTokens.current
     Text(
-        text = row.session.lastActiveLabel,
+        text = relativeLastActiveLabel(row.session.lastActive),
         style = MaterialTheme.typography.labelMedium,
         color = if (selected) tokens.componentColors.onSessionSelectedDim else tokens.colorScheme.onSurfaceVariant,
         maxLines = 1,
@@ -193,7 +195,7 @@ private fun SessionTimeColumn(
             Modifier
                 .width(SESSION_TIME_COLUMN)
                 .then(
-                    if (row.session.lastActiveLabel == UNKNOWN_LAST_ACTIVE_LABEL) {
+                    if (row.session.lastActive == RelativeLastActive.Unknown) {
                         Modifier.clearAndSetSemantics {}
                     } else {
                         Modifier
@@ -209,14 +211,18 @@ private fun SessionTitleAndPreview(
 ) {
     val tokens = LocalHermesDesignTokens.current
     Text(
-        text = row.session.title,
+        text = sessionTitle(row.session),
         style = MaterialTheme.typography.titleMedium,
         color = if (selected) tokens.componentColors.onSessionSelected else tokens.colorScheme.onSurface,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
     val previewText =
-        if (row.session.isPendingTitle) PENDING_TITLE_PREVIEW else row.session.preview
+        if (row.session.isPendingTitle) {
+            stringResource(R.string.sessions_pending_title_preview)
+        } else {
+            row.session.preview
+        }
     if (previewText != null) {
         Spacer(modifier = Modifier.height(tokens.spacing.xxs))
         Text(
@@ -243,6 +249,7 @@ private fun RenameSessionField(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val focusRequester = remember { FocusRequester() }
+    val sessionTitleDescription = stringResource(R.string.sessions_title_field)
     LaunchedEffect(session.id) { focusRequester.requestFocus() }
     Column(modifier = Modifier.fillMaxWidth()) {
         BasicTextField(
@@ -265,7 +272,7 @@ private fun RenameSessionField(
                 Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
-                    .semantics { contentDescription = "Session title" },
+                    .semantics { contentDescription = sessionTitleDescription },
         )
         HorizontalDivider(color = tokens.colorScheme.primary, thickness = 2.dp)
         if (session.preview != null) {
@@ -292,14 +299,14 @@ private fun InlineRenameActions(
     Row(horizontalArrangement = Arrangement.spacedBy(tokens.spacing.xxs)) {
         RenameAction(
             glyph = "✓",
-            description = "Confirm rename",
+            description = stringResource(R.string.sessions_confirm_rename),
             positive = true,
             enabled = enabled && !state.isSubmitting,
             onClick = { onEvent(EntryUiEvent.ConfirmRenameSessionClicked(session.id)) },
         )
         RenameAction(
             glyph = "×",
-            description = "Cancel rename",
+            description = stringResource(R.string.sessions_cancel_rename),
             positive = false,
             enabled = !state.isSubmitting,
             onClick = { onEvent(EntryUiEvent.CancelRenameSessionClicked(session.id)) },
@@ -348,14 +355,14 @@ private fun SessionRowMutationFeedback(
     val pending = mutation?.pendingAction
     val errors =
         listOfNotNull(
-            mutation?.errorCategory?.safeMessage,
-            mutation?.rename?.errorCategory?.safeMessage,
+            mutation?.errorCategory?.messageRes,
+            mutation?.rename?.errorCategory?.messageRes,
         ).distinct()
     if (pending == null && errors.isEmpty() && mutation?.retryAction == null) return
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = tokens.spacing.m)) {
         if (pending != null) {
             Text(
-                text = pending.pendingMessage(),
+                text = stringResource(pending.pendingLabelRes()),
                 style = MaterialTheme.typography.bodySmall,
                 color = tokens.colorScheme.onSurfaceVariant,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -363,7 +370,7 @@ private fun SessionRowMutationFeedback(
         }
         errors.forEach { message ->
             Text(
-                text = message,
+                text = stringResource(message),
                 style = MaterialTheme.typography.bodySmall,
                 color = tokens.colorScheme.error,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
@@ -386,7 +393,7 @@ private fun SessionRowMutationFeedback(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
-                    text = "Try again",
+                    text = stringResource(R.string.action_try_again),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tokens.colorScheme.primary,
                 )
@@ -395,15 +402,13 @@ private fun SessionRowMutationFeedback(
     }
 }
 
-private fun SessionMutationAction.pendingMessage(): String =
+internal fun SessionMutationAction.pendingLabelRes(): Int =
     when (this) {
-        SessionMutationAction.RENAME -> "Renaming Session…"
-        SessionMutationAction.PIN -> "Pinning Session…"
-        SessionMutationAction.UNPIN -> "Unpinning Session…"
-        SessionMutationAction.DELETE -> "Deleting Session…"
+        SessionMutationAction.RENAME -> R.string.sessions_renaming
+        SessionMutationAction.PIN -> R.string.sessions_pinning
+        SessionMutationAction.UNPIN -> R.string.sessions_unpinning
+        SessionMutationAction.DELETE -> R.string.sessions_deleting
     }
-
-internal const val PENDING_TITLE_PREVIEW = "Generating title…"
 
 private val SESSION_ROW_MIN_HEIGHT = 54.dp
 private val SESSION_TIME_COLUMN = 44.dp

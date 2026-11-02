@@ -104,14 +104,13 @@ class AndroidLocalDiagnosticsExporter(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         return Intent
-            .createChooser(share, EXPORT_CHOOSER_TITLE)
+            .createChooser(share, context.getString(R.string.diagnostics_export_chooser))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     internal companion object {
         const val FILE_PROVIDER_AUTHORITY_SUFFIX = ".diagnostics"
         const val EXPORT_MIME_TYPE = "text/plain"
-        const val EXPORT_CHOOSER_TITLE = "Export diagnostics"
         const val EXPORT_DIRECTORY_NAME = "diagnostics"
 
         private val SNAPSHOT_RETENTION = Duration.ofDays(1)

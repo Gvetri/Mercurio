@@ -40,7 +40,7 @@ Data owns transport DTO parsing, the authenticated HTTP and SSE adapter, concret
 
 Presentation owns immutable UI state, UI events, state transitions, the Compose theme, and rendering. Events enter `EntryStateHolder`; state flows down to `EntryScreen`. A composable does not call a repository or a network adapter.
 
-Untrusted Gateway message content is rendered by a presentation-local Markdown subset: paragraphs, lists, emphasis, HTTPS links, and fenced code blocks (`SafeMarkdown.kt`, `MarkdownContent.kt`). Every unsupported construct stays literal text, no WebView or executable content is involved, and only a destination that `allowedExternalLinkDestination` accepts can leave the client through the external-browser intent in `MessageIntents.kt`. Copy and Share are explicit user selections over the chosen message content.
+Untrusted Gateway message content is rendered by a presentation-local Markdown subset: paragraphs, lists, emphasis, HTTPS links, fenced code blocks, and pipe tables (`SafeMarkdown.kt`, `MarkdownContent.kt`, `MarkdownTable.kt`). Every unsupported construct stays literal text, no WebView or executable content is involved, and only a destination that `allowedExternalLinkDestination` accepts can leave the client through the external-browser intent in `MessageIntents.kt`. Copy and Share are explicit user selections over the chosen message content.
 
 ### Wiring
 

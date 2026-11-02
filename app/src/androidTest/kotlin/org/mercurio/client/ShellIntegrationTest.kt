@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -25,6 +27,8 @@ import org.mercurio.client.feature.entry.presentation.OpenSessionUiState
 import org.mercurio.client.feature.entry.presentation.SessionItemUiState
 import org.mercurio.client.feature.entry.presentation.SessionListUiState
 import org.mercurio.client.feature.entry.presentation.SessionMessageUiState
+import org.mercurio.client.feature.entry.presentation.UiText
+import org.mercurio.client.feature.entry.presentation.R as PresentationStrings
 
 /**
  * On-device integration coverage for the adaptive shell: the real Android back
@@ -56,7 +60,7 @@ class ShellIntegrationTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sessions").assertDoesNotExist()
 
         composeTestRule.runOnUiThread {
@@ -65,7 +69,7 @@ class ShellIntegrationTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertDoesNotExist()
         assertFalse(composeTestRule.activity.isFinishing)
     }
 
@@ -80,13 +84,13 @@ class ShellIntegrationTest {
         }
 
         composeTestRule
-            .onNodeWithText("Back to Sessions")
+            .onNodeWithContentDescription("Back to Sessions")
             .assertIsDisplayed()
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-message-input").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("Send")
+            .onNodeWithContentDescription("Send message")
             .assertIsDisplayed()
             .assertHasClickAction()
             .assertHeightIsAtLeast(48.dp)
@@ -110,9 +114,9 @@ class ShellIntegrationTest {
 
     private fun entryState(sessionList: SessionListUiState): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "Connected",
-            actionLabel = "Connected",
+            title = UiText.Resource(PresentationStrings.string.entry_title_connected),
+            supportingText = UiText.Resource(PresentationStrings.string.entry_supporting_connected),
+            actionLabel = UiText.Resource(PresentationStrings.string.entry_action_connected),
             isConnected = true,
             sessionList = sessionList,
         )

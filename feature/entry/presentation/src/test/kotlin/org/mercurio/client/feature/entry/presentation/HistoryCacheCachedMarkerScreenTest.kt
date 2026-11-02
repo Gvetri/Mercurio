@@ -53,12 +53,8 @@ class HistoryCacheCachedMarkerScreenTest {
         setConnectedContent(cachedTranscriptList())
 
         composeTestRule.onNodeWithText("Cached transcript message").assertExists()
-        composeTestRule
-            .onNodeWithText("The displayed Session history is cached on this device. It is not live.")
-            .assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("The displayed Session history may be stale.")
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("cached · unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ refresh ]").assertIsDisplayed()
     }
 
     @Test
@@ -143,9 +139,9 @@ class HistoryCacheCachedMarkerScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList = sessionList,
                         ),

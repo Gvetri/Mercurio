@@ -52,7 +52,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("mercurio").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(1)
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
@@ -75,7 +75,7 @@ class SessionShellTest {
 
         composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
         composeTestRule.onNodeWithText("Second Session").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("First Session").assertCountEquals(2)
     }
@@ -137,7 +137,7 @@ class SessionShellTest {
         composeTestRule
             .onNodeWithText("Select a Session from the list to view its conversation.")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertDoesNotExist()
     }
 
     @Test
@@ -286,8 +286,8 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed()
     }
 
     @Test
@@ -305,7 +305,7 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -320,7 +320,7 @@ class SessionShellTest {
         }
 
         composeTestRule.onNodeWithTag("conversation-composer-tail").assertHeightIsAtLeast(24.dp)
-        composeTestRule.onNodeWithText("Send").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText("[ send ]").assertExists()
     }
 
     @Test
@@ -347,8 +347,8 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed()
     }
 
     @Test
@@ -363,8 +363,8 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed()
     }
 
     @Test
@@ -396,9 +396,9 @@ class SessionShellTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed().assertHasClickAction()
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Send").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed().assertHasClickAction()
         composeTestRule.onNodeWithText("Conversation message").assertIsDisplayed()
     }
 
@@ -414,8 +414,8 @@ class SessionShellTest {
         }
 
         composeTestRule.onNodeWithText("mercurio").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertIsDisplayed().assertHasClickAction()
-        composeTestRule.onNodeWithText("Send").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed().assertHasClickAction()
     }
 
     @Test
@@ -423,9 +423,15 @@ class SessionShellTest {
         val state = mutableStateOf(conversationEntryState())
         setShellContent(state)
 
-        composeTestRule.onNodeWithText("Back to Sessions").assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        composeTestRule.onNodeWithText("Send").assertHasClickAction().assertHeightIsAtLeast(48.dp)
-        composeTestRule.onNodeWithText("Refresh history").assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeTestRule
+            .onNodeWithContentDescription("Back to Sessions")
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+        composeTestRule.onNodeWithText("[ send ]").performScrollTo().assertHasClickAction().assertHeightIsAtLeast(48.dp)
+        composeTestRule
+            .onNodeWithContentDescription("Message actions for message-1")
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
 
         composeTestRule.runOnIdle {
             state.value =
@@ -493,7 +499,7 @@ class SessionShellTest {
                 ),
         )
 
-        composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed()
     }
 
     @Test

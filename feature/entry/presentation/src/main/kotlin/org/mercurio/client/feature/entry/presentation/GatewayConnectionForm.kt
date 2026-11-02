@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -51,9 +52,9 @@ internal fun GatewayConnectionForm(
     Text(
         text =
             if (state.isChangingCredential) {
-                "The current connection stays in place until the replacement is verified and saved securely."
+                stringResource(R.string.connection_replacement_note)
             } else {
-                "The credential is saved securely on this device after verification."
+                stringResource(R.string.connection_save_note)
             },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -80,7 +81,7 @@ private fun GatewayEndpointField(
 @Composable
 private fun GatewayFixedEndpoint(endpoint: String) {
     Text(
-        text = "Gateway HTTPS endpoint",
+        text = stringResource(R.string.connection_endpoint_label),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -106,14 +107,14 @@ private fun GatewayEditableEndpointField(
         modifier = Modifier.fillMaxWidth(),
         enabled = !isPending,
         isError = endpointError,
-        label = { Text("Gateway HTTPS endpoint") },
+        label = { Text(stringResource(R.string.connection_endpoint_label)) },
         supportingText = {
             Text(
                 text =
                     if (endpointError) {
-                        EntryErrorCategory.INVALID_ADDRESS.safeMessage
+                        stringResource(EntryErrorCategory.INVALID_ADDRESS.messageRes)
                     } else {
-                        "Example: https://gateway.example"
+                        stringResource(R.string.connection_endpoint_example)
                     },
                 modifier =
                     if (endpointError) {
@@ -143,13 +144,19 @@ private fun GatewayBearerCredentialField(
     onToggleVisibility: () -> Unit,
 ) {
     val credentialError = state.errorCategory == EntryErrorCategory.AUTHENTICATION_FAILED
+    val credentialToggleDescription =
+        stringResource(
+            if (credentialVisible) R.string.connection_credential_hide else R.string.connection_credential_show,
+        )
+    val credentialToggleLabel =
+        stringResource(if (credentialVisible) R.string.connection_hide else R.string.connection_show)
     OutlinedTextField(
         value = state.bearerCredential,
         onValueChange = { onEvent(EntryUiEvent.BearerCredentialChanged(it)) },
         modifier = Modifier.fillMaxWidth(),
         enabled = !isPending,
         isError = credentialError,
-        label = { Text("Bearer credential") },
+        label = { Text(stringResource(R.string.connection_credential_label)) },
         singleLine = true,
         visualTransformation = if (credentialVisible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
@@ -158,17 +165,17 @@ private fun GatewayBearerCredentialField(
                 enabled = !isPending,
                 modifier =
                     Modifier.semantics {
-                        contentDescription = if (credentialVisible) "Hide credential" else "Show credential"
+                        contentDescription = credentialToggleDescription
                     },
             ) {
-                Text(text = if (credentialVisible) "Hide" else "Show")
+                Text(text = credentialToggleLabel)
             }
         },
         supportingText =
             if (credentialError) {
                 {
                     Text(
-                        text = EntryErrorCategory.AUTHENTICATION_FAILED.safeMessage,
+                        text = stringResource(EntryErrorCategory.AUTHENTICATION_FAILED.messageRes),
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
                     )
                 }
@@ -190,11 +197,12 @@ private fun ConnectionStatusFeedback(state: EntryUiState) {
     val credentialError = state.errorCategory == EntryErrorCategory.AUTHENTICATION_FAILED
     val endpointSlotError = !state.isChangingCredential && state.errorCategory == EntryErrorCategory.INVALID_ADDRESS
     val standaloneError = state.errorCategory?.takeUnless { endpointSlotError || credentialError }
-    val completionLine =
+    val completionLine: UiText? =
         when {
             state.errorCategory == null -> null
-            state.isChangingCredential -> "The previous connection is unchanged."
-            state.errorCategory == EntryErrorCategory.CREDENTIAL_STORAGE_FAILED -> "Setup is not complete."
+            state.isChangingCredential -> UiText.Resource(R.string.connection_previous_unchanged)
+            state.errorCategory == EntryErrorCategory.CREDENTIAL_STORAGE_FAILED ->
+                UiText.Resource(R.string.connection_setup_incomplete)
             else -> null
         }
     val hasTerminalStatus = standaloneError != null || completionLine != null
@@ -203,22 +211,23 @@ private fun ConnectionStatusFeedback(state: EntryUiState) {
         Spacer(modifier = Modifier.height(16.dp))
         if (state.isSaving) {
             Text(
-                text = "Gateway verified.\nSaving credential securely…",
+                text = stringResource(R.string.connection_verified_saving),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
         if (state.isVerifying) {
+            val verifyingDescription = stringResource(R.string.connection_verifying_description)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(
                     modifier =
                         Modifier.semantics {
-                            contentDescription = "Verifying Gateway connection"
+                            contentDescription = verifyingDescription
                         },
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Verifying Gateway connection…",
+                    text = stringResource(R.string.connection_verifying),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
@@ -234,23 +243,23 @@ private fun ConnectionStatusFeedback(state: EntryUiState) {
 @Composable
 private fun ConnectionFailureFeedback(
     standaloneError: EntryErrorCategory?,
-    completionLine: String?,
+    completionLine: UiText?,
 ) {
     if (standaloneError == EntryErrorCategory.CREDENTIAL_STORAGE_FAILED) {
         Text(
-            text = "Gateway verified.",
+            text = stringResource(R.string.connection_verified),
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED.safeMessage,
+            text = stringResource(EntryErrorCategory.CREDENTIAL_STORAGE_FAILED.messageRes),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
         )
     } else if (standaloneError != null) {
         Text(
-            text = standaloneError.safeMessage,
+            text = stringResource(standaloneError.messageRes),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
@@ -261,7 +270,7 @@ private fun ConnectionFailureFeedback(
             Spacer(modifier = Modifier.height(8.dp))
         }
         Text(
-            text = completion,
+            text = completion.resolve(),
             style = MaterialTheme.typography.bodyMedium,
         )
     }
@@ -289,7 +298,14 @@ private fun VerifyConnectionButton(
                 .fillMaxWidth()
                 .heightIn(min = 48.dp),
     ) {
-        Text(text = if (state.errorCategory == null) state.actionLabel else "Try again")
+        Text(
+            text =
+                if (state.errorCategory == null) {
+                    state.actionLabel.resolve()
+                } else {
+                    stringResource(R.string.action_try_again)
+                },
+        )
     }
 }
 
@@ -306,7 +322,7 @@ private fun GatewayCredentialActions(
             enabled = !isPending,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Cancel")
+            Text(text = stringResource(R.string.action_cancel))
         }
     }
     if (state.isGatewayConnectionConfigured || state.isConnected) {
@@ -316,7 +332,7 @@ private fun GatewayCredentialActions(
             enabled = !isPending,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Remove Gateway Connection")
+            Text(text = stringResource(R.string.action_remove_connection))
         }
     }
 }

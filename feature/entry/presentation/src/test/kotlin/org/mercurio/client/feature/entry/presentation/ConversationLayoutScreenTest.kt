@@ -5,10 +5,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -53,9 +52,9 @@ class ConversationLayoutScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_action_connected),
+                            supportingText = UiText.Resource(R.string.entry_action_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList = SessionListUiState(openedSession = conversation),
                         ),
@@ -89,7 +88,9 @@ class ConversationLayoutScreenTest {
                 EntryScreen(entryState(SessionListUiState(openedSession = conversation)), onEvent = {})
             }
         }
-        val composer = composeTestRule.onNodeWithText("Message").performClick().assertIsFocused()
+        val composer =
+            composeTestRule.onNodeWithTag("conversation-message-input").performClick().assertIsDisplayed()
+                .assertIsEnabled()
         val bottom = composer.fetchSemanticsNode().boundsInRoot.bottom
         val run = Run(RunId("run"), initial.session.id, "running")
         val response = SessionMessageUiState("response", "assistant", "First reply", isStreaming = true)
@@ -112,7 +113,7 @@ class ConversationLayoutScreenTest {
             )
         cases.forEach { (name, state) ->
             composeTestRule.runOnIdle { conversation = state }
-            composer.assertIsFocused()
+            composer.assertIsDisplayed()
             assertEquals(
                 "$name must keep the composer anchored",
                 bottom,
@@ -129,9 +130,9 @@ class ConversationLayoutScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_action_connected),
+                            supportingText = UiText.Resource(R.string.entry_action_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(
@@ -148,13 +149,14 @@ class ConversationLayoutScreenTest {
                 )
             }
         }
-        val draft = composeTestRule.onNodeWithText("Message").fetchSemanticsNode().boundsInRoot
-        val send = composeTestRule.onNodeWithText("Send").fetchSemanticsNode().boundsInRoot
-        assertTrue("Send must stay directly below the draft's field", send.top >= draft.bottom)
+        val draft = composeTestRule.onNodeWithTag("conversation-message-input").fetchSemanticsNode().boundsInRoot
+        val send = composeTestRule.onNodeWithText("[ send ]").fetchSemanticsNode().boundsInRoot
         assertTrue(
-            "Send must stay inside the composer's width",
-            send.left >= draft.left - 1f && send.right <= draft.right + 1f,
+            "Send must share the draft's row in the approved composer",
+            send.top <= draft.bottom + 1f && send.bottom >= draft.top - 1f,
         )
+        val rootRight = composeTestRule.onRoot().fetchSemanticsNode().boundsInRoot.right
+        assertTrue("Send must stay inside the composer", send.right <= rootRight)
     }
 
     @Test
@@ -182,12 +184,10 @@ class ConversationLayoutScreenTest {
                 }
             }
         }
-        composeTestRule
-            .onNode(
-                hasClickAction() and (hasText("Send") or hasText("Refresh history to resolve")),
-            ).performScrollTo().assertIsEnabled().assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.UNCERTAIN.messageRes)).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-discard-unsent").assertIsDisplayed().assertHasClickAction()
         val draft =
-            composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
                 .fetchSemanticsNode().boundsInRoot
         val rootWidth = composeTestRule.onRoot().fetchSemanticsNode().boundsInRoot.width
         assertTrue("The draft must keep the composer width", draft.width > rootWidth / 2)
@@ -200,9 +200,9 @@ class ConversationLayoutScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_action_connected),
+                            supportingText = UiText.Resource(R.string.entry_action_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(
@@ -222,7 +222,7 @@ class ConversationLayoutScreenTest {
             composeTestRule.onNode(hasText("Back to Sessions") or hasContentDescription("Back to Sessions"))
                 .fetchSemanticsNode().boundsInRoot
         val menu =
-            composeTestRule.onNodeWithContentDescription("Session actions for A Session")
+            composeTestRule.onNodeWithContentDescription("Session menu")
                 .fetchSemanticsNode().boundsInRoot
         assertTrue("Back and the Session menu must share one bar row", menu.center.y in back.top..back.bottom)
         composeTestRule.onNodeWithText("A Session").assertIsDisplayed()

@@ -85,9 +85,9 @@ internal fun EntryStateHolder.showCredentialRotation() {
     if (!state.isConnected || state.isVerifying || state.isSaving) return
     mutableUiState.value =
         state.copy(
-            title = "Change Gateway credential",
-            supportingText = "Verify the replacement before it replaces the saved credential.",
-            actionLabel = "Verify and save credential",
+            title = UiText.Resource(R.string.entry_title_change_credential),
+            supportingText = UiText.Resource(R.string.entry_supporting_change_credential),
+            actionLabel = UiText.Resource(R.string.entry_action_verify_and_save),
             connectionSetupRequested = true,
             isChangingCredential = true,
             bearerCredential = "",
@@ -100,9 +100,9 @@ internal fun EntryStateHolder.cancelCredentialRotation() {
     if (!state.isChangingCredential || state.isVerifying || state.isSaving) return
     mutableUiState.value =
         state.copy(
-            title = "Gateway connected",
-            supportingText = "The Gateway contract was verified successfully.",
-            actionLabel = "Connected",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+            actionLabel = UiText.Resource(R.string.entry_action_connected),
             isChangingCredential = false,
             errorCategory = null,
         )

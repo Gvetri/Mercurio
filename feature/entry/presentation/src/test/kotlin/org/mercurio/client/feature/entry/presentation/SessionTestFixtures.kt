@@ -11,9 +11,9 @@ internal fun entryState(
     runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
 ): EntryUiState =
     EntryUiState(
-        title = "Gateway connected",
-        supportingText = "Connected",
-        actionLabel = "Connected",
+        title = UiText.Resource(R.string.entry_title_connected),
+        supportingText = UiText.Resource(R.string.entry_action_connected),
+        actionLabel = UiText.Resource(R.string.entry_action_connected),
         isConnected = true,
         sessionList = sessionList,
         runStatusNotifications = runStatusNotifications,

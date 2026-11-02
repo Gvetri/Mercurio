@@ -11,6 +11,8 @@ import org.mercurio.client.feature.entry.presentation.OpenSessionUiState
 import org.mercurio.client.feature.entry.presentation.SessionItemUiState
 import org.mercurio.client.feature.entry.presentation.SessionListUiState
 import org.mercurio.client.feature.entry.presentation.SessionMessageUiState
+import org.mercurio.client.feature.entry.presentation.UiText
+import org.mercurio.client.feature.entry.presentation.R as PresentationStrings
 
 /**
  * Debug-only host for the shell's on-device configuration tests. It renders a
@@ -35,9 +37,9 @@ class ShellHostActivity : ComponentActivity() {
 
 private fun conversationState(): EntryUiState =
     EntryUiState(
-        title = "Gateway connected",
-        supportingText = "Connected",
-        actionLabel = "Connected",
+        title = UiText.Resource(PresentationStrings.string.entry_title_connected),
+        supportingText = UiText.Resource(PresentationStrings.string.entry_supporting_connected),
+        actionLabel = UiText.Resource(PresentationStrings.string.entry_action_connected),
         isConnected = true,
         sessionList =
             SessionListUiState(

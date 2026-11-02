@@ -170,7 +170,7 @@ class GatewayConnectionInputTest {
             state.value = state.value.copy(errorCategory = EntryErrorCategory.AUTHENTICATION_FAILED)
         }
         assertAboveKeyboard("Try again")
-        assertAboveKeyboard(EntryErrorCategory.AUTHENTICATION_FAILED.safeMessage)
+        assertAboveKeyboard(copy(EntryErrorCategory.AUTHENTICATION_FAILED.messageRes))
     }
 
     @Test
@@ -205,9 +205,9 @@ class GatewayConnectionInputTest {
 
     private fun setupState(): EntryUiState =
         EntryUiState(
-            title = "Verify a Hermes Gateway",
-            supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
-            actionLabel = "Verify Gateway Connection",
+            title = UiText.Resource(R.string.entry_title_verify_new),
+            supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
+            actionLabel = UiText.Resource(R.string.entry_action_verify),
             connectionSetupRequested = true,
             endpoint = "https://gateway.example",
             bearerCredential = "synthetic-token",

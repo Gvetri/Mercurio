@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -30,7 +31,10 @@ internal fun SessionRowMenu(
         modifier = Modifier.width(SESSION_MENU_WIDTH),
     ) {
         SessionMenuItem(
-            label = if (row.session.pinned) "Unpin" else "Pin",
+            label =
+                stringResource(
+                    if (row.session.pinned) R.string.sessions_unpin_short else R.string.sessions_pin_short,
+                ),
             enabled = row.enabled && mutation?.pendingAction == null,
         ) {
             onDismiss()
@@ -43,7 +47,7 @@ internal fun SessionRowMenu(
             )
         }
         SessionMenuItem(
-            label = "Rename",
+            label = stringResource(R.string.sessions_rename_short),
             enabled = row.enabled && mutation?.pendingAction == null,
         ) {
             onDismiss()
@@ -51,7 +55,7 @@ internal fun SessionRowMenu(
         }
         HorizontalDivider(color = tokens.colorScheme.outlineVariant)
         SessionMenuItem(
-            label = "Delete",
+            label = stringResource(R.string.sessions_delete_short),
             enabled = row.enabled && mutation?.pendingAction == null,
             destructive = true,
         ) {

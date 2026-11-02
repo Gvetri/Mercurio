@@ -52,7 +52,7 @@ class ConversationKeyboardScreenTest {
             }
         }
         composeTestRule.onNodeWithTag("conversation-send")
-            .assertTextEquals("Send").assertHasClickAction().performClick()
+            .assertTextEquals("[ send ]").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.SendMessageClicked), events)
     }
 
@@ -90,7 +90,7 @@ class ConversationKeyboardScreenTest {
                 }
             }
         }
-        composeTestRule.onNodeWithText("Message").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().performClick()
         val windowHeight = composeTestRule.activity.window.decorView.height
         val imeInset = windowHeight / 2
         composeTestRule.runOnUiThread {
@@ -102,20 +102,20 @@ class ConversationKeyboardScreenTest {
             composeTestRule.activity.window.decorView.dispatchApplyWindowInsets(insets.toWindowInsets())
         }
         composeTestRule.waitForIdle()
-        val send = composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        val send = composeTestRule.onNodeWithText("[ send ]").performScrollTo().assertIsDisplayed()
         val before = send.fetchSemanticsNode().boundsInWindow.bottom
         assertTrue("Send must be above the keyboard (bottom=$before)", before <= windowHeight - imeInset + 1f)
-        composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
         composeTestRule.runOnIdle {
             conversation.value =
                 conversation.value.copy(
                     messages = listOf(SessionMessageUiState("reply", "assistant", "First reply")),
                 )
         }
-        val sendAfterReply = composeTestRule.onNodeWithText("Send").performScrollTo().assertIsDisplayed()
+        val sendAfterReply = composeTestRule.onNodeWithText("[ send ]").performScrollTo().assertIsDisplayed()
         val after = sendAfterReply.fetchSemanticsNode().boundsInWindow.bottom
         assertEquals("A reply must not move Send behind the keyboard", before, after, 1f)
-        composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
 
         listOf(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED, MessageSendErrorCategory.UNCERTAIN).forEach { error ->
             composeTestRule.runOnIdle {
@@ -125,11 +125,10 @@ class ConversationKeyboardScreenTest {
                         hasUnresolvedSubmission = error == MessageSendErrorCategory.UNCERTAIN,
                     )
             }
-            composeTestRule.onNodeWithText(error.safeMessage).performScrollTo().assertIsDisplayed()
-            val label = if (error == MessageSendErrorCategory.UNCERTAIN) "Refresh history to resolve" else "Try again"
-            val action = composeTestRule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithText(copy(error.messageRes)).performScrollTo().assertIsDisplayed()
+            val action = composeTestRule.onNodeWithText("[ send ]").performScrollTo().assertIsDisplayed()
             assertTrue(action.fetchSemanticsNode().boundsInWindow.bottom <= windowHeight - imeInset + 1f)
-            composeTestRule.onNodeWithText("Message").performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
         }
     }
 }

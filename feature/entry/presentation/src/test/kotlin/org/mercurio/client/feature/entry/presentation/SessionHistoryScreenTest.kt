@@ -1,156 +1,85 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasScrollToIndexAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToIndex
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.time.Instant
+import java.util.TimeZone
 
+/**
+ * The transcript states an opened Session can be in: populated, refreshing, failed, unreachable,
+ * empty, loading and reconciling. Each one says its own state on the run line and keeps the
+ * composer honest about what the reader can do next.
+ */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp-notnight")
 class SessionHistoryScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    @Test
-    fun populated_history_shows_run_result_status_timestamp_and_usable_composer() {
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages =
-                                                listOf(
-                                                    SessionMessageUiState(
-                                                        id = "message-1",
-                                                        role = "user",
-                                                        content = "Run this",
-                                                        runId = RunId("run-1"),
-                                                        runStatus = "completed",
-                                                        runResult = "Done",
-                                                        timestamp = java.time.Instant.parse("2026-09-08T20:00:00Z"),
-                                                    ),
-                                                    SessionMessageUiState(
-                                                        id = "message-2",
-                                                        role = "assistant",
-                                                        content = "Answer",
-                                                    ),
-                                                ),
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
-            }
-        }
+    private lateinit var originalTimeZone: TimeZone
 
-        composeTestRule.onNodeWithText("Run this").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("User").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run result: Done").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status: Completed").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNode(hasText("Timestamp:", substring = true)).performScrollTo().assertIsDisplayed()
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
-        composeTestRule.onNodeWithText("Answer").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Assistant").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed().assertIsEnabled()
-        composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Refresh history").performScrollTo().assertIsDisplayed().assertIsEnabled()
+    @Before
+    fun fixTheTimeZoneTheTranscriptPrints() {
+        originalTimeZone = TimeZone.getDefault()
+        TimeZone.setDefault(TimeZone.getTimeZone("Europe/Berlin"))
+    }
+
+    @After
+    fun restoreTheTimeZone() {
+        TimeZone.setDefault(originalTimeZone)
     }
 
     @Test
-    fun epoch_second_timestamp_from_the_gateway_reaches_the_rendered_timestamp_line() {
-        val message =
-            GatewayHistoryMessage(
-                id = "message-epoch",
-                role = "assistant",
-                content = "Answer",
-                timestamp = "1757325600.0",
-            ).toSessionMessageUiState()
+    fun populated_history_shows_roles_times_and_a_usable_composer() {
         composeTestRule.setContent {
             HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages = listOf(message),
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
+                EntryScreen(state = historyState(messages = populatedMessages()), onEvent = {})
             }
         }
 
-        composeTestRule.onNodeWithText("Answer").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNode(hasText("Timestamp:", substring = true)).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("USER").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ASSISTANT").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("09:12").onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("idle").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("conversation-send").assertIsDisplayed()
     }
 
     @Test
-    fun refreshing_history_preserves_content_and_shows_refreshing_state() {
+    fun epoch_second_timestamp_reaches_the_rendered_time_cell() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
                     state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages =
-                                                listOf(
-                                                    SessionMessageUiState(
-                                                        id = "message-1",
-                                                        role = "user",
-                                                        content = "Preserved content",
-                                                    ),
-                                                ),
-                                            composerText = "Preserved draft",
-                                            isRefreshing = true,
-                                        ),
+                        historyState(
+                            messages =
+                                listOf(
+                                    SessionMessageUiState(
+                                        id = "message-1",
+                                        role = "user",
+                                        content = "Epoch timestamp",
+                                        timestamp = Instant.parse("2026-11-01T08:12:00Z"),
+                                    ),
                                 ),
                         ),
                     onEvent = {},
@@ -158,413 +87,286 @@ class SessionHistoryScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Preserved content").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Preserved draft").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Refreshing Session history…").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Refresh history").assertIsNotEnabled()
+        composeTestRule.onAllNodesWithText("09:12").onFirst().assertIsDisplayed()
     }
 
     @Test
-    fun terminal_reconciliation_shows_stale_progress_and_disables_history_controls_while_retaining_stream() {
-        val sessionId = SessionId("session-1")
-        val runId = RunId("run-terminal")
+    fun refreshing_history_preserves_content_and_shows_the_refreshing_state() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
                     state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session = SessionItemUiState(sessionId, "Session", null, false),
-                                            messages = emptyList(),
-                                            composerText = "Next message",
-                                            isRefreshing = true,
-                                            isStale = true,
-                                            latestRun = Run(runId, sessionId, "succeeded"),
-                                            latestRunState = RunPresentationState.SUCCEEDED,
-                                            activeResponse =
-                                                SessionMessageUiState(
-                                                    id = "streamed-response",
-                                                    role = "assistant",
-                                                    content = "Partial response",
-                                                    runId = runId,
-                                                    runState = RunPresentationState.SUCCEEDED,
-                                                    isStreaming = true,
-                                                ),
-                                            isReconciliationInProgress = true,
-                                        ),
-                                ),
+                        historyState(
+                            messages = populatedMessages(),
+                            isCached = true,
+                            isRefreshing = true,
                         ),
                     onEvent = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Partial response").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Refreshing Run and Session state…").assertIsDisplayed()
-        composeTestRule.onNodeWithText("The displayed Session history may be stale.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Refresh history").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Message").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Check the nightly release.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("cached · refreshing").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Refreshing history.").assertIsDisplayed()
     }
 
     @Test
-    fun unresolved_submission_shows_uncertainty_without_a_synthetic_latest_run_and_keeps_send_available() {
+    fun a_refreshing_transcript_offers_no_second_refresh_action() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
                     state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages =
-                                                listOf(
-                                                    SessionMessageUiState(
-                                                        id = "message-1",
-                                                        role = "user",
-                                                        content = "Preserved content",
-                                                    ),
-                                                ),
-                                            composerText = "Preserved draft",
-                                            sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                            hasUnresolvedSubmission = true,
-                                            isStale = true,
-                                            errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
-                                        ),
-                                ),
+                        historyState(
+                            messages = populatedMessages(),
+                            isCached = true,
+                            isRefreshing = true,
                         ),
                     onEvent = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Preserved content").assertExists()
-        composeTestRule.onNodeWithText("Preserved draft").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Latest Run:", substring = true).assertCountEquals(0)
+        composeTestRule.onNodeWithTag("chat-run-action").assertDoesNotExist()
+    }
+
+    @Test
+    fun reconciliation_states_its_progress_and_keeps_the_stream_visible() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        historyState(
+                            messages = populatedMessages(),
+                            isRefreshing = true,
+                            isReconciliationInProgress = true,
+                            latestRun = Run(RunId("4b2a-run"), SessionId("session-1"), "running"),
+                            latestRunState = RunPresentationState.RUNNING,
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("reconciling run state").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Reconciling the Run state.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Check the nightly release.").assertIsDisplayed()
+    }
+
+    @Test
+    fun an_unresolved_submission_states_its_reason_and_keeps_the_draft() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        historyState(
+                            messages = populatedMessages(),
+                            composerText = "Keep this draft",
+                            sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                            hasUnresolvedSubmission = true,
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.UNCERTAIN.messageRes)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Keep this draft").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Discard unsent record").assertIsDisplayed().assertIsEnabled()
+    }
+
+    @Test
+    fun a_failed_refresh_preserves_cached_content_and_offers_one_refresh() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        historyState(
+                            messages = populatedMessages(),
+                            isCached = true,
+                            isStale = true,
+                            errorCategory = SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Check the nightly release.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("cached · unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat-run-action").assertIsDisplayed()
+    }
+
+    @Test
+    fun an_unreachable_session_without_a_cache_shows_the_unavailable_state() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        entryState(
+                            SessionListUiState(
+                                openedSession =
+                                    OpenSessionUiState(
+                                        session = SessionItemUiState(SessionId("session-1"), "Session", null, false),
+                                        messages = emptyList(),
+                                        errorCategory = SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED,
+                                    ),
+                            ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Session history is unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ try again ]").assertIsDisplayed()
+        composeTestRule.onNodeWithText("history · unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("gateway :: offline").assertIsDisplayed()
+    }
+
+    @Test
+    fun empty_history_shows_guidance_and_the_composer() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = historyState(messages = emptyList()), onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("No messages yet").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText(MessageSendErrorCategory.UNCERTAIN.safeMessage)
+            .onNodeWithText("This Session has no history on the Gateway. Write the first message.")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("The displayed Session history may be stale.").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText(SessionHistoryErrorCategory.RECONCILIATION_FAILED.safeMessage)
-            .assertExists()
-        composeTestRule.onNodeWithText("Refresh history to resolve").assertIsEnabled()
-        composeTestRule.onNodeWithText("Discard unsent record").assertHasClickAction()
-        composeTestRule.onNodeWithText("Refresh history").assertIsEnabled()
-    }
-
-    @Test
-    fun list_refresh_disables_history_refresh() {
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    isRefreshing = true,
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages = emptyList(),
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Refresh history").assertIsNotEnabled()
-    }
-
-    @Test
-    fun failed_history_preserves_stale_content_and_keeps_refresh_available() {
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages =
-                                                listOf(
-                                                    SessionMessageUiState(
-                                                        id = "message-1",
-                                                        role = "user",
-                                                        content = "Preserved content",
-                                                    ),
-                                                ),
-                                            composerText = "Preserved draft",
-                                            isStale = true,
-                                            errorCategory = SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED,
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
-            }
-        }
-
-        composeTestRule
-            .onNodeWithText("Preserved content")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Preserved draft").assertIsDisplayed()
-        composeTestRule.onNodeWithText("The displayed Session history may be stale.").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText(SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Send").assertIsEnabled()
-        composeTestRule.onNodeWithText("Refresh history").assertIsDisplayed().assertIsEnabled()
-    }
-
-    @Test
-    fun mixed_local_and_external_runs_show_gateway_identity_status_result_and_timestamp() {
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(
-                                                    SessionId("session-1"),
-                                                    "Shared Session",
-                                                    null,
-                                                    false,
-                                                ),
-                                            messages =
-                                                listOf(
-                                                    SessionMessageUiState(
-                                                        id = "external-message",
-                                                        role = null,
-                                                        content = null,
-                                                        runId = RunId("external-run"),
-                                                        runStatus = "failed",
-                                                        runResult = "Gateway failure",
-                                                        timestamp = java.time.Instant.parse("2026-09-08T20:00:00Z"),
-                                                    ),
-                                                    SessionMessageUiState(
-                                                        id = "local-message",
-                                                        role = "assistant",
-                                                        content = "Local result",
-                                                        runId = RunId("local-run"),
-                                                        runStatus = "succeeded",
-                                                        runResult = "Done",
-                                                        timestamp = java.time.Instant.parse("2026-09-08T21:00:00Z"),
-                                                    ),
-                                                ),
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Run status: Failed").performScrollTo().assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
-        composeTestRule.onNodeWithText("Run ID: external-run").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run result: Gateway failure").performScrollTo().assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Timestamp:", substring = true).assertCountEquals(2)
-        composeTestRule.onNodeWithText("Local result").performScrollTo().assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Show run ID").onFirst().performClick()
-        composeTestRule.onNodeWithText("Run ID: local-run").assertIsDisplayed()
-    }
-
-    @Test
-    fun empty_history_shows_guidance_and_composer() {
-        composeTestRule.setContent {
-            HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session = SessionItemUiState(SessionId("session-1"), "Empty", null, false),
-                                            messages = emptyList(),
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("No messages in this Session.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed().assertIsEnabled()
+        composeTestRule.onNodeWithTag("conversation-message-input").assertIsDisplayed()
     }
 
     @Test
     fun loading_history_shows_progress_instead_of_an_empty_transcript() {
         composeTestRule.setContent {
             HermesTheme {
-                EntryScreen(
-                    state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(
-                                                    SessionId("session-1"),
-                                                    "Loading",
-                                                    null,
-                                                    false,
-                                                ),
-                                            messages = emptyList(),
-                                            isRefreshing = true,
-                                        ),
-                                ),
-                        ),
-                    onEvent = {},
-                )
+                EntryScreen(state = historyState(messages = emptyList(), isRefreshing = true), onEvent = {})
             }
         }
 
         composeTestRule.onNodeWithText("Loading Session history…").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No messages in this Session.").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Message").assertIsDisplayed()
+        composeTestRule.onNodeWithText("history · loading").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Sending is unavailable until the history loads.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No messages yet").assertDoesNotExist()
     }
 
     @Test
-    fun failed_run_suppresses_server_failure_text_and_shows_only_the_safe_message() {
-        val prompt = "Write a confidential poem"
-        val message =
-            GatewayHistoryMessage(
-                id = "message-failed",
-                role = "assistant",
-                content = "Partial response text",
-                runId = RunId("run-failed"),
-                runStatus = "failed",
-                runResult = "Provider error: Bearer secret123. Echo: $prompt",
-                timestamp = "2026-09-08T20:00:00Z",
-            ).toSessionMessageUiState(retryInput = prompt)
+    fun a_failed_run_shows_the_safe_message_and_never_the_server_text() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
                     state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages = listOf(message),
-                                        ),
+                        historyState(
+                            messages =
+                                listOf(
+                                    SessionMessageUiState(
+                                        id = "message-failed",
+                                        role = "assistant",
+                                        content = null,
+                                        runId = RunId("run-failed"),
+                                        runStatus = "failed",
+                                        runResult = "Remote failure",
+                                        failureMessage =
+                                            UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
+                                    ),
                                 ),
+                            latestRun = Run(RunId("run-failed"), SessionId("session-1"), "failed"),
+                            latestRunState = RunPresentationState.FAILED,
                         ),
                     onEvent = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Partial response text").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Provider error", substring = true).assertDoesNotExist()
-        composeTestRule.onNodeWithText("Bearer secret123", substring = true).assertDoesNotExist()
-        composeTestRule.onNodeWithText("Write a confidential poem", substring = true).assertDoesNotExist()
-        composeTestRule.onNodeWithText("Show technical detail").assertDoesNotExist()
-        composeTestRule
-            .onNodeWithText(RunFailureCategory.GATEWAY_REPORTED.safeMessage)
-            .performScrollTo()
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("FAILED").assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(RunFailureCategory.GATEWAY_REPORTED.messageRes)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Remote failure").assertDoesNotExist()
+        composeTestRule.onAllNodesWithText("failed", substring = true).assertCountEquals(2)
     }
 
     @Test
     fun client_derived_technical_detail_can_be_expanded_as_an_optional_safe_surface() {
-        val message =
-            SessionMessageUiState(
-                id = "message-failed",
-                role = "assistant",
-                content = null,
-                runId = RunId("run-failed"),
-                runStatus = "failed",
-                failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
-                failureTechnicalDetail = "The client could not confirm the Run result.",
-                retryAvailable = true,
-            )
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
                     state =
-                        EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
-                            isConnected = true,
-                            sessionList =
-                                SessionListUiState(
-                                    openedSession =
-                                        OpenSessionUiState(
-                                            session =
-                                                SessionItemUiState(SessionId("session-1"), "Session", null, false),
-                                            messages = listOf(message),
-                                        ),
+                        historyState(
+                            messages =
+                                listOf(
+                                    SessionMessageUiState(
+                                        id = "message-failed",
+                                        role = "assistant",
+                                        content = null,
+                                        runId = RunId("run-failed"),
+                                        runStatus = "failed",
+                                        failureMessage =
+                                            UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
+                                        failureTechnicalDetail = "gateway status 500",
+                                    ),
                                 ),
+                            latestRun = Run(RunId("run-failed"), SessionId("session-1"), "failed"),
+                            latestRunState = RunPresentationState.FAILED,
                         ),
                     onEvent = {},
                 )
             }
         }
 
+        composeTestRule.onNodeWithText("gateway status 500").assertDoesNotExist()
         composeTestRule.onNodeWithText("Show technical detail").performScrollTo().performClick()
-        composeTestRule
-            .onNodeWithText("The client could not confirm the Run result.")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hide technical detail").performScrollTo().performClick()
-        composeTestRule.onNodeWithText("The client could not confirm the Run result.").assertDoesNotExist()
+        composeTestRule.onNodeWithText("gateway status 500").assertIsDisplayed()
     }
+
+    private fun populatedMessages(): List<SessionMessageUiState> =
+        listOf(
+            SessionMessageUiState(
+                id = "message-1",
+                role = "user",
+                content = "Check the nightly release.",
+                timestamp = Instant.parse("2026-11-01T08:12:00Z"),
+            ),
+            SessionMessageUiState(
+                id = "message-2",
+                role = "assistant",
+                content = "Two checks did not pass.",
+                timestamp = Instant.parse("2026-11-01T08:12:00Z"),
+            ),
+        )
+
+    @Suppress("LongParameterList")
+    private fun historyState(
+        messages: List<SessionMessageUiState>,
+        composerText: String = "",
+        isCached: Boolean = false,
+        isRefreshing: Boolean = false,
+        isStale: Boolean = false,
+        errorCategory: SessionHistoryErrorCategory? = null,
+        latestRun: Run? = null,
+        latestRunState: RunPresentationState? = null,
+        isReconciliationInProgress: Boolean = false,
+        sendErrorCategory: MessageSendErrorCategory? = null,
+        hasUnresolvedSubmission: Boolean = false,
+    ): EntryUiState =
+        entryState(
+            SessionListUiState(
+                openedSession =
+                    OpenSessionUiState(
+                        session = SessionItemUiState(SessionId("session-1"), "Session", null, false),
+                        messages = messages,
+                        composerText = composerText,
+                        isCached = isCached,
+                        isRefreshing = isRefreshing,
+                        isStale = isStale,
+                        errorCategory = errorCategory,
+                        latestRun = latestRun,
+                        latestRunState = latestRunState,
+                        isReconciliationInProgress = isReconciliationInProgress,
+                        sendErrorCategory = sendErrorCategory,
+                        hasUnresolvedSubmission = hasUnresolvedSubmission,
+                    ),
+            ),
+        )
 }

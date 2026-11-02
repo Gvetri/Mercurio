@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,7 +73,7 @@ private fun WordmarkBar(onEvent: (EntryUiEvent) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "mercurio",
+            text = stringResource(R.string.shell_wordmark),
             style = MaterialTheme.typography.titleSmall,
             letterSpacing = 0.02.em,
             color = tokens.colorScheme.onSurface,
@@ -87,6 +88,7 @@ private fun WordmarkBar(onEvent: (EntryUiEvent) -> Unit) {
 @Composable
 private fun SettingsControl(onEvent: (EntryUiEvent) -> Unit) {
     val tokens = LocalHermesDesignTokens.current
+    val settingsDescription = stringResource(R.string.shell_settings)
     Box(
         modifier =
             Modifier
@@ -96,7 +98,7 @@ private fun SettingsControl(onEvent: (EntryUiEvent) -> Unit) {
                 .background(tokens.componentColors.inset)
                 .border(1.dp, tokens.colorScheme.outlineVariant, tokens.shapes.small)
                 .clickable { onEvent(EntryUiEvent.OpenSettingsClicked) }
-                .semantics { contentDescription = "Settings" },
+                .semantics { contentDescription = settingsDescription },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -148,6 +150,7 @@ private fun RowScope.SessionSearchField(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val searchSessionsDescription = stringResource(R.string.shell_search_sessions)
     BasicTextField(
         value = state.searchQuery,
         onValueChange = { onEvent(EntryUiEvent.SessionSearchQueryChanged(it)) },
@@ -158,12 +161,12 @@ private fun RowScope.SessionSearchField(
         modifier =
             Modifier
                 .weight(1f)
-                .semantics { contentDescription = "Search Sessions" },
+                .semantics { contentDescription = searchSessionsDescription },
         decorationBox = { innerTextField ->
             Box(contentAlignment = Alignment.CenterStart) {
                 if (state.searchQuery.isEmpty()) {
                     Text(
-                        text = "search sessions",
+                        text = stringResource(R.string.shell_search_placeholder),
                         style = MaterialTheme.typography.bodyMedium,
                         color = tokens.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -179,6 +182,7 @@ private fun RowScope.SessionSearchField(
 @Composable
 private fun SearchClearButton(onEvent: (EntryUiEvent) -> Unit) {
     val tokens = LocalHermesDesignTokens.current
+    val clearSearchDescription = stringResource(R.string.shell_clear_search)
     Box(
         modifier =
             Modifier
@@ -186,7 +190,7 @@ private fun SearchClearButton(onEvent: (EntryUiEvent) -> Unit) {
                 .heightIn(min = SESSION_SEARCH_CLEAR_SIZE)
                 .clip(CircleShape)
                 .clickable { onEvent(EntryUiEvent.ClearSessionSearchClicked) }
-                .semantics { contentDescription = "Clear search" },
+                .semantics { contentDescription = clearSearchDescription },
         contentAlignment = Alignment.Center,
     ) {
         Text(
