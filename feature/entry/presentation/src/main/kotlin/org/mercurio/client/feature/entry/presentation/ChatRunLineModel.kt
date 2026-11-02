@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 
 /** The run line's right segment: the Gateway state, or the one offered action. */
@@ -9,25 +10,19 @@ internal sealed interface ChatRunRight {
     ) : ChatRunRight
 
     data class Action(
-        val label: String,
+        val label: UiText,
         val event: EntryUiEvent,
     ) : ChatRunRight
 }
 
 /** The run line under the transcript: state left, dim segment, one right segment. */
 internal data class ChatRunLineState(
-    val state: String,
-    val dim: String?,
+    val state: UiText,
+    val dim: UiText?,
     val right: ChatRunRight,
     val active: Boolean,
     val error: Boolean,
 )
-
-internal const val CHAT_STOP_LABEL = "[ stop ]"
-
-internal const val CHAT_REFRESH_LABEL = "[ refresh ]"
-
-internal const val CHAT_REFRESH_HISTORY_LABEL = "[ refresh history ]"
 
 /**
  * The run line for the current Session state. The state word is the one the design fixes:
@@ -37,38 +32,49 @@ internal const val CHAT_REFRESH_HISTORY_LABEL = "[ refresh history ]"
  */
 internal fun chatRunLineState(detail: SessionDetailState): ChatRunLineState {
     val state = detail.content
-    val runLabel = state.activeRunLabel() ?: state.latestRun?.let { run -> chatRunLabel(run.id) }
+    val runId = state.activeRunId() ?: state.latestRun?.id
     val gateway = ChatRunRight.Gateway(online = detail.chatGatewayOnline())
-    return state.ownedRunLine(runLabel, gateway) ?: state.historyLine(gateway)
+    return state.ownedRunLine(runId, gateway) ?: state.historyLine(gateway)
 }
 
 @Suppress("CyclomaticComplexMethod")
 private fun OpenSessionUiState.ownedRunLine(
-    runLabel: String?,
+    runId: RunId?,
     gateway: ChatRunRight.Gateway,
 ): ChatRunLineState? =
     when {
         isReconciliationInProgress ->
-            ChatRunLineState("reconciling run state", null, gateway, active = true, error = false)
+            ChatRunLineState(
+                UiText.Resource(R.string.chat_run_state_reconciling),
+                null,
+                gateway,
+                active = true,
+                error = false,
+            )
         chatStreamingRun() ->
             ChatRunLineState(
-                state = "${runLabel.orEmpty()} · streaming".trim(),
+                state =
+                    runState(
+                        R.string.chat_run_state_streaming,
+                        R.string.chat_run_state_streaming_unlabelled,
+                        runId,
+                    ),
                 dim = null,
-                right = ChatRunRight.Action(CHAT_STOP_LABEL, EntryUiEvent.StopRunClicked),
+                right = ChatRunRight.Action(UiText.Resource(R.string.chat_stop), EntryUiEvent.StopRunClicked),
                 active = true,
                 error = false,
             )
         isSending ->
             ChatRunLineState(
-                "sending",
-                "· ${chatPendingCount().coerceAtLeast(1)} pending",
+                UiText.Resource(R.string.chat_run_state_sending),
+                uiText(R.string.chat_run_pending, chatPendingCount().coerceAtLeast(1)),
                 gateway,
                 active = true,
                 error = false,
             )
         latestRunState == RunPresentationState.FAILED ->
             ChatRunLineState(
-                "${runLabel.orEmpty()} · failed".trim(),
+                runState(R.string.chat_run_state_failed, R.string.chat_run_state_failed_unlabelled, runId),
                 null,
                 gateway,
                 active = false,
@@ -76,9 +82,12 @@ private fun OpenSessionUiState.ownedRunLine(
             )
         chatStaleRun() ->
             ChatRunLineState(
-                "${runLabel.orEmpty()} · stale".trim(),
+                runState(R.string.chat_run_state_stale, R.string.chat_run_state_stale_unlabelled, runId),
                 null,
-                ChatRunRight.Action(CHAT_REFRESH_HISTORY_LABEL, EntryUiEvent.RefreshSessionsClicked),
+                ChatRunRight.Action(
+                    UiText.Resource(R.string.chat_refresh_history),
+                    EntryUiEvent.RefreshSessionsClicked,
+                ),
                 active = false,
                 error = true,
             )
@@ -89,32 +98,58 @@ private fun OpenSessionUiState.historyLine(gateway: ChatRunRight.Gateway): ChatR
     when {
         isCached && chatRefreshFailed() ->
             ChatRunLineState(
-                "cached · unavailable",
+                UiText.Resource(R.string.chat_run_state_cached_unavailable),
                 null,
-                ChatRunRight.Action(CHAT_REFRESH_LABEL, EntryUiEvent.RefreshSessionsClicked),
+                ChatRunRight.Action(
+                    UiText.Resource(R.string.chat_refresh),
+                    EntryUiEvent.RefreshSessionsClicked,
+                ),
                 active = false,
                 error = true,
             )
         isHistoryUnavailable() ->
             ChatRunLineState(
-                "history · unavailable",
+                UiText.Resource(R.string.chat_run_state_history_unavailable),
                 null,
                 ChatRunRight.Gateway(online = false),
                 active = false,
                 error = true,
             )
         isCached && isRefreshing ->
-            ChatRunLineState("cached · refreshing", null, gateway, active = false, error = false)
-        isRefreshing && chatMessageCount() == 0 ->
-            ChatRunLineState("history · loading", null, gateway, active = false, error = false)
-        else ->
             ChatRunLineState(
-                "idle",
-                "· ${chatMessageCount()} messages",
+                UiText.Resource(R.string.chat_run_state_cached_refreshing),
+                null,
                 gateway,
                 active = false,
                 error = false,
             )
+        isRefreshing && chatMessageCount() == 0 ->
+            ChatRunLineState(
+                UiText.Resource(R.string.chat_run_state_history_loading),
+                null,
+                gateway,
+                active = false,
+                error = false,
+            )
+        else ->
+            ChatRunLineState(
+                UiText.Resource(R.string.chat_run_state_idle),
+                uiText(R.string.chat_run_messages, chatMessageCount()),
+                gateway,
+                active = false,
+                error = false,
+            )
+    }
+
+private fun runState(
+    labelledRes: Int,
+    unlabelledRes: Int,
+    runId: RunId?,
+): UiText =
+    if (runId == null) {
+        UiText.Resource(unlabelledRes)
+    } else {
+        uiText(labelledRes, runId.value.take(CHAT_RUN_LABEL_LENGTH))
     }
 
 /** A Run owns the screen: its answer streams, or its state is still starting or completing. */
@@ -133,6 +168,6 @@ internal fun OpenSessionUiState.chatStaleRun(): Boolean =
                 activeResponse?.streamInterrupted == true
         )
 
-private fun OpenSessionUiState.activeRunLabel(): String? =
-    activeResponse?.runId?.let(::chatRunLabel)
-        ?: latestRun?.takeIf { chatStreamingRun() }?.let { run -> chatRunLabel(run.id) }
+private fun OpenSessionUiState.activeRunId(): RunId? =
+    activeResponse?.runId
+        ?: latestRun?.takeIf { chatStreamingRun() }?.id

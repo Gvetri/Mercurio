@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -80,7 +81,7 @@ private fun ChatComposerReason(
     val tokens = LocalHermesDesignTokens.current
     composer.reason?.let { reason ->
         Text(
-            text = reason,
+            text = reason.resolve(),
             style = MaterialTheme.typography.labelMedium,
             color = tokens.colorScheme.onSurfaceVariant,
             modifier =
@@ -91,7 +92,7 @@ private fun ChatComposerReason(
     }
     if (state.hasUnresolvedSubmission) {
         ChatTextControl(
-            label = "Discard unsent record",
+            label = stringResource(R.string.chat_discard_unsent_record),
             enabled = composer.fieldEnabled,
             onClick = { onEvent(EntryUiEvent.DiscardUnresolvedSendClicked) },
             modifier = Modifier.testTag("conversation-discard-unsent"),
@@ -118,17 +119,17 @@ private fun ChatComposerTools(
         ComposerModelPickerSlot(picker = modelPicker, onEvent = onEvent)
         ChatDisabledGlyph(
             painter = painterResource(R.drawable.ic_chat_attach),
-            description = "Attach a file, not available",
+            description = stringResource(R.string.chat_attach_unavailable),
         )
         ChatDisabledGlyph(
             painter = painterResource(R.drawable.ic_chat_voice),
-            description = "Voice note, not available",
+            description = stringResource(R.string.chat_voice_unavailable),
         )
         Spacer(modifier = Modifier.weight(1f))
         if (state.composerText.lines().size > CHAT_DRAFT_EXPAND_LINES) {
             Icon(
                 painter = painterResource(R.drawable.ic_chat_expand),
-                contentDescription = "Open the editor",
+                contentDescription = stringResource(R.string.chat_open_editor),
                 modifier = Modifier.size(CHAT_GLYPH_SIZE),
                 tint = tokens.colorScheme.primary,
             )
@@ -157,11 +158,11 @@ private fun ChatComposerDraft(
         )
         ChatComposerField(state = state, composer = composer, onEvent = onEvent, modifier = Modifier.weight(1f))
         ChatTextControl(
-            label = CHAT_SEND_LABEL,
+            label = stringResource(R.string.chat_send),
             enabled = composer.sendEnabled,
             onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
             modifier = Modifier.testTag("conversation-send"),
-            contentDescription = "Send message",
+            contentDescription = stringResource(R.string.chat_send_message),
         )
     }
 }
@@ -204,7 +205,7 @@ private fun ChatComposerField(
             Box(contentAlignment = Alignment.TopStart) {
                 if (state.composerText.isEmpty()) {
                     Text(
-                        text = CHAT_PLACEHOLDER,
+                        text = stringResource(R.string.chat_placeholder),
                         style = MaterialTheme.typography.bodyLarge,
                         color = tokens.colorScheme.onSurfaceVariant,
                         maxLines = 1,

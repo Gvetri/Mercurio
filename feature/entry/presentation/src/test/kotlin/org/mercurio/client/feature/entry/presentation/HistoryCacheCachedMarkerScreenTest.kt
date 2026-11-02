@@ -139,9 +139,9 @@ class HistoryCacheCachedMarkerScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList = sessionList,
                         ),

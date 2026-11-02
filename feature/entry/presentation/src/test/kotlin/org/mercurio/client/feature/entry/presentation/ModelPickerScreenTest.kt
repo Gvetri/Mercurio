@@ -36,7 +36,7 @@ class ModelPickerScreenTest {
         setContent(picker)
 
         composeTestRule.onNodeWithTag("composer-model-picker").assertIsDisplayed().assertTextEquals("First Model")
-        composeTestRule.onNodeWithText(MODEL_CATALOG_UNAVAILABLE_COPY).assertDoesNotExist()
+        composeTestRule.onNodeWithText(copy(R.string.model_catalog_unavailable)).assertDoesNotExist()
     }
 
     @Test
@@ -57,7 +57,7 @@ class ModelPickerScreenTest {
         setContent(ModelPickerUiState(capabilityKnown = true, capabilityAdvertised = false))
 
         composeTestRule.onNodeWithTag("composer-model-picker").assertDoesNotExist()
-        composeTestRule.onNodeWithText(MODEL_CATALOG_UNAVAILABLE_COPY).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(R.string.model_catalog_unavailable)).assertIsDisplayed()
     }
 
     @Test
@@ -70,7 +70,7 @@ class ModelPickerScreenTest {
             ),
         )
         composeTestRule.onNodeWithTag("composer-model-picker").assertDoesNotExist()
-        composeTestRule.onNodeWithText(MODEL_CATALOG_UNAVAILABLE_COPY).assertDoesNotExist()
+        composeTestRule.onNodeWithText(copy(R.string.model_catalog_unavailable)).assertDoesNotExist()
     }
 
     @Test
@@ -83,7 +83,7 @@ class ModelPickerScreenTest {
             ),
         )
         composeTestRule.onNodeWithTag("composer-model-picker").assertDoesNotExist()
-        composeTestRule.onNodeWithText(MODEL_CATALOG_UNAVAILABLE_COPY).assertDoesNotExist()
+        composeTestRule.onNodeWithText(copy(R.string.model_catalog_unavailable)).assertDoesNotExist()
     }
 
     @Test
@@ -217,8 +217,8 @@ class ModelPickerScreenTest {
             ModelPickerUiState(capabilityAdvertised = true, catalog = pickerEffortCatalog()),
             sendErrorCategory = MessageSendErrorCategory.MODEL_REFUSED,
         )
-        composeTestRule.onNodeWithText(MessageSendErrorCategory.MODEL_REFUSED.safeMessage).assertIsDisplayed()
-        composeTestRule.onNodeWithText(MessageSendErrorCategory.EFFORT_REFUSED.safeMessage).assertDoesNotExist()
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.MODEL_REFUSED.messageRes)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.EFFORT_REFUSED.messageRes)).assertDoesNotExist()
     }
 
     @Test
@@ -227,8 +227,8 @@ class ModelPickerScreenTest {
             ModelPickerUiState(capabilityAdvertised = true, catalog = pickerEffortCatalog()),
             sendErrorCategory = MessageSendErrorCategory.EFFORT_REFUSED,
         )
-        composeTestRule.onNodeWithText(MessageSendErrorCategory.EFFORT_REFUSED.safeMessage).assertIsDisplayed()
-        composeTestRule.onNodeWithText(MessageSendErrorCategory.MODEL_REFUSED.safeMessage).assertDoesNotExist()
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.EFFORT_REFUSED.messageRes)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.MODEL_REFUSED.messageRes)).assertDoesNotExist()
     }
 
     private fun setContent(

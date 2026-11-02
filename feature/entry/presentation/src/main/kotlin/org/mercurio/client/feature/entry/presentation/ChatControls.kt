@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -109,8 +110,12 @@ internal fun ChatStreamingCaret(modifier: Modifier = Modifier) {
 @Composable
 internal fun ChatSpinner(modifier: Modifier = Modifier) {
     val tokens = LocalHermesDesignTokens.current
+    val inProgressDescription = stringResource(R.string.chat_in_progress)
     CircularProgressIndicator(
-        modifier = modifier.size(CHAT_SPINNER_SIZE).semantics { contentDescription = "In progress" },
+        modifier =
+            modifier.size(CHAT_SPINNER_SIZE).semantics {
+                contentDescription = inProgressDescription
+            },
         color = tokens.colorScheme.primary,
         trackColor = tokens.colorScheme.primary.copy(alpha = CHAT_SPINNER_TRACK_ALPHA),
         strokeWidth = 2.dp,

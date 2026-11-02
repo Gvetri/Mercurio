@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -46,13 +47,13 @@ internal fun ChatRunLine(
             color = tokens.colorScheme.primary,
         )
         Text(
-            text = model.state,
+            text = model.state.resolve(),
             style = MaterialTheme.typography.labelSmall,
             color = model.stateColor(tokens),
         )
         model.dim?.let { dim ->
             Text(
-                text = dim,
+                text = dim.resolve(),
                 style = MaterialTheme.typography.labelSmall,
                 color = tokens.colorScheme.onSurfaceVariant,
             )
@@ -71,13 +72,16 @@ private fun ChatRunRightContent(
     when (right) {
         is ChatRunRight.Gateway ->
             Text(
-                text = if (right.online) "gateway :: ready" else "gateway :: offline",
+                text =
+                    stringResource(
+                        if (right.online) R.string.chat_gateway_ready else R.string.chat_gateway_offline,
+                    ),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (right.online) tokens.colorScheme.primary else tokens.colorScheme.error,
             )
         is ChatRunRight.Action ->
             ChatTextControl(
-                label = right.label,
+                label = right.label.resolve(),
                 enabled = true,
                 onClick = { onEvent(right.event) },
                 modifier = Modifier.testTag("chat-run-action"),

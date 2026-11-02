@@ -64,7 +64,7 @@ class SessionHistoryRetryScreenTest {
         }
 
         composeTestRule.onNodeWithText("Transcript message 1").assertIsDisplayed()
-        composeTestRule.onNodeWithText(RunFailureCategory.GATEWAY_REPORTED.safeMessage).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(RunFailureCategory.GATEWAY_REPORTED.messageRes)).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Try again").assertCountEquals(1)
         composeTestRule.onNodeWithText("Retry answer").performScrollTo().assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Try again").assertCountEquals(1)
@@ -87,7 +87,7 @@ class SessionHistoryRetryScreenTest {
         state = confirmedFailureState(state)
 
         composeTestRule.onNodeWithText("FAILED").assertIsDisplayed()
-        composeTestRule.onNodeWithText(RunFailureCategory.GATEWAY_REPORTED.safeMessage).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(RunFailureCategory.GATEWAY_REPORTED.messageRes)).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Try again").assertCountEquals(1)
     }
 
@@ -112,8 +112,8 @@ class SessionHistoryRetryScreenTest {
                                                     content = null,
                                                     runId = RunId("run-failed"),
                                                     runStatus = "failed",
-                                                    failureSafeMessage =
-                                                        RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                                    failureMessage =
+                                                        UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
                                                     retryAvailable = true,
                                                 ),
                                             ),
@@ -223,7 +223,7 @@ class SessionHistoryRetryScreenTest {
                                     content = "Original request",
                                     runId = failedRunId,
                                     timestamp = Instant.parse("2026-09-08T20:00:00Z"),
-                                    failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                    failureMessage = UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
                                     retryAvailable = retryAvailable,
                                 ),
                             ),
@@ -254,7 +254,7 @@ class SessionHistoryRetryScreenTest {
                                     runId = RunId("run-failed"),
                                     runStatus = "failed",
                                     timestamp = Instant.parse("2026-09-08T20:01:00Z"),
-                                    failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                    failureMessage = UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
                                     retryAvailable = true,
                                 ),
                                 SessionMessageUiState(
@@ -311,7 +311,8 @@ class SessionHistoryRetryScreenTest {
                                         runId = RunId("run-interrupted"),
                                         runStatus = "failed",
                                         timestamp = Instant.parse("2026-09-08T20:01:00Z"),
-                                        failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                        failureMessage =
+                                            UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
                                         retryAvailable = true,
                                     ),
                                 ),

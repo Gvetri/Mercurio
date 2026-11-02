@@ -91,9 +91,9 @@ class EntryScreenTest {
         val events = mutableListOf<EntryUiEvent>()
         val state =
             EntryUiState(
-                title = "Verify a Hermes Gateway",
-                supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
-                actionLabel = "Verify Gateway Connection",
+                title = UiText.Resource(R.string.entry_title_verify_new),
+                supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
+                actionLabel = UiText.Resource(R.string.entry_action_verify),
                 connectionSetupRequested = true,
             )
 
@@ -122,9 +122,9 @@ class EntryScreenTest {
         val state =
             mutableStateOf(
                 EntryUiState(
-                    title = "Verify a Hermes Gateway",
-                    supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
-                    actionLabel = "Verify Gateway Connection",
+                    title = UiText.Resource(R.string.entry_title_verify_new),
+                    supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
+                    actionLabel = UiText.Resource(R.string.entry_action_verify),
                     connectionSetupRequested = true,
                     endpoint = "https://gateway.example/profile",
                     bearerCredential = "synthetic-token",
@@ -167,9 +167,9 @@ class EntryScreenTest {
         val state =
             mutableStateOf(
                 EntryUiState(
-                    title = "Change Gateway credential",
-                    supportingText = "Verify the replacement before it replaces the saved credential.",
-                    actionLabel = "Verify and save credential",
+                    title = UiText.Resource(R.string.action_change_credential),
+                    supportingText = UiText.Resource(R.string.entry_supporting_change_credential),
+                    actionLabel = UiText.Resource(R.string.entry_action_verify_and_save),
                     connectionSetupRequested = true,
                     isChangingCredential = true,
                     isConnected = true,
@@ -211,9 +211,9 @@ class EntryScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Verify your Hermes Gateway",
-                            supportingText = "Verify the saved HTTPS endpoint before opening Sessions.",
-                            actionLabel = "Verify Gateway Connection",
+                            title = UiText.Resource(R.string.entry_title_verify_saved),
+                            supportingText = UiText.Resource(R.string.entry_supporting_verify_saved),
+                            actionLabel = UiText.Resource(R.string.entry_action_verify),
                             connectionSetupRequested = true,
                             isGatewayConnectionConfigured = true,
                             isRemoveConfirmationOpen = true,
@@ -248,9 +248,9 @@ class EntryScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "",
-                            actionLabel = "",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Value(""),
+                            actionLabel = UiText.Value(""),
                             isConnected = true,
                             sessionList = SessionListUiState(),
                             isRemoveConfirmationOpen = true,
@@ -280,9 +280,9 @@ class EntryScreenTest {
     fun loading_state_and_each_error_category_offer_clear_recovery() {
         val loadingState =
             EntryUiState(
-                title = "Verify a Hermes Gateway",
-                supportingText = "Checking the Gateway.",
-                actionLabel = "Verify Gateway Connection",
+                title = UiText.Resource(R.string.entry_title_verify_new),
+                supportingText = UiText.Value("Checking the Gateway."),
+                actionLabel = UiText.Resource(R.string.entry_action_verify),
                 connectionSetupRequested = true,
                 isVerifying = true,
             )
@@ -304,15 +304,15 @@ class EntryScreenTest {
             composeTestRule.runOnIdle {
                 state.value =
                     EntryUiState(
-                        title = "Verify a Hermes Gateway",
-                        supportingText = "Correct the details and try again.",
-                        actionLabel = "Verify Gateway Connection",
+                        title = UiText.Resource(R.string.entry_title_verify_new),
+                        supportingText = UiText.Value("Correct the details and try again."),
+                        actionLabel = UiText.Resource(R.string.entry_action_verify),
                         connectionSetupRequested = true,
                         errorCategory = category,
                     )
             }
 
-            composeTestRule.onNodeWithText(category.safeMessage).assertIsDisplayed()
+            composeTestRule.onNodeWithText(copy(category.messageRes)).assertIsDisplayed()
             composeTestRule.onNodeWithText("Try again").performClick()
             assertEquals(EntryUiEvent.TryAgainClicked, events.single())
         }
@@ -326,9 +326,9 @@ class EntryScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             connectionSetupRequested = true,
                             isConnected = true,
                         ),

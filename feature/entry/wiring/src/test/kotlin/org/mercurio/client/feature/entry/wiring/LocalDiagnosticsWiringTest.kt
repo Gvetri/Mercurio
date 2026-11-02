@@ -121,7 +121,7 @@ class LocalDiagnosticsWiringTest {
         val chooser = shadowOf(context).nextStartedActivity
         assertEquals(Intent.ACTION_CHOOSER, chooser.action)
         assertEquals(
-            AndroidLocalDiagnosticsExporter.EXPORT_CHOOSER_TITLE,
+            RuntimeEnvironment.getApplication().getString(R.string.diagnostics_export_chooser),
             chooser.getCharSequenceExtra(Intent.EXTRA_TITLE),
         )
         val share = requireNotNull(chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java))

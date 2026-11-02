@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -53,7 +54,10 @@ internal fun ChatMessageBody(
         }
         if (foldable && !row.streaming) {
             ChatTextControl(
-                label = if (expanded) "[ show less ]" else "[ show more ]",
+                label =
+                    stringResource(
+                        if (expanded) R.string.chat_show_less else R.string.chat_show_more,
+                    ),
                 enabled = true,
                 onClick = { expanded = !expanded },
                 modifier = Modifier.testTag("chat-fold-${row.id}"),

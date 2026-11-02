@@ -11,6 +11,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -58,14 +59,14 @@ private fun SessionMutationFeedback(
     mutation?.pendingAction?.let { action ->
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = action.pendingMessage(),
+            text = stringResource(action.pendingLabelRes()),
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
     }
     mutation?.errorCategory?.let { category ->
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = category.safeMessage,
+            text = stringResource(category.messageRes),
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
         )
@@ -97,15 +98,7 @@ private fun SessionMutationRetryControl(
             enabled = enabled && mutation?.pendingAction == null,
             modifier = Modifier.heightIn(min = 48.dp),
         ) {
-            Text(text = "Try again")
+            Text(text = stringResource(R.string.action_try_again))
         }
     }
 }
-
-private fun SessionMutationAction.pendingMessage(): String =
-    when (this) {
-        SessionMutationAction.RENAME -> "Renaming Session…"
-        SessionMutationAction.PIN -> "Pinning Session…"
-        SessionMutationAction.UNPIN -> "Unpinning Session…"
-        SessionMutationAction.DELETE -> "Deleting Session…"
-    }

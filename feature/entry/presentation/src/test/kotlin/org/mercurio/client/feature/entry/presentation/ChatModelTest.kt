@@ -51,7 +51,8 @@ class ChatModelTest {
 
         assertEquals(1, items.filterIsInstance<ChatTranscriptItem.Day>().size)
         val rows = items.filterIsInstance<ChatTranscriptItem.Message>().map { item -> item.row }
-        assertEquals(listOf("09:12", "now"), rows.map { row -> row.timeLabel })
+        val timeLabels = rows.map { row -> row.timeLabel }
+        assertEquals(listOf(UiText.Value("09:12"), UiText.Resource(R.string.chat_time_now)), timeLabels)
         assertEquals(ChatRowKind.Pending, rows.last().kind)
     }
 
@@ -65,14 +66,14 @@ class ChatModelTest {
                     content = null,
                     runId = RunId("4b2a-run"),
                     runState = RunPresentationState.FAILED,
-                    failureSafeMessage = "This Run failed. Your conversation is preserved.",
+                    failureMessage = UiText.Resource(R.string.error_run_failed),
                 ),
                 zone,
             )
 
         assertEquals(ChatRowKind.Failed, row.kind)
-        assertEquals("Failed", row.label)
-        assertEquals("run 4b2a", row.runIdLabel)
+        assertEquals(UiText.Resource(R.string.chat_row_failed), row.label)
+        assertEquals(uiText(R.string.chat_run_label, "4b2a"), row.runIdLabel)
         assertNull(row.payload)
     }
 
@@ -81,15 +82,15 @@ class ChatModelTest {
         val row = chatRow(SessionMessageUiState("message", "tool", "Tool output"), zone)
 
         assertEquals(ChatRowKind.System, row.kind)
-        assertEquals("Tool", row.label)
+        assertEquals(UiText.Value("Tool"), row.label)
     }
 
     @Test
     fun the_idle_run_line_reports_the_gateway_and_the_message_count() {
         val line = chatRunLineState(detail(content(messages = listOf(message("message-1", "user", "One")))))
 
-        assertEquals("idle", line.state)
-        assertEquals("· 1 messages", line.dim)
+        assertEquals(UiText.Resource(R.string.chat_run_state_idle), line.state)
+        assertEquals(uiText(R.string.chat_run_messages, 1), line.dim)
         assertFalse(line.error)
         assertTrue(line.right is ChatRunRight.Gateway)
     }
@@ -115,8 +116,8 @@ class ChatModelTest {
                 ),
             )
 
-        assertEquals("run 4b2a · streaming", line.state)
-        assertEquals(ChatRunRight.Action(CHAT_STOP_LABEL, EntryUiEvent.StopRunClicked), line.right)
+        assertEquals(uiText(R.string.chat_run_state_streaming, "4b2a"), line.state)
+        assertEquals(ChatRunRight.Action(UiText.Resource(R.string.chat_stop), EntryUiEvent.StopRunClicked), line.right)
         assertTrue(line.active)
     }
 
@@ -134,8 +135,13 @@ class ChatModelTest {
                 ),
             )
 
-        assertEquals("run 4b2a · stale", line.state)
-        assertEquals(ChatRunRight.Action(CHAT_REFRESH_HISTORY_LABEL, EntryUiEvent.RefreshSessionsClicked), line.right)
+        assertEquals(uiText(R.string.chat_run_state_stale, "4b2a"), line.state)
+        val expectedAction =
+            ChatRunRight.Action(
+                UiText.Resource(R.string.chat_refresh_history),
+                EntryUiEvent.RefreshSessionsClicked,
+            )
+        assertEquals(expectedAction, line.right)
         assertTrue(line.error)
     }
 
@@ -148,7 +154,7 @@ class ChatModelTest {
                 ),
             )
 
-        assertEquals("history · unavailable", line.state)
+        assertEquals(UiText.Resource(R.string.chat_run_state_history_unavailable), line.state)
         assertEquals(ChatRunRight.Gateway(online = false), line.right)
     }
 
@@ -158,7 +164,7 @@ class ChatModelTest {
 
         assertFalse(composer.fieldEnabled)
         assertFalse(composer.sendEnabled)
-        assertEquals("Sending is unavailable until the history loads.", composer.reason)
+        assertEquals(UiText.Resource(R.string.chat_reason_history_loading), composer.reason)
     }
 
     @Test

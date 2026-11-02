@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -42,7 +43,7 @@ internal fun ComposerModelPickerSlot(
         picker.showsSelectionControl -> ComposerModelPicker(picker = picker, onEvent = onEvent)
         picker.showsUnavailableCopy ->
             Text(
-                text = MODEL_CATALOG_UNAVAILABLE_COPY,
+                text = stringResource(R.string.model_catalog_unavailable),
                 modifier = Modifier.testTag("composer-model-unavailable"),
             )
     }
@@ -63,7 +64,7 @@ private fun ComposerModelPicker(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(text = picker.controlLabel)
+                Text(text = picker.controlLabel.resolve())
                 Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
             }
         }
@@ -81,7 +82,7 @@ private fun ModelPickerMenu(
     DropdownMenu(expanded = picker.isPickerOpen, onDismissRequest = dismiss) {
         ModelOptionRow(
             tag = "model-row-server-default",
-            label = SERVER_DEFAULT_LABEL,
+            label = stringResource(R.string.model_server_default),
             isSelected = picker.selection == null,
             onSelect = { onEvent(EntryUiEvent.ServerDefaultModelClicked) },
         )
@@ -102,7 +103,7 @@ private fun ModelPickerMenu(
             )
             if (entry.id == picker.selection?.model && picker.selectedEfforts.isNotEmpty()) {
                 Text(
-                    text = "Reasoning effort",
+                    text = stringResource(R.string.model_reasoning_effort),
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp),
                 )
@@ -127,10 +128,11 @@ private fun ModelOptionRow(
     onSelect: () -> Unit,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val selectedDescription = stringResource(R.string.model_selected)
     val leading: (@Composable () -> Unit)? =
         if (isSelected) {
             {
-                Icon(imageVector = Icons.Default.Check, contentDescription = "Selected")
+                Icon(imageVector = Icons.Default.Check, contentDescription = selectedDescription)
             }
         } else {
             null
@@ -150,12 +152,16 @@ private fun ModelFavoriteToggle(
     isFavorite: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
-    val action = if (isFavorite) "Remove favorite from" else "Add favorite to"
+    val favoriteDescription =
+        stringResource(
+            if (isFavorite) R.string.model_remove_favorite else R.string.model_add_favorite,
+            entry.displayName,
+        )
     TextButton(
         onClick = { onEvent(EntryUiEvent.ModelFavoriteClicked(entry.id, !isFavorite)) },
         modifier =
             Modifier.testTag("model-favorite-${entry.id}").semantics {
-                contentDescription = "$action ${entry.displayName}"
+                contentDescription = favoriteDescription
             },
     ) {
         Icon(

@@ -2,7 +2,6 @@ package org.mercurio.client.feature.entry.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -72,24 +71,16 @@ class RunStatusNotificationTest {
     }
 
     @Test
-    fun notification_text_is_fixed_and_derives_only_from_the_presentation_state() {
-        assertEquals("Run succeeded", RunPresentationState.SUCCEEDED.runStatusNotificationText())
-        assertEquals("Run failed", RunPresentationState.FAILED.runStatusNotificationText())
-        assertNull(RunPresentationState.CANCELLED.runStatusNotificationText())
-        assertNull(RunPresentationState.UNCERTAIN.runStatusNotificationText())
-        assertNull(RunPresentationState.RUNNING.runStatusNotificationText())
-        assertNull(RunPresentationState.COMPLETING.runStatusNotificationText())
-        assertNull(RunPresentationState.STARTING.runStatusNotificationText())
+    fun the_notifiable_terminal_set_is_exactly_succeeded_and_failed() {
+        assertEquals(
+            setOf(RunPresentationState.SUCCEEDED, RunPresentationState.FAILED),
+            notifiableTerminalStates,
+        )
     }
 
     @Test
-    fun notification_text_never_contains_run_or_session_content() {
+    fun a_run_that_is_still_running_is_never_notifiable() {
         val run = Run(RunId("run-with-sensitive-ids"), SessionId("session-secret"), "running")
-        val derived = run.toRunPresentationState()
-        assertEquals("Run failed", RunPresentationState.FAILED.runStatusNotificationText())
-        assertFalse(RunPresentationState.FAILED.runStatusNotificationText().orEmpty().contains(run.id.value))
-        assertFalse(RunPresentationState.FAILED.runStatusNotificationText().orEmpty().contains(run.sessionId.value))
-        assertFalse(derived.isNotifiableTerminal())
-        assertNull(derived.runStatusNotificationText())
+        assertFalse(run.toRunPresentationState().isNotifiableTerminal())
     }
 }

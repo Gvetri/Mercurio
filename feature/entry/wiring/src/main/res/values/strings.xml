@@ -1,0 +1,7 @@
+<resources>
+    <string name="run_status_notification_title" translatable="false">Mercurio</string>
+    <string name="run_status_notification_succeeded">Run succeeded</string>
+    <string name="run_status_notification_failed">Run failed</string>
+    <string name="run_status_channel_name">Run status</string>
+    <string name="diagnostics_export_chooser">Export diagnostics</string>
+</resources>

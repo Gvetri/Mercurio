@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -183,7 +184,7 @@ private fun ChatFailedRow(
             }
             row.failure?.let { failure ->
                 Text(
-                    text = failure,
+                    text = failure.resolve(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tokens.colorScheme.onErrorContainer,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
@@ -208,7 +209,7 @@ private fun ChatFailureActions(
     ) {
         if (row.retryAvailable && runId != null) {
             ChatTextControl(
-                label = "Try again",
+                label = stringResource(R.string.action_try_again),
                 enabled = callbacks.retryEnabled,
                 onClick = { callbacks.onRetry(runId) },
                 modifier = Modifier.testTagged("chat-retry-${row.id}"),
@@ -216,7 +217,10 @@ private fun ChatFailureActions(
         }
         row.technicalDetail?.let {
             ChatTextControl(
-                label = if (showDetail) "Hide technical detail" else "Show technical detail",
+                label =
+                    stringResource(
+                        if (showDetail) R.string.chat_hide_detail else R.string.chat_show_detail,
+                    ),
                 enabled = true,
                 onClick = { showDetail = !showDetail },
                 modifier = Modifier.testTagged("chat-detail-${row.id}"),
@@ -244,9 +248,10 @@ private fun ChatMessageHeader(
 ) {
     val tokens = LocalHermesDesignTokens.current
     var menuOpen by remember(row.id) { mutableStateOf(false) }
+    val actionsDescription = stringResource(R.string.chat_message_actions, row.id)
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = row.label.uppercase(Locale.getDefault()),
+            text = row.label.resolve().uppercase(Locale.getDefault()),
             style = MaterialTheme.typography.labelSmall,
             letterSpacing = 0.14.em,
             color = colors.label,
@@ -255,7 +260,7 @@ private fun ChatMessageHeader(
         Spacer(modifier = Modifier.weight(1f))
         row.timeLabel?.let { time ->
             Text(
-                text = time,
+                text = time.resolve(),
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.time,
                 maxLines = 1,
@@ -267,7 +272,7 @@ private fun ChatMessageHeader(
                 ChatSpinner(modifier = Modifier.padding(start = tokens.spacing.xxs))
             } else {
                 ChatDotsControl(
-                    description = "Message actions for ${row.id}",
+                    description = actionsDescription,
                     onClick = { menuOpen = !menuOpen },
                     modifier =
                         Modifier
