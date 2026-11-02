@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -82,13 +83,14 @@ private fun ChatSessionMenuControl(
 ) {
     val tokens = LocalHermesDesignTokens.current
     var expanded by remember(session.id, enabled) { mutableStateOf(false) }
+    val sessionMenuDescription = stringResource(R.string.chat_session_menu)
     Box {
         Box(
             modifier =
                 Modifier
                     .widthIn(min = CHAT_TOUCH_TARGET)
                     .heightIn(min = CHAT_TOUCH_TARGET)
-                    .semantics { contentDescription = "Session menu" }
+                    .semantics { contentDescription = sessionMenuDescription }
                     .clickable(enabled = enabled) { expanded = true },
             contentAlignment = Alignment.Center,
         ) {

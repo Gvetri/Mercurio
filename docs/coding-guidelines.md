@@ -56,6 +56,7 @@ thresholds.
 | **Test-first changes** — a behavioral change starts from a focused failing test ([CONTRIBUTING](../CONTRIBUTING.md)) | No mechanical check — code review |
 | **Unit tests** — every declared scope runs; no test is skipped | `unit-tests` check |
 | **Test doubles** — a deterministic double at every declared datasource and repository boundary; no mocking framework | `architecture-check` check |
+| **Localization** — user-facing copy lives in the string resources of its module, and a UI state names a resource instead of holding copy ([localization](localization.md)) | `unit-tests` check (`LocalizedResourcesTest`) covers the resources themselves; a state that carries copy is caught in code review |
 | **Coverage and mutation** — declared modules stay at or above the declared thresholds ([quality gates](quality-gates.md)) | `coverage-mutation` check |
 | **Compose baselines** — pinned surfaces match their approved Roborazzi baselines | `compose-jvm-tests` check |
 | **Commit messages** — a Conventional Commit pull-request title and commits | `commit-message` check |
@@ -67,5 +68,7 @@ thresholds.
   how to change a declared value.
 - [Architecture boundaries](architecture.md) — the feature-first layout, the layer rules, and the
   architecture checks.
+- [Localization](localization.md) — where user-facing copy lives, the base locale, and what a
+  translated language adds.
 - [The protected main branch and the pull-request workflow](protected-main-workflow.md) — branch
   names, the pull-request routing, and the merge rules.

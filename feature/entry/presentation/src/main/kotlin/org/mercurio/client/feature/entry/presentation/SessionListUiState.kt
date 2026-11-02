@@ -14,16 +14,16 @@ import java.time.Duration
 import java.time.Instant
 
 enum class SessionListErrorCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    GATEWAY_UNAVAILABLE("The Gateway is unavailable. The current Session list is preserved. Try again or reconnect."),
-    SESSION_UNAVAILABLE("This Session could not be opened. It may have been removed. Return to the list or refresh."),
+    GATEWAY_UNAVAILABLE(R.string.error_session_list_unavailable),
+    SESSION_UNAVAILABLE(R.string.error_session_unavailable),
 }
 
 enum class SessionCreationErrorCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    GATEWAY_REQUEST_FAILED("Session was not created. Try again."),
+    GATEWAY_REQUEST_FAILED(R.string.error_session_not_created),
 }
 
 enum class SessionMutationAction {
@@ -34,17 +34,32 @@ enum class SessionMutationAction {
 }
 
 enum class SessionMutationErrorCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    GATEWAY_REQUEST_FAILED("Session action failed. No local changes were applied. Try again."),
+    GATEWAY_REQUEST_FAILED(R.string.error_session_action_failed),
 }
 
 enum class SessionRenameErrorCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    EMPTY_TITLE("Enter a Session title."),
-    CONTROL_CHARACTER("Session title cannot contain control characters."),
-    GATEWAY_REQUEST_FAILED("Session was not renamed. The current title is preserved. Try again."),
+    EMPTY_TITLE(R.string.error_session_title_empty),
+    CONTROL_CHARACTER(R.string.error_session_title_control_character),
+    GATEWAY_REQUEST_FAILED(R.string.error_session_not_renamed),
+}
+
+/** The unit a relative last-active label counts in; the renderer picks its resource. */
+enum class RelativeLastActiveUnit { MINUTES, HOURS, DAYS, WEEKS, MONTHS, YEARS }
+
+/** How long ago a Session was last active, or that the Gateway supplied no answer. */
+sealed interface RelativeLastActive {
+    data object Unknown : RelativeLastActive
+
+    data object Now : RelativeLastActive
+
+    data class Ago(
+        val amount: Long,
+        val unit: RelativeLastActiveUnit,
+    ) : RelativeLastActive
 }
 
 data class SessionItemUiState(
@@ -52,7 +67,8 @@ data class SessionItemUiState(
     val title: String,
     val preview: String?,
     val pinned: Boolean,
-    val lastActiveLabel: String = UNKNOWN_LAST_ACTIVE_LABEL,
+    val lastActive: RelativeLastActive = RelativeLastActive.Unknown,
+    /** The Gateway holds no title yet, so the renderer shows its pending-title placeholder. */
     val isPendingTitle: Boolean = false,
 )
 
@@ -67,7 +83,7 @@ data class SessionMessageUiState(
     val isStreaming: Boolean = false,
     val runState: RunPresentationState? = null,
     val streamInterrupted: Boolean = false,
-    val failureSafeMessage: String? = null,
+    val failureMessage: UiText? = null,
     val failureTechnicalDetail: String? = null,
     val retryAvailable: Boolean = false,
 ) {
@@ -78,30 +94,27 @@ data class SessionMessageUiState(
 }
 
 enum class SessionHistoryErrorCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    GATEWAY_REQUEST_FAILED("Session history could not be refreshed. The current content is preserved."),
-    RECONCILIATION_FAILED("Run result could not be confirmed. Current content is preserved. Refresh or reconnect."),
+    GATEWAY_REQUEST_FAILED(R.string.error_history_refresh_failed),
+    RECONCILIATION_FAILED(R.string.error_reconciliation_failed),
 }
 
 enum class MessageSendErrorCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    GATEWAY_REQUEST_FAILED("Message was not sent. Your draft is preserved. Try again."),
-    UNCERTAIN("Message outcome is uncertain. The Gateway may have received it. No automatic retry was made."),
-    MODEL_REFUSED("Message was not sent. The selected model was refused. Choose another model, then try again."),
-    EFFORT_REFUSED("Message was not sent. The selected effort was refused. Choose another effort, then try again."),
+    GATEWAY_REQUEST_FAILED(R.string.error_message_not_sent),
+    UNCERTAIN(R.string.error_message_uncertain),
+    MODEL_REFUSED(R.string.error_message_model_refused),
+    EFFORT_REFUSED(R.string.error_message_effort_refused),
 }
 
 enum class RunFailureCategory(
-    val safeMessage: String,
+    val messageRes: Int,
 ) {
-    GATEWAY_REPORTED("This Run failed. Your conversation is preserved."),
-    MODEL_REFUSED("This Run failed with the selected model. Your conversation is preserved. Try another model."),
-    EFFORT_REFUSED(
-        "This Run failed with the selected model and effort. " +
-            "Your conversation is preserved. Try another effort or model.",
-    ),
+    GATEWAY_REPORTED(R.string.error_run_failed),
+    MODEL_REFUSED(R.string.error_run_failed_model),
+    EFFORT_REFUSED(R.string.error_run_failed_effort),
 }
 
 data class OpenSessionUiState(
@@ -221,35 +234,33 @@ internal fun Session.toSessionItemUiState(now: Instant = Instant.now()): Session
     val pendingTitle = normalizedTitle.isEmpty()
     return SessionItemUiState(
         id = id,
-        title = if (pendingTitle) PENDING_SESSION_TITLE else normalizedTitle,
+        title = normalizedTitle,
         preview = preview?.takeIf(String::isNotBlank),
         pinned = pinned,
-        lastActiveLabel = relativeLastActiveLabel(lastActive, now),
+        lastActive = relativeLastActive(lastActive, now),
         isPendingTitle = pendingTitle,
     )
 }
 
-internal const val PENDING_SESSION_TITLE = "New session"
-internal const val UNKNOWN_LAST_ACTIVE_LABEL = "—"
-
 /**
- * Formats the Gateway's last-active instant as the compact relative label the
- * Session list time column renders. A missing value keeps the placeholder.
+ * Names the Gateway's last-active instant as the compact relative value the
+ * Session list time column renders. A missing value keeps the unknown value.
  */
-internal fun relativeLastActiveLabel(
+internal fun relativeLastActive(
     lastActive: Instant?,
     now: Instant,
-): String {
-    if (lastActive == null) return UNKNOWN_LAST_ACTIVE_LABEL
+): RelativeLastActive {
+    if (lastActive == null) return RelativeLastActive.Unknown
     val seconds = Duration.between(lastActive, now).seconds
     return when {
-        seconds < MINUTE_SECONDS -> "now"
-        seconds < HOUR_SECONDS -> "${seconds / MINUTE_SECONDS}m"
-        seconds < DAY_SECONDS -> "${seconds / HOUR_SECONDS}h"
-        seconds < WEEK_SECONDS -> "${seconds / DAY_SECONDS}d"
-        seconds < MONTH_SECONDS -> "${seconds / WEEK_SECONDS}w"
-        seconds < YEAR_SECONDS -> "${seconds / MONTH_SECONDS}mo"
-        else -> "${seconds / YEAR_SECONDS}y"
+        seconds < MINUTE_SECONDS -> RelativeLastActive.Now
+        seconds < HOUR_SECONDS -> RelativeLastActive.Ago(seconds / MINUTE_SECONDS, RelativeLastActiveUnit.MINUTES)
+        seconds < DAY_SECONDS -> RelativeLastActive.Ago(seconds / HOUR_SECONDS, RelativeLastActiveUnit.HOURS)
+        seconds < WEEK_SECONDS -> RelativeLastActive.Ago(seconds / DAY_SECONDS, RelativeLastActiveUnit.DAYS)
+        seconds < MONTH_SECONDS -> RelativeLastActive.Ago(seconds / WEEK_SECONDS, RelativeLastActiveUnit.WEEKS)
+        seconds < YEAR_SECONDS ->
+            RelativeLastActive.Ago(seconds / MONTH_SECONDS, RelativeLastActiveUnit.MONTHS)
+        else -> RelativeLastActive.Ago(seconds / YEAR_SECONDS, RelativeLastActiveUnit.YEARS)
     }
 }
 
@@ -273,7 +284,7 @@ internal fun GatewayHistoryMessage.toSessionMessageUiState(
         runStatus = runStatus,
         runResult = runResult,
         timestamp = timestamp?.let(::parseGatewayTimestamp),
-        failureSafeMessage = if (failed) runFailureMessageFor(modelSelection) else null,
+        failureMessage = if (failed) runFailureMessageFor(modelSelection) else null,
         retryAvailable = isRunRetryEligible(if (failed) RunPresentationState.FAILED else null, retryInput),
     )
 }
@@ -292,14 +303,14 @@ private fun epochSecondsToInstant(value: String): Instant? {
     }.getOrNull()
 }
 
-internal fun runFailureMessageFor(modelSelection: ModelSelection?): String {
+internal fun runFailureMessageFor(modelSelection: ModelSelection?): UiText {
     val category =
         when {
             modelSelection == null -> RunFailureCategory.GATEWAY_REPORTED
             modelSelection.effort != null -> RunFailureCategory.EFFORT_REFUSED
             else -> RunFailureCategory.MODEL_REFUSED
         }
-    return category.safeMessage
+    return UiText.Resource(category.messageRes)
 }
 
 internal fun List<SessionMessageUiState>.chronological(): List<SessionMessageUiState> {

@@ -52,9 +52,9 @@ class ConversationLayoutScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_action_connected),
+                            supportingText = UiText.Resource(R.string.entry_action_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList = SessionListUiState(openedSession = conversation),
                         ),
@@ -130,9 +130,9 @@ class ConversationLayoutScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_action_connected),
+                            supportingText = UiText.Resource(R.string.entry_action_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(
@@ -184,7 +184,7 @@ class ConversationLayoutScreenTest {
                 }
             }
         }
-        composeTestRule.onNodeWithText(MessageSendErrorCategory.UNCERTAIN.safeMessage).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.UNCERTAIN.messageRes)).assertIsDisplayed()
         composeTestRule.onNodeWithTag("conversation-discard-unsent").assertIsDisplayed().assertHasClickAction()
         val draft =
             composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()
@@ -200,9 +200,9 @@ class ConversationLayoutScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_action_connected),
+                            supportingText = UiText.Resource(R.string.entry_action_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(

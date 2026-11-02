@@ -151,7 +151,7 @@ class SelectedVisualRegressionTest {
             }
         }
         composeTestRule
-            .onNodeWithText(EntryErrorCategory.CREDENTIAL_STORAGE_FAILED.safeMessage)
+            .onNodeWithText(copy(EntryErrorCategory.CREDENTIAL_STORAGE_FAILED.messageRes))
             .performScrollTo()
         capture()
     }
@@ -339,7 +339,7 @@ class SelectedVisualRegressionTest {
             session("tokens", "Design system tokens", "Primary, surface and outline roles", pinned = true, time = "2d"),
             session(
                 id = "new",
-                title = "New session",
+                title = "",
                 preview = null,
                 time = "now",
                 pending = true,
@@ -354,7 +354,7 @@ class SelectedVisualRegressionTest {
         designSessions().filterNot { it.id.value == "new" } +
             session(
                 id = "new",
-                title = "New session",
+                title = "",
                 preview = null,
                 time = "now",
                 pending = true,
@@ -426,9 +426,9 @@ class SelectedVisualRegressionTest {
     fun session_detail_with_messages() {
         setContent(
             EntryUiState(
-                title = "Gateway connected",
-                supportingText = "",
-                actionLabel = "",
+                title = UiText.Resource(R.string.entry_title_connected),
+                supportingText = UiText.Value(""),
+                actionLabel = UiText.Value(""),
                 sessionList =
                     SessionListUiState(
                         openedSession =
@@ -537,9 +537,9 @@ class SelectedVisualRegressionTest {
         errorCategory: EntryErrorCategory? = null,
     ): EntryUiState =
         EntryUiState(
-            title = "Verify a Hermes Gateway",
-            supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
-            actionLabel = "Verify Gateway Connection",
+            title = UiText.Resource(R.string.entry_title_verify_new),
+            supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
+            actionLabel = UiText.Resource(R.string.entry_action_verify),
             connectionSetupRequested = true,
             endpoint = "https://gateway.example/profile",
             bearerCredential = "fixture-credential",
@@ -549,9 +549,9 @@ class SelectedVisualRegressionTest {
 
     private fun replacementFormState(errorCategory: EntryErrorCategory? = null): EntryUiState =
         EntryUiState(
-            title = "Change Gateway credential",
-            supportingText = "Verify the replacement before it replaces the saved credential.",
-            actionLabel = "Verify and save credential",
+            title = UiText.Resource(R.string.action_change_credential),
+            supportingText = UiText.Resource(R.string.entry_supporting_change_credential),
+            actionLabel = UiText.Resource(R.string.entry_action_verify_and_save),
             connectionSetupRequested = true,
             isChangingCredential = true,
             isConnected = true,
@@ -562,9 +562,9 @@ class SelectedVisualRegressionTest {
 
     private fun removeConfirmationState(): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "",
-            actionLabel = "",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Value(""),
+            actionLabel = UiText.Value(""),
             isConnected = true,
             sessionList =
                 SessionListUiState(
@@ -594,9 +594,9 @@ class SelectedVisualRegressionTest {
 
     private fun connectedState(sessionList: SessionListUiState): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "",
-            actionLabel = "",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Value(""),
+            actionLabel = UiText.Value(""),
             sessionList = sessionList,
         )
 
@@ -614,7 +614,7 @@ class SelectedVisualRegressionTest {
             title = title,
             preview = preview,
             pinned = pinned,
-            lastActiveLabel = time,
+            lastActive = relativeLastActive(time),
             isPendingTitle = pending,
         )
 

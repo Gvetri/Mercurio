@@ -170,7 +170,7 @@ class SessionHistoryScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText(MessageSendErrorCategory.UNCERTAIN.safeMessage).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.UNCERTAIN.messageRes)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Keep this draft").assertIsDisplayed()
         composeTestRule.onNodeWithText("Discard unsent record").assertIsDisplayed().assertIsEnabled()
     }
@@ -269,7 +269,8 @@ class SessionHistoryScreenTest {
                                         runId = RunId("run-failed"),
                                         runStatus = "failed",
                                         runResult = "Remote failure",
-                                        failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                        failureMessage =
+                                            UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
                                     ),
                                 ),
                             latestRun = Run(RunId("run-failed"), SessionId("session-1"), "failed"),
@@ -281,7 +282,7 @@ class SessionHistoryScreenTest {
         }
 
         composeTestRule.onNodeWithText("FAILED").assertIsDisplayed()
-        composeTestRule.onNodeWithText(RunFailureCategory.GATEWAY_REPORTED.safeMessage).assertIsDisplayed()
+        composeTestRule.onNodeWithText(copy(RunFailureCategory.GATEWAY_REPORTED.messageRes)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Remote failure").assertDoesNotExist()
         composeTestRule.onAllNodesWithText("failed", substring = true).assertCountEquals(2)
     }
@@ -301,7 +302,8 @@ class SessionHistoryScreenTest {
                                         content = null,
                                         runId = RunId("run-failed"),
                                         runStatus = "failed",
-                                        failureSafeMessage = RunFailureCategory.GATEWAY_REPORTED.safeMessage,
+                                        failureMessage =
+                                            UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
                                         failureTechnicalDetail = "gateway status 500",
                                     ),
                                 ),

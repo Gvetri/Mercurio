@@ -55,13 +55,13 @@ class ModelPickerOrderingTest {
     fun the_control_label_names_the_selected_entry_display_name_and_the_cleared_state_names_the_default() {
         val catalog = pickerCatalog()
         val overridden = ModelPickerUiState(catalog = catalog, selection = ModelSelection("beta"))
-        assertEquals("Second Model", overridden.controlLabel)
+        assertEquals(UiText.Value("Second Model"), overridden.controlLabel)
 
         val cleared = ModelPickerUiState(catalog = catalog, selection = null)
-        assertEquals("Server default", cleared.controlLabel)
+        assertEquals(UiText.Resource(R.string.model_server_default), cleared.controlLabel)
 
         val staleOverride = ModelPickerUiState(catalog = catalog, selection = ModelSelection("retired-model"))
-        assertEquals("retired-model", staleOverride.controlLabel)
+        assertEquals(UiText.Value("retired-model"), staleOverride.controlLabel)
     }
 
     @Test

@@ -26,6 +26,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -158,20 +159,20 @@ private fun ChatTranscriptRegion(
                 )
             state.isRefreshing ->
                 ChatEmptyState(
-                    title = "Loading Session history…",
-                    body = "The Gateway is returning this Session.",
+                    title = stringResource(R.string.chat_history_loading_title),
+                    body = stringResource(R.string.chat_history_loading_body),
                 )
             state.errorCategory != null && !state.isCached ->
                 ChatEmptyState(
-                    title = "Session history is unavailable",
-                    body = "The Gateway could not be read. No messages are shown.",
-                    actionLabel = "[ try again ]",
+                    title = stringResource(R.string.chat_history_unavailable_title),
+                    body = stringResource(R.string.chat_history_unavailable_body),
+                    actionLabel = stringResource(R.string.chat_try_again_label),
                     onAction = { callbacks.onEvent(EntryUiEvent.RefreshSessionsClicked) },
                 )
             else ->
                 ChatEmptyState(
-                    title = "No messages yet",
-                    body = "This Session has no history on the Gateway. Write the first message.",
+                    title = stringResource(R.string.chat_history_empty_title),
+                    body = stringResource(R.string.chat_history_empty_body),
                 )
         }
     }

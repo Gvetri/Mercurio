@@ -301,7 +301,8 @@ class EntryStateHolderTest {
             listOf("pinned-older", "pinned-newer", "unpinned-older", "unpinned-newer"),
             sessionList.sessions.map { it.id.value },
         )
-        assertEquals("New session", sessionList.sessions.first().title)
+        assertEquals("", sessionList.sessions.first().title)
+        assertTrue(sessionList.sessions.first().isPendingTitle)
         assertEquals(listOf(SessionListRequest()), gateway.listRequests)
         assertTrue(sessionList.showFirstUseGuidance)
 

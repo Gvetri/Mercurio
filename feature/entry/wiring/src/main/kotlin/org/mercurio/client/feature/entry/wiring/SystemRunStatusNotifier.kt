@@ -9,7 +9,6 @@ import android.os.Build
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunStatusNotifier
-import org.mercurio.client.feature.entry.domain.runStatusNotificationText
 
 /**
  * Best-effort system notification for a terminal observed Run.
@@ -30,7 +29,7 @@ class SystemRunStatusNotifier(
             val channel =
                 NotificationChannel(
                     CHANNEL_ID,
-                    CHANNEL_NAME,
+                    applicationContext.getString(R.string.run_status_channel_name),
                     NotificationManager.IMPORTANCE_DEFAULT,
                 )
             notificationManager.createNotificationChannel(channel)
@@ -41,7 +40,7 @@ class SystemRunStatusNotifier(
         run: Run,
         state: RunPresentationState,
     ) {
-        val text = state.runStatusNotificationText() ?: return
+        val text = state.notificationTextRes()?.let(applicationContext::getString) ?: return
 
         @Suppress("DEPRECATION")
         val builder =
@@ -54,7 +53,7 @@ class SystemRunStatusNotifier(
         val notification =
             builder
                 .setSmallIcon(R.drawable.ic_run_status_notification)
-                .setContentTitle(TITLE)
+                .setContentTitle(applicationContext.getString(R.string.run_status_notification_title))
                 .setContentText(text)
                 .setStyle(Notification.BigTextStyle().bigText(text))
                 .setAutoCancel(true)
@@ -75,9 +74,19 @@ class SystemRunStatusNotifier(
 
     private fun Context.launchIntent() = packageManager.getLaunchIntentForPackage(packageName)
 
+    private fun RunPresentationState.notificationTextRes(): Int? =
+        when (this) {
+            RunPresentationState.SUCCEEDED -> R.string.run_status_notification_succeeded
+            RunPresentationState.FAILED -> R.string.run_status_notification_failed
+            RunPresentationState.STARTING,
+            RunPresentationState.RUNNING,
+            RunPresentationState.COMPLETING,
+            RunPresentationState.CANCELLED,
+            RunPresentationState.UNCERTAIN,
+            -> null
+        }
+
     private companion object {
         const val CHANNEL_ID = "run_status"
-        const val CHANNEL_NAME = "Run status"
-        const val TITLE = "Mercurio"
     }
 }

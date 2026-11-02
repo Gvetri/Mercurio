@@ -118,7 +118,7 @@ class EntryStateHolderSecureSaveTest {
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("secure-token-edited"))
 
         assertNull(holder.uiState.value.errorCategory)
-        assertEquals("Verify Gateway Connection", holder.uiState.value.actionLabel)
+        assertEquals(UiText.Resource(R.string.entry_action_verify), holder.uiState.value.actionLabel)
 
         repository.throwOnSave = false
         holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)

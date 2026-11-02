@@ -55,7 +55,7 @@ class RunRetryStateHolderTest {
             val failedMessageAfter = opened.messages.single { it.runId == failedRunId && it.isFailedRun }
             assertEquals(failedMessageBefore.isFailedRun, failedMessageAfter.isFailedRun)
             assertEquals(failedMessageBefore.runStatus, failedMessageAfter.runStatus)
-            assertEquals(failedMessageBefore.failureSafeMessage, failedMessageAfter.failureSafeMessage)
+            assertEquals(failedMessageBefore.failureMessage, failedMessageAfter.failureMessage)
             assertNull(failedMessageAfter.failureTechnicalDetail)
             assertTrue(failedMessageAfter.retryAvailable)
             assertEquals(RunId("run-retried"), opened.activeResponse?.runId)
@@ -152,7 +152,7 @@ class RunRetryStateHolderTest {
             val failedMessage = opened.messages.single { it.runId == externalFailedRunId }
             assertTrue(failedMessage.isFailedRun)
             assertFalse(failedMessage.retryAvailable)
-            assertEquals(RunFailureCategory.GATEWAY_REPORTED.safeMessage, failedMessage.failureSafeMessage)
+            assertEquals(UiText.Resource(R.string.error_run_failed), failedMessage.failureMessage)
 
             holder.onEvent(EntryUiEvent.RetryRunClicked(externalFailedRunId))
 
@@ -195,7 +195,7 @@ class RunRetryStateHolderTest {
                     it.runId?.value == "run-uncertain" && it.runStatus == "interrupted"
                 }
             assertFalse(uncertainMessage.retryAvailable)
-            assertNull(uncertainMessage.failureSafeMessage)
+            assertNull(uncertainMessage.failureMessage)
             assertNull(uncertainMessage.failureTechnicalDetail)
 
             holder.onEvent(EntryUiEvent.RetryRunClicked(RunId("run-uncertain")))
@@ -207,7 +207,7 @@ class RunRetryStateHolderTest {
                     it.runId?.value == "run-done" && it.runStatus == "succeeded"
                 }
             assertFalse(succeededMessage.retryAvailable)
-            assertNull(succeededMessage.failureSafeMessage)
+            assertNull(succeededMessage.failureMessage)
 
             holder.onEvent(EntryUiEvent.RetryRunClicked(RunId("run-done")))
             assertTrue(gateway.runRequests.isEmpty())
@@ -248,7 +248,7 @@ class RunRetryStateHolderTest {
             assertTrue(failedMessage.isFailedRun)
             assertEquals("failed", failedMessage.runStatus)
             assertTrue(failedMessage.retryAvailable)
-            assertEquals(RunFailureCategory.GATEWAY_REPORTED.safeMessage, failedMessage.failureSafeMessage)
+            assertEquals(UiText.Resource(R.string.error_run_failed), failedMessage.failureMessage)
         } finally {
             holder.close()
         }
@@ -337,7 +337,7 @@ class RunRetryStateHolderTest {
             val failedMessage = opened.messages.single { it.runId == failedRunId && it.isFailedRun }
             assertTrue(failedMessage.isFailedRun)
             assertTrue(failedMessage.retryAvailable)
-            assertEquals(RunFailureCategory.GATEWAY_REPORTED.safeMessage, failedMessage.failureSafeMessage)
+            assertEquals(UiText.Resource(R.string.error_run_failed), failedMessage.failureMessage)
         } finally {
             holder.close()
         }

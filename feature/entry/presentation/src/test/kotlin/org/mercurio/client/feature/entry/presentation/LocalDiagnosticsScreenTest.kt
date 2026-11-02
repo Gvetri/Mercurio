@@ -88,7 +88,7 @@ class LocalDiagnosticsScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText(LocalDiagnosticsExportFailure.EXPORT_FAILED.safeMessage)
+            .onNodeWithText(copy(LocalDiagnosticsExportFailure.EXPORT_FAILED.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("1 diagnostic record stored on this device.").assertIsDisplayed()
         composeTestRule.onNodeWithText("Export diagnostics").assertIsEnabled().performClick()
@@ -141,7 +141,7 @@ class LocalDiagnosticsScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription(READING_DIAGNOSTICS_DESCRIPTION).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(copy(R.string.diagnostics_reading)).assertIsDisplayed()
         composeTestRule.onNodeWithText("No diagnostics available").assertDoesNotExist()
         composeTestRule.onNodeWithText("Export diagnostics").assertIsNotEnabled()
         composeTestRule.onNodeWithText("Clear diagnostics").assertIsNotEnabled()
@@ -241,9 +241,9 @@ class LocalDiagnosticsScreenTest {
 
     private fun diagnosticsState(localDiagnostics: LocalDiagnosticsUiState): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "The Gateway contract was verified successfully.",
-            actionLabel = "Connected",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+            actionLabel = UiText.Resource(R.string.entry_action_connected),
             isConnected = true,
             localDiagnostics = localDiagnostics,
         )
