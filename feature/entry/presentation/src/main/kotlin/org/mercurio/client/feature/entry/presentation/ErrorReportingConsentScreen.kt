@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -116,17 +117,19 @@ private fun ConsentDecision(
             Spacer(modifier = Modifier.height(spacing.l))
             Button(
                 onClick = { onEvent(EntryUiEvent.ErrorReportingConsentGranted) },
-                modifier = Modifier.fillMaxWidth().height(CONSENT_ACTION_HEIGHT),
+                modifier = Modifier.fillMaxWidth().heightIn(min = CONSENT_ACTION_HEIGHT),
                 shape = tokens.shapes.small,
+                contentPadding = PaddingValues(horizontal = CONSENT_ACTION_PADDING, vertical = 0.dp),
             ) {
                 Text(text = stringResource(R.string.consent_send_reports))
             }
             Spacer(modifier = Modifier.height(spacing.s))
             OutlinedButton(
                 onClick = { onEvent(EntryUiEvent.ErrorReportingConsentDeclined) },
-                modifier = Modifier.fillMaxWidth().height(CONSENT_ACTION_HEIGHT),
+                modifier = Modifier.fillMaxWidth().heightIn(min = CONSENT_ACTION_HEIGHT),
                 shape = tokens.shapes.small,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = tokens.colorScheme.onSurface),
+                contentPadding = PaddingValues(horizontal = CONSENT_ACTION_PADDING, vertical = 0.dp),
             ) {
                 Text(text = stringResource(R.string.consent_do_not_send))
             }
@@ -137,3 +140,5 @@ private fun ConsentDecision(
 private val CONSENT_BAR_HEIGHT = 48.dp
 
 private val CONSENT_ACTION_HEIGHT = 48.dp
+
+private val CONSENT_ACTION_PADDING = 24.dp

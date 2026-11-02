@@ -39,34 +39,35 @@ class SelectedVisualRegressionTest {
     val roborazziRule = RoborazziRule()
 
     @Test
+    @Config(qualifiers = "w360dp-h800dp-notnight")
     fun error_reporting_consent_first_run_light() {
         setContent(consentState())
         capture()
     }
 
     @Test
-    @Config(qualifiers = "w411dp-h891dp-night")
+    @Config(qualifiers = "w360dp-h800dp-night")
     fun error_reporting_consent_first_run_dark() {
         setContent(consentState(), darkTheme = true)
         capture()
     }
 
     @Test
-    @Config(qualifiers = "w411dp-h640dp-notnight")
+    @Config(qualifiers = "w360dp-h640dp-notnight")
     fun error_reporting_consent_short_200_top_light() {
         setContentAtTwoHundredPercent(consentState(), darkTheme = false)
         capture()
     }
 
     @Test
-    @Config(qualifiers = "w411dp-h640dp-night")
+    @Config(qualifiers = "w360dp-h640dp-night")
     fun error_reporting_consent_short_200_top_dark() {
         setContentAtTwoHundredPercent(consentState(), darkTheme = true)
         capture()
     }
 
     @Test
-    @Config(qualifiers = "w411dp-h640dp-notnight")
+    @Config(qualifiers = "w360dp-h640dp-notnight")
     fun error_reporting_consent_short_200_answers_light() {
         setContentAtTwoHundredPercent(consentState(), darkTheme = false)
         composeTestRule.onNodeWithText(copy(R.string.consent_do_not_send)).performScrollTo()
@@ -74,7 +75,7 @@ class SelectedVisualRegressionTest {
     }
 
     @Test
-    @Config(qualifiers = "w411dp-h640dp-night")
+    @Config(qualifiers = "w360dp-h640dp-night")
     fun error_reporting_consent_short_200_answers_dark() {
         setContentAtTwoHundredPercent(consentState(), darkTheme = true)
         composeTestRule.onNodeWithText(copy(R.string.consent_do_not_send)).performScrollTo()
