@@ -8,6 +8,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.EntryState
+import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
+import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionPage
 
 class EntryStateHolderSettingsTest {
@@ -112,4 +114,83 @@ class EntryStateHolderSettingsTest {
                 holder.close()
             }
         }
+
+    @Test
+    fun auto_load_defaults_on_when_no_decision_is_stored() {
+        val holder =
+            EntryStateHolder(
+                initialState = EntryState(),
+                dependencies =
+                    EntryStateHolderDependencies(
+                        imageLoadingSettingsStore = FakeImageLoadingSettingsStore(),
+                    ),
+            )
+
+        try {
+            assertTrue(holder.uiState.value.autoLoadImages)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun removing_the_connection_keeps_media_and_build_metadata() {
+        val store = FakeImageLoadingSettingsStore(enabled = true)
+        val holder =
+            EntryStateHolder(
+                initialState =
+                    EntryState(
+                        isGatewayConnectionConfigured = true,
+                        buildNumber = 412L,
+                        installSource = InstallSource.GOOGLE_PLAY,
+                    ),
+                dependencies = EntryStateHolderDependencies(imageLoadingSettingsStore = store),
+            )
+
+        try {
+            holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            assertFalse(holder.uiState.value.autoLoadImages)
+
+            holder.releaseGatewayConnection()
+
+            val state = holder.uiState.value
+            assertFalse(state.autoLoadImages)
+            assertEquals(412L, state.buildNumber)
+            assertEquals(InstallSource.GOOGLE_PLAY, state.installSource)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun the_auto_load_switch_persists_and_updates_the_surface() {
+        val store = FakeImageLoadingSettingsStore(enabled = false)
+        val holder =
+            EntryStateHolder(
+                initialState = EntryState(),
+                dependencies = EntryStateHolderDependencies(imageLoadingSettingsStore = store),
+            )
+
+        try {
+            assertFalse(holder.uiState.value.autoLoadImages)
+            holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            assertTrue(holder.uiState.value.autoLoadImages)
+            assertTrue(store.loadEnabled())
+            holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            assertFalse(holder.uiState.value.autoLoadImages)
+            assertFalse(store.loadEnabled())
+        } finally {
+            holder.close()
+        }
+    }
+}
+
+private class FakeImageLoadingSettingsStore(
+    private var enabled: Boolean = true,
+) : ImageLoadingSettingsStore {
+    override fun loadEnabled(): Boolean = enabled
+
+    override fun saveEnabled(enabled: Boolean) {
+        this.enabled = enabled
+    }
 }

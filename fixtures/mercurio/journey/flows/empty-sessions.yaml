@@ -27,16 +27,21 @@ name: empty-sessions
 - assertVisible: "New session"
 - takeScreenshot: empty-sessions-02-created-row
 - tapOn: "Settings"
-- assertVisible: "Change Gateway credential"
+- scrollUntilVisible:
+    element:
+      text: "Local diagnostics"
+    direction: DOWN
 - assertVisible: "Local diagnostics"
-- assertVisible: "Remove Gateway Connection"
-- tapOn: "Remove Gateway Connection"
+- tapOn: "::"
+- assertVisible: "Change credential"
+- assertVisible: "Remove connection"
+- tapOn: "Remove connection"
 - assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
 - takeScreenshot: empty-sessions-03-removal-confirmation
 - tapOn: "Cancel"
-- assertVisible: "Change Gateway credential"
+- assertVisible: "Local diagnostics"
 - assertNotVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
 - takeScreenshot: empty-sessions-04-removal-cancelled-on-settings
-- tapOn: "Back to Sessions"
+- back
 - assertVisible: "New session"
 - takeScreenshot: empty-sessions-05-created-row-kept

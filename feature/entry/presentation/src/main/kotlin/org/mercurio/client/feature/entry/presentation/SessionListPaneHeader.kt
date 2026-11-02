@@ -102,7 +102,7 @@ private fun SettingsControl(onEvent: (EntryUiEvent) -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "::",
+            text = stringResource(R.string.shell_connection_actions_mark),
             style =
                 MaterialTheme.typography.labelMedium.copy(
                     fontSize = 15.sp,

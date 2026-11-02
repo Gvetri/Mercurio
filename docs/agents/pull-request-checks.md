@@ -6,10 +6,11 @@ that is merged:
 | Required context | What it verifies |
 | --- | --- |
 | `quality-gate` | The aggregate gate: every check declared in `.github/quality-gate/required-checks.txt` reports the outcome its event expects, so one failing, missing, or misrouted check fails it. [Quality gates](../quality-gates.md) lists the checks and the routing. |
-| `pr-template` | The body carries the four template headings, each as a line of its own, verbatim. |
+| `pr-template` | The body carries the four template headings, each as a line of its own, verbatim; a pull request authored by `dependabot[bot]` is exempt, because Dependabot writes its own body |
 
 `.github/scripts/verify-repository-conformance.py` reads the ruleset back and fails when either
-context stops being required.
+context stops being required, and it runs the body check for a Dependabot author, another bot, and a
+human, so an edit that widens or drops the exemption fails the gate.
 
 ## The body check
 
@@ -26,6 +27,12 @@ The four headings, verbatim:
 
 The check reads those four headings and nothing else in the body, so content under a heading is the
 reviewer's and a heading written verbatim passes before its section is filled in.
+
+A Dependabot pull request is exempt: Dependabot writes its own release-note body and cannot author
+the headings, so the required context would keep a green dependency update blocked. The exemption is
+the exact `dependabot[bot]` identity and nothing else, so a body authored by anyone else, or an
+author the event does not name, must still carry every heading. The job always runs, because a
+skipped job does not satisfy a required check.
 
 ## The design section is reviewer material
 
