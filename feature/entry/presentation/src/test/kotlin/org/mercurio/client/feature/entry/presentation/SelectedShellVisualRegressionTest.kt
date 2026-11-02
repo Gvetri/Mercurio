@@ -62,8 +62,7 @@ class SelectedShellVisualRegressionTest {
             }
         }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Latest Run").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run state: Succeeded").assertIsDisplayed()
+        composeTestRule.onNodeWithText("idle").assertIsDisplayed()
         composeTestRule.onRoot().captureRoboImage()
     }
 

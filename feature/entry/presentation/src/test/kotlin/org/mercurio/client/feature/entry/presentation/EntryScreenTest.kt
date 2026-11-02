@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
@@ -371,16 +372,16 @@ class EntryScreenTest {
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First request")) }
-            composeTestRule.onNodeWithText("Send").performClick()
+            composeTestRule.onNodeWithText("[ send ]").performClick()
             assertTrue(gateway.firstRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertTrue(gateway.firstObservation.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertEquals(1L, gateway.firstObservation.closed.count)
             assertEquals(false, holder.uiState.value.sessionList?.openedSession?.hasUnresolvedSubmission)
 
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First draft")) }
-            composeTestRule.onNodeWithText("Stop").assertIsEnabled()
+            composeTestRule.onNodeWithText("[ stop ]").assertIsEnabled()
 
-            composeTestRule.onNodeWithText("Back to Sessions").performClick()
+            composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             assertTrue(gateway.firstObservation.closed.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             composeTestRule.onNodeWithText("Second Session").performClick()
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
@@ -388,18 +389,18 @@ class EntryScreenTest {
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("Second draft")) }
-            composeTestRule.onNodeWithText("Send").assertIsEnabled()
-            composeTestRule.onNodeWithText("Send").performClick()
+            composeTestRule.onNodeWithText("[ send ]").assertIsEnabled()
+            composeTestRule.onNodeWithText("[ send ]").performClick()
             assertTrue(gateway.secondRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
-            composeTestRule.onNodeWithText("Back to Sessions").performClick()
+            composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             composeTestRule.onNodeWithText("First Session").performClick()
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.onNodeWithText("First draft").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Send").assertIsNotEnabled()
+            composeTestRule.onNodeWithText("[ send ]").assertIsNotEnabled()
         } finally {
             holder.close()
         }
