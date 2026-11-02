@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -72,7 +73,7 @@ class RunRetryRecoveryTest {
             val retryRunId = RunId("run-retry-2")
             val gateway = activeRunRetryGateway(session, failedRunId, retryRunId)
             val registry = InMemoryRunRecoveryRegistry()
-            val holder = persistentRetryHolder(gateway, registry)
+            val holder = persistentRetryHolder(gateway, registry, StandardTestDispatcher(testScheduler))
 
             try {
                 openRetrySession(holder, gateway, session.id)

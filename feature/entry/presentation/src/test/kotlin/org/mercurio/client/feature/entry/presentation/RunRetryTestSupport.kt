@@ -85,11 +85,12 @@ internal fun retryHolder(
 internal fun persistentRetryHolder(
     gateway: RetryFakeGateway,
     registry: InMemoryRunRecoveryRegistry,
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ): EntryStateHolder =
     retryHolder(
         gateway,
         RetryHolderSettings(
-            dispatcher = Dispatchers.Default,
+            dispatcher = dispatcher,
             recoveryRegistry = registry,
             uncertaintyStore = DefaultRunSubmissionUncertaintyStore(RetryUncertaintyStorage()),
             persistRunRecoveryEntry = { _, entry -> registry.save(entry) },
