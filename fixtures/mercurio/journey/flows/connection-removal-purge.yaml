@@ -26,9 +26,10 @@ name: connection-removal-purge
 - tapOn: "Back to Sessions"
 - tapOn: "Settings"
 - extendedWaitUntil:
-    visible: ".*App version.*"
+    visible: "CONNECTION"
     timeout: 30000
-- tapOn: "Remove Gateway Connection"
+- tapOn: "::"
+- tapOn: "Remove connection"
 - assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
 - takeScreenshot: connection-removal-purge-confirmation
 - tapOn: "Remove"

@@ -21,6 +21,10 @@ name: diagnostics-recording
 - assertVisible: "Alpha Session"
 - takeScreenshot: diagnostics-before-opening
 - tapOn: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Local diagnostics"
+    direction: DOWN
 - tapOn: "Local diagnostics"
 - assertVisible: "Diagnostics stay on this device\\..*"
 - extendedWaitUntil:
@@ -28,7 +32,7 @@ name: diagnostics-recording
     timeout: 10000
 - assertNotVisible: "No diagnostics available"
 - takeScreenshot: diagnostics-recorded-after-connection
-- tapOn: "Back to Sessions"
-- assertVisible: ".*App version.*"
-- tapOn: "Back to Sessions"
+- back
+- assertVisible: "CONNECTION"
+- back
 - assertVisible: "Alpha Session"

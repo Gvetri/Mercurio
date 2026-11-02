@@ -112,8 +112,10 @@ images with the JVM/Robolectric Compose test gate.
 `feature/entry/presentation/src/test/roborazzi-baselines.txt` lists the PNGs
 that belong to the matrix. Each entry maps to one test method in
 `SelectedVisualRegressionTest`, in `SelectedShellVisualRegressionTest` for the
-shell window contracts, or in `SelectedMarkdownVisualRegressionTest` for the
-Markdown rendering contracts.
+shell window contracts, in `SelectedMarkdownVisualRegressionTest` for the
+Markdown rendering contracts, in `ChatDesignStatesTest` for the chat states, in
+`HistoryCacheVisualRegressionTest` for the cache states, or in
+`SettingsDesignStatesTest` for the approved `mercurio/settings` states.
 
 | State | Compose surface | Reason for inclusion |
 | --- | --- | --- |
@@ -193,6 +195,28 @@ on the phone viewport in the light and the dark token set.
 | `markdown_math_light` | `w411dp-h891dp-notnight` | Inline formula in its line, a centred display formula in its own surface, and a refused expression kept as its exact source |
 | `markdown_math_dark` | `w411dp-h891dp-night` | The same state on the dark token set |
 
+### Settings design-state matrix
+
+`SettingsDesignStatesTest` pins the shipped states of the approved `mercurio/settings` page: the
+connected list, the connection-actions menu, Notifications on, Media off, About, and the 200% font
+scale witness, each in the light and the dark token set. A section whose capability has not shipped
+is absent from the capture, so the matrix grows with the code issues that add those capabilities.
+
+| State | Window | Reason for inclusion |
+| --- | --- | --- |
+| `settings_02_connected_light` | `w360dp-h800dp-notnight` | Connected default with every shipped section |
+| `settings_02_connected_dark` | `w360dp-h800dp-night` | The same list on the dark token set |
+| `settings_03_connection_menu_light` | `w360dp-h800dp-notnight` | The only menu: change credential and remove connection |
+| `settings_03_connection_menu_dark` | `w360dp-h800dp-night` | The same menu on the dark token set |
+| `settings_10_notifications_on_light` | `w360dp-h800dp-notnight` | Notification opt-in on with its current-behaviour line |
+| `settings_10_notifications_on_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_12_media_off_light` | `w360dp-h800dp-notnight` | Automatic picture loading off |
+| `settings_12_media_off_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_23_about_light` | `w360dp-h640dp-notnight` | Version, build, and install-source rows in the shortened window, scrolled to the install-source value |
+| `settings_23_about_dark` | `w360dp-h640dp-night` | The same rows on the dark token set |
+| `settings_27_font_scale_200_light` | `w360dp-h640dp-notnight` | 200% type in the shortened window |
+| `settings_27_font_scale_200_dark` | `w360dp-h640dp-night` | The same witness on the dark token set |
+
 The Session list has no creation dialog: `+ new session` creates the Session and keeps
 the list in place, and the new row carries the pending-title preview until the Gateway
 titles it. The Gateway-removal confirmation
@@ -210,7 +234,8 @@ constrained-height witness or `w411dp-h480dp-notnight` for the Gateway short-win
 both of which also set a 2x font scale. The shell and markdown contract classes pass an
 explicit light or dark token set, and the entry contract class passes an explicit value for
 its dark captures and otherwise resolves the declared viewport's day or night configuration,
-so each capture proves one designed window and theme configuration. All three classes exclude timestamps,
+so each capture proves one designed window and theme configuration. The settings design-state
+class works the same way. All four classes exclude timestamps,
 live Gateway/provider data, credentials, animated loading states, Activity lifecycle
 behavior, and other system-dependent rendering. Behavior and semantics tests remain in their
 existing test classes.

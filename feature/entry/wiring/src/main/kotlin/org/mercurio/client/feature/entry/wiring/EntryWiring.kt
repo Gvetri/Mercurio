@@ -87,6 +87,7 @@ object EntryWiring {
                     modelSelectionStore = modelSelectionStore,
                     historyCacheStore = historyCacheStore,
                     runStatusNotificationSettingsStore = SharedPreferencesRunStatusNotificationSettingsStore(context),
+                    imageLoadingSettingsStore = SharedPreferencesImageLoadingSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
                     requestRunStatusNotificationPermission = requestRunStatusNotificationPermission,
@@ -121,6 +122,12 @@ private fun resolveInstalledBuildProvider(
     overrides: EntryWiringOverrides,
 ): InstalledBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuildProvider(context)
 
+private fun buildLocalDiagnosticsBuffer(context: Context): RollingLocalDiagnosticsBuffer =
+    RollingLocalDiagnosticsBuffer(
+        FileLocalDiagnosticsStorage(context),
+        onRecordFailure = ::reportLocalDiagnosticsRecordFailure,
+    )
+
 private fun buildRunRecoveryRegistry(
     context: Context,
     recoveryEndpoint: AtomicReference<String?>,
@@ -130,12 +137,6 @@ private fun buildRunRecoveryRegistry(
         storageForEndpoint = { endpoint ->
             SharedPreferencesRunRecoveryStorage(context) { endpoint }
         },
-    )
-
-private fun buildLocalDiagnosticsBuffer(context: Context): RollingLocalDiagnosticsBuffer =
-    RollingLocalDiagnosticsBuffer(
-        FileLocalDiagnosticsStorage(context),
-        onRecordFailure = ::reportLocalDiagnosticsRecordFailure,
     )
 
 private fun buildErrorReporting(

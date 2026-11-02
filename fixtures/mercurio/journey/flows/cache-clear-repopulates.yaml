@@ -35,12 +35,16 @@ name: cache-clear-repopulates
 - takeScreenshot: cache-clear-repopulates-preserved-list
 - tapOn: "Settings"
 - extendedWaitUntil:
-    visible: ".*App version.*"
+    visible: "CONNECTION"
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Clear cached conversations"
+    direction: DOWN
 - tapOn: "Clear cached conversations"
 - assertVisible: 'Clear cached conversations\?'
 - tapOn: '^Clear$'
-- tapOn: "Back to Sessions"
+- back
 - extendedWaitUntil:
     visible: "gateway :: offline"
     timeout: 30000

@@ -114,7 +114,7 @@ class SelectedMarkdownVisualRegressionTest {
         darkTheme: Boolean,
         port: MessageImagePort,
     ) {
-        val services = MessageImageServices(port::fetch, MarkdownImageDecoder())
+        val services = MessageImageServices(port::fetch, MarkdownImageDecoder(), autoLoad = true)
         composeTestRule.setContent {
             HermesTheme(darkTheme = darkTheme) {
                 CompositionLocalProvider(LocalMessageImageServices provides services) {
