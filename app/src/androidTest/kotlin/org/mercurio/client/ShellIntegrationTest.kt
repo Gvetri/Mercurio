@@ -27,6 +27,8 @@ import org.mercurio.client.feature.entry.presentation.OpenSessionUiState
 import org.mercurio.client.feature.entry.presentation.SessionItemUiState
 import org.mercurio.client.feature.entry.presentation.SessionListUiState
 import org.mercurio.client.feature.entry.presentation.SessionMessageUiState
+import org.mercurio.client.feature.entry.presentation.UiText
+import org.mercurio.client.feature.entry.presentation.R as PresentationStrings
 
 /**
  * On-device integration coverage for the adaptive shell: the real Android back
@@ -112,9 +114,9 @@ class ShellIntegrationTest {
 
     private fun entryState(sessionList: SessionListUiState): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "Connected",
-            actionLabel = "Connected",
+            title = UiText.Resource(PresentationStrings.string.entry_title_connected),
+            supportingText = UiText.Resource(PresentationStrings.string.entry_supporting_connected),
+            actionLabel = UiText.Resource(PresentationStrings.string.entry_action_connected),
             isConnected = true,
             sessionList = sessionList,
         )

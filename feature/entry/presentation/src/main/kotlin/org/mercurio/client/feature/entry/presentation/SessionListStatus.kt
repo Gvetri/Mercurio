@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -52,7 +53,7 @@ internal fun SessionListStatusStrip(state: SessionListUiState) {
     ) {
         status.segments.forEach { segment ->
             Text(
-                text = segment,
+                text = segment.resolve(),
                 style = MaterialTheme.typography.labelMedium,
                 color = tokens.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -61,7 +62,7 @@ internal fun SessionListStatusStrip(state: SessionListUiState) {
         }
         Spacer(modifier = Modifier.weight(1f))
         Text(
-            text = status.gateway,
+            text = status.gateway.resolve(),
             style = MaterialTheme.typography.labelMedium,
             color =
                 when (status.gatewayStatus) {
@@ -89,14 +90,14 @@ internal fun SessionListEmptyContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = content.title,
+            text = stringResource(content.title),
             style = MaterialTheme.typography.titleLarge,
             color = tokens.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = content.body,
+            text = stringResource(content.body),
             style = MaterialTheme.typography.bodyMedium,
             color = tokens.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -112,7 +113,7 @@ internal fun SessionListEmptyContent(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = content.actionLabel,
+                    text = stringResource(content.actionLabel),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tokens.colorScheme.primary,
                 )
@@ -123,37 +124,37 @@ internal fun SessionListEmptyContent(
 }
 
 private data class SessionListEmptyCopy(
-    val title: String,
-    val body: String,
-    val actionLabel: String? = null,
+    val title: Int,
+    val body: Int,
+    val actionLabel: Int? = null,
 )
 
 private fun emptyContentFor(state: SessionListUiState): SessionListEmptyCopy =
     when {
         state.searchQuery.isNotBlank() ->
             SessionListEmptyCopy(
-                title = "No sessions match",
-                body = "Search covers the titles and previews already loaded.",
+                title = R.string.sessions_no_match_title,
+                body = R.string.sessions_no_match_body,
             )
         state.isUnavailable || state.isStale ->
             SessionListEmptyCopy(
-                title = "Sessions are unavailable",
-                body = "The Gateway is offline. Cached sessions are not available.",
-                actionLabel = "Try again",
+                title = R.string.sessions_unavailable_title,
+                body = R.string.sessions_unavailable_body,
+                actionLabel = R.string.action_try_again,
             )
         else ->
             SessionListEmptyCopy(
-                title = "No sessions",
-                body = "The Gateway returned no sessions. Create one to start.",
+                title = R.string.sessions_empty_title,
+                body = R.string.sessions_empty_body,
             )
     }
 
 @Composable
 internal fun SessionCreationErrorBanner(state: SessionListUiState) {
     val tokens = LocalHermesDesignTokens.current
-    val message = state.creationErrorCategory?.safeMessage ?: return
+    val message = state.creationErrorCategory?.messageRes ?: return
     Text(
-        text = message,
+        text = stringResource(message),
         style = MaterialTheme.typography.bodySmall,
         color = tokens.colorScheme.error,
         modifier =
@@ -188,7 +189,7 @@ internal fun NewSessionRow(
                 color = tokens.colorScheme.primary.copy(alpha = if (enabled) 1f else DISABLED_CONTENT_ALPHA),
             )
             Text(
-                text = "new session",
+                text = stringResource(R.string.sessions_new),
                 style = MaterialTheme.typography.bodyMedium,
                 color = tokens.colorScheme.primary.copy(alpha = if (enabled) 1f else DISABLED_CONTENT_ALPHA),
             )

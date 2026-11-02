@@ -114,7 +114,7 @@ class SessionMutationScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText(SessionRenameErrorCategory.EMPTY_TITLE.safeMessage)
+            .onNodeWithText(copy(SessionRenameErrorCategory.EMPTY_TITLE.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Confirm rename").assertHasClickAction()
     }
@@ -143,7 +143,7 @@ class SessionMutationScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText(SessionRenameErrorCategory.CONTROL_CHARACTER.safeMessage)
+            .onNodeWithText(copy(SessionRenameErrorCategory.CONTROL_CHARACTER.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Confirm rename").assertHasClickAction()
     }
@@ -174,7 +174,7 @@ class SessionMutationScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText(SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+            .onNodeWithText(copy(SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Confirm rename").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.ConfirmRenameSessionClicked(sessionId)), events)
@@ -203,7 +203,7 @@ class SessionMutationScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+            .onNodeWithText(copy(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.ConfirmDeleteSessionClicked(sessionId)), events)
@@ -288,7 +288,7 @@ class SessionMutationScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+            .onNodeWithText(copy(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Try again").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.PinSessionClicked(sessionId)), events)
@@ -353,9 +353,9 @@ class SessionMutationScreenTest {
         mutations: Map<SessionId, SessionMutationUiState> = emptyMap(),
     ): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "The Gateway contract was verified successfully.",
-            actionLabel = "Connected",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+            actionLabel = UiText.Resource(R.string.entry_action_connected),
             isConnected = true,
             sessionList =
                 SessionListUiState(

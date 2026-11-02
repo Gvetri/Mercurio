@@ -1,14 +1,10 @@
 package org.mercurio.client.feature.entry.domain
 
-/** Fixed, non-sensitive notification text derived only from [RunPresentationState]. */
-val runStatusNotificationTextByState: Map<RunPresentationState, String> =
-    mapOf(
-        RunPresentationState.SUCCEEDED to "Run succeeded",
-        RunPresentationState.FAILED to "Run failed",
-    )
+val notifiableTerminalStates: Set<RunPresentationState> =
+    setOf(RunPresentationState.SUCCEEDED, RunPresentationState.FAILED)
 
 /** Terminal outcomes that may produce a best-effort Run status notification. */
-fun RunPresentationState.isNotifiableTerminal(): Boolean = runStatusNotificationTextByState.containsKey(this)
+fun RunPresentationState.isNotifiableTerminal(): Boolean = this in notifiableTerminalStates
 
 /**
  * Decides whether a terminal observed Run may notify.
@@ -21,14 +17,6 @@ fun shouldPostRunStatusNotification(
     canPost: Boolean,
     state: RunPresentationState,
 ): Boolean = enabled && canPost && state.isNotifiableTerminal()
-
-/**
- * Fixed, non-sensitive notification text derived only from [RunPresentationState].
- *
- * The text never includes Run identifiers, Session identifiers, status text,
- * prompt content, response content, credentials, headers, or tool data.
- */
-fun RunPresentationState.runStatusNotificationText(): String? = runStatusNotificationTextByState[this]
 
 /** Persisted user preference for Run status notifications. */
 interface RunStatusNotificationSettingsStore {

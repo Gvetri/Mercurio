@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -30,18 +31,18 @@ internal fun RenameSessionContent(
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
         Text(
-            text = "Rename Session",
+            text = stringResource(R.string.sessions_rename),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(text = "Current title: ${session.title}")
+        Text(text = stringResource(R.string.sessions_current_title, sessionTitle(session)))
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = state.titleDraft,
             onValueChange = { onEvent(EntryUiEvent.RenameSessionTitleChanged(session.id, it)) },
             enabled = enabled && !state.isSubmitting,
-            label = { Text("New Session title") },
+            label = { Text(stringResource(R.string.sessions_new_title)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -54,9 +55,9 @@ internal fun RenameSessionContent(
             Text(
                 text =
                     if (state.errorCategory == SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED) {
-                        "Try again"
+                        stringResource(R.string.action_try_again)
                     } else {
-                        "Confirm Rename Session"
+                        stringResource(R.string.action_confirm_rename)
                     },
             )
         }
@@ -66,10 +67,14 @@ internal fun RenameSessionContent(
             enabled = !state.isSubmitting,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Cancel Rename")
+            Text(text = stringResource(R.string.action_cancel_rename))
         }
-        SessionMutationProgress(visible = state.isSubmitting, label = "Renaming Session…", topSpacing = 8.dp)
-        SessionMutationErrorMessage(message = state.errorCategory?.safeMessage, topSpacing = 8.dp)
+        SessionMutationProgress(
+            visible = state.isSubmitting,
+            label = stringResource(R.string.sessions_renaming),
+            topSpacing = 8.dp,
+        )
+        SessionMutationErrorMessage(message = state.errorCategory?.messageRes, topSpacing = 8.dp)
     }
 }
 
@@ -92,13 +97,13 @@ internal fun SessionMutationProgress(
 
 @Composable
 internal fun SessionMutationErrorMessage(
-    message: String?,
+    message: Int?,
     topSpacing: Dp,
 ) {
     if (message == null) return
     Spacer(modifier = Modifier.height(topSpacing))
     Text(
-        text = message,
+        text = stringResource(message),
         color = MaterialTheme.colorScheme.error,
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
     )

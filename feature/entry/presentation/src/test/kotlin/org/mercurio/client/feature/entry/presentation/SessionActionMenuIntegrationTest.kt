@@ -134,7 +134,7 @@ class SessionActionMenuIntegrationTest {
             choose("Pin")
             assertFalse(firstSession(holder).pinned)
             composeTestRule
-                .onNodeWithText(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+                .onNodeWithText(copy(SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
                 .assertIsDisplayed()
             assertEquals(1, gateway.mutations.size)
 
