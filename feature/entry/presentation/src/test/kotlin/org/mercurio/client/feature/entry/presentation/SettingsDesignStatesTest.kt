@@ -66,10 +66,11 @@ class SettingsDesignStatesTest {
     fun settings_12_media_off_dark() = captureSettings(dark = true, state = settingsState(autoLoadImages = false))
 
     @Test
+    @Config(qualifiers = "w360dp-h640dp-notnight")
     fun settings_23_about_light() = captureSettings(dark = false, beforeCapture = { scrollToAbout() })
 
     @Test
-    @Config(qualifiers = "w360dp-h800dp-night")
+    @Config(qualifiers = "w360dp-h640dp-night")
     fun settings_23_about_dark() = captureSettings(dark = true, beforeCapture = { scrollToAbout() })
 
     @Test

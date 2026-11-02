@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
+import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionPage
 import java.util.concurrent.TimeUnit
 
@@ -123,6 +124,35 @@ class EntryStateHolderSettingsTest {
 
         try {
             assertTrue(holder.uiState.value.autoLoadImages)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun removing_the_connection_keeps_media_and_build_metadata() {
+        val store = FakeImageLoadingSettingsStore(enabled = true)
+        val holder =
+            EntryStateHolder(
+                initialState =
+                    EntryState(
+                        isGatewayConnectionConfigured = true,
+                        buildNumber = 412L,
+                        installSource = InstallSource.GOOGLE_PLAY,
+                    ),
+                dependencies = EntryStateHolderDependencies(imageLoadingSettingsStore = store),
+            )
+
+        try {
+            holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            assertFalse(holder.uiState.value.autoLoadImages)
+
+            holder.releaseGatewayConnection()
+
+            val state = holder.uiState.value
+            assertFalse(state.autoLoadImages)
+            assertEquals(412L, state.buildNumber)
+            assertEquals(InstallSource.GOOGLE_PLAY, state.installSource)
         } finally {
             holder.close()
         }

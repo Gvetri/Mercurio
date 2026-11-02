@@ -18,13 +18,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import java.util.Locale
 
 @Composable
 internal fun SettingsSectionHeader(label: String) {
     val tokens = LocalHermesDesignTokens.current
     Text(
-        text = label.uppercase(Locale.ROOT),
+        text = label,
         style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.16.em),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,

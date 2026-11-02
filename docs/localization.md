@@ -15,7 +15,8 @@ language has to add.
 
 The English base locale is `values/`. A brand string (`brand_name`, `shell_wordmark`,
 `run_status_notification_title`, `app_name`) is marked `translatable="false"`, because a product
-name does not change with the reader's language.
+name does not change with the reader's language. A non-linguistic mark
+(`settings_connection_actions_mark`, `::`) is also marked `translatable="false"`.
 
 ## How a state names copy
 

@@ -57,7 +57,7 @@ internal fun SettingsContent(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.s),
         ) {
-            SettingsConnectionSection(state = state, onEvent = onEvent)
+            SettingsConnectionSection(state = state)
             SettingsNotificationSection(state = state, onEvent = onEvent)
             SettingsMediaSection(state = state, onEvent = onEvent)
             SettingsDiagnosticsSection(state = state, onEvent = onEvent)
@@ -127,10 +127,7 @@ private fun SettingsTopBar(
 }
 
 @Composable
-private fun SettingsConnectionSection(
-    state: EntryUiState,
-    onEvent: (EntryUiEvent) -> Unit,
-) {
+private fun SettingsConnectionSection(state: EntryUiState) {
     SettingsSectionHeader(stringResource(R.string.settings_section_connection))
     SettingsValueRow(
         label = stringResource(R.string.settings_connection_row),
@@ -141,13 +138,6 @@ private fun SettingsConnectionSection(
                 else -> stringResource(R.string.settings_connection_none)
             },
     )
-    if (!state.isGatewayConnectionConfigured && !state.isConnected) {
-        HorizontalDivider()
-        SettingsActionRow(
-            label = stringResource(R.string.settings_action_add_connection),
-            onClick = { onEvent(EntryUiEvent.AddGatewayConnectionClicked) },
-        )
-    }
 }
 
 @Composable
@@ -160,7 +150,7 @@ private fun SettingsNotificationSection(
     SettingsSwitchRow(
         model =
             SettingsSwitchRowModel(
-                label = stringResource(R.string.settings_section_notifications),
+                label = stringResource(R.string.settings_notifications_row),
                 supporting =
                     stringResource(
                         if (notifications.enabled) {

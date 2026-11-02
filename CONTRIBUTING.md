@@ -209,8 +209,8 @@ is absent from the capture, so the matrix grows with the code issues that add th
 | `settings_10_notifications_on_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_12_media_off_light` | `w360dp-h800dp-notnight` | Automatic picture loading off |
 | `settings_12_media_off_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
-| `settings_23_about_light` | `w360dp-h800dp-notnight` | Version, build, and install-source value rows |
-| `settings_23_about_dark` | `w360dp-h800dp-night` | The same rows on the dark token set |
+| `settings_23_about_light` | `w360dp-h640dp-notnight` | Version, build, and install-source rows in the shortened window, scrolled to About |
+| `settings_23_about_dark` | `w360dp-h640dp-night` | The same rows on the dark token set |
 | `settings_27_font_scale_200_light` | `w360dp-h640dp-notnight` | 200% type in the shortened window |
 | `settings_27_font_scale_200_dark` | `w360dp-h640dp-night` | The same witness on the dark token set |
 
