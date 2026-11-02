@@ -2,15 +2,6 @@ package org.mercurio.client.buildlogic
 
 import java.io.File
 
-/** The validated, repository-owned provenance and lifecycle contract for the deterministic fixture. */
-data class PinnedHermesFixtureDescriptor(
-    val schemaVersion: Int,
-    val name: String,
-    val provenanceField: String,
-    val provenanceValue: String,
-    val fields: Map<String, String>,
-)
-
 /** Validates the intentionally small properties format used by the deterministic fixture descriptor. */
 object FixtureDescriptorValidator {
     private val keyPattern = Regex("[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*")
