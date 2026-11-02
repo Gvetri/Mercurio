@@ -60,3 +60,15 @@ internal fun EntryStateHolder.toMessageUiStates(history: SessionHistory): List<S
 internal fun List<SessionItemUiState>.orderedSessions(): List<SessionItemUiState> {
     return filter { it.pinned } + filterNot { it.pinned }
 }
+
+internal fun List<SessionItemUiState>.mergeAuthoritative(session: Session): List<SessionItemUiState> {
+    val authoritative = session.toSessionItemUiState()
+    val replaced = map { item -> if (item.id == authoritative.id) authoritative else item }
+    val merged =
+        if (replaced.any { it.id == authoritative.id }) {
+            replaced
+        } else {
+            replaced + authoritative
+        }
+    return merged.orderedSessions()
+}

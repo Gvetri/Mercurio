@@ -33,15 +33,37 @@ internal fun SessionListUiState.blocksCreateSession(): Boolean =
         createSession != null ||
         sessionMutations.isNotEmpty()
 
+private fun SessionListUiState.blocksSessionTransition(): Boolean =
+    hasPendingMutation ||
+        openingSessionId != null ||
+        createSession != null
+
 internal fun SessionListUiState.blocksSessionOpen(): Boolean =
     isLoading ||
         isRefreshing ||
         isSearching ||
         isUnavailable ||
         isLoadingMore ||
-        hasPendingMutation ||
-        openingSessionId != null ||
-        createSession != null
+        blocksSessionTransition()
+
+/**
+ * A linked Session open reads the authoritative Session resource, so a list
+ * request in flight does not block it. Only another Session transition does.
+ */
+internal fun SessionListUiState.blocksLinkedSessionOpen(): Boolean = blocksSessionTransition()
+
+internal fun SessionListUiState.allowsSessionOpen(
+    sessionId: SessionId,
+    linked: Boolean,
+): Boolean {
+    val canOpen = linked || sessions.any { it.id == sessionId }
+    val blocked = if (linked) blocksLinkedSessionOpen() else blocksSessionOpen()
+    return canOpen && !blocked && sessionMutations[sessionId]?.pendingAction == null
+}
+
+internal fun SessionListUiState.interruptsListRequest(): Boolean {
+    return isLoading || isRefreshing || isSearching || isLoadingMore
+}
 
 internal fun EntryStateHolder.blocksRunSubmission(
     opened: OpenSessionUiState,
