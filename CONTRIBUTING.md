@@ -8,7 +8,10 @@ The client connects to a pre-existing Hermes Gateway. It does not host the Gatew
 
 ## Development setup
 
-Install JDK 21 and Android SDK Platform 35. Use the checked-in Gradle wrapper:
+Read [Development setup](docs/development-setup.md) first: it states the toolchain a build needs and
+the two machine-local settings a clone does not carry — the `local.properties` SDK location, and the
+`ANDROID_HOME` and `JAVA_HOME` export the release-script suites read. Use the checked-in Gradle
+wrapper:
 
 ```text
 ./gradlew :app:assembleDebug
