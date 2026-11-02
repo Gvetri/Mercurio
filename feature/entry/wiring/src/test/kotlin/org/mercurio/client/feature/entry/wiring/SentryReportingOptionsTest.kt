@@ -1,8 +1,10 @@
 package org.mercurio.client.feature.entry.wiring
 
+import io.sentry.Breadcrumb
 import io.sentry.Hint
 import io.sentry.SentryEvent
 import io.sentry.android.core.SentryAndroidOptions
+import io.sentry.protocol.SentryException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -20,7 +22,7 @@ class SentryReportingOptionsTest {
         assertEquals(config.dsn, options.dsn)
         assertEquals(config.release, options.release)
         assertEquals(config.environment, options.environment)
-        assertEquals(config.tracesSampleRate, options.tracesSampleRate ?: 0.0, 0.0)
+        assertEquals(config.tracesSampleRate, options.tracesSampleRate)
         assertEquals(config.sessionTrackingEnabled, options.isEnableAutoSessionTracking)
         assertEquals(
             config.ignoredErrors,
@@ -30,12 +32,31 @@ class SentryReportingOptionsTest {
     }
 
     @Test
-    fun the_session_tracking_toggle_reaches_the_options() {
+    fun the_declared_defaults_leave_session_tracking_and_tracing_off() {
+        val config = reportingConfig()
+
+        assertFalse(config.sessionTrackingEnabled)
+        assertNull(config.tracesSampleRate)
+    }
+
+    @Test
+    fun the_applied_options_carry_crash_error_and_not_responding_reports_only() {
         val options = SentryAndroidOptions()
 
-        options.applyReporting(reportingConfig().copy(sessionTrackingEnabled = false), ReportScrubber())
+        options.applyReporting(reportingConfig(), ReportScrubber())
 
         assertFalse(options.isEnableAutoSessionTracking)
+        assertNull(options.tracesSampleRate)
+        assertFalse(options.isTracingEnabled)
+        assertFalse(options.isEnableAutoActivityLifecycleTracing)
+        assertFalse(options.isEnableUserInteractionTracing)
+        assertFalse(options.isEnableTimeToFullDisplayTracing)
+        assertFalse(options.isProfilingEnabled)
+        assertFalse(options.isSendDefaultPii)
+        assertFalse(options.isAttachScreenshot)
+        assertFalse(options.isAttachViewHierarchy)
+        assertTrue(options.isAnrEnabled)
+        assertFalse(options.isAttachAnrThreadDump)
     }
 
     @Test
@@ -50,10 +71,33 @@ class SentryReportingOptionsTest {
         assertNull(scrubbed?.serverName)
     }
 
+    @Test
+    fun an_anr_event_keeps_its_thread_stacks_and_loses_only_its_context() {
+        val options = SentryAndroidOptions()
+        options.applyReporting(reportingConfig(), ReportScrubber())
+        val beforeSend = requireNotNull(options.beforeSend) { "The reporting options install no before-send hook." }
+        val notResponding =
+            SentryException().apply {
+                type = "ANR"
+                value = "Application Not Responding"
+            }
+        val event =
+            SentryEvent().apply {
+                exceptions = listOf(notResponding)
+                breadcrumbs = listOf(Breadcrumb("draft text typed into the composer"))
+            }
+
+        val scrubbed = beforeSend.execute(event, Hint())
+
+        assertEquals(listOf(notResponding), scrubbed?.exceptions)
+        assertNull(scrubbed?.breadcrumbs)
+    }
+
     private fun reportingConfig(): SentryReportingConfig =
         SentryReportingConfig(
             dsn = "https://synthetic-key@ingest.example.invalid/1",
             release = "0.1.0",
             environment = "debug",
+            consent = ErrorReportingConsent.Granted,
         )
 }

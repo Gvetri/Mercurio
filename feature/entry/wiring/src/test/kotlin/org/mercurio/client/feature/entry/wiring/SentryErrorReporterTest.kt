@@ -32,10 +32,23 @@ class SentryErrorReporterTest {
         assertTrue(captured.isEmpty())
     }
 
+    @Test
+    fun a_decision_that_grants_nothing_reports_nothing() {
+        for (consent in listOf(ErrorReportingConsent.Undecided, ErrorReportingConsent.Declined)) {
+            val captured = mutableListOf<ErrorReport>()
+            val reporter = SentryErrorReporter(reportingConfig().copy(consent = consent), captured::add)
+
+            reporter.report(ErrorReport(release = "0.1.0", environment = "debug"))
+
+            assertTrue("A $consent decision reported an event.", captured.isEmpty())
+        }
+    }
+
     private fun reportingConfig(): SentryReportingConfig =
         SentryReportingConfig(
             dsn = "https://synthetic-key@ingest.example.invalid/1",
             release = "0.1.0",
             environment = "debug",
+            consent = ErrorReportingConsent.Granted,
         )
 }

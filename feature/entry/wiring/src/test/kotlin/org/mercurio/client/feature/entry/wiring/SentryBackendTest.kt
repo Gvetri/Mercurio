@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.wiring
 
 import android.app.Application
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -18,7 +19,7 @@ class SentryBackendTest {
     private val context: Application = RuntimeEnvironment.getApplication()
 
     @Test
-    fun a_configured_dsn_installs_the_backend_with_the_declared_options() {
+    fun a_configured_dsn_and_a_granted_decision_install_the_backend_with_the_declared_options() {
         val installed = mutableListOf<SentryReportingConfig>()
         val backend = AndroidSentryBackend { _, config -> installed += config }
         val config = reportingConfig()
@@ -28,8 +29,8 @@ class SentryBackendTest {
         assertEquals(listOf(config), installed)
         assertTrue(reporter is SentryErrorReporter)
         assertTrue(config.isEnabled)
-        assertTrue(config.tracesSampleRate < 1.0)
-        assertTrue(config.sessionTrackingEnabled)
+        assertFalse(config.sessionTrackingEnabled)
+        assertNull(config.tracesSampleRate)
         assertEquals(
             listOf(
                 "java.util.concurrent.CancellationException",
@@ -37,6 +38,19 @@ class SentryBackendTest {
             ),
             config.ignoredErrors,
         )
+    }
+
+    @Test
+    fun a_decision_that_grants_nothing_never_installs_the_backend() {
+        for (consent in listOf(ErrorReportingConsent.Undecided, ErrorReportingConsent.Declined)) {
+            val installed = mutableListOf<SentryReportingConfig>()
+            val backend = AndroidSentryBackend { _, config -> installed += config }
+
+            val reporter = backend.start(context, reportingConfig().copy(consent = consent))
+
+            assertTrue("A $consent decision installed the backend.", installed.isEmpty())
+            assertSame(NoOpErrorReporter, reporter)
+        }
     }
 
     @Test
@@ -51,12 +65,21 @@ class SentryBackendTest {
     }
 
     @Test
-    fun the_dsn_and_the_environment_come_from_the_build_configuration_value() {
-        val config = sentryReportingConfig(clientVersion = "0.1.0")
+    fun a_reporting_config_that_stores_no_decision_stays_disabled() {
+        val config = reportingConfig().copy(consent = ErrorReportingConsent.Undecided)
+
+        assertEquals(ErrorReportingConsent.Undecided, config.consent)
+        assertFalse(config.isEnabled)
+    }
+
+    @Test
+    fun the_dsn_the_environment_and_the_decision_come_from_the_wiring_inputs() {
+        val config = sentryReportingConfig(clientVersion = "0.1.0", consent = ErrorReportingConsent.Granted)
 
         assertEquals(BuildConfig.SENTRY_DSN, config.dsn)
         assertEquals(BuildConfig.BUILD_TYPE, config.environment)
         assertEquals("0.1.0", config.release)
+        assertEquals(ErrorReportingConsent.Granted, config.consent)
     }
 
     @Test
@@ -93,5 +116,6 @@ class SentryBackendTest {
             dsn = "https://synthetic-key@ingest.example.invalid/1",
             release = "0.1.0",
             environment = "debug",
+            consent = ErrorReportingConsent.Granted,
         )
 }
