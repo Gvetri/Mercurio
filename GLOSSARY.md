@@ -59,3 +59,7 @@ _Avoid_: embed, snippet, open graph card
 **Lightbox**:
 The full-screen viewer for a loaded Inline image, offering zoom, save, and share.
 _Avoid_: gallery, photo browser
+
+**Installed build**:
+The client's own package on the device: its version code, its version name, and the source that installed it (Google Play or another source). Every build shares one climbing version-code sequence.
+_Avoid_: app version, build identity
