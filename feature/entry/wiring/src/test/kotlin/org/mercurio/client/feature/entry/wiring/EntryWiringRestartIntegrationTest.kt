@@ -454,6 +454,7 @@ class EntryWiringRestartIntegrationTest {
                 holder.close()
 
                 assertTrue(dispatcher.queuedCount > 0)
+                dispatcher.drain()
                 assertTrue(SharedPreferencesRunSubmissionUncertaintyStore(context).isSettled(uncertaintyKey))
                 assertTrue(gateway.runRequests.isEmpty())
             } finally {

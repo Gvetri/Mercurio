@@ -9,7 +9,7 @@ import org.mercurio.client.feature.entry.domain.ModelSelection
  * An effort without a selected model is unrepresentable: [ModelSelection] only carries
  * effort with its model, and the handler drops the event when no model is selected.
  */
-internal fun EntryStateHolder.dispatchModelPickerEvent(event: EntryUiEvent.ModelPicker) {
+internal fun EntryStateHolder.handleModelPickerEvent(event: EntryUiEvent.ModelPicker) {
     when (event) {
         is EntryUiEvent.ModelPickerClicked -> openModelPicker()
         is EntryUiEvent.ModelPickerDismissed -> closeModelPicker()
