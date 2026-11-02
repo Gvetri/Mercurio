@@ -1,9 +1,17 @@
+## Development setup
+
+A fresh clone carries no `local.properties` and no suite environment. See `docs/development-setup.md`.
+
 ## Coding guidelines
 
 Before writing or changing any code, follow `docs/coding-guidelines.md`; it records the repository's
 coding rules and what enforces each one.
 
 ## Agent skills
+
+### Development setup
+
+A fresh clone carries no SDK location and no suite environment. See `docs/development-setup.md`.
 
 ### Issue tracker
 

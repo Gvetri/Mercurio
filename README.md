@@ -30,7 +30,8 @@ Requirements:
 - Android SDK Platform 35 and Build Tools 35.
 - A network connection for the first Gradle dependency download.
 
-Build the debug and release APKs:
+A fresh clone carries neither the SDK location nor the environment the release-script suites read;
+[Development setup](docs/development-setup.md) states both. Build the debug and release APKs:
 
 ```text
 ./gradlew :app:assembleDebug :app:assembleRelease
