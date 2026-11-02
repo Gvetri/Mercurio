@@ -16,6 +16,7 @@ import org.mercurio.client.feature.entry.data.DefaultGatewayConnectionRepository
 import org.mercurio.client.feature.entry.data.EndpointScopedRunRecoveryRegistry
 import org.mercurio.client.feature.entry.data.RollingLocalDiagnosticsBuffer
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
+import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
 import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryStateHolderDependencies
 import org.mercurio.client.feature.entry.presentation.LocalDiagnosticsPorts
@@ -32,7 +33,7 @@ object EntryWiring {
         val repository = DefaultGatewayConnectionRepository(dataSource, credentialStore)
         val recoveryEndpoint = AtomicReference(dataSource.loadEndpoint())
         val runRecoveryRegistry = buildRunRecoveryRegistry(context, recoveryEndpoint)
-        val installedBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuild(context)
+        val installedBuildProvider = resolveInstalledBuildProvider(context, overrides)
         val initialState = LoadEntryState(repository, installedBuildProvider).execute()
         val clientVersion = initialState.clientVersion
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
@@ -89,20 +90,26 @@ object EntryWiring {
     fun createErrorReporting(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
-    ): ErrorReporting {
-        val installedBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuild(context)
-        return buildErrorReporting(
+    ): ErrorReporting =
+        buildErrorReporting(
             context = context,
             overrides = overrides,
-            clientVersion = installedBuildProvider.installedBuild().versionNameOr(UNKNOWN_CLIENT_VERSION),
+            clientVersion =
+                resolveInstalledBuildProvider(context, overrides)
+                    .installedBuild()
+                    .versionNameOr(UNKNOWN_CLIENT_VERSION),
         )
-    }
 
     private fun entryScope(
         coroutineScope: CoroutineScope?,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ): CoroutineScope = coroutineScope ?: CoroutineScope(SupervisorJob() + ioDispatcher)
 }
+
+private fun resolveInstalledBuildProvider(
+    context: Context,
+    overrides: EntryWiringOverrides,
+): InstalledBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuildProvider(context)
 
 private fun buildRunRecoveryRegistry(
     context: Context,

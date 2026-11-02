@@ -4,7 +4,6 @@ import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.InstalledBuild
 import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
 
-/** A fixed installed build a wiring test supplies instead of this installation's package metadata. */
 internal class FakeInstalledBuildProvider(
     private val versionName: String,
     private val versionCode: Long = 1L,

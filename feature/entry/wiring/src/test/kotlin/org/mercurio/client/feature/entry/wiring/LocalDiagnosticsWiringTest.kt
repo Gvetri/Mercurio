@@ -249,7 +249,7 @@ class LocalDiagnosticsWiringTest {
 
     @Test
     fun reads_the_installed_build_from_this_installations_package_metadata() {
-        val installedBuild = AndroidInstalledBuild(context).installedBuild()
+        val installedBuild = AndroidInstalledBuildProvider(context).installedBuild()
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
 
         assertEquals(PackageInfoCompat.getLongVersionCode(packageInfo), installedBuild.versionCode)
