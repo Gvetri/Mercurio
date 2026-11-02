@@ -10,7 +10,7 @@ repositories {
 dependencies {
     implementation(libs.kover.gradle.plugin)
     implementation(libs.gradle.pitest.plugin)
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.junit4)
     testImplementation(libs.konsist)
 }
 
