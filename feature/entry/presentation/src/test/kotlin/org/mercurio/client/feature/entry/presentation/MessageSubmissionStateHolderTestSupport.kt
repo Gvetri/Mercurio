@@ -76,7 +76,12 @@ internal fun open(
 ) {
     connect(holder, gateway)
     holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-    awaitState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
+    // The open applies in two stages (metadata, then full result); the second stage now runs on
+    // the state-change consumer, so wait until the opened session is settled before returning.
+    awaitState(holder) {
+        val opened = it.sessionList?.openedSession
+        opened?.session?.id == sessionId && !opened.isRefreshing
+    }
 }
 
 internal fun TestScope.connectWithVirtualTime(

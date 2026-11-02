@@ -124,32 +124,35 @@ internal fun EntryStateHolder.createRunJob(
     return job
 }
 
-internal fun EntryStateHolder.applyConfirmedSession(
+internal suspend fun EntryStateHolder.applyConfirmedSession(
     session: Session,
     request: SessionMutationRequest,
 ) {
-    synchronized(sessionRequestLock) {
-        if (!isCurrentSessionMutation(request)) return
-        val current =
-            mutableUiState.value.sessionList?.takeIf { it.sessionForMutation(session.id) != null } ?: return
-        val updated = session.toSessionItemUiState()
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessions =
-                            current.sessions
-                                .map { item -> if (item.id == session.id) updated else item }
-                                .orderedSessions(),
-                        openedSession =
-                            current.openedSession
-                                ?.takeIf { it.session.id == session.id }
-                                ?.copy(session = updated)
-                                ?: current.openedSession,
-                        sessionMutations = current.sessionMutations - session.id,
-                    ),
-            )
-        unresolvedSessionMutations.remove(recoverySessionKey(session.id))
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            if (!isCurrentSessionMutation(request)) return@synchronized
+            val current =
+                mutableUiState.value.sessionList?.takeIf { it.sessionForMutation(session.id) != null }
+                    ?: return@synchronized
+            val updated = session.toSessionItemUiState()
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            sessions =
+                                current.sessions
+                                    .map { item -> if (item.id == session.id) updated else item }
+                                    .orderedSessions(),
+                            openedSession =
+                                current.openedSession
+                                    ?.takeIf { it.session.id == session.id }
+                                    ?.copy(session = updated)
+                                    ?: current.openedSession,
+                            sessionMutations = current.sessionMutations - session.id,
+                        ),
+                )
+            unresolvedSessionMutations.remove(recoverySessionKey(session.id))
+        }
     }
 }
 

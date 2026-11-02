@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.Run
@@ -10,7 +11,7 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 
-internal fun EntryStateHolder.applySubmittedRun(
+internal suspend fun EntryStateHolder.applySubmittedRun(
     sessionId: SessionId,
     run: Run,
     requestConnectionGeneration: Long,
@@ -19,18 +20,34 @@ internal fun EntryStateHolder.applySubmittedRun(
 ): Boolean {
     val preparation = prepareSubmittedRun(sessionId, run, requestConnectionGeneration, requestEndpoint, attemptId)
     val result =
-        applySubmittedRunLocked(
-            SubmittedRunApplication(
-                sessionId = sessionId,
-                run = run,
-                requestConnectionGeneration = requestConnectionGeneration,
-                requestEndpoint = requestEndpoint,
-                attemptId = attemptId,
-                pendingKey = preparation.pendingKey,
-                submissionBindingSucceeded = preparation.submissionBindingSucceeded,
-                recoveryPersistenceFailed = preparation.recoveryPersistenceFailed,
-            ),
-        )
+        try {
+            applySubmittedRunLocked(
+                SubmittedRunApplication(
+                    sessionId = sessionId,
+                    run = run,
+                    requestConnectionGeneration = requestConnectionGeneration,
+                    requestEndpoint = requestEndpoint,
+                    attemptId = attemptId,
+                    pendingKey = preparation.pendingKey,
+                    submissionBindingSucceeded = preparation.submissionBindingSucceeded,
+                    recoveryPersistenceFailed = preparation.recoveryPersistenceFailed,
+                ),
+            )
+        } catch (error: CancellationException) {
+            // The state-change barrier is the first suspension point after the create
+            // result. A cancelled producer (connection release, holder close) used to
+            // run the application synchronously; the consumer still applies the queued
+            // command, and the producer-side disconnect-persist obligation must survive.
+            if (!preparation.persistBeforeApply) {
+                val entry = RunRecoveryEntry(sessionId = sessionId, runId = run.id)
+                if (run.isActive()) {
+                    persistDisconnectedRecoveryEntry(endpoint = requestEndpoint, entry = entry)
+                } else {
+                    reconcilePersistedRecoveryEntryIfConnected(requestEndpoint, entry)
+                }
+            }
+            throw error
+        }
     if (!result.applied && result.persistAfterDisconnect && !preparation.persistBeforeApply) {
         val entry = RunRecoveryEntry(sessionId = sessionId, runId = run.id)
         if (run.isActive()) {
@@ -102,33 +119,35 @@ internal fun EntryStateHolder.persistBeforeApply(
             connectionGeneration == requestConnectionGeneration
         }
 
-internal fun EntryStateHolder.applySubmittedRunLocked(work: SubmittedRunApplication): SubmittedRunApplicationResult =
-    synchronized(sessionRequestLock) {
-        if (connectionGeneration != work.requestConnectionGeneration) {
-            if (work.run.isActive()) {
-                rememberUnresolvedLocalRun(
-                    work.requestEndpoint,
-                    work.sessionId,
-                    work.run.id,
-                    work.attemptId,
+internal suspend fun EntryStateHolder.applySubmittedRunLocked(work: SubmittedRunApplication): SubmittedRunApplicationResult =
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            if (connectionGeneration != work.requestConnectionGeneration) {
+                if (work.run.isActive()) {
+                    rememberUnresolvedLocalRun(
+                        work.requestEndpoint,
+                        work.sessionId,
+                        work.run.id,
+                        work.attemptId,
+                    )
+                }
+                return@synchronized SubmittedRunApplicationResult(
+                    applied = false,
+                    persistAfterDisconnect = work.run.isActive(),
                 )
             }
-            return@synchronized SubmittedRunApplicationResult(
-                applied = false,
-                persistAfterDisconnect = work.run.isActive(),
+            val shouldObserve = work.run.isActive()
+            recordSubmittedRunState(work)
+            val observationState = markSubmittedRunObservationState(work, shouldObserve)
+            val releases = updateSubmittedRunUi(work, observationState)
+            SubmittedRunApplicationResult(
+                applied = true,
+                requestSessionGeneration = sessionRequestGeneration,
+                shouldObserve = shouldObserve,
+                observationJobToCancel = releases.job,
+                observationToClose = releases.observation,
             )
         }
-        val shouldObserve = work.run.isActive()
-        recordSubmittedRunState(work)
-        val observationState = markSubmittedRunObservationState(work, shouldObserve)
-        val releases = updateSubmittedRunUi(work, observationState)
-        SubmittedRunApplicationResult(
-            applied = true,
-            requestSessionGeneration = sessionRequestGeneration,
-            shouldObserve = shouldObserve,
-            observationJobToCancel = releases.job,
-            observationToClose = releases.observation,
-        )
     }
 
 internal fun EntryStateHolder.recordSubmittedRunState(application: SubmittedRunApplication) {

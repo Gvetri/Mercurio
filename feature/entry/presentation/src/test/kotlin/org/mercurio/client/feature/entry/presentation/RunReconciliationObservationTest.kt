@@ -503,19 +503,36 @@ class RunReconciliationObservationTest {
             holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             dispatcher.runNext()
+            dispatcher.settleUntil {
+                holder.uiState.value.sessionList?.openedSession?.latestRun?.id == firstRun.id &&
+                    (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+            }
             assertEquals(firstRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
             assertEquals(1, dispatcher.queuedCount)
             assertTrue(gateway.observedRunIds.isEmpty())
 
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            dispatcher.runLast()
+            // The refresh chain's applications are serialized on the state-change consumer;
+            // step the producer tail until the terminal state is applied AND the refresh's
+            // reconcile tail has finished (it clears isReconciliationInProgress). Tail-stepping
+            // keeps the superseded observation start (queue head) unexecuted.
+            dispatcher.settleLastUntil {
+                val opened = holder.uiState.value.sessionList?.openedSession
+                opened?.latestRunState == RunPresentationState.SUCCEEDED &&
+                    !opened.isReconciliationInProgress
+            }
             assertEquals(
                 RunPresentationState.SUCCEEDED,
                 holder.uiState.value.sessionList?.openedSession?.latestRunState,
             )
             holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
             holder.onEvent(EntryUiEvent.SendMessageClicked)
-            dispatcher.runLast()
+            // The submission's application is serialized on the state-change consumer; step the
+            // producer tail until the new run request and its application have landed.
+            dispatcher.settleLastUntil {
+                gateway.runRequests.size == 2 &&
+                    holder.uiState.value.sessionList?.openedSession?.latestRun?.id == nextRun.id
+            }
             assertEquals(nextRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
             assertEquals(2, gateway.runRequests.size)
             assertTrue(gateway.observedRunIds.isEmpty())

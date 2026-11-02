@@ -123,7 +123,7 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
     }
 }
 
-internal fun EntryStateHolder.completeSuccessfulSubmission(
+internal suspend fun EntryStateHolder.completeSuccessfulSubmission(
     work: RunSubmissionWork,
     run: Run,
 ): Boolean {
@@ -178,7 +178,7 @@ internal suspend fun EntryStateHolder.reportUncertainRunSubmission(
     )
 }
 
-internal fun EntryStateHolder.reconcileInactiveSubmittedRun(
+internal suspend fun EntryStateHolder.reconcileInactiveSubmittedRun(
     sessionId: SessionId,
     runId: RunId,
     requestConnectionGeneration: Long,

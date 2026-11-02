@@ -152,32 +152,34 @@ internal fun EntryStateHolder.submitRenameSession(
         }
     }
 
-internal fun EntryStateHolder.showRenameFailure(request: SessionMutationRequest) {
-    synchronized(sessionRequestLock) {
-        val (current, mutation) = mutationFailureTarget(request) ?: return
-        val sessionId = request.sessionId
-        val rename = mutation.rename ?: return
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessionMutations =
-                            current.sessionMutations +
-                                (
-                                    sessionId to
-                                        mutation.copy(
-                                            rename =
-                                                rename.copy(
-                                                    isSubmitting = false,
-                                                    errorCategory =
-                                                        SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED,
-                                                ),
-                                            pendingAction = null,
-                                            retryAction = SessionMutationAction.RENAME,
-                                        )
-                                ),
-                    ),
-            )
+internal suspend fun EntryStateHolder.showRenameFailure(request: SessionMutationRequest) {
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            val (current, mutation) = mutationFailureTarget(request) ?: return@synchronized
+            val sessionId = request.sessionId
+            val rename = mutation.rename ?: return@synchronized
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            sessionMutations =
+                                current.sessionMutations +
+                                    (
+                                        sessionId to
+                                            mutation.copy(
+                                                rename =
+                                                    rename.copy(
+                                                        isSubmitting = false,
+                                                        errorCategory =
+                                                            SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED,
+                                                    ),
+                                                pendingAction = null,
+                                                retryAction = SessionMutationAction.RENAME,
+                                            )
+                                    ),
+                        ),
+                )
+        }
     }
 }
 

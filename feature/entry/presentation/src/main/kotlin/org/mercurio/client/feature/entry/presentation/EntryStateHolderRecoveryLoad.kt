@@ -97,48 +97,50 @@ internal fun EntryStateHolder.beginRecoveryLoad(expectedConnectionGeneration: Lo
         }
     }
 
-internal fun EntryStateHolder.finishRecoveryLoad(
+internal suspend fun EntryStateHolder.finishRecoveryLoad(
     expectedConnectionGeneration: Long,
     entries: List<RunRecoveryEntry>,
     failed: Boolean,
 ) {
-    synchronized(sessionRequestLock) {
-        if (connectionGeneration != expectedConnectionGeneration) return
-        recoveryLoadPending = false
-        recoveryLoadFailed = failed
-        val recoveredSessionIds = entries.mapTo(mutableSetOf()) { it.sessionId }
-        val current = mutableUiState.value.sessionList
-        if (failed) {
-            current?.sessions?.forEach { item -> recoveryUnavailableSessions += item.id }
-            current?.openedSession?.session?.id?.let(recoveryUnavailableSessions::add)
-        }
-        val opened = current?.openedSession
-        if (current != null && opened != null) {
-            val sessionId = opened.session.id
-            val recoveryInProgress =
-                sessionId in recoveredSessionIds ||
-                    sessionId in connectionRecoverySessionCounts ||
-                    sessionId in recoverySessionCounts ||
-                    sessionId in reconcilingSessions
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = if (failed) false else recoveryInProgress,
-                                    isReconciliationInProgress = if (failed) false else recoveryInProgress,
-                                    hasUnresolvedSubmission =
-                                        failed || hasUnresolvedSubmission(sessionId),
-                                    sendErrorCategory =
-                                        if (failed) {
-                                            MessageSendErrorCategory.UNCERTAIN
-                                        } else {
-                                            sendErrorCategoryFor(sessionId)
-                                        },
-                                ),
-                        ),
-                )
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            if (connectionGeneration != expectedConnectionGeneration) return@synchronized
+            recoveryLoadPending = false
+            recoveryLoadFailed = failed
+            val recoveredSessionIds = entries.mapTo(mutableSetOf()) { it.sessionId }
+            val current = mutableUiState.value.sessionList
+            if (failed) {
+                current?.sessions?.forEach { item -> recoveryUnavailableSessions += item.id }
+                current?.openedSession?.session?.id?.let(recoveryUnavailableSessions::add)
+            }
+            val opened = current?.openedSession
+            if (current != null && opened != null) {
+                val sessionId = opened.session.id
+                val recoveryInProgress =
+                    sessionId in recoveredSessionIds ||
+                        sessionId in connectionRecoverySessionCounts ||
+                        sessionId in recoverySessionCounts ||
+                        sessionId in reconcilingSessions
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                openedSession =
+                                    opened.copy(
+                                        isRefreshing = if (failed) false else recoveryInProgress,
+                                        isReconciliationInProgress = if (failed) false else recoveryInProgress,
+                                        hasUnresolvedSubmission =
+                                            failed || hasUnresolvedSubmission(sessionId),
+                                        sendErrorCategory =
+                                            if (failed) {
+                                                MessageSendErrorCategory.UNCERTAIN
+                                            } else {
+                                                sendErrorCategoryFor(sessionId)
+                                            },
+                                    ),
+                            ),
+                    )
+            }
         }
     }
 }

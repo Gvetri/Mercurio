@@ -81,6 +81,11 @@ internal fun assertParentCancellationReleasesObserver(cancelDuringRegistration: 
         holder.onEvent(EntryUiEvent.ComposerTextChanged("Cancel the parent"))
         holder.onEvent(EntryUiEvent.SendMessageClicked)
         dispatcher.runNext()
+        // The submission application is serialized on the holder's state-change
+        // consumer: step the paused dispatcher until the producer reaches the
+        // observation registration (the counter is monotonic, so it also settles
+        // when the registration is immediately cancelled).
+        dispatcher.settleUntil { registrations.get() > 0 }
         if (!cancelDuringRegistration) {
             assertEquals(1, dispatcher.queuedCount)
             assertTrue(observerJobs.values.single().isActive)
@@ -678,6 +683,32 @@ internal class ReconciliationPausingDispatcher(
             runNext()
         }
         error("Dispatcher did not become idle.")
+    }
+
+    /**
+     * Runs queued blocks one at a time until [condition] holds. The state-change
+     * consumer serializes holder applications, so a paused dispatcher must step
+     * through the consumer and producer continuations before an applied result
+     * (or a queued observer registration) is observable.
+     */
+    fun settleUntil(condition: () -> Boolean) {
+        repeat(100) {
+            if (condition()) return
+            if (queuedCount > 0) runNext() else Thread.sleep(20)
+        }
+        if (!condition()) error("settleUntil: condition not met after stepping the dispatcher")
+    }
+
+    /** Steps from the tail so the oldest queued block (such as a superseded
+     * observation start) is never executed while the condition is awaited.
+     * Stepping requires more than one queued block; the chain order is safe
+     * because a resumed await is only queued after its completer ran. */
+    fun settleLastUntil(condition: () -> Boolean) {
+        repeat(100) {
+            if (condition()) return
+            if (queuedCount > 1) runLast() else Thread.sleep(20)
+        }
+        if (!condition()) error("settleLastUntil: condition not met after stepping the dispatcher")
     }
 }
 

@@ -93,7 +93,7 @@ internal fun EntryStateHolder.createFirstPageLoadJob(
         }
     }
 
-internal fun EntryStateHolder.loadFirstPage(
+internal suspend fun EntryStateHolder.loadFirstPage(
     gateway: SessionGatewayPort,
     request: SessionRequestContext,
     preserveSessions: Boolean,
@@ -163,23 +163,25 @@ internal fun EntryStateHolder.createSessionJob(block: suspend CoroutineScope.() 
         scope.launch(start = CoroutineStart.LAZY, block = block).also { sessionJob = it }
     }
 
-internal fun EntryStateHolder.updateCurrentSessionRequest(
+internal suspend fun EntryStateHolder.updateCurrentSessionRequest(
     requestGeneration: Long,
     offset: Int? = null,
     transform: (SessionListUiState) -> SessionListUiState,
 ): Boolean =
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value.sessionList ?: return@synchronized false
-        val offsetIsStale = offset != null && current.nextOffset != offset
-        if (requestGeneration != sessionRequestGeneration || offsetIsStale) {
-            false
-        } else {
-            mutableUiState.value = mutableUiState.value.copy(sessionList = transform(current))
-            true
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            val current = mutableUiState.value.sessionList ?: return@synchronized false
+            val offsetIsStale = offset != null && current.nextOffset != offset
+            if (requestGeneration != sessionRequestGeneration || offsetIsStale) {
+                false
+            } else {
+                mutableUiState.value = mutableUiState.value.copy(sessionList = transform(current))
+                true
+            }
         }
     }
 
-internal fun EntryStateHolder.showSessionListFailure(
+internal suspend fun EntryStateHolder.showSessionListFailure(
     requestGeneration: Long,
     offset: Int?,
     preserveSessions: Boolean,

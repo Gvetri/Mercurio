@@ -86,7 +86,7 @@ internal fun EntryStateHolder.createSessionJob(
         }
     }
 
-internal fun EntryStateHolder.showCreateSessionFailure(requestGeneration: Long) {
+internal suspend fun EntryStateHolder.showCreateSessionFailure(requestGeneration: Long) {
     updateCurrentSessionRequest(requestGeneration) { current ->
         current.copy(
             createSession = null,

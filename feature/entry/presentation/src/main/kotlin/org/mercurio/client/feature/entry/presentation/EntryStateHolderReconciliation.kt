@@ -28,7 +28,7 @@ internal fun EntryStateHolder.recordTerminalPollReconciliation(
     updateVisibleRunState(sessionId)
 }
 
-internal fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunReconcileContext) {
+internal suspend fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunReconcileContext) {
     val recoveryEntries =
         try {
             runRecoveryRegistry?.load().orEmpty()
@@ -145,7 +145,7 @@ internal fun EntryStateHolder.reconciliationRunIds(
         }
     }
 
-internal fun EntryStateHolder.reconcileRunObservationCandidate(
+internal suspend fun EntryStateHolder.reconcileRunObservationCandidate(
     context: OpenedRunReconcileContext,
     runId: RunId,
     hasCandidate: Boolean,
@@ -215,7 +215,7 @@ internal fun EntryStateHolder.markRecoveryUnavailable(
     }
 }
 
-internal fun EntryStateHolder.reconcileRun(
+internal suspend fun EntryStateHolder.reconcileRun(
     sessionId: SessionId,
     runId: RunId,
     requestConnectionGeneration: Long,
@@ -321,13 +321,18 @@ internal fun EntryStateHolder.finishReconciliation(
     }
 }
 
-internal fun EntryStateHolder.applyAuthoritativeRunReconciliation(
+internal suspend fun EntryStateHolder.applyAuthoritativeRunReconciliation(
     request: AuthoritativeReconciliationRequest,
     reconciliation: AuthoritativeRunReconciliation,
 ) {
-    val application = applyReconciliationLocked(request, reconciliation)
+    val application =
+        applyStateChange {
+            applyReconciliationLocked(request, reconciliation)
+        }
     application.observationToClose?.close()
     application.observationJobToCancel?.cancel()
+    // Recovery-entry removal is registry persistence: it can block, so it stays producer-side
+    // instead of running on the serialized state-change consumer.
     removeReconciledRecoveryEntry(
         recoveryEntryToRemove = application.recoveryEntryToRemove,
         recoveryEndpointToRemove = application.recoveryEndpointToRemove,

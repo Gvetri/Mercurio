@@ -36,7 +36,7 @@ internal fun EntryStateHolder.releaseRecoveryClaim(claim: RecoveryClaim): Boolea
     return true
 }
 
-internal fun EntryStateHolder.startRunRecovery(expectedConnectionGeneration: Long) {
+internal suspend fun EntryStateHolder.startRunRecovery(expectedConnectionGeneration: Long) {
     val recovery = beginRunRecovery(expectedConnectionGeneration) ?: return
     val (registry, recoveryContext) = recovery
     if (!beginRecoveryLoad(expectedConnectionGeneration)) return
@@ -117,7 +117,7 @@ internal fun EntryStateHolder.claimRecoveryWorkItems(
         }
     }
 
-internal fun EntryStateHolder.startRecoveryWork(
+internal suspend fun EntryStateHolder.startRecoveryWork(
     workItems: List<RecoveryWorkItem>,
     recoveryContext: RecoveryGatewayContext,
     expectedConnectionGeneration: Long,

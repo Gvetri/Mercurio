@@ -74,7 +74,12 @@ internal fun openObservedSession(
     holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
     awaitObservationState(holder) { it.sessionList?.sessions == listOf(gateway.session.toSessionItemUiState()) }
     holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-    awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
+    // The open applies in two stages (metadata, then full result); the second stage now runs on
+    // the state-change consumer, so wait until the opened session is settled before returning.
+    awaitObservationState(holder) {
+        val opened = it.sessionList?.openedSession
+        opened?.session?.id == sessionId && !opened.isRefreshing
+    }
 }
 
 internal fun awaitObservationState(

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -452,6 +453,12 @@ class EntryStateHolder(
     internal val pendingTimedOutSends = mutableMapOf<SessionId, TimedOutSendRecovery>()
     internal val reconcilingSessions = mutableMapOf<SessionId, Long>()
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
+
+    internal val stateChangeCommands = Channel<StateChangeCommand>(Channel.BUFFERED)
+
+    init {
+        scope.launch(StateChangeConsumerMarker()) { consumeStateChanges() }
+    }
 
     fun onEvent(event: EntryUiEvent) {
         when (event) {

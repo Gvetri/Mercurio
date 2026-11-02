@@ -55,11 +55,21 @@ class RunReconciliationSubmissionTest {
 
             dispatcher.paused = true
             registry.releaseLoad.countDown()
-            awaitReconciliationCondition { dispatcher.queuedCount == 1 }
+            // The open chain completes through the state-change consumer and then
+            // queues the observation start without running it: step only the open
+            // chain's blocks, never the queued observation start.
+            dispatcher.settleUntil {
+                holder.uiState.value.sessionList?.openedSession?.latestRun?.id == run.id &&
+                    (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+            }
             assertEquals(run.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
             assertTrue(registry.load().isEmpty())
             assertTrue(gateway.observedRunIds.isEmpty())
             registry.releaseSave.countDown()
+            // The submission now settles through the state-change consumer: step
+            // its chain from the tail so the queued open-recovery observation
+            // start is never executed before the submission replaces it.
+            dispatcher.settleLastUntil { gateway.submissionCompleted.count == 0L }
             assertTrue(gateway.submissionCompleted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
             dispatcher.drain()
@@ -146,6 +156,10 @@ class RunReconciliationSubmissionTest {
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 dispatcher.runNext()
+                dispatcher.settleUntil {
+                    holder.uiState.value.sessionList?.openedSession?.latestRun?.id == run.id &&
+                        (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+                }
                 assertEquals(1, dispatcher.queuedCount)
 
                 if (closeHolder) holder.close() else holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
