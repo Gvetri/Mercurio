@@ -38,7 +38,7 @@ name: settings-cache-clear
 - assertVisible: "Remove the cached conversations stored on this device. Remote Sessions and Runs are not deleted or changed. Diagnostic files you already exported are not removed."
 - takeScreenshot: settings-cache-clear-confirmation
 - tapOn: "Cancel"
-- assertVisible: "CONNECTION"
+- assertVisible: "Clear cached conversations"
 - extendedWaitUntil:
     notVisible: 'Clear cached conversations\?'
     timeout: 30000
@@ -48,7 +48,7 @@ name: settings-cache-clear
     direction: DOWN
 - tapOn: "Clear cached conversations"
 - tapOn: '^Clear$'
-- assertVisible: "CONNECTION"
+- assertVisible: "Clear cached conversations"
 - extendedWaitUntil:
     notVisible: 'Clear cached conversations\?'
     timeout: 30000
