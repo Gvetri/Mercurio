@@ -4,10 +4,15 @@ set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
+staged_list="$(mktemp)"
+trap 'rm -f "$staged_list"' EXIT
+
+git diff --cached --name-only --diff-filter=ACMR -z > "$staged_list"
+
 staged=()
 while IFS= read -r -d '' path; do
   staged+=("$path")
-done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+done < "$staged_list"
 
 if [[ "${#staged[@]}" -eq 0 ]]; then
   exit 0

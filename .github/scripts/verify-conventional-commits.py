@@ -147,7 +147,7 @@ def main():
             raise VerificationError(
                 f"The commit-message check supports pull_request and push events, not '{event_name}'"
             )
-    except VerificationError as error:
+    except MessageError as error:
         print(f"Commit-message verification failed closed: {error}", file=sys.stderr)
         return 1
 

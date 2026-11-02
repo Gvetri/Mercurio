@@ -709,6 +709,14 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertIn("the scope 'CI' must be lower case", completed.stderr)
         self.assertIn("must not end with a period", completed.stderr)
 
+    def test_a_title_with_no_subject_line_fails_closed(self):
+        self.routes["/repos/Gvetri/Mercurio/pulls/25"] = {"number": 25, "title": ""}
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(["feat: protect main"])
+        completed = self.run_check()
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("failed closed", completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+
     def test_an_empty_commit_list_fails_closed(self):
         self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = []
         completed = self.run_check()
