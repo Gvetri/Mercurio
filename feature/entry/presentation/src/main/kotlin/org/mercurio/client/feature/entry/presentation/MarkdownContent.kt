@@ -11,7 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,10 +39,10 @@ import androidx.compose.ui.unit.dp
 /**
  * Renders the supported Markdown subset of untrusted Gateway content as native Compose
  * content: headings, blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links,
- * fenced code blocks, and pipe tables. A table becomes the approved table card; `$$…$$`
- * display math still renders as its literal source text until its renderer lands. The content
- * is never interpreted as markup beyond that subset, so no HTML, script, or other executable
- * content can run, and no WebView is involved.
+ * fenced code blocks, pipe tables, and math. A table becomes the approved table card; inline
+ * `$…$` math joins the inline text path and `$$…$$` display math gets its own surface. The
+ * content is never interpreted as markup beyond that subset, so no HTML, script, or other
+ * executable content can run, and no WebView is involved.
  *
  * Link destinations are carried as annotations built from [allowedExternalLinkDestination];
  * a blocked destination is rendered as its inert label and cannot be selected. [onTableExpand]
@@ -86,7 +89,8 @@ internal fun MarkdownContent(
                         actions = actions,
                         onExpand = { onTableExpand(block) },
                     )
-                is MarkdownBlock.DisplayMath -> MarkdownParagraph(spans = block.spans, actions = actions)
+                is MarkdownBlock.DisplayMath ->
+                    MarkdownDisplayMath(expression = block.expression, source = block.source)
             }
         }
     }
@@ -108,13 +112,16 @@ private fun MarkdownSpans(
     val tokens = LocalHermesDesignTokens.current
     val pieces = remember(spans) { spans.paragraphPieces() }
     if (pieces.none { piece -> piece is ParagraphPiece.Image }) {
+        val math = rememberInlineMath(spans, LocalTextStyle.current, LocalContentColor.current)
         Text(
             text =
                 spans.toAnnotatedString(
                     linkColor = MaterialTheme.colorScheme.primary,
                     onOpenLink = actions.openLink,
                     codeBackground = tokens.componentColors.inset,
+                    math = math,
                 ),
+            inlineContent = math?.contents.orEmpty(),
         )
         return
     }
@@ -122,15 +129,19 @@ private fun MarkdownSpans(
     Column(verticalArrangement = Arrangement.spacedBy(tokens.spacing.xs)) {
         pieces.forEach { piece ->
             when (piece) {
-                is ParagraphPiece.Text ->
+                is ParagraphPiece.Text -> {
+                    val math = rememberInlineMath(piece.spans, LocalTextStyle.current, LocalContentColor.current)
                     Text(
                         text =
                             piece.spans.toAnnotatedString(
                                 linkColor = MaterialTheme.colorScheme.primary,
                                 onOpenLink = actions.openLink,
                                 codeBackground = tokens.componentColors.inset,
+                                math = math,
                             ),
+                        inlineContent = math?.contents.orEmpty(),
                     )
+                }
                 is ParagraphPiece.Image ->
                     if (imageServices == null) {
                         Text(text = piece.source)
@@ -183,15 +194,19 @@ private fun MarkdownHeading(
     actions: MessageActions,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val style = headingStyle(heading.level)
+    val math = rememberInlineMath(heading.spans, style, LocalContentColor.current)
     Text(
         text =
             heading.spans.toAnnotatedString(
                 linkColor = MaterialTheme.colorScheme.primary,
                 onOpenLink = actions.openLink,
                 codeBackground = tokens.componentColors.inset,
+                math = math,
             ),
-        style = headingStyle(heading.level),
+        style = style,
         modifier = Modifier.semantics { heading() },
+        inlineContent = math?.contents.orEmpty(),
     )
 }
 
@@ -212,6 +227,7 @@ private fun MarkdownBlockquote(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val spacing = tokens.spacing
+    val math = rememberInlineMath(spans, LocalTextStyle.current, LocalContentColor.current)
     Row(
         modifier =
             Modifier
@@ -232,8 +248,10 @@ private fun MarkdownBlockquote(
                     linkColor = MaterialTheme.colorScheme.primary,
                     onOpenLink = actions.openLink,
                     codeBackground = tokens.componentColors.inset,
+                    math = math,
                 ),
             modifier = Modifier.weight(1f),
+            inlineContent = math?.contents.orEmpty(),
         )
     }
 }
@@ -285,13 +303,19 @@ internal fun List<MarkdownSpan>.toAnnotatedString(
     linkColor: Color,
     onOpenLink: (String) -> Unit,
     codeBackground: Color?,
+    math: InlineMathContent? = null,
 ): AnnotatedString =
     buildAnnotatedString {
-        this@toAnnotatedString.forEach { span ->
+        this@toAnnotatedString.forEachIndexed { index, span ->
+            val mathId = math?.idFor(index)
+            if (mathId != null) {
+                appendInlineContent(mathId, alternateText = (span.element as InlineElement.Math).expression)
+                return@forEachIndexed
+            }
             val start = length
             append(span.text)
             val end = length
-            if (start == end) return@forEach
+            if (start == end) return@forEachIndexed
             if (span.bold) addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
             if (span.italic) addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
             if (span.code) {

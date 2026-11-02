@@ -22,6 +22,7 @@ roborazzi = "1.60.0"
 konsist = "0.17.3"
 sentry = "8.16.0"
 coil = "3.0.4"
+jlatexmathAndroid = "0.2.0"
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
@@ -62,3 +63,4 @@ roborazzi-junit-rule = { module = "io.github.takahirom.roborazzi:roborazzi-junit
 konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 sentry-android-core = { module = "io.sentry:sentry-android-core", version.ref = "sentry" }
 coil = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
+jlatexmath-android = { module = "ru.noties:jlatexmath-android", version.ref = "jlatexmathAndroid" }

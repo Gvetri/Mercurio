@@ -1,7 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-private val INLINE_MARKUP_CHARACTERS = setOf('*', '`', '[')
-
 internal data class InlineMath(
     val startIndex: Int,
     val endIndex: Int,
@@ -9,8 +7,9 @@ internal data class InlineMath(
 )
 
 /**
- * The inline math run at [startIndex], or null when there is none or its expression
- * carries Markdown markup: such a run stays the markup the literal parse renders today.
+ * The inline math run at [startIndex], or null when there is none. Every character between a
+ * matched pair belongs to the expression, so common shapes such as `a * b`, `x^{*}`, and `A[0]`
+ * reach the formula layout instead of staying markup.
  */
 internal fun inlineMathAt(
     text: String,
@@ -19,10 +18,8 @@ internal fun inlineMathAt(
     val contentStart = startIndex + 1
     val endIndex = if (opensInlineMath(text, startIndex)) nextDollarClose(text, contentStart) else -1
     val expression = if (endIndex > contentStart) text.substring(contentStart, endIndex) else ""
-    val unmarked =
-        expression.isNotEmpty() &&
-            expression.none { character -> character in INLINE_MARKUP_CHARACTERS }
-    return if (unmarked) InlineMath(startIndex = startIndex, endIndex = endIndex + 1, expression = expression) else null
+    if (expression.isEmpty()) return null
+    return InlineMath(startIndex = startIndex, endIndex = endIndex + 1, expression = expression)
 }
 
 private fun opensInlineMath(

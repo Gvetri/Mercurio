@@ -56,11 +56,13 @@ internal sealed interface MarkdownBlock {
     ) : MarkdownBlock
 
     /**
-     * A `$$…$$` display-math block: the expression without its delimiters, and [spans]
-     * holding the literal source text the renderer still shows until a math renderer lands.
+     * A `$$…$$` display-math block: the expression without its delimiters, the expression exactly
+     * as the block authored it for the literal fallback, and [spans] holding the block's literal
+     * source text.
      */
     data class DisplayMath(
         val expression: String,
+        val source: String,
         val spans: List<MarkdownSpan>,
     ) : MarkdownBlock
 }
@@ -137,10 +139,11 @@ private const val CODE_FENCE = "```"
 /**
  * Parses the supported Markdown subset of untrusted Gateway content: headings,
  * blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links, fenced code
- * blocks, pipe tables, and math delimiters. A pipe table becomes its own block with the
- * alignment its separator row declares; `$$…$$` display math still renders as its literal
- * source text, and `![…](…)` and `$…$` become marked spans. Unsupported constructs stay
- * literal text, so nothing in the source can become executable content.
+ * blocks, pipe tables, and math. A pipe table becomes its own block with the alignment its
+ * separator row declares; `$$…$$` display math becomes its own block, and `![…](…)` and `$…$`
+ * become marked spans. Every one keeps its literal source text in the model, so a renderer opts
+ * in explicitly and an unhandled construct stays text. Unsupported constructs stay literal text,
+ * so nothing in the source can become executable content.
  */
 internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()

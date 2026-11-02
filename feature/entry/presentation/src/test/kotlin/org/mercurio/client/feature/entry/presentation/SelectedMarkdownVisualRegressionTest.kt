@@ -3,7 +3,10 @@ package org.mercurio.client.feature.entry.presentation
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -19,9 +22,9 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The markdown rendering contract for untrusted Gateway content: a fenced code block in
- * its horizontally scrollable region, long multi-block content, and the image card's
- * loading, failed and loaded states, each captured in an intentional light and dark theme
- * on a fixed phone viewport.
+ * its horizontally scrollable region, long multi-block content, a message carrying inline,
+ * display and refused math, and the image card's loading, failed and loaded states, each
+ * captured in an intentional light and dark theme on a fixed phone viewport.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-notnight")
@@ -56,6 +59,19 @@ class SelectedMarkdownVisualRegressionTest {
     }
 
     @Test
+    fun markdown_math_light() {
+        capture(darkTheme = false, content = MATH_MESSAGE)
+        assertRefusedMathFellBack()
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun markdown_math_dark() {
+        capture(darkTheme = true, content = MATH_MESSAGE)
+        assertRefusedMathFellBack()
+    }
+
+    @Test
     fun markdown_image_loading_light() {
         captureImage(darkTheme = false, port = MarkdownImageSuspendingPort())
     }
@@ -86,6 +102,12 @@ class SelectedMarkdownVisualRegressionTest {
     @Config(qualifiers = "w411dp-h891dp-night")
     fun markdown_image_loaded_dark() {
         captureImage(darkTheme = true, port = MarkdownImageLoadedPort())
+    }
+
+    private fun assertRefusedMathFellBack() {
+        composeTestRule.onNodeWithTag(MARKDOWN_MATH_LITERAL_TAG).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(MARKDOWN_MATH_TAG).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("P(A \\mid B) = \\frac{P(B \\mid A) P(A)}{P(B)}").assertExists()
     }
 
     private fun captureImage(
@@ -183,6 +205,22 @@ class SelectedMarkdownVisualRegressionTest {
                 "\n\n" +
                 (1..12).joinToString(separator = "\n\n") { index -> "Paragraph $index of the long response." } +
                 "\n\n```kotlin\nval total = 12\n```"
+
+        val MATH_MESSAGE =
+            """
+            Inline math such as ${'$'}E = mc^2${'$'} stays on the line.
+
+            ${'$'}${'$'}
+            P(A \mid B) = \frac{P(B \mid A) P(A)}{P(B)}
+            ${'$'}${'$'}
+
+            An expression the engine refuses keeps its exact source:
+
+            ${'$'}${'$'}
+            \frac{a}{b}
+            = \left(
+            ${'$'}${'$'}
+            """.trimIndent()
     }
 }
 

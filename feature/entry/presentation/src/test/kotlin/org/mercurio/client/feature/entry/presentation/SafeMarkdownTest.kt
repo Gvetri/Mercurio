@@ -435,30 +435,48 @@ class SafeMarkdownTest {
     }
 
     @Test
-    fun emphasis_inside_a_dollar_run_keeps_rendering_as_emphasis() {
+    fun emphasis_characters_inside_a_dollar_run_belong_to_the_expression() {
         val blocks = parseSafeMarkdown("\$**bold**\$")
 
-        assertEquals("\$bold\$", blocks.plainText())
-        assertEquals(listOf("bold"), blocks.spans().filter { it.bold }.map { it.text })
-        assertTrue(blocks.spans().all { it.element == null })
+        val math = blocks.spans().single { it.element != null }
+        assertEquals(InlineElement.Math(expression = "**bold**"), math.element)
+        assertEquals("\$**bold**\$", math.text)
+        assertTrue(blocks.spans().none { it.bold })
     }
 
     @Test
-    fun a_link_inside_a_dollar_run_keeps_its_destination() {
+    fun a_link_inside_a_dollar_run_belongs_to_the_expression() {
         val blocks = parseSafeMarkdown("\$[lbl](https://example.com)\$")
 
-        assertEquals("\$lbl\$", blocks.plainText())
-        assertEquals(listOf("https://example.com"), blocks.spans().mapNotNull { it.link })
-        assertTrue(blocks.spans().all { it.element == null })
+        val math = blocks.spans().single { it.element != null }
+        assertEquals(InlineElement.Math(expression = "[lbl](https://example.com)"), math.element)
+        assertTrue(blocks.spans().all { it.link == null })
     }
 
     @Test
-    fun code_inside_a_dollar_run_keeps_rendering_as_code() {
+    fun code_inside_a_dollar_run_belongs_to_the_expression() {
         val blocks = parseSafeMarkdown("\$`c`\$")
 
-        assertEquals("\$c\$", blocks.plainText())
-        assertEquals(listOf("c"), blocks.spans().filter { it.code }.map { it.text })
-        assertTrue(blocks.spans().all { it.element == null })
+        val math = blocks.spans().single { it.element != null }
+        assertEquals(InlineElement.Math(expression = "`c`"), math.element)
+        assertTrue(blocks.spans().none { it.code })
+    }
+
+    @Test
+    fun common_inline_formula_shapes_become_math() {
+        val expressions =
+            listOf("\$a * b\$", "\$x^{*}\$", "\$A[0]\$").map { source ->
+                parseSafeMarkdown(source).spans().single { it.element != null }.element
+            }
+
+        assertEquals(
+            listOf(
+                InlineElement.Math(expression = "a * b"),
+                InlineElement.Math(expression = "x^{*}"),
+                InlineElement.Math(expression = "A[0]"),
+            ),
+            expressions,
+        )
     }
 
     @Test
@@ -467,7 +485,17 @@ class SafeMarkdownTest {
 
         val math = blocks.single() as MarkdownBlock.DisplayMath
         assertEquals("E = mc^2", math.expression)
+        assertEquals("E = mc^2", math.source)
         assertEquals("\$\$ E = mc^2 \$\$", blocks.plainText())
+    }
+
+    @Test
+    fun a_multi_line_display_expression_keeps_its_authored_lines_for_the_fallback() {
+        val blocks = parseSafeMarkdown("\$\$\n\\frac{a}{b}\n= c\n\$\$")
+
+        val math = blocks.single() as MarkdownBlock.DisplayMath
+        assertEquals("\\frac{a}{b} = c", math.expression)
+        assertEquals("\\frac{a}{b}\n= c", math.source)
     }
 
     @Test
