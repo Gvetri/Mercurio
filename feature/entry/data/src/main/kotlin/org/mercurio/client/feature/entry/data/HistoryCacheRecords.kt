@@ -11,14 +11,6 @@ import java.io.EOFException
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 
-/** One cached entry with its storage key and the instant it entered the cache. */
-data class CachedHistoryRecord(
-    val key: String,
-    val message: GatewayHistoryMessage? = null,
-    val cachedAt: Instant,
-    val sessionList: List<Session> = emptyList(),
-)
-
 /**
  * The cache record codec: a versioned, length-prefixed binary form of the retained
  * records, independent of the encryption envelope that carries it. Message records
