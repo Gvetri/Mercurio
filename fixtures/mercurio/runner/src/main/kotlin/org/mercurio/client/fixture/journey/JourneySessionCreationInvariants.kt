@@ -41,7 +41,7 @@ internal object JourneySessionCreationInvariants {
                     }
                 }
             }
-        check(checkpoints == listOf("list" to 0, "list" to 0, "list" to 1)) {
+        check(checkpoints == listOf("list" to 0, "list" to 1)) {
             "Empty-session cancellation checkpoints recorded missing reads or premature writes: $checkpoints"
         }
     }

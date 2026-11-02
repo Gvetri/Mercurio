@@ -3,7 +3,6 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 
 internal fun EntryStateHolder.releaseConnectionState(): ReleasedConnectionState =
     synchronized(connectionPersistenceLock) {
@@ -25,10 +24,12 @@ internal fun EntryStateHolder.releaseConnectionState(): ReleasedConnectionState 
                     connectionRecoveryJobs,
                 ).flatten()
             val observationsToClose = runObservations.values.toList()
+            val pendingCreates = pendingCreateSnapshotLocked()
             clearSessionStateForClose()
             ReleasedConnectionState(
                 jobs = requestJobs + supersededJobs,
                 observations = observationsToClose,
+                pendingCreates = pendingCreates,
             )
         }
     }
@@ -48,7 +49,6 @@ internal fun EntryStateHolder.clearSessionStateForClose() {
     uncertainSendDrafts.clear()
     uncertainSubmissionRunIds.clear()
     uncertainSubmissionAttemptIds.clear()
-    persistPendingCreates()
     pendingCreateSessions.clear()
     pendingCreateStarted.clear()
     unresolvedLocalRunIds.clear()
@@ -73,25 +73,6 @@ internal fun EntryStateHolder.clearSessionStateForClose() {
     submittedRunModelSelections.clear()
     authoritativeSessionHistoryGenerations.clear()
     authoritativeSessionRuns.clear()
-}
-
-internal fun EntryStateHolder.persistPendingCreates() {
-    pendingCreateSessions.forEach { (key, pendingCreate) ->
-        val submissionKey = PendingRunSubmissionKey(key.endpoint, key.sessionId)
-        val persisted =
-            runCatching {
-                runSubmissionUncertaintyStore.add(
-                    submissionKey,
-                    pendingCreate.knownRunIds,
-                    pendingCreate.attemptId,
-                )
-            }.getOrDefault(false)
-        if (persisted && key !in pendingCreateStarted) {
-            runCatching {
-                runSubmissionUncertaintyStore.markSettled(submissionKey, pendingCreate.attemptId)
-            }
-        }
-    }
 }
 
 internal fun EntryStateHolder.showConnectionSetup() {

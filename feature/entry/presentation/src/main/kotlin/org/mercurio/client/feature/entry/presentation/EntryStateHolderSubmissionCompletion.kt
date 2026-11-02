@@ -3,7 +3,6 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -18,21 +17,20 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 
-internal fun EntryStateHolder.abortUnclaimedRunJob(submission: PreparedRunSubmission) {
-    val persistence = submission.persistence
+internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
     synchronized(sessionRequestLock) {
         if (
-            pendingCreateSessions[persistence.recoveryKey] ==
-            PendingCreateState(persistence.knownRunIds, persistence.attemptId)
+            pendingCreateSessions[work.recoverySessionKey] ==
+            PendingCreateState(work.knownRunIds, work.attemptId)
         ) {
-            pendingCreateSessions.remove(persistence.recoveryKey)
-            pendingCreateStarted.remove(persistence.recoveryKey)
-            unresolvedSubmissionSessions += persistence.key.sessionId
-            pendingRunDrafts.remove(persistence.key.sessionId)?.let { draft ->
-                uncertainSendDrafts[persistence.key.sessionId] = draft
+            pendingCreateSessions.remove(work.recoverySessionKey)
+            pendingCreateStarted.remove(work.recoverySessionKey)
+            unresolvedSubmissionSessions += work.sessionId
+            pendingRunDrafts.remove(work.sessionId)?.let { draft ->
+                uncertainSendDrafts[work.sessionId] = draft
             }
-            sessionSendErrors[persistence.key.sessionId] = MessageSendErrorCategory.UNCERTAIN
-            val (current, opened) = openedSessionFor(persistence.key.sessionId) ?: return@synchronized
+            sessionSendErrors[work.sessionId] = MessageSendErrorCategory.UNCERTAIN
+            val (current, opened) = openedSessionFor(work.sessionId) ?: return@synchronized
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =
@@ -47,12 +45,26 @@ internal fun EntryStateHolder.abortUnclaimedRunJob(submission: PreparedRunSubmis
                 )
         }
     }
-    synchronized(sessionRequestLock) {
-        if (runJobs[persistence.key.sessionId] === submission.job) {
-            runJobs.remove(persistence.key.sessionId)
-        }
+}
+
+internal fun EntryStateHolder.prepareClaimedSubmission(work: RunSubmissionWork): RunSubmissionWork? {
+    if (work.recordDraft) {
+        runCatching { sessionDraftStore.write(sessionDraftKey(work.sessionId, work.requestEndpoint), work.input) }
     }
-    submission.job.cancel()
+    val claimed =
+        runCatching {
+            runSubmissionUncertaintyStore.add(
+                PendingRunSubmissionKey(work.requestEndpoint, work.sessionId),
+                work.knownRunIds,
+                work.attemptId,
+            )
+        }.getOrDefault(false)
+    if (!claimed) {
+        abortUnclaimedRun(work)
+        return null
+    }
+    val selection = runCatching { modelSelectionStore.read(work.requestEndpoint) }.getOrNull()
+    return work.copy(selection = selection)
 }
 
 internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
@@ -65,46 +77,48 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
     ) {
         return
     }
+    val submission = prepareClaimedSubmission(work) ?: return
     try {
         val run =
             withContext(NonCancellable) {
                 withTimeout(sendTimeoutMillis) {
                     runInterruptible {
-                        SubmitMessage(work.gateway).execute(work.sessionId, work.input, work.selection)
+                        SubmitMessage(submission.gateway)
+                            .execute(submission.sessionId, submission.input, submission.selection)
                     }
                 }
             }
-        val applied = completeSuccessfulSubmission(work, run)
+        val applied = completeSuccessfulSubmission(submission, run)
         if (applied) {
             if (!run.isActive()) {
-                reconcileInactiveSubmittedRun(work.sessionId, run.id, work.requestConnectionGeneration)
+                reconcileInactiveSubmittedRun(submission.sessionId, run.id, submission.requestConnectionGeneration)
             }
             onRunSubmissionCompleted?.invoke()
         }
     } catch (_: TimeoutCancellationException) {
-        if (reportUncertainRunSubmission(work)) {
+        if (reportUncertainRunSubmission(submission)) {
             onRunSubmissionCompleted?.invoke()
         }
     } catch (error: CancellationException) {
         runCatching {
             runSubmissionUncertaintyStore.markAmbiguous(
-                PendingRunSubmissionKey(work.requestEndpoint, work.sessionId),
-                work.attemptId,
+                PendingRunSubmissionKey(submission.requestEndpoint, submission.sessionId),
+                submission.attemptId,
             )
         }
         throw error
     } catch (error: GatewayException) {
         val sendCategory =
             error.category.toSendFailureCategoryOrNull() ?: MessageSendErrorCategory.GATEWAY_REQUEST_FAILED
-        if (reportUncertainRunSubmission(work, sendCategory)) {
+        if (reportUncertainRunSubmission(submission, sendCategory)) {
             onRunSubmissionCompleted?.invoke()
         }
     } catch (_: Exception) {
-        if (reportUncertainRunSubmission(work, MessageSendErrorCategory.GATEWAY_REQUEST_FAILED)) {
+        if (reportUncertainRunSubmission(submission, MessageSendErrorCategory.GATEWAY_REQUEST_FAILED)) {
             onRunSubmissionCompleted?.invoke()
         }
     } finally {
-        forgetPendingCreate(work.recoverySessionKey, work.pendingCreate)
+        forgetPendingCreate(submission.recoverySessionKey, submission.pendingCreate)
         onRunSubmissionSettled?.invoke()
     }
 }

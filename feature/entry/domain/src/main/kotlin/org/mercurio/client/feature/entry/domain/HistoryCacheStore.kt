@@ -1,11 +1,5 @@
 package org.mercurio.client.feature.entry.domain
 
-/** The Gateway endpoint and Session whose cached transcript is addressed. */
-data class HistoryCacheKey(
-    val endpoint: String,
-    val sessionId: SessionId,
-)
-
 /** At most this many cached messages exist in the store; the bound is fixed, not configurable. */
 const val HISTORY_CACHE_MAX_MESSAGES: Int = 5_000
 
@@ -46,25 +40,4 @@ interface HistoryCacheStore {
 
     /** Empties the store completely, removing cached content and the key that protects it. */
     fun clear()
-}
-
-/** In-memory default used when no persisted history cache store is provided. */
-object NoOpHistoryCacheStore : HistoryCacheStore {
-    override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> = emptyList()
-
-    override fun write(
-        key: HistoryCacheKey,
-        messages: List<GatewayHistoryMessage>,
-    ) = Unit
-
-    override fun readSessionList(endpoint: String): List<Session> = emptyList()
-
-    override fun writeSessionList(
-        endpoint: String,
-        sessions: List<Session>,
-    ) = Unit
-
-    override fun clearEndpoint(endpoint: String) = Unit
-
-    override fun clear() = Unit
 }

@@ -19,12 +19,13 @@ name: terminal-failure
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Fail this"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: "Run state: Failed"
+    visible: ".*· failed"
     timeout: 30000
 - swipe:
     start: "50%, 71%"
@@ -34,13 +35,9 @@ name: terminal-failure
     start: "50%, 71%"
     end: "50%, 62%"
     duration: 400
+- tapOn: "Message actions for message-failure"
 - extendedWaitUntil:
-    visible: "Latest Run"
+    visible: "Copy message"
     timeout: 30000
-- tapOn:
-    text: "Show run ID"
-    index: 0
-- extendedWaitUntil:
-    visible: "Run ID: run-failure"
-    timeout: 30000
+- back
 - assertVisible: "Stable failure result"
