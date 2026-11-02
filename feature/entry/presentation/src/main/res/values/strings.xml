@@ -86,11 +86,38 @@
     <string name="dialog_delete_session_body">The session and its transcript are removed from this client. This cannot be undone here.</string>
 
     <string name="settings_title">Settings</string>
-    <string name="settings_version">App version %1$s</string>
-    <string name="settings_run_status_notifications">Run status notifications</string>
     <string name="settings_local_diagnostics">Local diagnostics</string>
     <string name="settings_clear_history_cache">Clear cached conversations</string>
     <string name="settings_clear_history_cache_summary">Clearing removes cached conversations from this device only. Remote Sessions and Runs are not deleted, and diagnostic files you already exported are not removed.</string>
+    <string name="settings_section_connection">CONNECTION</string>
+    <string name="settings_section_notifications">NOTIFICATIONS</string>
+    <string name="settings_notifications_row">Notifications</string>
+    <string name="settings_section_media">MEDIA</string>
+    <string name="settings_section_diagnostics">DIAGNOSTICS</string>
+    <string name="settings_section_about">ABOUT</string>
+    <string name="settings_connection_actions">Connection actions</string>
+    <string name="shell_connection_actions_mark" translatable="false">::</string>
+    <string name="settings_media_auto_load_description">Automatic picture loading</string>
+    <string name="settings_run_status_notifications_description">Run status notifications</string>
+    <string name="settings_connection_row">Connection</string>
+    <string name="settings_connection_connected">Connected · gateway ready</string>
+    <string name="settings_connection_saved">Saved connection</string>
+    <string name="settings_connection_none">No saved connection</string>
+    <string name="settings_action_change_credential">Change credential</string>
+    <string name="settings_action_remove_connection">Remove connection</string>
+    <string name="settings_notifications_supporting_off">Tells you when a run finishes, even when closed.</string>
+    <string name="settings_notifications_supporting_on">Run-finished notices are on.</string>
+    <string name="settings_media_auto_load">Load pictures automatically</string>
+    <string name="settings_media_auto_load_on">Images load without a tap. Data charges may apply.</string>
+    <string name="settings_media_auto_load_off">Images load only when you tap them.</string>
+    <string name="settings_about_version">Version</string>
+    <string name="settings_about_build">Build</string>
+    <string name="settings_about_install_source">Install source</string>
+    <string name="settings_install_source_google_play">Google Play</string>
+    <string name="settings_install_source_other">Other source</string>
+    <string name="settings_value_unknown">unknown</string>
+    <string name="chat_image_not_loaded">Image not loaded.</string>
+    <string name="chat_image_load">Load image</string>
 
     <string name="diagnostics_title">Local diagnostics</string>
     <string name="diagnostics_body">Diagnostics stay on this device. They hold redacted operational metadata only: no credentials, endpoints, prompts, responses, or identifiers.</string>

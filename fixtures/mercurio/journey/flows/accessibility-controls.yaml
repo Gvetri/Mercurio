@@ -16,9 +16,9 @@ name: accessibility-controls
     visible: "mercurio"
     timeout: 30000
 - tapOn: "Settings"
-- assertVisible: "Run status notifications"
-- assertVisible: ".*App version.*"
-- tapOn: "Back to Sessions"
+- assertVisible: "Notifications"
+- assertVisible: "CONNECTION"
+- back
 - assertVisible: "Search Sessions"
 - assertVisible: "new session"
 - tapOn: "Alpha Session"
