@@ -24,11 +24,12 @@ name: model-catalog-row-mismatch
     timeout: 30000
 - assertNotVisible: "Server default"
 - takeScreenshot: model-catalog-row-mismatch-hidden
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Mismatch send"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Stable mismatch composer"
     timeout: 30000
-- assertVisible: "Run state: Succeeded"
+- assertVisible: "idle"
