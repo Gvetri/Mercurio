@@ -10,11 +10,14 @@ class LoadEntryState(
     fun execute(): EntryState {
         val connection = gatewayConnectionRepository.load()
         val configuredEndpoint = connection?.endpoint
+        val installedBuild = installedBuildProvider.installedBuild()
         return EntryState(
             isGatewayConnectionConfigured = configuredEndpoint != null,
             configuredEndpoint = configuredEndpoint,
             configuredCredential = connection?.bearerCredential,
-            clientVersion = installedBuildProvider.installedBuild().versionNameOr(UNKNOWN_CLIENT_VERSION),
+            clientVersion = installedBuild.versionNameOr(UNKNOWN_CLIENT_VERSION),
+            buildNumber = installedBuild.versionCode,
+            installSource = installedBuild.installSource,
         )
     }
 }

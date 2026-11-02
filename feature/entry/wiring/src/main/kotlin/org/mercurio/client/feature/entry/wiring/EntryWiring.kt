@@ -49,11 +49,7 @@ object EntryWiring {
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
         val modelSelectionStore = SharedPreferencesModelSelectionStore(context)
         val historyCacheStore = overrides.historyCacheStore ?: buildHistoryCacheStore(context)
-        val localDiagnosticsBuffer =
-            RollingLocalDiagnosticsBuffer(
-                FileLocalDiagnosticsStorage(context),
-                onRecordFailure = ::reportLocalDiagnosticsRecordFailure,
-            )
+        val localDiagnosticsBuffer = buildLocalDiagnosticsBuffer(context)
         return EntryStateHolder(
             initialState = initialState,
             verifyGatewayConnection = verifyGatewayConnection,
@@ -88,6 +84,7 @@ object EntryWiring {
                     modelSelectionStore = modelSelectionStore,
                     historyCacheStore = historyCacheStore,
                     runStatusNotificationSettingsStore = SharedPreferencesRunStatusNotificationSettingsStore(context),
+                    imageLoadingSettingsStore = SharedPreferencesImageLoadingSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
                     requestRunStatusNotificationPermission = requestRunStatusNotificationPermission,
@@ -119,6 +116,12 @@ private fun resolveInstalledBuildProvider(
     context: Context,
     overrides: EntryWiringOverrides,
 ): InstalledBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuildProvider(context)
+
+private fun buildLocalDiagnosticsBuffer(context: Context): RollingLocalDiagnosticsBuffer =
+    RollingLocalDiagnosticsBuffer(
+        FileLocalDiagnosticsStorage(context),
+        onRecordFailure = ::reportLocalDiagnosticsRecordFailure,
+    )
 
 private fun buildRunRecoveryRegistry(
     context: Context,

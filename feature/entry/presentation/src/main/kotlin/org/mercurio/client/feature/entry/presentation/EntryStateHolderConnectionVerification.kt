@@ -177,12 +177,16 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
         synchronized(connectionPersistenceLock) {
             val releasedState = releaseGatewayConnectionLocked()
             updateRunRecoveryEndpoint?.invoke(null)
+            val current = mutableUiState.value
             mutableUiState.value =
                 EntryState()
                     .toUiState()
                     .copy(
-                        clientVersion = mutableUiState.value.clientVersion,
-                        runStatusNotifications = mutableUiState.value.runStatusNotifications,
+                        clientVersion = current.clientVersion,
+                        buildNumber = current.buildNumber,
+                        installSource = current.installSource,
+                        autoLoadImages = current.autoLoadImages,
+                        runStatusNotifications = current.runStatusNotifications,
                     )
             releasedState
         }

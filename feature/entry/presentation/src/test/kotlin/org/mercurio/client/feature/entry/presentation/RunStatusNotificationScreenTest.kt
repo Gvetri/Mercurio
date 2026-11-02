@@ -35,7 +35,7 @@ class RunStatusNotificationScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Run status notifications").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Notifications").assertIsDisplayed()
         composeTestRule
             .onNodeWithContentDescription("Run status notifications")
             .assertIsDisplayed()

@@ -138,7 +138,7 @@ private fun ChatSessionMenuControl(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "::",
+                    text = stringResource(R.string.shell_connection_actions_mark),
                     style =
                         MaterialTheme.typography.labelLarge.copy(
                             letterSpacing = 0.14.em,
