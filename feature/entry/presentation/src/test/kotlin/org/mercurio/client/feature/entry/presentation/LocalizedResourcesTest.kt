@@ -12,11 +12,6 @@ import org.robolectric.RuntimeEnvironment
 import java.io.File
 import java.util.Locale
 
-/**
- * The localization scaffolding this module carries: copy lives in string resources,
- * a translated locale directory drops in without further refactoring, and a locale
- * that carries no translation of a string falls back to the base locale.
- */
 @RunWith(RobolectricTestRunner::class)
 class LocalizedResourcesTest {
     @Test

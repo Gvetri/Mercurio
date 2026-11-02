@@ -47,7 +47,6 @@ enum class SessionRenameErrorCategory(
     GATEWAY_REQUEST_FAILED(R.string.error_session_not_renamed),
 }
 
-/** The unit a relative last-active label counts in; the renderer picks its resource. */
 enum class RelativeLastActiveUnit { MINUTES, HOURS, DAYS, WEEKS, MONTHS, YEARS }
 
 /** How long ago a Session was last active, or that the Gateway supplied no answer. */

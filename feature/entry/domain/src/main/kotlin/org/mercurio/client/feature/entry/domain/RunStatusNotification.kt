@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.domain
 
-/** Terminal outcomes that may produce a best-effort Run status notification. */
 val notifiableTerminalStates: Set<RunPresentationState> =
     setOf(RunPresentationState.SUCCEEDED, RunPresentationState.FAILED)
 

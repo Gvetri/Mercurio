@@ -3,12 +3,10 @@ package org.mercurio.client.feature.entry.presentation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 
-/** The Session title the list renders: Gateway data, or the pending-title placeholder. */
 @Composable
 internal fun sessionTitle(item: SessionItemUiState): String =
     if (item.isPendingTitle) stringResource(R.string.sessions_pending_title) else item.title
 
-/** The compact last-active value the time column renders. */
 @Composable
 internal fun relativeLastActiveLabel(value: RelativeLastActive): String =
     when (value) {
