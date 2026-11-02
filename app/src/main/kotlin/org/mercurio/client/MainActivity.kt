@@ -10,19 +10,23 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import org.mercurio.client.feature.entry.domain.MessageImagePort
 import org.mercurio.client.feature.entry.presentation.EntryScreen
 import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryUiEvent
 import org.mercurio.client.feature.entry.presentation.HermesTheme
+import org.mercurio.client.feature.entry.presentation.MessageImageProvider
 import org.mercurio.client.feature.entry.wiring.EntryWiring
 
 class MainActivity : ComponentActivity() {
     private lateinit var entryStateHolder: EntryStateHolder
+    private lateinit var messageImagePort: MessageImagePort
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         entryStateHolder = EntryWiring.createEntryStateHolder(applicationContext)
+        messageImagePort = EntryWiring.createMessageImagePort()
         setContent {
             val notificationPermissionLauncher =
                 rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -35,10 +39,12 @@ class MainActivity : ComponentActivity() {
             }
             val state by entryStateHolder.uiState.collectAsState()
             HermesTheme {
-                EntryScreen(
-                    state = state,
-                    onEvent = entryStateHolder::onEvent,
-                )
+                MessageImageProvider(port = messageImagePort) {
+                    EntryScreen(
+                        state = state,
+                        onEvent = entryStateHolder::onEvent,
+                    )
+                }
             }
         }
     }

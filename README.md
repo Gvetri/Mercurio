@@ -2,6 +2,8 @@
 
 Mercurio is an independent Android application built with Kotlin and Jetpack Compose. It provides a native shell for connecting to a pre-existing, compatible Hermes Gateway.
 
+Messages can reference HTTPS images: the client fetches them directly from their host, holds them only in memory, and refuses a non-HTTPS destination or a private, loopback, or link-local address.
+
 This repository does not embed a local Hermes runtime, agent execution engine, desktop web interface, Electron application, or WebView wrapper. It provides one explicit HTTPS Gateway connection flow that verifies the Gateway and then saves the bearer credential with authenticated, device-local persistence by default, followed by a Gateway-derived Session list with filtering of loaded titles and previews and server-backed pagination, explicit in-memory Session creation, and read-only Session history entry with an in-memory message composer and explicit Gateway Run submission. Drafts remain memory-only per Session, Send is disabled while a submission or active Run exists, and failed submissions preserve the draft for retry.
 
 ## Install and use

@@ -107,6 +107,7 @@ dependencies {
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.coil)
     implementation(libs.kotlinx.coroutines.core)
     implementation(project(":feature:entry:application"))
     implementation(project(":feature:entry:domain"))

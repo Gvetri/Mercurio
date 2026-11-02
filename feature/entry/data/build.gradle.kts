@@ -14,10 +14,12 @@ kotlin {
 
 dependencies {
     implementation(project(":feature:entry:domain"))
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     testImplementation(kotlin("test"))
     testImplementation(libs.junit4)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":feature:entry:application"))
     testImplementation(project(":fixtures:mercurio:runner"))
 }

@@ -120,6 +120,10 @@ Android settings.
 - A verified credential is authenticated-encrypted with an AndroidKeyStore key in
   application-private, backup-excluded storage. It is never written in plain text, and
   **Remove Gateway Connection** deletes the saved endpoint and credential from this device.
+- A Message can reference an HTTPS image. The client fetches that image directly from its host, so
+  the host can see the device's network address. The image stays in memory only: it is never written
+  to disk, and a process restart fetches it again. Non-HTTPS destinations and private, loopback, and
+  link-local addresses are refused.
 
 ## Local diagnostics
 

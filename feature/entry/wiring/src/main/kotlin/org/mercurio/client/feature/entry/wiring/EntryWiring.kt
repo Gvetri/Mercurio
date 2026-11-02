@@ -13,8 +13,11 @@ import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.data.DefaultGatewayClient
 import org.mercurio.client.feature.entry.data.DefaultGatewayConnectionRepository
 import org.mercurio.client.feature.entry.data.EndpointScopedRunRecoveryRegistry
+import org.mercurio.client.feature.entry.data.HttpMessageImagePort
 import org.mercurio.client.feature.entry.data.RollingLocalDiagnosticsBuffer
+import org.mercurio.client.feature.entry.data.defaultMessageImageHttpTransport
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
+import org.mercurio.client.feature.entry.domain.MessageImagePort
 import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryStateHolderDependencies
 import org.mercurio.client.feature.entry.presentation.LocalDiagnosticsPorts
@@ -22,6 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 object EntryWiring {
+    fun createMessageImagePort(): MessageImagePort = HttpMessageImagePort(defaultMessageImageHttpTransport())
+
     fun createEntryStateHolder(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),

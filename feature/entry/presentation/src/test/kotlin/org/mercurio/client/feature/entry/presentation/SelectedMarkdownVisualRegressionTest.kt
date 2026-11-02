@@ -1,5 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziRule
@@ -7,14 +10,18 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.MessageImageFetch
+import org.mercurio.client.feature.entry.domain.MessageImagePort
+import org.mercurio.client.feature.entry.domain.MessageImageRefusal
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
  * The markdown rendering contract for untrusted Gateway content: a fenced code block in
- * its horizontally scrollable region, and long multi-block content, each captured in an
- * intentional light and dark theme on a fixed phone viewport.
+ * its horizontally scrollable region, long multi-block content, and the image card's
+ * loading, failed and loaded states, each captured in an intentional light and dark theme
+ * on a fixed phone viewport.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-notnight")
@@ -46,6 +53,55 @@ class SelectedMarkdownVisualRegressionTest {
     @Config(qualifiers = "w411dp-h891dp-night")
     fun markdown_long_content_dark() {
         capture(darkTheme = true, content = LONG_MESSAGE)
+    }
+
+    @Test
+    fun markdown_image_loading_light() {
+        captureImage(darkTheme = false, port = MarkdownImageSuspendingPort())
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun markdown_image_loading_dark() {
+        captureImage(darkTheme = true, port = MarkdownImageSuspendingPort())
+    }
+
+    @Test
+    fun markdown_image_failed_light() {
+        captureImage(darkTheme = false, port = MarkdownImageRefusedPort())
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun markdown_image_failed_dark() {
+        captureImage(darkTheme = true, port = MarkdownImageRefusedPort())
+    }
+
+    @Test
+    fun markdown_image_loaded_light() {
+        captureImage(darkTheme = false, port = MarkdownImageLoadedPort())
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night")
+    fun markdown_image_loaded_dark() {
+        captureImage(darkTheme = true, port = MarkdownImageLoadedPort())
+    }
+
+    private fun captureImage(
+        darkTheme: Boolean,
+        port: MessageImagePort,
+    ) {
+        val services = MessageImageServices(port, MarkdownImageDecoder())
+        composeTestRule.setContent {
+            HermesTheme(darkTheme = darkTheme) {
+                CompositionLocalProvider(LocalMessageImageServices provides services) {
+                    EntryScreen(state = markdownState(IMAGE_MESSAGE), onEvent = {})
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onRoot().captureRoboImage()
     }
 
     private fun capture(
@@ -111,6 +167,8 @@ class SelectedMarkdownVisualRegressionTest {
             A rejected scheme such as [danger](javascript:alert(1)) stays inert text.
             """.trimIndent()
 
+        const val IMAGE_MESSAGE = "![Latency by minute for run 4b2a.](https://example.com/chart.png)"
+
         val LONG_MESSAGE =
             """
             **Summary**
@@ -127,3 +185,35 @@ class SelectedMarkdownVisualRegressionTest {
                 "\n\n```kotlin\nval total = 12\n```"
     }
 }
+
+private class MarkdownImageSuspendingPort : MessageImagePort {
+    override suspend fun fetch(destination: String): MessageImageFetch = kotlinx.coroutines.awaitCancellation()
+}
+
+private class MarkdownImageRefusedPort : MessageImagePort {
+    override suspend fun fetch(destination: String): MessageImageFetch {
+        return MessageImageFetch.Refused(MessageImageRefusal.NETWORK)
+    }
+}
+
+private class MarkdownImageLoadedPort : MessageImagePort {
+    override suspend fun fetch(destination: String): MessageImageFetch {
+        return MessageImageFetch.Fetched(byteArrayOf(1, 2, 3), "image/png")
+    }
+}
+
+private class MarkdownImageDecoder : MessageImageDecoder {
+    private val image: ImageBitmap =
+        android.graphics.Bitmap
+            .createBitmap(IMAGE_WIDTH, IMAGE_HEIGHT, android.graphics.Bitmap.Config.ARGB_8888)
+            .apply { eraseColor(IMAGE_COLOR) }
+            .asImageBitmap()
+
+    override suspend fun decode(bytes: ByteArray): ImageBitmap = image
+}
+
+private const val IMAGE_WIDTH = 96
+
+private const val IMAGE_HEIGHT = 54
+
+private const val IMAGE_COLOR = 0xFF78909C.toInt()

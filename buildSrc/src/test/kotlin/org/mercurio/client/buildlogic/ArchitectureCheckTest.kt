@@ -217,6 +217,21 @@ class ArchitectureCheckTest {
     }
 
     @Test
+    fun rejects_a_coil_network_fetcher_in_presentation() {
+        val violation =
+            fixturePath("presentation", "CoilNetworkViolation.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                val networkFetcher = "coil3.network.okhttp.OkHttpNetworkFetcher"
+                """
+
+        withFixtureScope(mapOf(violation)) { scope ->
+            assertRuleRejects(presentationReferenceRule, "coil3.network") { assertPresentationReferences(scope) }
+        }
+    }
+
+    @Test
     fun accepts_the_presentation_renderer_of_a_supported_construct() {
         val accepted =
             fixturePath("presentation", "AllowedReference.kt") to
@@ -615,6 +630,7 @@ class ArchitectureCheckTest {
             listOf(
                 Regex("""android\.webkit|androidx\.webkit"""),
                 Regex("""java\.net\.|okhttp3\.|HttpURLConnection|URLConnection"""),
+                Regex("""coil3\.network"""),
             )
 
         val appExternalFileForbiddenReferences =

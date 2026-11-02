@@ -97,15 +97,84 @@ private fun MarkdownParagraph(
     spans: List<MarkdownSpan>,
     actions: MessageActions,
 ) {
+    MarkdownSpans(spans = spans, actions = actions)
+}
+
+@Composable
+private fun MarkdownSpans(
+    spans: List<MarkdownSpan>,
+    actions: MessageActions,
+) {
     val tokens = LocalHermesDesignTokens.current
-    Text(
-        text =
-            spans.toAnnotatedString(
-                linkColor = MaterialTheme.colorScheme.primary,
-                onOpenLink = actions.openLink,
-                codeBackground = tokens.componentColors.inset,
-            ),
-    )
+    val pieces = remember(spans) { spans.paragraphPieces() }
+    if (pieces.none { piece -> piece is ParagraphPiece.Image }) {
+        Text(
+            text =
+                spans.toAnnotatedString(
+                    linkColor = MaterialTheme.colorScheme.primary,
+                    onOpenLink = actions.openLink,
+                    codeBackground = tokens.componentColors.inset,
+                ),
+        )
+        return
+    }
+    val imageServices = LocalMessageImageServices.current
+    Column(verticalArrangement = Arrangement.spacedBy(tokens.spacing.xs)) {
+        pieces.forEach { piece ->
+            when (piece) {
+                is ParagraphPiece.Text ->
+                    Text(
+                        text =
+                            piece.spans.toAnnotatedString(
+                                linkColor = MaterialTheme.colorScheme.primary,
+                                onOpenLink = actions.openLink,
+                                codeBackground = tokens.componentColors.inset,
+                            ),
+                    )
+                is ParagraphPiece.Image ->
+                    if (imageServices == null) {
+                        Text(text = piece.source)
+                    } else {
+                        MessageImageCard(destination = piece.element.destination, alt = piece.element.alt)
+                    }
+            }
+        }
+    }
+}
+
+private sealed interface ParagraphPiece {
+    data class Text(
+        val spans: List<MarkdownSpan>,
+    ) : ParagraphPiece
+
+    data class Image(
+        val source: String,
+        val element: InlineElement.Image,
+    ) : ParagraphPiece
+}
+
+private fun List<MarkdownSpan>.paragraphPieces(): List<ParagraphPiece> {
+    val pieces = mutableListOf<ParagraphPiece>()
+    val textRun = mutableListOf<MarkdownSpan>()
+
+    fun flushTextRun() {
+        if (textRun.isNotEmpty()) {
+            pieces += ParagraphPiece.Text(textRun.toList())
+            textRun.clear()
+        }
+    }
+
+    forEach { span ->
+        val image = span.element as? InlineElement.Image
+        if (image == null) {
+            textRun += span
+        } else {
+            flushTextRun()
+            pieces += ParagraphPiece.Image(source = span.text, element = image)
+        }
+    }
+    flushTextRun()
+    return pieces
 }
 
 @Composable
@@ -181,7 +250,6 @@ private fun MarkdownList(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val spacing = tokens.spacing
-    val linkColor = MaterialTheme.colorScheme.primary
     Column(
         modifier = Modifier.padding(start = spacing.m),
         verticalArrangement = Arrangement.spacedBy(spacing.xs),
@@ -192,15 +260,9 @@ private fun MarkdownList(
                 horizontalArrangement = Arrangement.spacedBy(spacing.xs),
             ) {
                 Text(text = item.marker)
-                Text(
-                    text =
-                        item.spans.toAnnotatedString(
-                            linkColor = linkColor,
-                            onOpenLink = actions.openLink,
-                            codeBackground = tokens.componentColors.inset,
-                        ),
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    MarkdownSpans(spans = item.spans, actions = actions)
+                }
             }
         }
     }
