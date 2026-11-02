@@ -225,13 +225,13 @@ internal fun pickerHolder(
             ),
     )
 
-internal fun EntryStateHolder.connectAndOpenPickerSession(gateway: RetryFakeGateway) {
+internal suspend fun EntryStateHolder.connectAndOpenPickerSession(gateway: RetryFakeGateway) {
     connectRetryGateway(this, gateway)
     onEvent(EntryUiEvent.SessionClicked(PICKER_SESSION_ID))
     awaitRetryState(this) { it.sessionList?.openedSession?.session?.id == PICKER_SESSION_ID }
 }
 
-internal fun awaitPickerState(
+internal suspend fun awaitPickerState(
     holder: EntryStateHolder,
     predicate: (ModelPickerUiState) -> Boolean,
 ) {

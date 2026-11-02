@@ -3,12 +3,11 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
@@ -25,8 +24,6 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class SessionRenameStateHolderTest {
     private companion object {
@@ -140,93 +137,95 @@ class SessionRenameStateHolderTest {
     }
 
     @Test
-    fun late_rename_completion_cannot_mutate_a_reconnected_gateway_and_stays_retryable() {
-        val sessionId = SessionId("session-one")
-        val oldGateway =
-            BlockingRenameGateway(
-                listed = session(sessionId, "Old gateway title", "Old preview"),
-                confirmed = session(sessionId, "Old remote result", "Old preview"),
-            )
-        val newGateway =
-            FakeSessionGateway(
-                listed = session(sessionId, "New gateway title", "New preview"),
-                confirmed = session(sessionId, "New confirmed title", "New preview"),
-            )
-        val gateways =
-            ArrayDeque<SessionGatewayPort>().apply {
-                add(oldGateway)
-                add(newGateway)
-            }
-        val holder =
-            EntryStateHolder(
-                initialState = EntryState(isGatewayConnectionConfigured = false),
-                verifyGatewayConnection =
-                    VerifyGatewayConnection(FakeGatewayConnectionRepository()) { _, _ ->
-                        GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
-                    },
-                scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-                sessionGatewayFactory = { _, _ -> gateways.removeFirst() },
-            )
+    fun late_rename_completion_cannot_mutate_a_reconnected_gateway_and_stays_retryable() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            lateinit var holder: EntryStateHolder
+            val oldGateway =
+                ScriptedRenameGateway(
+                    listed = session(sessionId, "Old gateway title", "Old preview"),
+                    confirmed = session(sessionId, "Old remote result", "Old preview"),
+                ).apply {
+                    onRename = { holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked) }
+                }
+            val newGateway =
+                FakeSessionGateway(
+                    listed = session(sessionId, "New gateway title", "New preview"),
+                    confirmed = session(sessionId, "New confirmed title", "New preview"),
+                )
+            val gateways =
+                ArrayDeque<SessionGatewayPort>().apply {
+                    add(oldGateway)
+                    add(newGateway)
+                }
+            holder =
+                EntryStateHolder(
+                    initialState = EntryState(isGatewayConnectionConfigured = false),
+                    verifyGatewayConnection =
+                        VerifyGatewayConnection(FakeGatewayConnectionRepository()) { _, _ ->
+                            GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
+                        },
+                    scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)),
+                    sessionGatewayFactory = { _, _ -> gateways.removeFirst() },
+                )
 
-        try {
             connect(holder)
+            advanceUntilIdle()
             awaitState(holder) { it.sessionList?.sessions?.singleOrNull()?.title == "Old gateway title" }
             holder.onEvent(EntryUiEvent.RenameSessionClicked(sessionId))
             holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(sessionId, "Old request"))
             holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(sessionId))
-            assertTrue(oldGateway.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            advanceUntilIdle()
 
-            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
+            advanceUntilIdle()
             awaitState(holder) { it.sessionList?.sessions?.singleOrNull()?.title == "New gateway title" }
 
-            oldGateway.release.countDown()
-            awaitState(holder) {
-                val mutation = it.sessionList?.sessionMutations?.get(sessionId)
-                it.sessionList?.sessions?.singleOrNull()?.title == "New gateway title" &&
-                    mutation?.retryAction == SessionMutationAction.RENAME &&
-                    mutation.pendingAction == null
-            }
-        } finally {
-            oldGateway.release.countDown()
+            val mutation = holder.uiState.value.sessionList?.sessionMutations?.get(sessionId)
+            assertEquals(SessionMutationAction.RENAME, mutation?.retryAction)
+            assertNull(mutation?.pendingAction)
             holder.close()
         }
-    }
 
     @Test
-    fun edited_restored_rename_draft_survives_refresh_and_reconnect() {
-        val sessionId = SessionId("session-one")
-        val gateway =
-            BlockingRenameGateway(
-                listed = session(sessionId, "Current title", "Preview"),
-                confirmed = session(sessionId, "Original request", "Preview"),
-            )
-        val holder =
-            EntryStateHolder(
-                initialState = EntryState(isGatewayConnectionConfigured = false),
-                verifyGatewayConnection =
-                    VerifyGatewayConnection(FakeGatewayConnectionRepository()) { _, _ ->
-                        GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
-                    },
-                scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-                sessionGatewayFactory = { _, _ -> gateway },
-            )
+    fun edited_restored_rename_draft_survives_refresh_and_reconnect() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            lateinit var holder: EntryStateHolder
+            val gateway =
+                ScriptedRenameGateway(
+                    listed = session(sessionId, "Current title", "Preview"),
+                    confirmed = session(sessionId, "Original request", "Preview"),
+                ).apply {
+                    onRename = { holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked) }
+                }
+            holder =
+                EntryStateHolder(
+                    initialState = EntryState(isGatewayConnectionConfigured = false),
+                    verifyGatewayConnection =
+                        VerifyGatewayConnection(FakeGatewayConnectionRepository()) { _, _ ->
+                            GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
+                        },
+                    scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)),
+                    sessionGatewayFactory = { _, _ -> gateway },
+                )
 
-        try {
             connect(holder)
+            advanceUntilIdle()
             awaitState(holder) { it.sessionList?.isLoading == false }
             holder.onEvent(EntryUiEvent.RenameSessionClicked(sessionId))
             holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(sessionId, "Original request"))
             holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(sessionId))
-            assertTrue(gateway.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            advanceUntilIdle()
 
-            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
+            advanceUntilIdle()
             awaitState(holder) {
                 it.sessionList?.sessionMutations?.get(sessionId)?.retryAction == SessionMutationAction.RENAME
             }
             holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(sessionId, "Edited after reconnect"))
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+            advanceUntilIdle()
             awaitState(holder) { it.sessionList?.isRefreshing == false }
             assertEquals(
                 "Edited after reconnect",
@@ -235,16 +234,14 @@ class SessionRenameStateHolderTest {
 
             holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
             connect(holder)
+            advanceUntilIdle()
             awaitState(holder) { it.sessionList?.isLoading == false }
             assertEquals(
                 "Edited after reconnect",
                 holder.uiState.value.sessionList?.sessionMutations?.get(sessionId)?.rename?.titleDraft,
             )
-        } finally {
-            gateway.release.countDown()
             holder.close()
         }
-    }
 
     private fun connectedHolder(gateway: SessionGatewayPort): EntryStateHolder {
         val holder =
@@ -271,16 +268,10 @@ class SessionRenameStateHolderTest {
         holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
     }
 
-    private fun awaitState(
+    private suspend fun awaitState(
         holder: EntryStateHolder,
         predicate: (EntryUiState) -> Boolean,
-    ) {
-        runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) {
-                holder.uiState.first(predicate)
-            }
-        }
-    }
+    ) = holder.awaitUiState("the Session rename state", predicate)
 
     private fun session(
         id: SessionId,
@@ -301,12 +292,11 @@ class SessionRenameStateHolderTest {
         override fun save(connection: GatewayConnection) = Unit
     }
 
-    private class BlockingRenameGateway(
+    private class ScriptedRenameGateway(
         private val listed: Session,
         private val confirmed: Session,
     ) : SessionGatewayPort {
-        val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
+        var onRename: (() -> Unit)? = null
 
         override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(listed), null)
 
@@ -321,8 +311,7 @@ class SessionRenameStateHolderTest {
             sessionId: SessionId,
             title: String,
         ): Session {
-            started.countDown()
-            check(release.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) { "Timed out waiting for rename release." }
+            onRename?.invoke()
             return confirmed
         }
 

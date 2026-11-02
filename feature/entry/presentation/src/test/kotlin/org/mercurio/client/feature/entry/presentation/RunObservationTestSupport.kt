@@ -5,7 +5,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.mercurio.client.feature.entry.application.EntryState
@@ -63,7 +62,7 @@ internal fun observationHolder(
     )
 }
 
-internal fun openObservedSession(
+internal suspend fun openObservedSession(
     holder: EntryStateHolder,
     gateway: ObservationScriptedGateway,
     sessionId: SessionId,
@@ -77,16 +76,10 @@ internal fun openObservedSession(
     awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
 }
 
-internal fun awaitObservationState(
+internal suspend fun awaitObservationState(
     holder: EntryStateHolder,
     predicate: (EntryUiState) -> Boolean,
-) {
-    runBlocking {
-        withTimeout(OBSERVATION_TIMEOUT_MILLIS) {
-            holder.uiState.first(predicate)
-        }
-    }
-}
+) = holder.awaitUiState("the observation state", predicate)
 
 internal fun awaitObservationCondition(predicate: () -> Boolean) {
     runBlocking {
