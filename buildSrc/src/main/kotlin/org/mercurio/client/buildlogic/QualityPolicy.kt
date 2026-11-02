@@ -55,6 +55,7 @@ object QualityPolicy {
     )
 
     val boundaryDoubles = listOf(
+        BoundaryDoubleRequirement("MessageImagePort", "repository"),
         BoundaryDoubleRequirement("GatewayConnectionRepository", "repository"),
         BoundaryDoubleRequirement("SessionGatewayPort", "repository"),
         BoundaryDoubleRequirement("RunGatewayPort", "repository"),

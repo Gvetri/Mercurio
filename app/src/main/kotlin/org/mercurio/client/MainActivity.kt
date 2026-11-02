@@ -11,15 +11,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import kotlinx.coroutines.flow.MutableSharedFlow
+import org.mercurio.client.feature.entry.domain.MessageImagePort
 import org.mercurio.client.feature.entry.presentation.EntryScreen
 import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryUiEvent
 import org.mercurio.client.feature.entry.presentation.HermesTheme
+import org.mercurio.client.feature.entry.presentation.MessageImageProvider
 import org.mercurio.client.feature.entry.wiring.EntryWiring
 
 class MainActivity : ComponentActivity() {
     private val notificationPermissionRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private lateinit var entryStateHolder: EntryStateHolder
+    private lateinit var messageImagePort: MessageImagePort
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +32,7 @@ class MainActivity : ComponentActivity() {
                 context = applicationContext,
                 requestRunStatusNotificationPermission = { notificationPermissionRequests.tryEmit(Unit) },
             )
+        messageImagePort = EntryWiring.createMessageImagePort()
         setContent {
             val notificationPermissionLauncher =
                 rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -41,10 +45,12 @@ class MainActivity : ComponentActivity() {
             }
             val state by entryStateHolder.uiState.collectAsState()
             HermesTheme {
-                EntryScreen(
-                    state = state,
-                    onEvent = entryStateHolder::onEvent,
-                )
+                MessageImageProvider(loadImage = messageImagePort::fetch) {
+                    EntryScreen(
+                        state = state,
+                        onEvent = entryStateHolder::onEvent,
+                    )
+                }
             }
         }
     }

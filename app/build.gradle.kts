@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
+    implementation(project(":feature:entry:domain"))
     implementation(project(":feature:entry:presentation"))
     implementation(project(":feature:entry:wiring"))
 

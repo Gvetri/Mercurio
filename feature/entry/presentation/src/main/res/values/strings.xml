@@ -172,6 +172,10 @@
     <string name="chat_history_empty_title">No messages yet</string>
     <string name="chat_history_empty_body">This Session has no history on the Gateway. Write the first message.</string>
     <string name="chat_try_again_label">[ try again ]</string>
+    <string name="chat_image_loading">Loading image…</string>
+    <string name="chat_image_load_failed">Image could not be loaded.</string>
+    <string name="chat_image_decode_failed">Image could not be decoded.</string>
+    <string name="chat_image_content_description">Image</string>
     <string name="run_id_label">Run ID: %1$s</string>
     <string name="run_id_show">Show run ID</string>
     <string name="run_id_hide">Hide run ID</string>

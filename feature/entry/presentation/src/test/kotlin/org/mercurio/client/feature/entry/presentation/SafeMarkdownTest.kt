@@ -414,6 +414,16 @@ class SafeMarkdownTest {
     }
 
     @Test
+    fun an_image_destination_outside_absolute_https_stays_literal_without_an_element() {
+        val content = "![relative](charts/a.png) ![plain](http://example.com/a.png)"
+
+        val blocks = parseSafeMarkdown(content)
+
+        assertEquals(content, blocks.plainText())
+        assertTrue(blocks.spans().all { it.element == null })
+    }
+
+    @Test
     fun inline_math_becomes_a_structured_element_and_keeps_its_delimiters() {
         val blocks = parseSafeMarkdown("Energy \$E = mc^2\$ here")
 

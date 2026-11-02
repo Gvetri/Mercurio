@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.mercurio.client.feature.entry.domain.MAX_EXTERNAL_DESTINATION_LENGTH
+
 /**
  * A Gateway message rendered as a closed set of inert blocks. The model has no node
  * that can carry executable content: every span is literal text, and [MarkdownSpan.link]
@@ -97,7 +99,11 @@ internal data class MarkdownSpan(
  * [MarkdownSpan.text], so a renderer stays inert until it opts into handling the element.
  */
 internal sealed interface InlineElement {
-    /** `![alt](destination)` with the label and the destination its source authored. */
+    /**
+     * `![alt](destination)` whose destination is an absolute HTTPS URL accepted by
+     * [allowedExternalLinkDestination]. Any other destination stays literal text and never
+     * becomes an element, so a relative or non-HTTPS target is never fetched.
+     */
     data class Image(
         val alt: String,
         val destination: String,
@@ -118,7 +124,7 @@ internal fun allowedExternalLinkDestination(destination: String): String? {
     val candidate = destination.trim()
     val authority = candidate.drop(HTTPS_SCHEME.length).takeWhile { it !in "/?#" }
     return when {
-        candidate.length > MAX_LINK_LENGTH -> null
+        candidate.length > MAX_EXTERNAL_DESTINATION_LENGTH -> null
         candidate.any { it.isWhitespace() || it.isISOControl() || it == '\\' } -> null
         !candidate.startsWith(HTTPS_SCHEME, ignoreCase = true) -> null
         authority.isEmpty() -> null
@@ -127,8 +133,6 @@ internal fun allowedExternalLinkDestination(destination: String): String? {
 }
 
 private const val HTTPS_SCHEME = "https://"
-
-private const val MAX_LINK_LENGTH = 2_048
 
 private const val CODE_FENCE = "```"
 

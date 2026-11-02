@@ -124,17 +124,26 @@ private fun consumeImage(
     val labelBracket = index + 1
     val labelEnd = linkBrackets?.matchingLabelEnds?.get(labelBracket) ?: -1
     val image = linkAt(text, labelBracket, linkBrackets, labelEnd)
-    if (image == null) {
-        literal.append(text, index, index + IMAGE_PREFIX.length)
-        return index + IMAGE_PREFIX.length
+    val destination = image?.let { allowedExternalLinkDestination(it.destination) }
+    return when {
+        image == null -> {
+            literal.append(text, index, index + IMAGE_PREFIX.length)
+            index + IMAGE_PREFIX.length
+        }
+        destination == null -> {
+            literal.append(text, index, image.endIndex)
+            image.endIndex
+        }
+        else -> {
+            flushLiteral(literal, spans)
+            spans +=
+                MarkdownSpan(
+                    text = text.substring(index, image.endIndex),
+                    element = InlineElement.Image(alt = image.label, destination = destination),
+                )
+            image.endIndex
+        }
     }
-    flushLiteral(literal, spans)
-    spans +=
-        MarkdownSpan(
-            text = text.substring(index, image.endIndex),
-            element = InlineElement.Image(alt = image.label, destination = image.destination),
-        )
-    return image.endIndex
 }
 
 private fun mathSpan(

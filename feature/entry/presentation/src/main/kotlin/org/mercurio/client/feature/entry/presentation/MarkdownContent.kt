@@ -101,18 +101,91 @@ private fun MarkdownParagraph(
     spans: List<MarkdownSpan>,
     actions: MessageActions,
 ) {
+    MarkdownSpans(spans = spans, actions = actions)
+}
+
+@Composable
+private fun MarkdownSpans(
+    spans: List<MarkdownSpan>,
+    actions: MessageActions,
+) {
     val tokens = LocalHermesDesignTokens.current
-    val math = rememberInlineMath(spans, LocalTextStyle.current, LocalContentColor.current)
-    Text(
-        text =
-            spans.toAnnotatedString(
-                linkColor = MaterialTheme.colorScheme.primary,
-                onOpenLink = actions.openLink,
-                codeBackground = tokens.componentColors.inset,
-                math = math,
-            ),
-        inlineContent = math?.contents.orEmpty(),
-    )
+    val pieces = remember(spans) { spans.paragraphPieces() }
+    if (pieces.none { piece -> piece is ParagraphPiece.Image }) {
+        val math = rememberInlineMath(spans, LocalTextStyle.current, LocalContentColor.current)
+        Text(
+            text =
+                spans.toAnnotatedString(
+                    linkColor = MaterialTheme.colorScheme.primary,
+                    onOpenLink = actions.openLink,
+                    codeBackground = tokens.componentColors.inset,
+                    math = math,
+                ),
+            inlineContent = math?.contents.orEmpty(),
+        )
+        return
+    }
+    val imageServices = LocalMessageImageServices.current
+    Column(verticalArrangement = Arrangement.spacedBy(tokens.spacing.xs)) {
+        pieces.forEach { piece ->
+            when (piece) {
+                is ParagraphPiece.Text -> {
+                    val math = rememberInlineMath(piece.spans, LocalTextStyle.current, LocalContentColor.current)
+                    Text(
+                        text =
+                            piece.spans.toAnnotatedString(
+                                linkColor = MaterialTheme.colorScheme.primary,
+                                onOpenLink = actions.openLink,
+                                codeBackground = tokens.componentColors.inset,
+                                math = math,
+                            ),
+                        inlineContent = math?.contents.orEmpty(),
+                    )
+                }
+                is ParagraphPiece.Image ->
+                    if (imageServices == null) {
+                        Text(text = piece.source)
+                    } else {
+                        MessageImageCard(destination = piece.element.destination, alt = piece.element.alt)
+                    }
+            }
+        }
+    }
+}
+
+private sealed interface ParagraphPiece {
+    data class Text(
+        val spans: List<MarkdownSpan>,
+    ) : ParagraphPiece
+
+    data class Image(
+        val source: String,
+        val element: InlineElement.Image,
+    ) : ParagraphPiece
+}
+
+private fun List<MarkdownSpan>.paragraphPieces(): List<ParagraphPiece> {
+    val pieces = mutableListOf<ParagraphPiece>()
+    val textRun = mutableListOf<MarkdownSpan>()
+
+    fun flushTextRun() {
+        if (textRun.isNotEmpty()) {
+            pieces += ParagraphPiece.Text(textRun.toList())
+            textRun.clear()
+        }
+    }
+
+    forEach { span ->
+        val image = span.element as? InlineElement.Image
+        if (image == null) {
+            textRun += span
+        } else {
+            flushTextRun()
+            pieces += ParagraphPiece.Image(source = span.text, element = image)
+        }
+    }
+    flushTextRun()
+    return pieces
 }
 
 @Composable
@@ -205,31 +278,12 @@ private fun MarkdownList(
                 horizontalArrangement = Arrangement.spacedBy(spacing.xs),
             ) {
                 Text(text = item.marker)
-                MarkdownListItemText(spans = item.spans, actions = actions, modifier = Modifier.weight(1f))
+                Column(modifier = Modifier.weight(1f)) {
+                    MarkdownSpans(spans = item.spans, actions = actions)
+                }
             }
         }
     }
-}
-
-@Composable
-private fun MarkdownListItemText(
-    spans: List<MarkdownSpan>,
-    actions: MessageActions,
-    modifier: Modifier = Modifier,
-) {
-    val tokens = LocalHermesDesignTokens.current
-    val math = rememberInlineMath(spans, LocalTextStyle.current, LocalContentColor.current)
-    Text(
-        text =
-            spans.toAnnotatedString(
-                linkColor = MaterialTheme.colorScheme.primary,
-                onOpenLink = actions.openLink,
-                codeBackground = tokens.componentColors.inset,
-                math = math,
-            ),
-        modifier = modifier,
-        inlineContent = math?.contents.orEmpty(),
-    )
 }
 
 private data class RenderedItem(
