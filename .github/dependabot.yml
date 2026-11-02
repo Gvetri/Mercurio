@@ -16,10 +16,3 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
-    groups:
-      gradle-minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
