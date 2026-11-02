@@ -1762,6 +1762,11 @@ class QualityGateConfigurationTest {
                 buildSrcContractsJob.contains("needs.ui_paths.outputs.build_logic_changed == 'true'"),
         )
         assertTrue(
+            "The buildsrc-contracts job must keep a timeout above the self-test suite, " +
+                "so a green suite is not cancelled at the ceiling.",
+            buildSrcContractsJob.contains("    timeout-minutes: 45\n"),
+        )
+        assertTrue(
             "The aggregate gate must receive the buildsrc-contracts result.",
             workflow.contains("      - buildsrc_contracts\n") &&
                 workflow.contains("BUILDSRC_CONTRACTS_RESULT: \${{ needs.buildsrc_contracts.result }}"),
