@@ -414,6 +414,34 @@ class ArchitectureCheckTest {
     }
 
     @Test
+    fun rejects_a_public_mutable_property_on_a_state_holder_object() {
+        val violation =
+            fixturePath("presentation", "EntryStateHolder.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import kotlinx.coroutines.flow.MutableStateFlow
+                import kotlinx.coroutines.flow.StateFlow
+                import kotlinx.coroutines.flow.asStateFlow
+
+                internal object FixtureStateHolder {
+                    var requestPermission: (() -> Unit)? = null
+
+                    internal val mutableUiState = MutableStateFlow(EntryUiState(title = "fixture"))
+                    val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
+
+                    fun onEvent(event: EntryUiEvent) {
+                        mutableUiState.value = mutableUiState.value.copy(title = event.toString())
+                    }
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(stateWriterRule, "requestPermission") { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
     fun rejects_a_state_write_outside_the_state_holder_files() {
         val violation =
             fixturePath("presentation", "EntryScreen.kt") to
@@ -504,6 +532,33 @@ class ArchitectureCheckTest {
     @Test
     fun accepts_the_state_writes_of_the_state_holder() {
         withFixtureScope(presentationFixture()) { scope ->
+            assertRuleAccepts(stateWriterRule) { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
+    fun accepts_a_comparison_of_the_state_flow_outside_the_state_holder_files() {
+        val accepted =
+            fixturePath("presentation", "EntryScreen.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import androidx.compose.runtime.Composable
+
+                @Composable
+                internal fun EntryScreen(
+                    state: EntryUiState,
+                    onEvent: (EntryUiEvent) -> Unit,
+                ): Boolean = mutableUiState.value == state
+
+                @Composable
+                internal fun EntryScreenDiffers(
+                    state: EntryUiState,
+                    onEvent: (EntryUiEvent) -> Unit,
+                ): Boolean = mutableUiState.value !== state
+                """
+
+        withFixtureScope(presentationFixture(accepted)) { scope ->
             assertRuleAccepts(stateWriterRule) { assertOneStateWriter(scope) }
         }
     }
@@ -762,7 +817,7 @@ class ArchitectureCheckTest {
         val writePatterns = stateFlows.flatMap(::stateWritePatternsOf)
 
         val exposedWriters =
-            scope.classes()
+            scope.classesAndObjects()
                 .filter { declaration -> declaration.name.endsWith(stateHolderTypeSuffix) }
                 .flatMap { declaration ->
                     declaration.properties()
@@ -847,7 +902,7 @@ class ArchitectureCheckTest {
 
     private fun stateWritePatternsOf(flow: String): List<Regex> =
         listOf(
-            Regex("""\b${Regex.escape(flow)}\s*\.\s*value\s*[-+]?="""),
+            Regex("""\b${Regex.escape(flow)}\s*\.\s*value\s*[-+]?=(?!=)"""),
             Regex("""\b${Regex.escape(flow)}\s*\.\s*update\s*[({]"""),
             Regex("""\b${Regex.escape(flow)}\s*\.\s*(?:getAndSet|compareAndSet)\b"""),
         )
