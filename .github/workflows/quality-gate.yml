@@ -69,7 +69,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew formatCheck --no-daemon
+      - run: ./gradlew formatCheck commentPolicyVerify --no-daemon
 
   static_analysis:
     name: static-analysis
@@ -361,7 +361,7 @@ jobs:
     steps:
       - name: Detect modified UI paths
         id: ui_paths
-        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
           filters: |
             ui_paths:
@@ -371,7 +371,7 @@ jobs:
               - 'fixtures/mercurio/journey/**'
       - name: Detect the changed files of the pull request
         id: changed_files
-        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
           list-files: json
           filters: |

@@ -117,6 +117,23 @@ class QualityVerificationFailClosedTest {
     }
 
     @Test
+    fun the_comment_policy_check_rejects_a_line_comment() {
+        assertInjectedFixturesFail(
+            fixtures =
+                listOf(
+                    InjectedFixture(
+                        relativePath =
+                            "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/" +
+                                "GatewayConnectionRepository.kt",
+                        appended = "\n// The reason the repository exists.\n",
+                    ),
+                ),
+            tasks = listOf("commentPolicyVerify"),
+            expected = "line comment is not allowed",
+        )
+    }
+
+    @Test
     fun quality_gate_rejects_a_skipped_coverage_verification() {
         val result = runGradle(listOf("qualityGate") + excludedGateTasks + listOf("-x", "coverageVerify"))
 

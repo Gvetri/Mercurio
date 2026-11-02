@@ -12,7 +12,10 @@ its tests speak otherwise. KDoc does not attach to a private declaration. Every 
 file carries no comments beyond the [exceptions](#exceptions) below. A comment that records a
 constraint is encoded first — as a test, a check, or documentation — and then removed.
 
-For now this is the policy; it is revisitable as the codebase evolves.
+The policy is enforced mechanically over every tracked file: `./gradlew commentPolicyVerify` fails on
+a line or block comment and reports its file, line, kind, and remedy. A tracked file whose class the
+verifier does not know fails as well, so a new file class is decided in the table below, in the same
+change that introduces it.
 
 ### Scope
 
@@ -30,14 +33,15 @@ here, in the same change.
 
 | Class | Files | Decision |
 | --- | --- | --- |
-| **In scope** | Kotlin sources and build scripts (`.kt`, `.kts`); CI configuration, workflows, and repository scripts (`.github/workflows/*.yml`, `.github/quality-gate/required-checks.txt`, `.github/scripts/**`); the detekt configuration (`config/detekt/detekt.yml`); tooling (`tools/**`); fixtures in comment-capable formats (Maestro flows in `.yaml`, contract fixtures in `.sse`, `fixtures/mercurio/pinned-fixture.properties`); Android manifests and resources (`.xml`); root configuration and lists (`.editorconfig`, `.gitignore` files, `gradle.properties`, `gradle/libs.versions.toml`, `feature/entry/presentation/src/test/roborazzi-baselines.txt`) | The comments policy applies |
+| **In scope** | Kotlin sources and build scripts (`.kt`, `.kts`); CI configuration, workflows, and repository scripts (`.github/workflows/*.yml`, `.github/dependabot.yml`, `.github/quality-gate/required-checks.txt`, `.github/scripts/**`); the detekt configuration (`config/detekt/detekt.yml`); tooling (`tools/**`, including the live-smoke `Dockerfile`); fixtures in comment-capable formats (Maestro flows in `.yaml`, contract fixtures in `.sse`, `fixtures/mercurio/pinned-fixture.properties`); Android manifests and resources (`.xml`); root configuration and lists (`.editorconfig`, `.gitignore` files, `CODEOWNERS`, `gradle.properties`, `gradle/libs.versions.toml`, `feature/entry/presentation/src/test/roborazzi-baselines.txt`) | The comments policy applies |
 | **Inert** | Formats that cannot carry comments: strict JSON (the `.json` fixtures), digests (`.github/release-certificate.sha256`), certificate material (`fixtures/mercurio/journey-tls/*.pem`, `fixtures/mercurio/journey-tls/*.p12`) | Nothing to remove or check |
-| **Excluded** | Generated files (the Gradle wrapper — `gradlew`, `gradlew.bat`, `gradle/wrapper/**` — stays exactly as generated); binary artifacts (`.png` baselines, `.jar`); prose documents (`.md`); legal texts (`LICENSE`) | Outside the policy |
+| **Excluded** | Generated files (the Gradle wrapper — `gradlew`, `gradlew.bat`, `gradle/wrapper/**` — stays exactly as generated); vendored material kept as published (`third_party/**`); binary artifacts (`.png` baselines, `.jar`, images, fonts); prose documents (`.md`); legal texts (`LICENSE`) | Outside the policy |
 
 ### Exceptions
 
-- **Tool directives the tool requires**: a shebang, `# noqa`, `# shellcheck`, a parser directive such
-  as the Dockerfile `# syntax=` line. They serve the tool, not the reader.
+- **Tool directives the tool requires**: a shebang, `# noqa`, `# shellcheck`, a type or linter
+  directive, a formatter's off switch, a parser directive such as the Dockerfile `# syntax=` or
+  `# escape=` line. They serve the tool, not the reader.
 - **License headers**: where a file needs one.
 
 ## Rule ↔ enforcement index
@@ -49,7 +53,7 @@ thresholds.
 
 | Rule | What fails when it is broken |
 | --- | --- |
-| **Comments policy** ([above](#comments-policy)) | No mechanical check yet — detekt reports only two comment shapes: a comment attached to a private declaration (`CommentOverPrivateFunction`, `CommentOverPrivateProperty`), and a comment containing a forbidden marker (`ForbiddenComment`: `TODO:`, `FIXME:`, `STOPSHIP:`). |
+| **Comments policy** ([above](#comments-policy)) | `formatting` check (`commentPolicyVerify`) — a line or block comment in a hand-maintained file fails with its file, line, and remedy, and a file class the verifier does not know fails rather than passing. detekt additionally reports a comment attached to a private declaration (`CommentOverPrivateFunction`, `CommentOverPrivateProperty`) and a comment containing a forbidden marker (`ForbiddenComment`: `TODO:`, `FIXME:`, `STOPSHIP:`) |
 | **Formatting** — Kotlin sources stay formatted | `formatting` check |
 | **Static analysis** — the pinned detekt configuration reports no finding and Android lint reports no error | `detekt` check; `static-analysis` check |
 | **Architecture boundaries** — feature-first modules with inward dependencies ([architecture](architecture.md)) | `architecture-check` check |

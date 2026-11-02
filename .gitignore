@@ -5,6 +5,7 @@ local.properties
 .cxx/
 
 **/.kotlin/
+kls_database.db
 
 .idea/
 *.iml
