@@ -35,7 +35,7 @@ class EntryScreenSessionListTest {
                 sessions =
                     listOf(
                         item("pinned", "Pinned title", "Pinned preview", pinned = true, time = "1h"),
-                        item("untitled", "New session", null, time = "now", pending = true),
+                        item("untitled", "", null, time = "now", pending = true),
                         item("plain", "Plain title", "Plain preview", time = "2d"),
                     ),
             )
