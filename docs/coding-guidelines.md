@@ -33,7 +33,7 @@ here, in the same change.
 
 | Class | Files | Decision |
 | --- | --- | --- |
-| **In scope** | Kotlin sources and build scripts (`.kt`, `.kts`); CI configuration, workflows, and repository scripts (`.github/workflows/*.yml`, `.github/dependabot.yml`, `.github/quality-gate/required-checks.txt`, `.github/scripts/**`); the detekt configuration (`config/detekt/detekt.yml`); tooling (`tools/**`, including the live-smoke `Dockerfile`); fixtures in comment-capable formats (Maestro flows in `.yaml`, contract fixtures in `.sse`, `fixtures/mercurio/pinned-fixture.properties`); Android manifests and resources (`.xml`); root configuration and lists (`.editorconfig`, `.gitignore` files, `CODEOWNERS`, `gradle.properties`, `gradle/libs.versions.toml`, `feature/entry/presentation/src/test/roborazzi-baselines.txt`) | The comments policy applies |
+| **In scope** | Kotlin sources and build scripts (`.kt`, `.kts`); CI configuration, workflows, and repository scripts (`.github/workflows/*.yml`, `.github/dependabot.yml`, `.github/quality-gate/required-checks.txt`, `.github/scripts/**`); the committed git hooks (`.githooks/**`); the detekt configuration (`config/detekt/detekt.yml`); tooling (`tools/**`, including the live-smoke `Dockerfile`); fixtures in comment-capable formats (Maestro flows in `.yaml`, contract fixtures in `.sse`, `fixtures/mercurio/pinned-fixture.properties`); Android manifests and resources (`.xml`); root configuration and lists (`.editorconfig`, `.gitignore` files, `CODEOWNERS`, `gradle.properties`, `gradle/libs.versions.toml`, `feature/entry/presentation/src/test/roborazzi-baselines.txt`) | The comments policy applies |
 | **Inert** | Formats that cannot carry comments: strict JSON (the `.json` fixtures), digests (`.github/release-certificate.sha256`), certificate material (`fixtures/mercurio/journey-tls/*.pem`, `fixtures/mercurio/journey-tls/*.p12`) | Nothing to remove or check |
 | **Excluded** | Generated files (the Gradle wrapper — `gradlew`, `gradlew.bat`, `gradle/wrapper/**` — stays exactly as generated); vendored material kept as published (`third_party/**`); binary artifacts (`.png` baselines, `.jar`, images, fonts); prose documents (`.md`); legal texts (`LICENSE`) | Outside the policy |
 
@@ -64,7 +64,7 @@ thresholds.
 | **Localization** — user-facing copy lives in the string resources of its module, and a UI state names a resource instead of holding copy ([localization](localization.md)) | `unit-tests` check (`LocalizedResourcesTest`) covers the resources themselves; a state that carries copy is caught in code review |
 | **Coverage and mutation** — declared modules stay at or above the declared thresholds ([quality gates](quality-gates.md)) | `coverage-mutation` check |
 | **Compose baselines** — pinned surfaces match their approved Roborazzi baselines | `compose-jvm-tests` check |
-| **Commit messages** — a Conventional Commit pull-request title and commits | `commit-message` check |
+| **Commit messages** — a Conventional Commit pull-request title and commits | `commit-message` check; the optional `.githooks/commit-msg` hook checks the same rule locally ([commit hooks](agents/commit-hooks.md)) |
 | **Branches and pull requests** — one issue-scoped branch `<type>/<issue>-<short-description>`, a pull request against protected `main`, a squash merge ([workflow](protected-main-workflow.md)) | The `Main` ruleset refuses a non-conforming merge; the `conformance` check verifies the configuration still implements it |
 
 ## Where the authorities live

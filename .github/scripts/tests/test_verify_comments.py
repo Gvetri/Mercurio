@@ -283,6 +283,36 @@ class CommentsPolicyTest(unittest.TestCase):
     def test_the_repository_tree_carries_kdoc_only(self):
         self.assert_accepted(self.check_root(ROOT))
 
+    def check_named(self, files, names):
+        for relative, content in files.items():
+            target = self.root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(CHECK), "--repository-root", str(self.root), "--files", *names],
+            capture_output=True, text=True, timeout=120,
+        )
+
+    def test_a_named_scope_checks_only_the_files_it_names(self):
+        files = {
+            "app/src/main/Present.kt": "package app\n\ninternal fun present(): Int = 1\n",
+            "tools/run.sh": "#!/usr/bin/env bash\n# run it\nset -euo pipefail\n",
+        }
+        self.assert_accepted(self.check_named(files, ["app/src/main/Present.kt"]))
+        result = self.check_named(files, ["tools/run.sh"])
+        self.assert_rejected(result, "tools/run.sh:2", "line comment")
+
+    def test_a_named_scope_with_no_in_scope_file_passes(self):
+        result = self.check_named({"docs/notes.md": "# Prose.\n"}, ["docs/notes.md"])
+        self.assert_accepted(result)
+        self.assertIn("0 of 1 named file(s)", result.stdout)
+
+    def test_a_hook_carrying_a_shell_comment_fails(self):
+        result = self.check_named({
+            ".githooks/pre-commit": "#!/usr/bin/env bash\n# format the staged files\nset -euo pipefail\n",
+        }, [".githooks/pre-commit"])
+        self.assert_rejected(result, ".githooks/pre-commit:2", "line comment")
+
 
 if __name__ == "__main__":
     unittest.main()

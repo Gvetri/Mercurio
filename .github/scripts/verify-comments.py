@@ -5,6 +5,10 @@ The policy lives in docs/coding-guidelines.md: KDoc is the only allowed comment 
 exceptions are the tool directives a tool requires, a license header, and the generated or vendored
 files the class table excludes. Every tracked file gets a reading; a class this verifier does not
 know fails instead of passing, so a new file class is decided in the same change that adds it.
+
+A caller that already knows the scope it cares about, the pre-commit hook that reads the staged
+files, names it with `--files`. A named scope that holds no in-scope file passes, because the caller
+declared the scope rather than the repository being empty.
 """
 import argparse
 import bisect
@@ -325,6 +329,8 @@ NAMED_HANDLERS = {
     ".editorconfig": editorconfig_comments,
 }
 
+PATH_HANDLERS = ((".githooks/", shell_comments),)
+
 EXCLUDED_SUFFIXES = frozenset(
     {".md", ".json", ".png", ".jar", ".ttf", ".pem", ".p12", ".sha256", ".bat", ".zip", ".jpg", ".webp", ".ico"}
 )
@@ -338,6 +344,9 @@ def handler_for(relative):
         return None, "excluded"
     if any(relative.startswith(prefix) for prefix in EXCLUDED_PREFIXES):
         return None, "excluded"
+    for prefix, handler in PATH_HANDLERS:
+        if relative.startswith(prefix):
+            return handler, None
     if path.name in NAMED_HANDLERS:
         return NAMED_HANDLERS[path.name], None
     handler = HANDLERS.get(path.suffix)
@@ -414,10 +423,11 @@ def tracked_files(root):
     return sorted(name.decode("utf-8") for name in completed.stdout.split(b"\0") if name)
 
 
-def scan(root):
+def scan(root, files=None):
     reports = []
     scanned = 0
-    for relative in tracked_files(root):
+    relatives = tracked_files(root) if files is None else [str(pathlib.PurePosixPath(name)) for name in files]
+    for relative in relatives:
         handler, status = handler_for(relative)
         if handler is None and status == "excluded":
             continue
@@ -441,16 +451,25 @@ def main(argv=None):
         default=str(pathlib.Path(__file__).resolve().parents[2]),
         help="the repository whose tracked files are verified",
     )
+    parser.add_argument(
+        "--files",
+        nargs="*",
+        default=None,
+        help="verify these repository-relative files instead of every tracked file, as the pre-commit hook does",
+    )
     arguments = parser.parse_args(argv)
-    reports, scanned = scan(pathlib.Path(arguments.repository_root).resolve())
+    reports, scanned = scan(pathlib.Path(arguments.repository_root).resolve(), arguments.files)
     if reports:
         print("\n".join(reports), file=sys.stderr)
         print(f"Comments verified: {len(reports)} violation(s) across {scanned} in-scope file(s).", file=sys.stderr)
         return 1
-    if scanned == 0:
+    if scanned == 0 and arguments.files is None:
         print("Comments verification found no in-scope file; it fails closed.", file=sys.stderr)
         return 1
-    print(f"Comments verified: {scanned} in-scope file(s) carry KDoc only.")
+    if arguments.files is None:
+        print(f"Comments verified: {scanned} in-scope file(s) carry KDoc only.")
+    else:
+        print(f"Comments verified: {scanned} of {len(arguments.files)} named file(s) are in scope and carry KDoc only.")
     return 0
 
 

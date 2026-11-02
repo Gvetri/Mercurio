@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+staged=()
+while IFS= read -r -d '' path; do
+  staged+=("$path")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [[ "${#staged[@]}" -eq 0 ]]; then
+  exit 0
+fi
+
+kotlin=()
+for path in "${staged[@]}"; do
+  case "$path" in
+    *.kt | *.kts) kotlin+=("$path") ;;
+  esac
+done
+
+if [[ "${#kotlin[@]}" -gt 0 ]]; then
+  unstaged=()
+  for path in "${kotlin[@]}"; do
+    if ! git diff --quiet -- "$path"; then
+      unstaged+=("$path")
+    fi
+  done
+  if [[ "${#unstaged[@]}" -gt 0 ]]; then
+    printf 'The formatter rewrites the staged copy, so these files must carry no unstaged change:\n' >&2
+    printf '  %s\n' "${unstaged[@]}" >&2
+    printf 'Stage all of their changes, or stash the rest, and commit again.\n' >&2
+    exit 1
+  fi
+  filter="$(printf '%s\n' "${kotlin[@]}")"
+  ./gradlew --quiet ktlintFormat "-PinternalKtlintGitFilter=$filter"
+  git add -- "${kotlin[@]}"
+fi
+
+python3 .github/scripts/verify-comments.py --files "${staged[@]}" >/dev/null

@@ -778,6 +778,14 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertEqual(1, completed.returncode)
         self.assertIn("supports pull_request and push events", completed.stderr)
 
+    def test_the_rule_has_one_home_shared_with_the_commit_message_hook(self):
+        checker = COMMIT_SCRIPT.read_text(encoding="utf-8")
+        hook = (ROOT / ".githooks/commit-msg").read_text(encoding="utf-8")
+        self.assertIn("from commit_header import", checker)
+        self.assertIn(".github/scripts/commit_header.py", hook)
+        self.assertNotIn("COMMIT_TYPES = (", checker)
+        self.assertNotIn("HEADER = re.compile(", checker)
+
 
 class TestVerifyRepositoryConformance(unittest.TestCase):
     """The conformance check, against a local GitHub API stand-in."""

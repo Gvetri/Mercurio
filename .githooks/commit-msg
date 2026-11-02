@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+message_file="$1"
+if [[ "$message_file" != /* ]]; then
+  message_file="$root/$message_file"
+fi
+
+exec python3 "$root/.github/scripts/commit_header.py" "$message_file"
