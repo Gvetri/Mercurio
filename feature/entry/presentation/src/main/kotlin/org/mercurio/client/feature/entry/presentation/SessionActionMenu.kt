@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -44,34 +45,47 @@ internal fun SessionActionMenu(
             Icon(imageVector = Icons.Default.MoreVert, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(if (session.pinned) "Unpin Session" else "Pin Session") },
-                onClick = {
-                    expanded = false
-                    onEvent(
-                        if (session.pinned) {
-                            EntryUiEvent.UnpinSessionClicked(session.id)
-                        } else {
-                            EntryUiEvent.PinSessionClicked(session.id)
-                        },
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Rename Session") },
-                onClick = {
-                    expanded = false
-                    onEvent(EntryUiEvent.RenameSessionClicked(session.id))
-                },
-            )
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Delete Session") },
-                onClick = {
-                    expanded = false
-                    onEvent(EntryUiEvent.DeleteSessionClicked(session.id))
-                },
-            )
+            SessionActionMenuItems(session = session, onDismiss = { expanded = false }, onEvent = onEvent)
         }
     }
+}
+
+/**
+ * The Session actions every Session menu offers, whichever control opens it. Keeping them in
+ * one place means the top-bar control and the list row cannot drift apart.
+ */
+@Composable
+internal fun ColumnScope.SessionActionMenuItems(
+    session: SessionItemUiState,
+    onDismiss: () -> Unit,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(if (session.pinned) "Unpin Session" else "Pin Session") },
+        onClick = {
+            onDismiss()
+            onEvent(
+                if (session.pinned) {
+                    EntryUiEvent.UnpinSessionClicked(session.id)
+                } else {
+                    EntryUiEvent.PinSessionClicked(session.id)
+                },
+            )
+        },
+    )
+    DropdownMenuItem(
+        text = { Text("Rename Session") },
+        onClick = {
+            onDismiss()
+            onEvent(EntryUiEvent.RenameSessionClicked(session.id))
+        },
+    )
+    HorizontalDivider()
+    DropdownMenuItem(
+        text = { Text("Delete Session") },
+        onClick = {
+            onDismiss()
+            onEvent(EntryUiEvent.DeleteSessionClicked(session.id))
+        },
+    )
 }

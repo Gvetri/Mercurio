@@ -1,250 +1,285 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import org.mercurio.client.feature.entry.domain.RunSubmissionState
+import kotlinx.coroutines.flow.filter
+import org.mercurio.client.feature.entry.domain.RunId
 
-@Composable
-private fun SessionDetailHeader(state: OpenSessionUiState) {
-    Text(
-        text = state.session.title,
-        style = MaterialTheme.typography.headlineMedium,
-        modifier = Modifier.semantics { heading() },
-    )
-    state.session.preview?.let { preview ->
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = preview, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
+/**
+ * The approved Chat composition: the 40 dp bar island, and one transcript island that holds the
+ * messages, the run line and the composer. The derivation belongs to [chatTranscriptItems],
+ * [chatRunLineState] and [chatComposerState]; this file only arranges what they return.
+ */
 @Composable
 internal fun SessionDetailContent(
     detail: SessionDetailState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val tokens = LocalHermesDesignTokens.current
     val state = detail.content
-    val displayedMessages = state.messages + listOfNotNull(state.activeResponse)
-    val canSubmit = submissionCanSubmit(detail)
-    val transcriptListState = rememberLazyListState()
-    var trailingContentHeight by remember(state.session.id, displayedMessages.lastOrNull()?.id) { mutableIntStateOf(0) }
-    val textLineHeight = with(LocalDensity.current) { MaterialTheme.typography.bodyLarge.lineHeight.roundToPx() }
-    val viewportHeight by remember { derivedStateOf { transcriptListState.layoutInfo.viewportSize.height } }
-    val hiddenTail = (trailingContentHeight + textLineHeight - viewportHeight).coerceIn(0, trailingContentHeight)
-    TranscriptScrollEffects(
-        detail = detail,
-        displayedMessages = displayedMessages,
-        listState = transcriptListState,
-        hiddenTail = hiddenTail,
-    )
-    Column(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Top,
-    ) {
-        SessionDetailToolbar(detail = detail, onEvent = onEvent)
-        SessionDetailTranscript(
-            detail = detail,
-            displayedMessages = displayedMessages,
-            listState = transcriptListState,
-            onEvent = onEvent,
-            onTrailingContentHeightChanged = { trailingContentHeight = it },
-        )
-        SessionDetailComposerTail(
-            state = state,
-            mutation = detail.mutation,
-            modelPicker = detail.modelPicker,
-            canSubmit = canSubmit,
-            onEvent = onEvent,
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SessionDetailToolbar(
-    detail: SessionDetailState,
-    onEvent: (EntryUiEvent) -> Unit,
-) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        TextButton(
-            onClick = { onEvent(EntryUiEvent.ReturnToSessionListClicked) },
-            modifier = Modifier.heightIn(min = 48.dp),
-        ) {
-            Text(text = "Back to Sessions")
+    val listState = rememberLazyListState()
+    val displayed =
+        remember(state.messages, state.activeResponse) {
+            state.messages + listOfNotNull(state.activeResponse)
         }
-        SessionActionMenu(
-            session = detail.content.session,
-            enabled =
-                detail.actionsEnabled &&
-                    detail.mutation?.pendingAction == null &&
-                    detail.mutation?.rename == null &&
-                    detail.mutation?.delete == null,
-            onEvent = onEvent,
-        )
-    }
-}
-
-private fun submissionCanSubmit(detail: SessionDetailState): Boolean =
-    RunSubmissionState(
-        latestRun = detail.content.latestRun,
-        activeRuns = detail.content.activeRuns,
-        isSubmissionPending = detail.content.isSending || detail.listRequestActive,
-    ).canSubmit
-
-@Composable
-private fun ColumnScope.SessionDetailTranscript(
-    detail: SessionDetailState,
-    displayedMessages: List<SessionMessageUiState>,
-    listState: LazyListState,
-    onEvent: (EntryUiEvent) -> Unit,
-    onTrailingContentHeightChanged: (Int) -> Unit,
-) {
-    val retryEnabled = detail.retryEnabled(submissionCanSubmit(detail))
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.weight(1f).fillMaxWidth(),
-        contentPadding = PaddingValues(top = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item {
-            SessionDetailHeader(state = detail.content)
-            Spacer(modifier = Modifier.height(12.dp))
-            SessionDetailSummary(
-                detail = detail,
-                retryEnabled = retryEnabled,
+    val items = remember(displayed) { chatTranscriptItems(displayed) }
+    val messageActions = rememberMessageActions()
+    val callbacks =
+        remember(detail, messageActions) {
+            ChatCallbacks(
+                actions = messageActions,
+                retryEnabled = detail.retryEnabled(chatCanSubmit(detail)),
+                onRetry = { runId: RunId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
                 onEvent = onEvent,
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            if (displayedMessages.isEmpty()) {
-                Text(
-                    text =
-                        if (detail.content.isRefreshing) {
-                            "Loading Session history…"
-                        } else {
-                            "No messages in this Session."
-                        },
-                )
-            }
         }
-        items(
-            items = displayedMessages,
-            key = { message -> message.id },
-        ) { message ->
-            key(detail.content.session.id) {
-                SessionMessageContent(
-                    message = message,
-                    retryEnabled = retryEnabled,
-                    onRetry = { runId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
-                    onTrailingContentHeightChanged = {
-                        if (message.id == displayedMessages.last().id) onTrailingContentHeightChanged(it)
-                    },
+    val followNewest = rememberTranscriptFollow(listState)
+    LaunchedEffect(items) {
+        if (items.isNotEmpty() && followNewest) listState.pinNewestItemEnd(items.lastIndex)
+    }
+    Column(
+        modifier = modifier.fillMaxSize().padding(CHAT_ISLAND_GUTTER),
+        verticalArrangement = Arrangement.spacedBy(CHAT_ISLAND_GUTTER),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = tokens.colorScheme.surface,
+            shape = tokens.shapes.large,
+        ) {
+            ChatAppBar(
+                session = state.session,
+                menuEnabled = detail.actionsEnabled && detail.mutation?.pendingAction == null,
+                onEvent = onEvent,
+            )
+        }
+        ChatMainIsland(
+            detail = detail,
+            items = items,
+            listState = listState,
+            callbacks = callbacks,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun ChatMainIsland(
+    detail: SessionDetailState,
+    items: List<ChatTranscriptItem>,
+    listState: LazyListState,
+    callbacks: ChatCallbacks,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    Surface(
+        modifier = modifier,
+        color = tokens.colorScheme.surface,
+        shape = tokens.shapes.large,
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val tail = maxHeight * CHAT_TAIL_FRACTION
+            Column(modifier = Modifier.fillMaxSize()) {
+                ChatTranscriptRegion(
+                    detail = detail,
+                    items = items,
+                    listState = listState,
+                    callbacks = callbacks,
+                    modifier = Modifier.weight(1f),
                 )
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = tail)
+                            .verticalScroll(rememberScrollState()),
+                ) {
+                    ChatMutationPanel(detail = detail, onEvent = callbacks.onEvent)
+                    ChatRunLine(model = remember(detail) { chatRunLineState(detail) }, onEvent = callbacks.onEvent)
+                    ChatComposer(
+                        state = detail.content,
+                        composer = remember(detail) { chatComposerState(detail) },
+                        modelPicker = detail.modelPicker,
+                        onEvent = callbacks.onEvent,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TranscriptScrollEffects(
+private fun ChatTranscriptRegion(
     detail: SessionDetailState,
-    displayedMessages: List<SessionMessageUiState>,
+    items: List<ChatTranscriptItem>,
     listState: LazyListState,
-    hiddenTail: Int,
+    callbacks: ChatCallbacks,
+    modifier: Modifier = Modifier,
 ) {
-    val sessionId = detail.content.session.id
-    val newestMessageItemIndex = displayedMessages.size
-    val followNewestMessages = rememberTranscriptFollow(listState, hiddenTail)
-    var transcriptPositionPending by remember(sessionId) { mutableStateOf(true) }
-    val streamedResponseContent = detail.content.activeResponse?.content
-    LaunchedEffect(sessionId, newestMessageItemIndex, streamedResponseContent, hiddenTail) {
-        if (newestMessageItemIndex == 0) return@LaunchedEffect
-        if (transcriptPositionPending) {
-            listState.pinNewestItemEnd(newestMessageItemIndex, hiddenTail)
-            transcriptPositionPending = false
-        } else if (followNewestMessages) {
-            listState.pinNewestItemEnd(newestMessageItemIndex, hiddenTail)
+    val state = detail.content
+    Box(modifier = modifier.fillMaxWidth()) {
+        when {
+            items.isNotEmpty() ->
+                ChatTranscript(
+                    items = items,
+                    listState = listState,
+                    callbacks = callbacks,
+                    sessionKey = state.session.id,
+                )
+            state.isRefreshing ->
+                ChatEmptyState(
+                    title = "Loading Session history…",
+                    body = "The Gateway is returning this Session.",
+                )
+            state.errorCategory != null && !state.isCached ->
+                ChatEmptyState(
+                    title = "Session history is unavailable",
+                    body = "The Gateway could not be read. No messages are shown.",
+                    actionLabel = "[ try again ]",
+                    onAction = { callbacks.onEvent(EntryUiEvent.RefreshSessionsClicked) },
+                )
+            else ->
+                ChatEmptyState(
+                    title = "No messages yet",
+                    body = "This Session has no history on the Gateway. Write the first message.",
+                )
         }
-    }
-    val showMutationContext =
-        detail.mutation?.rename != null ||
-            detail.mutation?.delete != null ||
-            detail.mutation?.errorCategory != null
-    LaunchedEffect(sessionId, showMutationContext) {
-        if (showMutationContext && displayedMessages.isNotEmpty()) listState.scrollToItem(0)
     }
 }
 
-private suspend fun LazyListState.pinNewestItemEnd(
-    index: Int,
-    hiddenTail: Int,
+@Composable
+private fun ChatMutationPanel(
+    detail: SessionDetailState,
+    onEvent: (EntryUiEvent) -> Unit,
 ) {
-    if (layoutInfo.visibleItemsInfo.none { item -> item.index == index }) {
-        scrollToItem(index)
+    val mutation = detail.mutation
+    val visible = mutation?.rename != null || mutation?.delete != null || mutation?.errorCategory != null
+    if (visible) {
+        ChatMutationContent(detail = detail, mutation = mutation, onEvent = onEvent)
     }
-    val viewportHeight = layoutInfo.viewportEndOffset
-    val itemSize = layoutInfo.visibleItemsInfo.firstOrNull { item -> item.index == index }?.size ?: return
-    scrollToItem(index, (itemSize - viewportHeight - hiddenTail).coerceAtLeast(0))
 }
 
 /**
- * Whether the transcript should follow its newest content. The follow stays on while the
- * newest content's end is visible, turns off when the reader scrolls it out of view, and
- * returns once the transcript shows the newest content again, so a reader who scrolled up
- * is not pulled away from what they are reading. [hiddenTail] excludes only the trailing
- * metadata that would otherwise hide the newest text line in a short viewport.
+ * The empty, loading and unavailable state: one title, one body, and at most one action, as the
+ * approved design draws it. No state pretends history exists.
+ */
+@Composable
+internal fun ChatEmptyState(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    Column(
+        modifier = modifier.fillMaxSize().padding(tokens.spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(tokens.spacing.xs, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = tokens.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        if (actionLabel != null && onAction != null) {
+            ChatTextControl(
+                label = actionLabel,
+                enabled = true,
+                onClick = onAction,
+                modifier = Modifier.padding(top = tokens.spacing.s),
+            )
+        }
+    }
+}
+
+/**
+ * Whether the transcript follows its newest content. The follow stays on while the newest content
+ * is on screen, turns off when a settled scroll leaves it out of view, and returns once the reader
+ * settles back at the newest content.
  */
 @Composable
 internal fun rememberTranscriptFollow(
     listState: LazyListState,
-    hiddenTail: Int,
+    hiddenTail: Int = 0,
 ): Boolean {
-    val follow by
-        remember(listState, hiddenTail) {
-            derivedStateOf {
+    var follow by remember(listState) { mutableStateOf(true) }
+    LaunchedEffect(listState, hiddenTail) {
+        snapshotFlow { listState.isScrollInProgress }
+            .filter { inProgress -> !inProgress }
+            .collect {
                 val layoutInfo = listState.layoutInfo
-                val newestItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                layoutInfo.totalItemsCount == 0 ||
-                    (
-                        newestItem != null &&
-                            newestItem.index == layoutInfo.totalItemsCount - 1 &&
-                            newestItem.offset.toLong() + newestItem.size.toLong() - hiddenTail <=
-                            layoutInfo.viewportEndOffset.toLong()
-                    )
+                if (layoutInfo.visibleItemsInfo.isNotEmpty()) {
+                    follow = layoutInfo.showsNewestContent(hiddenTail)
+                }
             }
-        }
+    }
     return follow
 }
+
+private fun LazyListLayoutInfo.showsNewestContent(hiddenTail: Int): Boolean {
+    val newestItem = visibleItemsInfo.lastOrNull()
+    val isNewest = newestItem != null && newestItem.index == totalItemsCount - 1
+    val newestIsOnScreen = isNewest && newestItem.offset < viewportEndOffset - hiddenTail
+    return totalItemsCount == 0 || newestIsOnScreen
+}
+
+private suspend fun LazyListState.pinNewestItemEnd(index: Int) {
+    repeat(PIN_ATTEMPTS) {
+        withFrameNanos { }
+        val info = layoutInfo
+        if (info.viewportEndOffset == 0) return@repeat
+        val item = info.visibleItemsInfo.firstOrNull { visible -> visible.index == index }
+        if (item == null) {
+            scrollToItem(index)
+            return@repeat
+        }
+        val distanceToEnd = item.offset + item.size - info.viewportEndOffset
+        if (distanceToEnd <= 0) return
+        scrollToItem(index, item.offset + distanceToEnd)
+    }
+}
+
+internal val CHAT_ISLAND_GUTTER = 4.dp
+
+private const val CHAT_TAIL_FRACTION = 0.6f
+
+private const val PIN_ATTEMPTS = 3
