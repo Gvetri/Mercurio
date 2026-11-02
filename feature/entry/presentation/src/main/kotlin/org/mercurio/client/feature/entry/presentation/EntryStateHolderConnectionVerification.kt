@@ -1,8 +1,10 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.application.normalizeGatewayEndpoint
@@ -21,12 +23,13 @@ internal fun EntryUiState.blocksVerification(): Boolean {
     return !connectionSetupRequested || isVerifying || isSaving || (isConnected && !isChangingCredential)
 }
 
-internal fun EntryStateHolder.runVerification(
+internal suspend fun EntryStateHolder.runVerification(
     verifier: VerifyGatewayConnection,
     state: EntryUiState,
     requestConnectionGeneration: Long,
 ) {
     try {
+        pendingRemovalJob?.join()
         val capabilities =
             verifier.executeWithoutPersistence(
                 endpoint = state.endpoint,
@@ -167,20 +170,31 @@ internal fun EntryStateHolder.removeGatewayConnection() {
     released.observations.forEach(RunEventObservation::close)
 }
 
-internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionState =
-    synchronized(connectionPersistenceLock) {
-        val released = releaseGatewayConnectionLocked()
-        removeGatewayConnectionUseCase?.execute()
-        updateRunRecoveryEndpoint?.invoke(null)
-        mutableUiState.value =
-            EntryState()
-                .toUiState()
-                .copy(
-                    clientVersion = mutableUiState.value.clientVersion,
-                    runStatusNotifications = restoredRunStatusNotificationState(),
-                )
-        released
-    }
+internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionState {
+    val endpoint = mutableUiState.value.endpoint
+    val released =
+        synchronized(connectionPersistenceLock) {
+            val releasedState = releaseGatewayConnectionLocked()
+            updateRunRecoveryEndpoint?.invoke(null)
+            mutableUiState.value =
+                EntryState()
+                    .toUiState()
+                    .copy(
+                        clientVersion = mutableUiState.value.clientVersion,
+                        runStatusNotifications = mutableUiState.value.runStatusNotifications,
+                    )
+            releasedState
+        }
+    val persistence =
+        persistenceScope.launch(start = CoroutineStart.LAZY) {
+            runCatching { writePendingCreateMarkers(released.pendingCreates) }
+            runCatching { removeGatewayConnectionUseCase?.execute() }
+            runCatching { clearEndpointStores(endpoint) }
+        }
+    pendingRemovalJob = persistence
+    persistence.start()
+    return released
+}
 
 internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnectionState =
     synchronized(sessionRequestLock) {
@@ -191,7 +205,7 @@ internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnecti
         verificationJob = null
         sessionJob = null
         recoveryJob = null
-        persistPendingCreates()
+        val pendingCreates = pendingCreateSnapshotLocked()
         pendingCreateStarted.clear()
         pendingCreateSessions.clear()
         sessionGateway = null
@@ -200,11 +214,12 @@ internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnecti
         mutationOwners.clear()
         val connectionRecoveryJobsToCancel = connectionRecoveryJobs.toList()
         clearRecoveryState()
-        clearSessionDraftsAndRuns(mutableUiState.value.endpoint)
+        clearSessionDraftAndRunState()
         val observationsToClose = runObservations.values.toList()
         val requestJobs = collectAndClearRequestJobs()
         ReleasedConnectionState(
             jobs = requestJobs + supersededJobs + connectionRecoveryJobsToCancel,
             observations = observationsToClose,
+            pendingCreates = pendingCreates,
         )
     }

@@ -12,19 +12,22 @@ internal fun EntryStateHolder.clearRecoveryState() {
     recoveryHandledEntries.clear()
 }
 
-internal fun EntryStateHolder.clearSessionDraftsAndRuns(endpoint: String) {
+internal fun EntryStateHolder.clearSessionDraftAndRunState() {
     sessionDrafts.clear()
     sessionDraftRevisions.clear()
     sessionSendErrors.clear()
     pendingRunDrafts.clear()
-    sessionDraftStore.clearEndpoint(endpoint)
-    modelSelectionStore.clearEndpoint(endpoint)
-    historyCacheStore.clearEndpoint(endpoint)
     sessionRuns.clear()
     submittedRunInputs.clear()
     submittedRunModelSelections.clear()
     authoritativeSessionHistoryGenerations.clear()
     authoritativeSessionRuns.clear()
+}
+
+internal fun EntryStateHolder.clearEndpointStores(endpoint: String) {
+    sessionDraftStore.clearEndpoint(endpoint)
+    modelSelectionStore.clearEndpoint(endpoint)
+    historyCacheStore.clearEndpoint(endpoint)
 }
 
 internal fun EntryStateHolder.collectAndClearRequestJobs(): List<Job> =
