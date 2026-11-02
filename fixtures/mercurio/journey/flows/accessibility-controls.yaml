@@ -25,8 +25,9 @@ name: accessibility-controls
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- assertVisible: "Message"
-- assertVisible: "Send"
+- assertVisible:
+    id: "conversation-message-input"
+- assertVisible: '\[ send \]'
 - assertVisible: "Back to Sessions"
 - back
 - extendedWaitUntil:
@@ -42,16 +43,15 @@ name: accessibility-controls
 - assertNotVisible: "Delete"
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
-    visible: "Message"
+    visible:
+      id: "conversation-message-input"
     timeout: 30000
 - assertVisible:
     id: "conversation-message-input"
-- assertVisible:
-    id: "conversation-send"
-- tapOn:
-    id: "conversation-send"
+- assertVisible: '\[ send \]'
+- tapOn: '\[ send \]'
 - tapOn:
     id: "conversation-message-input"
-- assertVisible: "Write a message"
+- assertVisible: "write a message"
 - assertVisible: "Back to Sessions"
 - takeScreenshot: accessibility-controls-composer-resource-ids

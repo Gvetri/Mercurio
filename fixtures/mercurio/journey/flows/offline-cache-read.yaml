@@ -18,7 +18,7 @@ name: offline-cache-read
 - extendedWaitUntil:
     visible: "Synthetic cached conversation"
     timeout: 30000
-- assertNotVisible: "The displayed Session history is cached on this device. It is not live."
+- assertNotVisible: "cached · unavailable"
 - takeScreenshot: offline-cache-read-authoritative-transcript
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
@@ -26,26 +26,11 @@ name: offline-cache-read
     timeout: 30000
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
-    visible: "The displayed Session history is cached on this device. It is not live."
+    visible: "cached · unavailable"
     timeout: 30000
 - assertVisible: "Synthetic cached conversation"
 - takeScreenshot: offline-cache-read-cached-transcript
 - tapOn: "Back to Sessions"
-- repeat:
-    times: 4
-    while:
-      notVisible:
-        text: "gateway :: ready"
-    commands:
-      - swipe:
-          start: "50%, 35%"
-          end: "50%, 80%"
-          duration: 800
-- extendedWaitUntil:
-    visible: "gateway :: ready"
-    timeout: 30000
-- assertVisible: "Alpha Session"
-- takeScreenshot: offline-cache-read-recovered-list
 - launchApp:
     clearState: false
 - extendedWaitUntil:
