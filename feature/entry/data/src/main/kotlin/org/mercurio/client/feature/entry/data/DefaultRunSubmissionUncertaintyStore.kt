@@ -10,19 +10,6 @@ private const val LEGACY_ATTEMPT_ID = "legacy"
 
 private val submissionUncertaintyLock = Any()
 
-interface RunSubmissionUncertaintyStorage {
-    fun read(key: PendingRunSubmissionKey): RunSubmissionUncertaintySnapshot?
-
-    fun write(
-        key: PendingRunSubmissionKey,
-        snapshot: RunSubmissionUncertaintySnapshot,
-    )
-
-    fun remove(key: PendingRunSubmissionKey)
-
-    fun clearEndpoint(endpoint: String) = Unit
-}
-
 class DefaultRunSubmissionUncertaintyStore(
     private val storage: RunSubmissionUncertaintyStorage,
 ) : RunSubmissionUncertaintyStore,

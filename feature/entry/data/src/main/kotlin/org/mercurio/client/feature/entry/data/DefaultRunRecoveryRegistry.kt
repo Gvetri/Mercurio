@@ -4,20 +4,6 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
 import org.mercurio.client.feature.entry.domain.isValid
 
-interface RunRecoveryStorage {
-    fun load(): Set<RunRecoveryEntry>
-
-    fun save(entries: Set<RunRecoveryEntry>)
-
-    fun clear() {
-        save(emptySet())
-    }
-}
-
-internal object RunRecoveryStorageTransactions {
-    val lock = Any()
-}
-
 class DefaultRunRecoveryRegistry(
     private val storage: RunRecoveryStorage,
 ) : RunRecoveryRegistry {
