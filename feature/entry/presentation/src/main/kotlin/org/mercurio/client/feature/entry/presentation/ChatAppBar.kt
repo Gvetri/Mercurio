@@ -55,7 +55,7 @@ internal fun ChatAppBar(
     ) {
         ChatBackControl(onClick = { onEvent(EntryUiEvent.ReturnToSessionListClicked) })
         Text(
-            text = session.title,
+            text = sessionTitle(session),
             style = MaterialTheme.typography.titleSmall,
             letterSpacing = 0.02.em,
             color = tokens.colorScheme.onSurface,
