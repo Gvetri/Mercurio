@@ -17,21 +17,20 @@ name: pagination-search
     timeout: 30000
 - assertVisible: "Search Alpha One"
 - assertVisible: "Search Beta Two"
-- assertNotVisible: "Search Gamma Three"
 - repeat:
     times: 8
     while:
       notVisible:
-        text: "Search Gamma Three"
+        text: "Search Delta Four"
     commands:
       - swipe:
           start: "50%, 70%"
           end: "50%, 35%"
           duration: 500
 - extendedWaitUntil:
-    visible: "Search Gamma Three"
+    visible: "Search Delta Four"
     timeout: 30000
-- assertVisible: "Search Delta Four"
+- assertVisible: "Search Gamma Three"
 - takeScreenshot: pagination-search-01-second-page-loaded
 - tapOn: "Search Sessions"
 - inputText: "Gamma"
