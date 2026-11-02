@@ -19,12 +19,13 @@ name: failed-offline-send
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Recover this offline draft"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: "Refresh history to resolve"
+    visible: "Message was not sent. Your draft is preserved. Try again."
     timeout: 30000
 - assertVisible: "Recover this offline draft"
 - assertVisible: "Discard unsent record"
@@ -44,9 +45,7 @@ name: failed-offline-send
     visible: "Recover this offline draft"
     timeout: 30000
 - takeScreenshot: failed-offline-send-draft-restored
-- tapOn:
-    text: "Try again"
-    retryTapIfNoChange: true
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Offline send recovered"
     timeout: 30000

@@ -212,9 +212,10 @@ transcript pins its newest content, so a control can scroll out of view, and an
 element swipe up from the first Session overshoots the short list viewport and
 clips the Session titles above it. A flow that needs earlier messages walks up
 to the first message first and then reads downward. In `session-lifecycle`, the
-`Refresh` reads are Gateway checkpoints asserted by the journey verifier: only
-Session creation may have written before them, and no list-menu cancellation
-may add a write.
+list and transcript reads are Gateway checkpoints asserted by the journey
+verifier against the sequence a real device run records: every confirmed action
+follows the read that makes it valid, and no list-menu cancellation may add a
+write.
 
 The `journeyScenarioTest` task declares the checked-in journey fixtures as
 Gradle inputs, so a scenario-only edit re-runs the scenario parse and
@@ -226,20 +227,21 @@ Two flow-authoring traps have lost journey rounds on device. Both are flow-desig
 errors, not app bugs, and each has a discriminating check to run on device before
 a flow change is pushed.
 
-### Focus-gated placeholder text
+### Composer and run-line controls
 
-The composer placeholder (`Write a message`) is the Material3 `placeholder` of the
-input field and composes only while that field is focused and empty. A flow that
-taps Send, or never taps the field, and then asserts the placeholder fails on
-device: it queries a node the app has not composed, because an empty, unfocused
-composer exposes the input's resource id, not its placeholder text.
+The Chat composer exposes the input as the resource id `conversation-message-input`
+and the send action as the text control `[ send ]`; the run line carries
+`[ stop ]`, `[ refresh ]` and `[ refresh history ]`. The placeholder
+(`write a message`) is a decoration that composes whenever the composer draft
+is empty, so a flow asserts it only after the field has been cleared - never
+while a reply is still streaming, when the draft state is the flow's own.
 
-The discriminating check is a hierarchy-dump pair: unfocused, the accessibility
-hierarchy holds zero `Write a message` nodes; after tapping the input, it holds
-one. Tap the input by its resource id (`conversation-message-input`) immediately
-before any placeholder assertion. In a journey that sends first, focus after the
-reply has landed: the composer input can be transiently disabled while the
-post-terminal history refresh lands, and a focus tap inside that window no-ops.
+The discriminating check is a hierarchy dump: the input node carries its resource
+id, while the bracket delimiters in the control labels are regex metacharacters.
+Maestro matches the full rendered text, so every bracket control is matched with
+an escaped, single-quoted pattern (`'\[ send \]'`) and never as a bare word such
+as `send`; an unescaped bracket class matches no label at all, and an unanchored
+word matches a longer passive string first.
 
 ### Full-text selector matching
 

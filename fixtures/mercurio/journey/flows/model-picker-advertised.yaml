@@ -48,14 +48,15 @@ name: model-picker-advertised
 - back
 - assertVisible: "Hermes Agent"
 - takeScreenshot: model-picker-advertised-hermes-selected
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Rely on this"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Stable recents result"
     timeout: 30000
-- assertVisible: "Run state: Succeeded"
+- assertVisible: "idle"
 - tapOn: "Hermes Agent"
 - repeat:
     times: 3
@@ -79,12 +80,13 @@ name: model-picker-advertised
 - back
 - assertVisible: "DeepSeek V4 Flash"
 - takeScreenshot: model-picker-advertised-effort-selected
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Override this"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: "Run state: Succeeded"
+    visible: "idle"
     timeout: 30000
 - scrollUntilVisible:
     element: "Stable picker result"
