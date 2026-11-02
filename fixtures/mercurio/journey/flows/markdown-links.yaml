@@ -27,7 +27,7 @@ name: markdown-links
 - assertVisible: "Safe Markdown text"
 - tapOn: "Message actions for message-markdown-1"
 - assertVisible: "Copy message"
-- assertVisible: "Share message"
+- assertVisible: "Share"
 - takeScreenshot: markdown-links-01-menu-open
 - back
 - assertNotVisible: "Copy message"
@@ -48,5 +48,6 @@ name: markdown-links
     element:
       text: ".*val total = 1.*"
     direction: DOWN
-- assertVisible: "Copy code"
-- assertVisible: "Message"
+- assertVisible: '\[ copy \]'
+- assertVisible:
+    id: "conversation-message-input"

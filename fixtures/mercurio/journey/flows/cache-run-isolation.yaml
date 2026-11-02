@@ -21,12 +21,13 @@ name: cache-run-isolation
     timeout: 30000
 - assertNotVisible: "The displayed Session history is cached on this device. It is not live."
 - takeScreenshot: cache-run-isolation-populated
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Recover this offline draft"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: "Refresh history to resolve"
+    visible: ".*Refresh history to resolve.*"
     timeout: 30000
 - assertVisible: "Recover this offline draft"
 - assertNotVisible: "The displayed Session history is cached on this device. It is not live."

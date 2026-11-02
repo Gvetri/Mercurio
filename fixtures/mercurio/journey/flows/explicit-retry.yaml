@@ -19,26 +19,23 @@ name: explicit-retry
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Retry this"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: "Run state: Failed"
+    visible: ".*· failed"
     timeout: 30000
 - scrollUntilVisible:
     element: "Stable retry failure"
     direction: DOWN
     timeout: 30000
+- tapOn: "Message actions for message-retry-failed"
 - extendedWaitUntil:
-    visible: "Latest Run"
+    visible: "Copy message"
     timeout: 30000
-- tapOn:
-    text: "Show run ID"
-    index: 0
-- extendedWaitUntil:
-    visible: "Run ID: run-retry-1"
-    timeout: 30000
+- back
 - extendedWaitUntil:
     visible: "Stable retry failure"
     timeout: 30000
@@ -49,7 +46,7 @@ name: explicit-retry
     text: "Try again"
     retryTapIfNoChange: true
 - extendedWaitUntil:
-    visible: "Run state: Succeeded"
+    visible: "idle"
     timeout: 30000
 - scrollUntilVisible:
     element: "Stable retry success"

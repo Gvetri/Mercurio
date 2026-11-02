@@ -25,11 +25,12 @@ name: model-picker-absent
 - assertNotVisible: "Server default"
 - assertNotVisible: "DeepSeek V4 Flash"
 - takeScreenshot: model-picker-absent-hidden
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Send anyway"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Stable composer result"
     timeout: 30000
-- assertVisible: "Run state: Succeeded"
+- assertVisible: "idle"
