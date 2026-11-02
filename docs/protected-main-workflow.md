@@ -2,7 +2,9 @@
 
 `main` is protected by the repository ruleset `Main`. Every change lands through an issue-scoped
 branch and a pull request, and the protected branch accepts a merge only when the current head of
-that pull request passed the aggregate `quality-gate` status.
+that pull request passed both required contexts: the aggregate `quality-gate` status and the
+`pr-template` body check. [What a pull request must satisfy](agents/pull-request-checks.md) names
+what each verifies.
 
 ## Rules enforced on `main`
 
@@ -10,7 +12,7 @@ that pull request passed the aggregate `quality-gate` status.
 | --- | --- |
 | Pull request before merging | Required; direct pushes are refused for every account, administrators included |
 | Merge strategy | Squash only. Merge commits and rebase merges are disabled on the repository as well |
-| Required status | Exactly one: `quality-gate`, the aggregate check of the workflow below |
+| Required statuses | Two: `quality-gate`, the aggregate check of the workflow below, and `pr-template`, the body check |
 | Required approvals | Zero, because one operator maintains the repository |
 | Stale reviews | Dismissed when a new commit arrives |
 | Up-to-date branch | Required, so the status describes the head that is merged and not an older result |
@@ -18,8 +20,8 @@ that pull request passed the aggregate `quality-gate` status.
 | Bypass actors | None, so no account or role can skip a rule |
 
 A merged pull request deletes its branch. Auto-merge may be enabled on a ready pull request, and the
-merge then happens only once the required status is green for the exact current head. GitHub refuses
-to merge a draft pull request at all.
+merge then happens only once both required statuses are green for the exact current head. GitHub
+refuses to merge a draft pull request at all.
 
 ## Branch names
 
@@ -39,11 +41,12 @@ owner to request the review.
 `ready_for_review`, and `labeled`: each listed activity except a non-`run-maestro` label starts a run
 that re-evaluates the head as it is at that moment, so a result from an earlier state of a pull
 request never stands for the current one, and adding the `run-maestro` label starts the labeled
-emulator suites on an open pull request. A title edit and a draft transition change no code, so they
-start no run; adding any other label starts only a no-op run whose validation jobs report `skipped`
-while its aggregate re-reports the decision of the newest completed `quality-gate` check run on that
-same head, so the last completed gate stays authoritative and a label can neither clear a failed
-gate nor block a green one.
+emulator suites on an open pull request. A title edit and converting a pull request to a draft change
+no code, so they start no `quality-gate` run; the body check has its own `edited` trigger, so an edit
+of the title or the body re-runs `pr-template` alone. Adding any other label starts only a no-op run
+whose validation jobs report `skipped` while its aggregate re-reports the decision of the newest
+completed `quality-gate` check run on that same head, so the last completed gate stays authoritative
+and a label can neither clear a failed gate nor block a green one.
 
 With `cancel-in-progress: true`, pull-request runs group per pull-request number and push runs group
 per ref: a newer run supersedes the obsolete run of the same pull request or ref. Scheduled runs
@@ -51,12 +54,11 @@ keep sharing the per-ref group. A hand-started run instead groups on its own run
 cancel a validation the Nightly started, and separate hand starts cannot cancel one another; a
 `labeled` run without the `run-maestro` label groups on its own run id too, so its no-op result never
 cancels an in-flight gate.
-Results are published per check, and only the aggregate job named
-`quality-gate` is a required status. On a run that validates the head, the aggregate fails unless
-every check declared in `.github/quality-gate/required-checks.txt` reports the outcome the event
-expects; on a non-maestro label run it instead fails unless the newest completed `quality-gate`
-check run on the same head carries a pass conclusion, so a no-op result is never more permissive
-than the gate it mirrors.
+Results are published per check, and `quality-gate` is a required status. On a run that validates the
+head, the aggregate fails unless every check declared in `.github/quality-gate/required-checks.txt`
+reports the outcome the event expects; on a non-maestro label run it instead fails unless the newest
+completed `quality-gate` check run on the same head carries a pass conclusion, so a no-op result is
+never more permissive than the gate it mirrors.
 
 | Run | Checks that execute | Checks that stay skipped |
 | --- | --- | --- |
@@ -123,7 +125,7 @@ validation on `main`. Only that exact successful validation permits signing and 
 and on a ready pull request it adds a fast formatting and lint result beside the complete gate. The
 aggregate also requires that a pull request targets `main`, so a pull request against another branch
 fails even when its checks pass. For an external-fork pull request the aggregate fails closed: the
-head never ran the complete gate, so it must never hold a passing required status.
+head never ran the complete gate, so it must never hold a passing `quality-gate` status.
 
 ## Merging
 
@@ -131,10 +133,10 @@ A pull request may be merged or auto-merged only when all of the following hold:
 
 - it is ready for review, not a draft;
 - it targets `main`;
-- its exact current head passed the required `quality-gate` status, and the branch is up to date
+- its exact current head passed both required statuses, and the branch is up to date
   with `main`;
-- it comes from the repository itself, because an external-fork head never holds a passing required
-  status;
+- it comes from the repository itself, because an external-fork head never holds a passing
+  `quality-gate` status;
 - it is merged with a squash merge, which is the only enabled strategy.
 
 The squash merge writes the pull-request title onto `main`, so the title and every commit the pull
@@ -152,8 +154,8 @@ An external-fork pull request is untrusted input, so it never runs the complete 
 - the repository requires maintainer approval before a run from an external contributor starts, so no
   external change consumes runner time on its own;
 - only `fork-guard` executes, and it reports which handling applies;
-- the aggregate fails closed, so an external head never holds a passing required status and neither
-  an automatic nor a manual merge of the fork head is possible;
+- the aggregate fails closed, so an external head never holds a passing `quality-gate` status, and
+  neither an automatic nor a manual merge of the fork head is possible;
 - external-fork artifacts are not release or compatibility inputs;
 - a maintainer validates the change by carrying it onto an in-repository branch, where the complete
   gate runs against a commit-verified head, and merges that pull request explicitly. That explicit
@@ -183,7 +185,7 @@ GITHUB_REPOSITORY=Gvetri/Mercurio GITHUB_TOKEN="$(gh auth token)" \
 ```
 
 Without `--owner` the check verifies everything a read-only credential can read: the enforced rules
-and the rulesets' bypass actors, the required status, the required-check declaration, the declared
+and the rulesets' bypass actors, the required statuses, the required-check declaration, the declared
 read-only token scope, and the absence of secrets.
 
 ## The contracts are themselves tested
