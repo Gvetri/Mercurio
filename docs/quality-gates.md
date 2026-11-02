@@ -257,8 +257,11 @@ the first code, and the generated or vendored files the class table excludes pas
 A violation reports the file, the line, the comment kind, and the remedy: delete the comment, or move
 its constraint into a test, a check, or `docs/` first. The verifier fails closed on its own scope too:
 a tracked file whose class it does not know fails instead of passing, so a new file class is decided in
-[Coding guidelines](coding-guidelines.md#scope) in the same change that adds it, and a scope that
-resolves to no in-scope file fails rather than reporting a clean tree.
+[Coding guidelines](coding-guidelines.md#scope) in the same change that adds it, and a sweep of the
+whole repository that resolves to no in-scope file fails rather than reporting a clean tree. A caller
+that names its own scope with `--files` is judged on exactly that scope, so the optional pre-commit
+hook names the staged files and passes when none of them is in scope; `--staged` reads those files as
+the index holds them, which is what the hook judges.
 
 `QualityGateConfigurationTest` pins the wiring, and `.github/scripts/tests/test_verify_comments.py`
 pins the tricky readings: comment markers inside strings, URLs, YAML block scalars, heredocs,

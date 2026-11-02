@@ -6,41 +6,26 @@ message that lands on `main`; every commit the pull request carries must also be
 Commit. A push validates the commits it introduced. The checker resolves the squash-merge title live
 from the GitHub API; the event payload title is only a fallback when the API gives no usable answer.
 
-The commit list fails closed: an unavailable or truncated commit-list answer is an error, never an
-accepted message.
+The header rule itself lives in `commit_header.py`, which `.githooks/commit-msg` reads as well, so the
+local answer and the CI answer cannot drift. The commit list fails closed: an unavailable or truncated
+commit-list answer is an error, never an accepted message.
 """
 
 import json
 import os
-import re
+import pathlib
 import sys
 import urllib.error
 import urllib.request
 
-COMMIT_TYPES = (
-    "build",
-    "chore",
-    "ci",
-    "docs",
-    "feat",
-    "fix",
-    "perf",
-    "refactor",
-    "revert",
-    "test",
-)
-HEADER = re.compile(
-    r"^(?P<type>[a-z]+)"
-    r"(?:\((?P<scope>[^()]+)\))?"
-    r"(?P<breaking>!)?"
-    r": (?P<subject>\S.*)$"
-)
-MERGE_PREFIXES = ("Merge ", "Revert \"Merge ", "Merged in ", "fixup! ", "squash! ")
-MAX_SUBJECT_LENGTH = 100
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from commit_header import MessageError, validate_message
+
 COMMITS_PER_PAGE = 100
 
 
-class VerificationError(Exception):
+class VerificationError(MessageError):
     """A condition that must fail the check rather than pass it."""
 
 
@@ -74,45 +59,6 @@ def event_payload():
             return json.load(handle)
     except (OSError, json.JSONDecodeError) as error:
         raise VerificationError(f"The event payload is unreadable: {error}") from error
-
-
-def header_of(message):
-    lines = [line.strip() for line in message.strip().splitlines()]
-    if not lines or not lines[0]:
-        raise VerificationError("The message has no subject line")
-    return lines[0]
-
-
-def validate_message(message, label):
-    """Return the violations of one message; an empty list means it is a valid Conventional Commit."""
-    header = header_of(message)
-    if header.startswith(MERGE_PREFIXES):
-        return []
-    match = HEADER.match(header)
-    if match is None:
-        return [
-            f"{label}: '{header}' is not a Conventional Commit. "
-            "Use '<type>[optional scope][!]: <description>'."
-        ]
-    violations = []
-    commit_type = match.group("type")
-    if commit_type not in COMMIT_TYPES:
-        violations.append(
-            f"{label}: '{commit_type}' is not a declared commit type. Use one of {', '.join(COMMIT_TYPES)}."
-        )
-    scope = match.group("scope")
-    if scope is not None and scope != scope.lower():
-        violations.append(f"{label}: the scope '{scope}' must be lower case.")
-    subject = match.group("subject").strip()
-    if not subject:
-        violations.append(f"{label}: the description is empty.")
-    if subject.endswith("."):
-        violations.append(f"{label}: the description must not end with a period.")
-    if len(header) > MAX_SUBJECT_LENGTH:
-        violations.append(
-            f"{label}: the subject line is {len(header)} characters; keep it within {MAX_SUBJECT_LENGTH}."
-        )
-    return violations
 
 
 def validate_pull_request(payload):
@@ -201,7 +147,7 @@ def main():
             raise VerificationError(
                 f"The commit-message check supports pull_request and push events, not '{event_name}'"
             )
-    except VerificationError as error:
+    except MessageError as error:
         print(f"Commit-message verification failed closed: {error}", file=sys.stderr)
         return 1
 

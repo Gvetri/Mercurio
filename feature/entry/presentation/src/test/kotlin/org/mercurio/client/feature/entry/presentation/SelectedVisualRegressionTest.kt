@@ -39,6 +39,50 @@ class SelectedVisualRegressionTest {
     val roborazziRule = RoborazziRule()
 
     @Test
+    @Config(qualifiers = "w360dp-h800dp-notnight")
+    fun error_reporting_consent_first_run_light() {
+        setContent(consentState())
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun error_reporting_consent_first_run_dark() {
+        setContent(consentState(), darkTheme = true)
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-notnight")
+    fun error_reporting_consent_short_200_top_light() {
+        setContentAtTwoHundredPercent(consentState(), darkTheme = false)
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-night")
+    fun error_reporting_consent_short_200_top_dark() {
+        setContentAtTwoHundredPercent(consentState(), darkTheme = true)
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-notnight")
+    fun error_reporting_consent_short_200_answers_light() {
+        setContentAtTwoHundredPercent(consentState(), darkTheme = false)
+        composeTestRule.onNodeWithText(copy(R.string.consent_do_not_send)).performScrollTo()
+        capture()
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-night")
+    fun error_reporting_consent_short_200_answers_dark() {
+        setContentAtTwoHundredPercent(consentState(), darkTheme = true)
+        composeTestRule.onNodeWithText(copy(R.string.consent_do_not_send)).performScrollTo()
+        capture()
+    }
+
+    @Test
     fun connection_form() {
         setContent(setupFormState())
         capture()
@@ -591,6 +635,28 @@ class SelectedVisualRegressionTest {
             }
         }
     }
+
+    private fun setContentAtTwoHundredPercent(
+        state: EntryUiState,
+        darkTheme: Boolean,
+    ) {
+        composeTestRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                HermesTheme(darkTheme = darkTheme) {
+                    EntryScreen(state = state, onEvent = {})
+                }
+            }
+        }
+    }
+
+    private fun consentState(): EntryUiState =
+        EntryUiState(
+            title = UiText.Resource(R.string.entry_title_connect),
+            supportingText = UiText.Resource(R.string.entry_supporting_connect),
+            actionLabel = UiText.Resource(R.string.entry_action_add_connection),
+            isErrorReportingConsentRequired = true,
+        )
 
     private fun connectedState(sessionList: SessionListUiState): EntryUiState =
         EntryUiState(

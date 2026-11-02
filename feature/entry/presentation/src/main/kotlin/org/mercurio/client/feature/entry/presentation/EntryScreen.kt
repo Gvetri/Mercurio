@@ -55,7 +55,9 @@ fun EntryScreen(
             if (state.isSettingsOpen) {
                 SettingsBackHandling(state, onEvent)
             }
-            if (state.localDiagnostics.isOpen) {
+            if (state.isErrorReportingConsentRequired) {
+                ErrorReportingConsentContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
+            } else if (state.localDiagnostics.isOpen) {
                 LocalDiagnosticsContent(
                     state = state.localDiagnostics,
                     onEvent = onEvent,

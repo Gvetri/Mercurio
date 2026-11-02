@@ -55,6 +55,12 @@
     <string name="entry_action_connected">Connected</string>
     <string name="entry_connected_to_gateway">Connected to Gateway</string>
 
+    <string name="consent_question">Send crash and error reports?</string>
+    <string name="consent_explanation">When Mercurio crashes or hangs, it can send a report to Sentry. The report says what broke, which is how most bugs get found.</string>
+    <string name="consent_consequence">Nothing is sent until you answer. If you say no, crash and hang details stay on this device. You can change your mind later in Settings › Diagnostics.</string>
+    <string name="consent_send_reports">Send reports</string>
+    <string name="consent_do_not_send">Don\'t send</string>
+
     <string name="inbound_link_session_needs_connection">Connect to a Gateway to open Session links. This link was discarded.</string>
     <string name="inbound_link_compose_needs_connection">Connect to a Gateway to use the composer. This link was discarded.</string>
     <string name="inbound_link_session_unknown">This Session link could not be opened.</string>

@@ -3,6 +3,10 @@ name: connection
 ---
 - launchApp:
     clearState: true
+- assertVisible: "Send crash and error reports[?]"
+- assertVisible: ".*crash and hang details stay on this device.*"
+- takeScreenshot: error-reporting-consent
+- tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
 - assertNotVisible: "Remove Gateway Connection"
 - tapOn: "Gateway HTTPS endpoint"

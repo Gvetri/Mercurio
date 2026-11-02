@@ -1,6 +1,8 @@
 package org.mercurio.client.feature.entry.wiring
 
 import android.content.Context
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 
 class SharedPreferencesErrorReportingConsentStore(
     context: Context,

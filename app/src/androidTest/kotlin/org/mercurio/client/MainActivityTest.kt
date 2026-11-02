@@ -20,7 +20,7 @@ class MainActivityTest {
     companion object {
         @BeforeClass
         @JvmStatic
-        fun clearSavedConnection() = clearSavedGatewayConnection()
+        fun clearSavedConnection() = prepareFirstUseInstall()
     }
 
     @Test

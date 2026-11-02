@@ -9,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.application.NoOpErrorReporter
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
