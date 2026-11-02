@@ -56,8 +56,8 @@ import java.util.Locale
 internal fun MarkdownTableCard(
     block: MarkdownBlock.Table,
     actions: MessageActions,
-    modifier: Modifier = Modifier,
     onExpand: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = LocalHermesDesignTokens.current
     val naturalWidths = rememberTableColumnWidths(block)
@@ -267,7 +267,7 @@ internal fun tableCellText(
         codeBackground = null,
     )
 
-internal fun MarkdownBlock.Table.collectionInfo(): CollectionInfo {
+private fun MarkdownBlock.Table.collectionInfo(): CollectionInfo {
     val rowCount = rows.size + 1
     return CollectionInfo(rowCount = rowCount, columnCount = header.size)
 }
@@ -279,14 +279,14 @@ internal fun tableTitle(columnCount: Int): String =
         "Table · $columnCount columns"
     }
 
-internal fun TableAlignment.textAlign(): TextAlign =
+private fun TableAlignment.textAlign(): TextAlign =
     when (this) {
         TableAlignment.Start -> TextAlign.Start
         TableAlignment.Center -> TextAlign.Center
         TableAlignment.End -> TextAlign.End
     }
 
-internal fun DrawScope.drawStickyColumnEdge(color: Color) {
+private fun DrawScope.drawStickyColumnEdge(color: Color) {
     val stroke = 1.dp.toPx()
     drawLine(
         color = color,
