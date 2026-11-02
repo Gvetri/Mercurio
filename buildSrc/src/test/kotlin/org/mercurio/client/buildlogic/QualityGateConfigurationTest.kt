@@ -135,6 +135,63 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun the_comment_policy_verifier_accepts_kdoc_and_rejects_the_other_comment_forms() {
+        runPythonSuite(".github/scripts/tests/test_verify_comments.py")
+    }
+
+    @Test
+    fun the_comment_policy_check_runs_in_the_formatting_job_and_the_local_gate() {
+        val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
+        val buildScript = repositoryRoot.resolve("build.gradle.kts").readText()
+        val documentation = repositoryRoot.resolve("docs/quality-gates.md").readText()
+        val guidelines = repositoryRoot.resolve("docs/coding-guidelines.md").readText()
+        val formattingJob = workflow.substringAfter("  formatting:\n").substringBefore("  static_analysis:\n")
+
+        assertTrue(
+            "The formatting job must run the comment policy check beside the formatter.",
+            formattingJob.contains("- run: ./gradlew formatCheck commentPolicyVerify --no-daemon"),
+        )
+        assertTrue(
+            "The local gate must depend on the comment policy check.",
+            buildScript.contains("\"commentPolicyVerify\","),
+        )
+        assertTrue(
+            "The local gate must require the comment policy check to execute.",
+            buildScript.contains("qualityGate requires commentPolicyVerify to execute in this invocation."),
+        )
+        assertTrue(
+            "The quality-gates document must record the check and its scope.",
+            documentation.contains("`formatCheck commentPolicyVerify`") && documentation.contains("### Comments"),
+        )
+        assertTrue(
+            "The coding guidelines must flip the enforcement row to the mechanical check.",
+            guidelines.contains("`formatting` check (`commentPolicyVerify`)") &&
+                !guidelines.contains("No mechanical check yet"),
+        )
+        assertTrue(
+            "The comment policy tests must exist.",
+            repositoryRoot.resolve(".github/scripts/tests/test_verify_comments.py").isFile &&
+                repositoryRoot.resolve(".github/scripts/verify-comments.py").isFile,
+        )
+    }
+
+    @Test
+    fun the_version_catalog_maps_okhttp_to_the_jvm_artifact() {
+        val catalog = repositoryRoot.resolve("gradle/libs.versions.toml").readText()
+
+        assertTrue(
+            "The catalog must map okhttp to the okhttp-jvm artifact: the `okhttp` redirect stub resolves " +
+                "to okhttp-android, whose AAR metadata requires compileSdk 37 while this repository is on 35.",
+            catalog.contains("okhttp = { module = \"com.squareup.okhttp3:okhttp-jvm\", version.ref = \"okhttp\" }"),
+        )
+        assertTrue(
+            "The catalog must pin okhttp 5.5.1: that release blocks the compromised eMudhra intermediate " +
+                "certificates (CVE-2026-111943), and a later version is a deliberate bump.",
+            catalog.contains("okhttp = \"5.5.1\""),
+        )
+    }
+
+    @Test
     fun gradle_wrapper_declares_official_distribution_checksum() {
         val checksum =
             repositoryRoot.resolve("gradle/wrapper/gradle-wrapper.properties").readLines()
