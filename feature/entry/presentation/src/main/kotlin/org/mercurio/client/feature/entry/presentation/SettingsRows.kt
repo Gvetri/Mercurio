@@ -17,17 +17,12 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 
 @Composable
 internal fun SettingsSectionHeader(label: String) {
     val tokens = LocalHermesDesignTokens.current
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.16.em),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+    SectionHeaderText(
+        label = label,
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -99,7 +94,7 @@ internal fun SettingsSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
-    val switchDescription = model.description ?: model.label
+    val switchDescription = model.description
     Row(
         modifier =
             Modifier
@@ -137,7 +132,7 @@ internal data class SettingsSwitchRowModel(
     val label: String,
     val supporting: String,
     val checked: Boolean,
-    val description: String? = null,
+    val description: String,
     val errorText: String? = null,
 )
 

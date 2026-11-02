@@ -108,7 +108,7 @@ class SettingsDesignStatesTest {
     }
 
     private fun scrollToAbout() {
-        composeTestRule.onNodeWithText("ABOUT").performScrollTo()
+        composeTestRule.onNodeWithText("Google Play").performScrollTo()
     }
 
     private fun notificationsOnState(): EntryUiState = settingsState(notificationsEnabled = true)

@@ -73,7 +73,7 @@ private fun SettingsTopBar(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val actionsDescription = stringResource(R.string.settings_connection_actions)
-    val overflowMark = stringResource(R.string.settings_connection_actions_mark)
+    val overflowMark = stringResource(R.string.shell_connection_actions_mark)
     var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier =
