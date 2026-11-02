@@ -49,7 +49,6 @@ enum class SessionRenameErrorCategory(
 
 enum class RelativeLastActiveUnit { MINUTES, HOURS, DAYS, WEEKS, MONTHS, YEARS }
 
-/** How long ago a Session was last active, or that the Gateway supplied no answer. */
 sealed interface RelativeLastActive {
     data object Unknown : RelativeLastActive
 
@@ -67,7 +66,6 @@ data class SessionItemUiState(
     val preview: String?,
     val pinned: Boolean,
     val lastActive: RelativeLastActive = RelativeLastActive.Unknown,
-    /** The Gateway holds no title yet, so the renderer shows its pending-title placeholder. */
     val isPendingTitle: Boolean = false,
 )
 
