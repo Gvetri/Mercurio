@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.flow.MutableSharedFlow
 import org.mercurio.client.feature.entry.domain.MessageImagePort
 import org.mercurio.client.feature.entry.presentation.EntryScreen
 import org.mercurio.client.feature.entry.presentation.EntryStateHolder
@@ -19,21 +20,26 @@ import org.mercurio.client.feature.entry.presentation.MessageImageProvider
 import org.mercurio.client.feature.entry.wiring.EntryWiring
 
 class MainActivity : ComponentActivity() {
+    private val notificationPermissionRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private lateinit var entryStateHolder: EntryStateHolder
     private lateinit var messageImagePort: MessageImagePort
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        entryStateHolder = EntryWiring.createEntryStateHolder(applicationContext)
+        entryStateHolder =
+            EntryWiring.createEntryStateHolder(
+                context = applicationContext,
+                requestRunStatusNotificationPermission = { notificationPermissionRequests.tryEmit(Unit) },
+            )
         messageImagePort = EntryWiring.createMessageImagePort()
         setContent {
             val notificationPermissionLauncher =
                 rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                     entryStateHolder.onEvent(EntryUiEvent.RunStatusNotificationPermissionResult(granted))
                 }
-            LaunchedEffect(Unit) {
-                entryStateHolder.requestRunStatusNotificationPermission = {
+            LaunchedEffect(notificationPermissionLauncher) {
+                notificationPermissionRequests.collect {
                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             }

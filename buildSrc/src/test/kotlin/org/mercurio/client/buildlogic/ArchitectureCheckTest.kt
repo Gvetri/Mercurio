@@ -5,6 +5,8 @@ import com.lemonappdev.konsist.api.architecture.KoArchitectureCreator.assertArch
 import com.lemonappdev.konsist.api.architecture.Layer
 import com.lemonappdev.konsist.api.container.KoScope
 import com.lemonappdev.konsist.api.declaration.KoFileDeclaration
+import com.lemonappdev.konsist.api.declaration.KoParameterDeclaration
+import com.lemonappdev.konsist.api.declaration.type.KoTypeDeclaration
 import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertNotNull
@@ -66,6 +68,26 @@ class ArchitectureCheckTest {
     @Test
     fun domain_and_application_module_scripts_declare_no_forbidden_dependency() {
         assertNoForbiddenModuleDependencies(moduleBuildScripts.map { script -> repositoryRoot.resolve(script) })
+    }
+
+    @Test
+    fun presentation_composables_take_state_and_events_only() {
+        assertComposablesTakeStateAndEvents(productionScope())
+    }
+
+    @Test
+    fun presentation_state_has_one_writer() {
+        assertOneStateWriter(scopeOf(presentationSourceRoot))
+    }
+
+    @Test
+    fun presentation_state_types_stay_immutable() {
+        assertImmutableStateTypes(scopeOf(presentationSourceRoot))
+    }
+
+    @Test
+    fun presentation_exposes_one_event_entry() {
+        assertOneEventEntry(scopeOf(presentationSourceRoot))
     }
 
     @Test
@@ -309,6 +331,284 @@ class ArchitectureCheckTest {
     }
 
     @Test
+    fun rejects_a_composable_that_takes_the_state_holder() {
+        val violation =
+            fixturePath("presentation", "HolderParameter.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import androidx.compose.runtime.Composable
+
+                @Composable
+                internal fun HolderParameterScreen(holder: FixtureStateHolder) = Unit
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(composableContractRule, "FixtureStateHolder") { assertComposablesTakeStateAndEvents(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_composable_that_takes_a_domain_port() {
+        val violation =
+            fixturePath("presentation", "PortParameter.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import androidx.compose.runtime.Composable
+                import org.mercurio.client.feature.entry.domain.FixtureStore
+
+                @Composable
+                internal fun PortParameterScreen(store: FixtureStore) = Unit
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(composableContractRule, "FixtureStore") { assertComposablesTakeStateAndEvents(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_composable_scope_that_resolves_to_no_presentation_function() {
+        withFixtureScope(
+            mapOf(fixturePath("presentation", "FixtureNotes.txt") to "Not a Kotlin source."),
+        ) { scope ->
+            assertRuleRejects(composableContractRule, "resolved to no presentation function") {
+                assertComposablesTakeStateAndEvents(scope)
+            }
+        }
+    }
+
+    @Test
+    fun accepts_a_composable_that_takes_state_and_events() {
+        withFixtureScope(presentationFixture()) { scope ->
+            assertRuleAccepts(composableContractRule) { assertComposablesTakeStateAndEvents(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_public_mutable_property_on_the_state_holder() {
+        val violation =
+            fixturePath("presentation", "EntryStateHolder.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import kotlinx.coroutines.flow.MutableStateFlow
+                import kotlinx.coroutines.flow.StateFlow
+                import kotlinx.coroutines.flow.asStateFlow
+
+                internal class FixtureStateHolder {
+                    var requestPermission: (() -> Unit)? = null
+
+                    internal val mutableUiState = MutableStateFlow(EntryUiState(title = "fixture"))
+                    val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
+
+                    fun onEvent(event: EntryUiEvent) {
+                        mutableUiState.value = mutableUiState.value.copy(title = event.toString())
+                    }
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(stateWriterRule, "requestPermission") { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_state_write_outside_the_state_holder_files() {
+        val violation =
+            fixturePath("presentation", "EntryScreen.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import androidx.compose.runtime.Composable
+
+                @Composable
+                internal fun EntryScreen(
+                    state: EntryUiState,
+                    onEvent: (EntryUiEvent) -> Unit,
+                ) {
+                    mutableUiState.value = state.copy(title = "written by the screen")
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(stateWriterRule, "EntryScreen.kt") { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_state_write_through_the_update_helper() {
+        val violation =
+            fixturePath("presentation", "EntryScreen.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import androidx.compose.runtime.Composable
+
+                @Composable
+                internal fun EntryScreen(
+                    state: EntryUiState,
+                    onEvent: (EntryUiEvent) -> Unit,
+                ) {
+                    mutableUiState.update { current -> current.copy(title = "written by the screen") }
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(stateWriterRule, "EntryScreen.kt") { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_renamed_state_flow_written_outside_the_state_holder_files() {
+        val violation =
+            fixturePath("presentation", "EntrySessionCache.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                import kotlinx.coroutines.flow.MutableStateFlow
+
+                internal object EntrySessionCache {
+                    val cachedStateFlow = MutableStateFlow(EntryUiState(title = "cache"))
+
+                    fun replace(state: EntryUiState) {
+                        cachedStateFlow.value = state
+                    }
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(stateWriterRule, "EntrySessionCache.kt") { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_scope_that_declares_no_state_flow() {
+        withFixtureScope(
+            mapOf(
+                fixturePath("presentation", "EntryScreen.kt") to
+                    """
+                    package org.mercurio.client.feature.entry.presentation
+
+                    import androidx.compose.runtime.Composable
+
+                    @Composable
+                    internal fun EntryScreen(state: EntryUiState) = Unit
+                    """,
+            ),
+        ) { scope ->
+            assertRuleRejects(stateWriterRule, "declares no MutableStateFlow") { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
+    fun accepts_the_state_writes_of_the_state_holder() {
+        withFixtureScope(presentationFixture()) { scope ->
+            assertRuleAccepts(stateWriterRule) { assertOneStateWriter(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_state_type_with_a_mutable_property() {
+        val violation =
+            fixturePath("presentation", "EntryUiState.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                internal data class EntryUiState(
+                    val title: String,
+                    var count: Int = 0,
+                )
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(immutableStateRule, "count") { assertImmutableStateTypes(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_state_type_with_a_mutable_collection() {
+        val violation =
+            fixturePath("presentation", "EntryUiState.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                internal data class EntryUiState(
+                    val title: String,
+                    val rows: MutableList<String> = mutableListOf(),
+                )
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(immutableStateRule, "rows") { assertImmutableStateTypes(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_state_type_with_a_nested_mutable_collection() {
+        val violation =
+            fixturePath("presentation", "EntryUiState.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                internal data class EntryUiState(
+                    val title: String,
+                    val rows: Map<String, MutableList<String>> = emptyMap(),
+                )
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(immutableStateRule, "rows") { assertImmutableStateTypes(scope) }
+        }
+    }
+
+    @Test
+    fun accepts_an_immutable_state_type() {
+        withFixtureScope(presentationFixture()) { scope ->
+            assertRuleAccepts(immutableStateRule) { assertImmutableStateTypes(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_second_public_event_entry() {
+        val violation =
+            fixturePath("presentation", "SecondEntry.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                internal fun dispatchClicked(event: EntryUiEvent) = event.toString()
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(eventEntryRule, "SecondEntry.kt") { assertOneEventEntry(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_an_event_callback_property() {
+        val violation =
+            fixturePath("presentation", "FixtureChannel.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                internal class FixtureChannel {
+                    var raise: (EntryUiEvent) -> Unit = {}
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(eventEntryRule, "raise") { assertOneEventEntry(scope) }
+        }
+    }
+
+    @Test
+    fun accepts_a_state_holder_with_one_event_entry() {
+        withFixtureScope(presentationFixture()) { scope ->
+            assertRuleAccepts(eventEntryRule) { assertOneEventEntry(scope) }
+        }
+    }
+
+    @Test
     fun rejects_a_forbidden_dependency_declaration_in_a_module_script() {
         withFixtureDirectory(
             mapOf(
@@ -406,6 +706,155 @@ class ArchitectureCheckTest {
             rule = appExternalFileRule,
             guidance = appExternalFileGuidance,
         )
+    }
+
+    private fun assertComposablesTakeStateAndEvents(scope: KoScope) {
+        val functions =
+            scope
+                .functions()
+                .filter { function -> function.packagee?.name?.startsWith(presentationPackageName) == true }
+        require(functions.isNotEmpty()) {
+            "$composableContractRule failed. The declared scope resolved to no presentation function."
+        }
+
+        val portNames =
+            scope
+                .interfaces()
+                .filter { declaration -> declaration.packagee?.name?.startsWith(presentationPackageName) != true }
+                .map { declaration -> declaration.name }
+                .toSet()
+
+        val violations =
+            functions
+                .filter { function -> function.hasAnnotationWithName(composableAnnotation) }
+                .flatMap { function ->
+                    function.parameters
+                        .filter { parameter -> parameter.takesLayerHandle(portNames) }
+                        .map { parameter ->
+                            "${function.location}: ${function.name} takes ${parameter.type.name}, so the rendering " +
+                                "surface can read or write the state holder or a port directly."
+                        }
+                }
+
+        require(violations.isEmpty()) {
+            "$composableContractRule failed. $composableContractGuidance\n${violations.joinToString("\n")}"
+        }
+    }
+
+    private fun assertOneStateWriter(scope: KoScope) {
+        val files = scope.files
+        require(files.isNotEmpty()) {
+            "$stateWriterRule failed. The declared scope resolved to no Kotlin source."
+        }
+
+        val stateFlows =
+            scope
+                .classesAndObjects()
+                .flatMap { declaration -> declaration.properties() }
+                .filter { property -> property.text.contains(mutableStateFlowType) }
+                .map { property -> property.name }
+                .distinct()
+        require(stateFlows.isNotEmpty()) {
+            "$stateWriterRule failed. The declared scope declares no $mutableStateFlowType, so the rule would " +
+                "have nothing to guard."
+        }
+
+        val writePatterns = stateFlows.flatMap(::stateWritePatternsOf)
+
+        val exposedWriters =
+            scope.classes()
+                .filter { declaration -> declaration.name.endsWith(stateHolderTypeSuffix) }
+                .flatMap { declaration ->
+                    declaration.properties()
+                        .filter { property -> property.isVar && property.hasPublicOrDefaultModifier }
+                        .map { property ->
+                            "${property.location}: ${declaration.name} exposes the mutable property ${property.name}, " +
+                                "a second write path around the event entry."
+                        }
+                }
+
+        val strayWrites =
+            files
+                .filterNot { file -> file.name.startsWith(stateHolderFilePrefix) }
+                .flatMap { file ->
+                    file.text.lines().mapIndexedNotNull { index, line ->
+                        if (writePatterns.any { pattern -> pattern.containsMatchIn(line) }) {
+                            "${file.path}:${index + 1}: a state write outside the state-holder files: $line"
+                        } else {
+                            null
+                        }
+                    }
+                }
+
+        val violations = exposedWriters + strayWrites
+        require(violations.isEmpty()) {
+            "$stateWriterRule failed. $stateWriterGuidance\n${violations.joinToString("\n")}"
+        }
+    }
+
+    private fun assertImmutableStateTypes(scope: KoScope) {
+        val stateTypes = scope.classes().filter { declaration -> declaration.name.endsWith(uiStateTypeSuffix) }
+        require(stateTypes.isNotEmpty()) {
+            "$immutableStateRule failed. The declared scope resolved to no UI state type."
+        }
+
+        val violations =
+            stateTypes.flatMap { declaration ->
+                declaration.properties().mapNotNull { property ->
+                    when {
+                        property.isVar ->
+                            "${property.location}: ${declaration.name}.${property.name} is a mutable property, " +
+                                "so a state comparison proves nothing."
+                        property.type?.hasMutableCollectionType() == true ->
+                            "${property.location}: ${declaration.name}.${property.name} holds a mutable collection, " +
+                                "so the value can change behind the state flow."
+                        else -> null
+                    }
+                }
+            }
+
+        require(violations.isEmpty()) {
+            "$immutableStateRule failed. $immutableStateGuidance\n${violations.joinToString("\n")}"
+        }
+    }
+
+    private fun assertOneEventEntry(scope: KoScope) {
+        val entries =
+            scope.functions(includeLocal = false).filter { function ->
+                !function.hasPrivateModifier &&
+                    function.parameters.any { parameter -> parameter.type.name == eventTypeName }
+            }
+        val callbacks =
+            scope
+                .classesAndObjects()
+                .flatMap { declaration -> declaration.properties() }
+                .filter { property ->
+                    property.isVar &&
+                        !property.hasPrivateModifier &&
+                        property.text.contains(eventCallbackTypeFragment)
+                }
+        val found = entries.size + callbacks.size
+
+        require(found == 1) {
+            "$eventEntryRule failed. $eventEntryGuidance\nThe rule found $found reachable event entries:\n" +
+                (entries.map { entry -> entry.locationWithText } + callbacks.map { callback -> callback.locationWithText })
+                    .joinToString("\n")
+        }
+    }
+
+    private fun KoParameterDeclaration.takesLayerHandle(portNames: Set<String>): Boolean =
+        type.name.let { name -> name.endsWith(stateHolderTypeSuffix) || name in portNames }
+
+    private fun stateWritePatternsOf(flow: String): List<Regex> =
+        listOf(
+            Regex("""\b${Regex.escape(flow)}\s*\.\s*value\s*[-+]?="""),
+            Regex("""\b${Regex.escape(flow)}\s*\.\s*update\s*[({]"""),
+            Regex("""\b${Regex.escape(flow)}\s*\.\s*(?:getAndSet|compareAndSet)\b"""),
+        )
+
+    private fun KoTypeDeclaration.hasMutableCollectionType(): Boolean {
+        val type = text.trim()
+        return mutableCollectionTypePattern.containsMatchIn(type) || arrayCollectionTypePattern.containsMatchIn(type)
     }
 
     private fun assertNoForbiddenReferences(
@@ -571,12 +1020,78 @@ class ArchitectureCheckTest {
         return files
     }
 
+    private fun presentationFixture(violation: Pair<String, String>? = null): Map<String, String> {
+        val files =
+            mutableMapOf(
+                fixturePath("presentation", "EntryUiEvent.kt") to
+                    """
+                    package org.mercurio.client.feature.entry.presentation
+
+                    internal sealed interface EntryUiEvent {
+                        data object Clicked : EntryUiEvent
+                    }
+                    """,
+                fixturePath("presentation", "EntryUiState.kt") to
+                    """
+                    package org.mercurio.client.feature.entry.presentation
+
+                    internal data class EntryUiState(
+                        val title: String,
+                        val rows: List<String> = emptyList(),
+                    )
+                    """,
+                fixturePath("domain", "FixtureStore.kt") to
+                    """
+                    package org.mercurio.client.feature.entry.domain
+
+                    internal interface FixtureStore
+                    """,
+                fixturePath("presentation", "EntryStateHolder.kt") to
+                    """
+                    package org.mercurio.client.feature.entry.presentation
+
+                    import kotlinx.coroutines.flow.MutableStateFlow
+                    import kotlinx.coroutines.flow.StateFlow
+                    import kotlinx.coroutines.flow.asStateFlow
+
+                    internal class FixtureStateHolder {
+                        internal val mutableUiState = MutableStateFlow(EntryUiState(title = "fixture"))
+                        val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
+
+                        fun onEvent(event: EntryUiEvent) {
+                            mutableUiState.value = mutableUiState.value.copy(title = event.toString())
+                        }
+                    }
+                    """,
+                fixturePath("presentation", "EntryScreen.kt") to
+                    """
+                    package org.mercurio.client.feature.entry.presentation
+
+                    import androidx.compose.runtime.Composable
+
+                    @Composable
+                    internal fun EntryScreen(
+                        state: EntryUiState,
+                        onEvent: (EntryUiEvent) -> Unit,
+                    ) = Unit
+                    """,
+            )
+
+        violation?.let { (path, content) -> files[path] = content }
+
+        return files
+    }
+
     private companion object {
         const val layerBoundaryRule = "architecture/layer-boundaries"
         const val domainReferenceRule = "architecture/domain-application-references"
         const val presentationReferenceRule = "architecture/presentation-untrusted-content"
         const val appExternalFileRule = "architecture/app-external-file-boundary"
         const val moduleDependencyRule = "architecture/module-dependency-declarations"
+        const val composableContractRule = "udf/composables-take-state-and-events"
+        const val stateWriterRule = "udf/one-state-writer"
+        const val immutableStateRule = "udf/immutable-state-types"
+        const val eventEntryRule = "udf/one-event-entry"
 
         const val layerBoundaryGuidance =
             "The dependency direction is inward, so a domain or application declaration must not reach an outer layer."
@@ -588,6 +1103,26 @@ class ArchitectureCheckTest {
             "A file handed to another app must be a read-only content URI from the declared, non-exported file provider, never a file path or a writable grant."
         const val moduleDependencyGuidance =
             "The domain and application module scripts must not declare a framework, transport, serialization, injection, or concrete-layer dependency."
+        const val composableContractGuidance =
+            "A presentation composable takes immutable state and one event callback, never the state holder or a port, so it cannot read or write state itself."
+        const val stateWriterGuidance =
+            "State is written in one place: the state holder files, through the event entry. Another file that writes the state flow, or a public mutable property on the state holder, is a second writer."
+        const val immutableStateGuidance =
+            "A UI state type is immutable: every property is a val and every collection is a read-only type, so comparing two states means something."
+        const val eventEntryGuidance =
+            "Events enter the feature at exactly one function that is not private, so no second path can mutate state behind the state holder."
+
+        const val composableAnnotation = "Composable"
+        const val eventTypeName = "EntryUiEvent"
+        const val eventCallbackTypeFragment = "($eventTypeName) ->"
+        const val mutableStateFlowType = "MutableStateFlow"
+        const val stateHolderTypeSuffix = "StateHolder"
+        const val stateHolderFilePrefix = "EntryStateHolder"
+        const val uiStateTypeSuffix = "UiState"
+        const val presentationPackageName = "org.mercurio.client.feature.entry.presentation"
+
+        val mutableCollectionTypePattern = Regex("""\bMutable[A-Za-z0-9]*""")
+        val arrayCollectionTypePattern = Regex("""\bArray\s*<""")
 
         const val domainSourceRoot = "feature/entry/domain/src/main/kotlin"
         const val applicationSourceRoot = "feature/entry/application/src/main/kotlin"

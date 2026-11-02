@@ -48,6 +48,18 @@ An inline HTTPS image is fetched through the `MessageImagePort` domain port, imp
 
 Wiring selects concrete datasource and repository implementations and creates the presentation state holder. This is the only feature module that assembles the bootstrap data path. The module enables core-library desugaring for `java.time`, because the diagnostics exporter records UTC instants and the minimum supported API level is 24.
 
+## Unidirectional data flow
+
+State flows down and events flow up, and the shape is enforced by rules rather than by review. The state holder exposes `uiState` and one event entry, `onEvent`; a composable receives immutable state and one event callback.
+
+- **One writer.** The rule reads the declared `MutableStateFlow` properties — `EntryStateHolder.mutableUiState` today — and fails on an assignment, an `update { }`, a `getAndSet`, or a `compareAndSet` on one of them outside the state-holder files (`EntryStateHolder*.kt`). Every other file reads state or raises an event. A scope that declares no `MutableStateFlow` fails rather than passing vacuously, so renaming the flow cannot retire the rule.
+- **No public mutable property.** The state holder keeps no public `var`. A capability such as the notification-permission request arrives through `EntryStateHolderDependencies` at construction, so no caller can swap a callback or set a field after the holder exists.
+- **Immutable state types.** A `*UiState` type declares `val` properties and carries no mutable collection anywhere in a property type — `List`, never `MutableList`, at any nesting depth.
+- **One event entry.** Exactly one function that is not private takes `EntryUiEvent` itself, and it is `onEvent`. The dispatch functions take the event's subtypes and stay private or internal, so they are not entries. A settable function-typed property of the event type — the shape the removed permission callback had — is a second entry and fails; a read-only callback bundle that a composable receives is not.
+- **Composables take state and events.** A `@Composable` takes immutable state, one event callback, and styling inputs. It fails when it takes a state holder or a port, and a port is an interface declared outside presentation, whatever it is named.
+
+The four rules share one deliberate blind spot: they read declarations and the source text of presentation's main sources, not dataflow. A write through a local alias of the state flow, and an event entry declared in another module, are outside what they can see; the shape they pin is the one this feature has.
+
 ## Architecture checks
 
 The architecture rules are Konsist checks. `./gradlew architectureRuleTests` runs the rule suite and fails unless its executed evidence is complete, and every rule also runs against a synthetic scope that carries one deliberate violation, so a rule that stopped rejecting a violation fails the suite instead of passing it. The rules live in `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt` and are declared by name:
@@ -59,8 +71,12 @@ The architecture rules are Konsist checks. `./gradlew architectureRuleTests` run
 | `architecture/presentation-untrusted-content` | executable web content or a network client in presentation, which renders untrusted Gateway content, so the renderer cannot reach a web view or a link destination's server |
 | `architecture/app-external-file-boundary` | a file path or a writable grant in any main source, so a file handed to another app stays a read-only content URI from the declared, non-exported file provider |
 | `architecture/module-dependency-declarations` | a forbidden dependency declaration in the domain or application module build script |
+| `udf/composables-take-state-and-events` | a `@Composable` that takes a state holder or an interface declared outside presentation (a port) instead of immutable state and one event callback |
+| `udf/one-state-writer` | a write to a declared state flow outside the state-holder files, a scope that declares no state flow, or a public mutable property on a state holder |
+| `udf/immutable-state-types` | a `*UiState` type with a mutable property or a mutable collection at any nesting depth |
+| `udf/one-event-entry` | a second function that is not private and takes the feature's UI event, or a settable function-typed property of that event |
 
-The layer graph runs through the Konsist architecture assertion: domain depends on nothing, application and data depend only inward, and presentation and wiring stay inside the declared direction. The reference rules read the same scopes through Konsist's declaration model, because a fully qualified reference that carries no import is invisible to an import-based dependency assertion. Konsist parses Kotlin sources, not Gradle Kotlin scripts, so the module build scripts are the one medium the rule suite reads directly.
+The layer graph runs through the Konsist architecture assertion: domain depends on nothing, application and data depend only inward, and presentation and wiring stay inside the declared direction. The reference rules read the same scopes through Konsist's declaration model, because a fully qualified reference that carries no import is invisible to an import-based dependency assertion. The UDF rules read presentation's declarations the same way: the `@Composable` signatures, the state-holder and state-flow properties, the `*UiState` properties, and the functions and settable properties that carry the event type. The composable rule resolves over the whole production scope, because a port is only recognisable as an interface declared in another package, and narrows this judgement to presentation functions. The one-state-writer rule reads the source text as well, because an assignment inside a function body is not a declaration. Konsist parses Kotlin sources, not Gradle Kotlin scripts, so the module build scripts are the one medium the rule suite reads directly.
 
 `./gradlew verifyNoMocks` rejects mock framework names, mock framework dependencies, and mock construction in main, unit-test, and instrumentation source. `./gradlew verifyDeterministicFakes` requires an in-repository test double for every declared datasource and repository boundary and rejects a double that reads randomness or the wall clock. `./gradlew coverageVerify` and `./gradlew mutationVerify` enforce the declared coverage and mutation scopes; see [Quality gates](quality-gates.md).
 

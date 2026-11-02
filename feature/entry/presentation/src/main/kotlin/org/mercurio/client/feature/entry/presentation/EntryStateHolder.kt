@@ -338,6 +338,7 @@ data class EntryStateHolderDependencies(
     val historyCacheStore: HistoryCacheStore = NoOpHistoryCacheStore,
     val onRunSubmissionCompleted: (() -> Unit)? = null,
     val onRunSubmissionSettled: (() -> Unit)? = null,
+    val requestRunStatusNotificationPermission: (() -> Unit)? = null,
     val runStatusNotificationSettingsStore: RunStatusNotificationSettingsStore? = null,
     val runStatusNotificationPermission: RunStatusNotificationPermission? = null,
     val runStatusNotifier: RunStatusNotifier? = null,
@@ -365,18 +366,13 @@ class EntryStateHolder(
     internal val historyCacheStore = dependencies.historyCacheStore
     internal val onRunSubmissionCompleted = dependencies.onRunSubmissionCompleted
     internal val onRunSubmissionSettled = dependencies.onRunSubmissionSettled
+    internal val requestRunStatusNotificationPermission = dependencies.requestRunStatusNotificationPermission
     internal val runStatusNotificationSettingsStore = dependencies.runStatusNotificationSettingsStore
     internal val runStatusNotificationPermission = dependencies.runStatusNotificationPermission
     internal val runStatusNotifier = dependencies.runStatusNotifier
     internal val localDiagnostics = dependencies.localDiagnostics
     internal val errorReporting = dependencies.errorReporting
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
-
-    /**
-     * Requests the Android notification permission. Assigned by the app
-     * composition root before the Settings control is reachable.
-     */
-    var requestRunStatusNotificationPermission: (() -> Unit)? = null
 
     init {
         require(sendTimeoutMillis > 0) { "sendTimeoutMillis must be positive." }
