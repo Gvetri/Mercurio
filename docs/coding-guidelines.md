@@ -57,6 +57,7 @@ thresholds.
 | **Formatting** — Kotlin sources stay formatted | `formatting` check |
 | **Static analysis** — the pinned detekt configuration reports no finding and Android lint reports no error | `detekt` check; `static-analysis` check |
 | **Architecture boundaries** — feature-first modules with inward dependencies ([architecture](architecture.md)) | `architecture-check` check |
+| **Unidirectional data flow** — one state writer, immutable state types, one event entry, and composables that take state and events ([architecture](architecture.md#unidirectional-data-flow)) | `architecture-check` check: `udf/composables-take-state-and-events` (a composable that takes a state holder or a port), `udf/one-state-writer` (a state write outside the state-holder files, or a public mutable property on a state holder), `udf/immutable-state-types` (a mutable `*UiState` property or collection), and `udf/one-event-entry` (a second reachable event entry) each fail with their file and line |
 | **Test-first changes** — a behavioral change starts from a focused failing test ([CONTRIBUTING](../CONTRIBUTING.md)) | No mechanical check — code review |
 | **Unit tests** — every declared scope runs; no test is skipped | `unit-tests` check |
 | **Test doubles** — a deterministic double at every declared datasource and repository boundary; no mocking framework | `architecture-check` check |
