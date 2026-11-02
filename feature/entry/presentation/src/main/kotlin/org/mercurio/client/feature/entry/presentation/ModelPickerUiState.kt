@@ -40,11 +40,11 @@ data class ModelPickerUiState(
         get() = catalog?.entries?.firstOrNull { it.id == selection?.model }
 
     /** The currently-effective model as UI text: the selected display name or the baseline. */
-    val controlLabel: String
+    val controlLabel: UiText
         get() =
             when {
-                selection == null -> SERVER_DEFAULT_LABEL
-                else -> selectedEntry?.displayName ?: selection.model
+                selection == null -> UiText.Resource(R.string.model_server_default)
+                else -> UiText.Value(selectedEntry?.displayName ?: selection.model)
             }
 
     /** The effort values offered for the selected entry; empty unless the entry advertises them. */
@@ -58,10 +58,6 @@ data class ModelPickerUiState(
     /** The favorite toggle state of the selected entry id, used by the picker rows. */
     fun isFavorite(modelId: String): Boolean = modelId in favorites
 }
-
-internal const val SERVER_DEFAULT_LABEL = "Server default"
-
-internal const val MODEL_CATALOG_UNAVAILABLE_COPY = "This Gateway does not offer model selection."
 
 /**
  * Picker order: favorites first in catalog order, then recents most-recent-first, then

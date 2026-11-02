@@ -198,9 +198,9 @@ class MarkdownTableScreenTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Connected",
-                            supportingText = "Connected",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(

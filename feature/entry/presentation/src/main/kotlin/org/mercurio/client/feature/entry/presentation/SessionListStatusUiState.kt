@@ -3,39 +3,38 @@ package org.mercurio.client.feature.entry.presentation
 internal enum class GatewayStatus { READY, WAITING, OFFLINE }
 
 internal data class SessionListStatusUiState(
-    val segments: List<String>,
-    val gateway: String,
+    val segments: List<UiText>,
+    val gateway: UiText,
     val gatewayStatus: GatewayStatus,
 )
 
 internal fun SessionListUiState.statusUiState(): SessionListStatusUiState {
     val count = sessions.size
-    val noun = if (count == 1) "session" else "sessions"
-    val cacheLabel = if (isCached) "cached" else "connected"
-    val countLabel = "$count $noun · $cacheLabel"
+    val cacheLabel = UiText.Resource(if (isCached) R.string.sessions_cached else R.string.sessions_connected)
+    val countLabel = UiText.Plural(R.plurals.sessions_count, count, listOf(count, cacheLabel))
     return when {
         isUnavailable || isStale ->
             SessionListStatusUiState(
                 segments = listOf(countLabel),
-                gateway = "gateway :: offline",
+                gateway = UiText.Resource(R.string.sessions_gateway_offline),
                 gatewayStatus = GatewayStatus.OFFLINE,
             )
         (isLoading && sessions.isEmpty()) || isRefreshing ->
             SessionListStatusUiState(
-                segments = listOf("connecting…"),
-                gateway = "gateway :: waiting",
+                segments = listOf(UiText.Resource(R.string.sessions_connecting)),
+                gateway = UiText.Resource(R.string.sessions_gateway_waiting),
                 gatewayStatus = GatewayStatus.WAITING,
             )
         isLoadingMore ->
             SessionListStatusUiState(
-                segments = listOf("loading more…", countLabel),
-                gateway = "gateway :: ready",
+                segments = listOf(UiText.Resource(R.string.sessions_loading_more), countLabel),
+                gateway = UiText.Resource(R.string.sessions_gateway_ready),
                 gatewayStatus = GatewayStatus.READY,
             )
         else ->
             SessionListStatusUiState(
                 segments = listOf(countLabel),
-                gateway = "gateway :: ready",
+                gateway = UiText.Resource(R.string.sessions_gateway_ready),
                 gatewayStatus = GatewayStatus.READY,
             )
     }

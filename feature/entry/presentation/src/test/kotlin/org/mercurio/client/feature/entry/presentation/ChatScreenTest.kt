@@ -11,6 +11,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -96,5 +97,48 @@ class ChatScreenTest {
         composeTestRule.onNodeWithText("Session history is unavailable").assertExists()
         composeTestRule.onNodeWithText("[ try again ]").assertExists()
         composeTestRule.onNodeWithText("gateway :: offline").assertExists()
+    }
+
+    @Test
+    fun the_bar_names_an_untitled_session_with_the_pending_title_placeholder() {
+        composeTestRule.setContent {
+            HermesTheme(darkTheme = false) {
+                ChatAppBar(
+                    session =
+                        SessionItemUiState(
+                            id = SessionId("pending"),
+                            title = "",
+                            preview = null,
+                            pinned = false,
+                            isPendingTitle = true,
+                        ),
+                    menuEnabled = true,
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("New session").assertExists()
+    }
+
+    @Test
+    fun the_bar_names_a_titled_session_with_the_server_title() {
+        composeTestRule.setContent {
+            HermesTheme(darkTheme = false) {
+                ChatAppBar(
+                    session =
+                        SessionItemUiState(
+                            id = SessionId("titled"),
+                            title = "Release checklist",
+                            preview = null,
+                            pinned = false,
+                        ),
+                    menuEnabled = true,
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Release checklist").assertExists()
     }
 }

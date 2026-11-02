@@ -4,6 +4,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 
 /**
  * The D-02 Gateway-removal confirmation contract: dismissal or Back leaves the stored
@@ -14,22 +15,18 @@ import androidx.compose.runtime.Composable
 internal fun RemoveGatewayConnectionConfirmation(onEvent: (EntryUiEvent) -> Unit) {
     AlertDialog(
         onDismissRequest = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) },
-        title = { Text(text = "Remove Gateway Connection?") },
+        title = { Text(text = stringResource(R.string.dialog_remove_connection_title)) },
         text = {
-            Text(
-                text =
-                    "Remove the saved endpoint and credential from this device. " +
-                        "Remote Sessions and Runs are not deleted or cancelled.",
-            )
+            Text(text = stringResource(R.string.dialog_remove_connection_body))
         },
         confirmButton = {
             TextButton(onClick = { onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked) }) {
-                Text(text = "Remove")
+                Text(text = stringResource(R.string.action_remove))
             }
         },
         dismissButton = {
             TextButton(onClick = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) }) {
-                Text(text = "Cancel")
+                Text(text = stringResource(R.string.action_cancel))
             }
         },
     )

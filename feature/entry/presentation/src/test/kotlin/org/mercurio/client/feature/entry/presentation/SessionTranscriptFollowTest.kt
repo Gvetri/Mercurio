@@ -209,7 +209,7 @@ class SessionTranscriptFollowTest {
                 content = null,
                 runId = RunId("failed-run"),
                 runState = RunPresentationState.FAILED,
-                failureSafeMessage = "The message was not sent.",
+                failureMessage = UiText.Value("The message was not sent."),
             )
         composeTestRule.setContent {
             HermesTheme {

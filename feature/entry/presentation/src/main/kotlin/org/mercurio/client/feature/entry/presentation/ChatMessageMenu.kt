@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.mercurio.client.feature.entry.domain.RunId
 import java.time.Instant
@@ -31,7 +32,7 @@ internal fun ChatMessageMenu(
         modifier = Modifier.width(CHAT_MENU_WIDTH),
     ) {
         DropdownMenuItem(
-            text = { Text("Copy message") },
+            text = { Text(stringResource(R.string.chat_copy_message)) },
             onClick = {
                 onDismiss()
                 row.payload?.let(actions.copy)
@@ -39,7 +40,7 @@ internal fun ChatMessageMenu(
             enabled = row.payload != null,
         )
         DropdownMenuItem(
-            text = { Text("Copy run ID") },
+            text = { Text(stringResource(R.string.chat_copy_run_id)) },
             onClick = {
                 onDismiss()
                 row.runId?.let { id -> actions.copy(id.value) }
@@ -47,17 +48,17 @@ internal fun ChatMessageMenu(
             enabled = row.runId != null,
         )
         DropdownMenuItem(
-            text = { Text("Share") },
+            text = { Text(stringResource(R.string.chat_share)) },
             onClick = {
                 onDismiss()
                 row.payload?.let(actions.share)
             },
             enabled = row.payload != null,
         )
-        if (meta.isNotEmpty()) {
+        meta?.let { metaText ->
             HorizontalDivider()
             Text(
-                text = meta,
+                text = metaText.resolve(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp),
@@ -70,11 +71,16 @@ internal fun ChatMessageMenu(
 internal fun chatMenuMeta(
     runId: RunId?,
     timestamp: Instant?,
-): String =
-    listOfNotNull(
-        runId?.let(::chatRunLabel),
-        timestamp?.let { instant -> chatMenuTimestamp(instant) },
-        timestamp?.let { instant -> chatMenuTime(instant) },
-    ).joinToString(separator = " · ")
+): UiText? {
+    val parts =
+        listOfNotNull(
+            runId?.let(::chatRunLabel),
+            timestamp?.let { instant -> UiText.Value(chatMenuTimestamp(instant)) },
+            timestamp?.let { instant -> UiText.Value(chatMenuTime(instant)) },
+        )
+    return if (parts.isEmpty()) null else UiText.Joined(parts = parts, separator = CHAT_META_SEPARATOR)
+}
+
+private const val CHAT_META_SEPARATOR = " · "
 
 private val CHAT_MENU_WIDTH = 216.dp

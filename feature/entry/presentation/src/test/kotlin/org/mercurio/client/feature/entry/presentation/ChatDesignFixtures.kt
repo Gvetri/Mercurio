@@ -26,7 +26,7 @@ internal object ChatDesignFixtures {
             title = "Nightly release triage",
             preview = "Two failing tests; retry green",
             pinned = true,
-            lastActiveLabel = "1h",
+            lastActive = relativeLastActive("1h"),
         )
 
     private fun details(
@@ -177,7 +177,7 @@ internal object ChatDesignFixtures {
                             content = "",
                             runId = runId,
                             runState = RunPresentationState.FAILED,
-                            failureSafeMessage = "This Run failed. Your conversation is preserved.",
+                            failureMessage = UiText.Resource(R.string.error_run_failed),
                             failureTechnicalDetail = "gateway status 500 · run 4b2a",
                             retryAvailable = true,
                             timestamp = later,

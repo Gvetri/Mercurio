@@ -395,7 +395,7 @@ class SessionMessageRenderingTest {
                                 id = "message-1",
                                 role = "assistant",
                                 content = "Answer",
-                                failureSafeMessage = "This Run failed.",
+                                failureMessage = UiText.Value("This Run failed."),
                             ),
                         ),
                     callbacks =

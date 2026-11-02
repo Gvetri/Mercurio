@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.collectionInfo
@@ -176,7 +177,7 @@ private fun TableCaption(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = tableTitle(columnCount).uppercase(Locale.getDefault()),
+            text = tableTitle(columnCount).resolve().uppercase(Locale.getDefault()),
             style = MaterialTheme.typography.labelSmall,
             letterSpacing = 0.12.em,
             color = tokens.colorScheme.onSurfaceVariant,
@@ -186,7 +187,7 @@ private fun TableCaption(
         )
         if (onExpand != null) {
             ChatTextControl(
-                label = "[ expand ]",
+                label = stringResource(R.string.chat_expand),
                 enabled = true,
                 onClick = onExpand,
                 modifier = Modifier.testTag(TABLE_EXPAND_TAG),
@@ -272,12 +273,12 @@ private fun MarkdownBlock.Table.collectionInfo(): CollectionInfo {
     return CollectionInfo(rowCount = rowCount, columnCount = header.size)
 }
 
-internal fun tableTitle(columnCount: Int): String =
-    if (columnCount == 1) {
-        "Table · 1 column"
-    } else {
-        "Table · $columnCount columns"
-    }
+internal fun tableTitle(columnCount: Int): UiText =
+    UiText.Plural(
+        R.plurals.table_column_count,
+        columnCount,
+        listOf(columnCount),
+    )
 
 private fun TableAlignment.textAlign(): TextAlign =
     when (this) {
