@@ -45,9 +45,7 @@ name: failed-offline-send
     visible: "Recover this offline draft"
     timeout: 30000
 - takeScreenshot: failed-offline-send-draft-restored
-- tapOn:
-    text: "Try again"
-    retryTapIfNoChange: true
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Offline send recovered"
     timeout: 30000

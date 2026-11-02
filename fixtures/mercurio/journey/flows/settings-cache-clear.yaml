@@ -18,7 +18,7 @@ name: settings-cache-clear
 - extendedWaitUntil:
     visible: "Synthetic cached conversation"
     timeout: 30000
-- assertNotVisible: "The displayed Session history is cached on this device. It is not live."
+- assertNotVisible: "cached · unavailable"
 - tapOn: "Back to Sessions"
 - extendedWaitUntil:
     visible: "mercurio"

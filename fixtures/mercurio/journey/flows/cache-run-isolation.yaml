@@ -19,7 +19,7 @@ name: cache-run-isolation
 - extendedWaitUntil:
     visible: "Synthetic cached conversation"
     timeout: 30000
-- assertNotVisible: "The displayed Session history is cached on this device. It is not live."
+- assertNotVisible: "cached · unavailable"
 - takeScreenshot: cache-run-isolation-populated
 - tapOn:
     id: "conversation-message-input"
@@ -30,7 +30,7 @@ name: cache-run-isolation
     visible: "Message was not sent. Your draft is preserved. Try again."
     timeout: 30000
 - assertVisible: "Recover this offline draft"
-- assertNotVisible: "The displayed Session history is cached on this device. It is not live."
+- assertNotVisible: "cached · unavailable"
 - takeScreenshot: cache-run-isolation-unresolved
 - launchApp:
     clearState: false
@@ -47,15 +47,13 @@ name: cache-run-isolation
 - extendedWaitUntil:
     visible: "Recover this offline draft"
     timeout: 30000
-- assertNotVisible: "The displayed Session history is cached on this device. It is not live."
+- assertNotVisible: "cached · unavailable"
 - takeScreenshot: cache-run-isolation-draft-restored
-- tapOn:
-    text: "Try again"
-    retryTapIfNoChange: true
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Offline send recovered"
     timeout: 30000
 - assertVisible: "Offline send recovered"
 - assertNotVisible: "Discard unsent record"
-- assertNotVisible: "The displayed Session history is cached on this device. It is not live."
+- assertNotVisible: "cached · unavailable"
 - takeScreenshot: cache-run-isolation-recovered

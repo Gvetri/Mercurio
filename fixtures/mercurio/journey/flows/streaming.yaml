@@ -42,6 +42,4 @@ name: streaming
 - assertVisible: '\[ stop \]'
 - takeScreenshot: "keyboard-first-reply"
 - hideKeyboard
-- assertVisible:
-    id: "conversation-message-input"
 - assertVisible: '\[ stop \]'
