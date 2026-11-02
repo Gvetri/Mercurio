@@ -19,12 +19,13 @@ name: interrupted-sse-refetch
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Interrupt this"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: "Run state: Failed"
+    visible: ".*· failed"
     timeout: 30000
 - swipe:
     start: "50%, 71%"
@@ -34,13 +35,9 @@ name: interrupted-sse-refetch
     start: "50%, 71%"
     end: "50%, 62%"
     duration: 400
+- tapOn: "Message actions for message-interrupted"
 - extendedWaitUntil:
-    visible: "Latest Run"
+    visible: "Copy message"
     timeout: 30000
-- tapOn:
-    text: "Show run ID"
-    index: 0
-- extendedWaitUntil:
-    visible: "Run ID: interrupted-run"
-    timeout: 30000
+- back
 - assertVisible: "Refetched failure"

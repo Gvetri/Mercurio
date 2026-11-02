@@ -19,23 +19,16 @@ name: active-run-isolation
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- tapOn: "Message"
+- tapOn:
+    id: "conversation-message-input"
 - inputText: "Run this"
 - hideKeyboard
-- tapOn: "Send"
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "Active partial"
     timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "Refresh history"
-    direction: UP
-    timeout: 30000
-- tapOn: "Refresh history"
-- extendedWaitUntil:
-    visible: "Run state: Uncertain"
-    timeout: 30000
-- assertVisible: "The displayed Session history may be stale."
+- assertVisible: ".*· streaming"
+- assertVisible: '\[ stop \]'
 - tapOn: "Back to Sessions"
 - repeat:
     times: 4
@@ -52,7 +45,8 @@ name: active-run-isolation
 - extendedWaitUntil:
     visible: "Back to Sessions"
     timeout: 30000
-- assertVisible: "Message"
+- assertVisible:
+    id: "conversation-message-input"
 - tapOn: "Back to Sessions"
 - swipe:
     start: "50%, 50%"
@@ -65,11 +59,5 @@ name: active-run-isolation
 - assertVisible: "Alpha Session"
 - tapOn: "Alpha Session"
 - extendedWaitUntil:
-    visible: "Latest Run"
-    timeout: 30000
-- tapOn:
-    text: "Show run ID"
-    index: 0
-- extendedWaitUntil:
-    visible: "Run ID: active-run"
+    visible: "run acti · streaming"
     timeout: 30000

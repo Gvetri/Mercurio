@@ -328,9 +328,10 @@ class JourneyVerifierTest {
     private fun assertEarlyMutationRejected(sessionId: String) {
         val requests = lifecycleRequests.toMutableList()
         val firstMutation = requests.indexOfFirst { it == "PATCH" to "/api/sessions/$sessionId" }
-        assertEquals("GET", requests[firstMutation - 1].first)
+        val precedingRead = requests.subList(0, firstMutation).indexOfLast { it.first == "GET" }
+        assertTrue("No read precedes the first mutation of $sessionId", precedingRead >= 0)
         val mutation = requests.removeAt(firstMutation)
-        requests.add(firstMutation - 1, mutation)
+        requests.add(precedingRead, mutation)
         assertThrows(IllegalStateException::class.java) {
             JourneyInvariants.verify("session-lifecycle", lifecycleTelemetry(requests))
         }
@@ -339,21 +340,17 @@ class JourneyVerifierTest {
     private val lifecycleRequests =
         listOf(
             "GET" to "/api/sessions",
-            "GET" to "/api/sessions",
-            "GET" to "/api/sessions",
             "POST" to "/api/sessions",
+            "GET" to "/api/sessions",
+            "PATCH" to "/api/sessions/synthetic-created-session-1",
             "GET" to "/api/sessions/synthetic-created-session-1",
             "GET" to "/api/sessions/synthetic-created-session-1/messages",
-            "GET" to "/api/sessions",
-            "GET" to "/api/sessions/synthetic-created-session-1",
-            "GET" to "/api/sessions/synthetic-created-session-1/messages",
-            "PATCH" to "/api/sessions/synthetic-created-session-1",
             "PATCH" to "/api/sessions/synthetic-created-session-1",
             "GET" to "/api/sessions",
             "PATCH" to "/api/sessions/synthetic-created-session-1",
             "GET" to "/api/sessions",
+            "PATCH" to "/api/sessions/synthetic-created-session-1",
             "DELETE" to "/api/sessions/synthetic-created-session-1",
-            "GET" to "/api/sessions",
             "PATCH" to "/api/sessions/session-alpha",
             "PATCH" to "/api/sessions/session-alpha",
             "GET" to "/api/sessions",
@@ -368,6 +365,7 @@ class JourneyVerifierTest {
             "rename" to "synthetic-created-session-1",
             "pin" to "synthetic-created-session-1",
             "unpin" to "synthetic-created-session-1",
+            "rename" to "synthetic-created-session-1",
             "delete" to "synthetic-created-session-1",
             "rename" to "session-alpha",
             "pin" to "session-alpha",
@@ -409,7 +407,6 @@ class JourneyVerifierTest {
 
     private val emptySessionsRequests =
         listOf(
-            "GET" to "/api/sessions",
             "GET" to "/api/sessions",
             "POST" to "/api/sessions",
             "GET" to "/api/sessions/synthetic-created-session-1",
