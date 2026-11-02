@@ -1,7 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunGatewayPort
 import org.mercurio.client.feature.entry.domain.RunId
@@ -68,6 +68,18 @@ internal fun EntryStateHolder.sendMessage() {
     launchRunSubmission(input = input, recordDraft = true)
 }
 
+internal fun EntryStateHolder.dispatchSendMessage() {
+    val retryPending =
+        synchronized(sessionRequestLock) {
+            mutableUiState.value.sessionList?.openedSession?.hasUnresolvedSubmission == true
+        }
+    if (retryPending) {
+        scope.launch { retryUncertainSubmissionOrSend() }
+    } else {
+        sendMessage()
+    }
+}
+
 internal fun EntryStateHolder.retryRun(runId: RunId) {
     val originalMessage =
         synchronized(sessionRequestLock) {
@@ -106,8 +118,7 @@ internal fun EntryStateHolder.launchRunSubmission(
     rejectRunId: RunId? = null,
 ) {
     val gateway = runGateway ?: return
-    val submission = prepareRunSubmission(gateway, input, recordDraft, rejectRunId) ?: return
-    claimAndStartRunJob(submission)
+    prepareRunSubmission(gateway, input, recordDraft, rejectRunId)?.start()
 }
 
 internal fun EntryStateHolder.prepareRunSubmission(
@@ -115,7 +126,7 @@ internal fun EntryStateHolder.prepareRunSubmission(
     input: String,
     recordDraft: Boolean,
     rejectRunId: RunId?,
-): PreparedRunSubmission? =
+): Job? =
     synchronized(sessionRequestLock) {
         val current = mutableUiState.value.sessionList ?: return@synchronized null
         val opened = current.openedSession ?: return@synchronized null
@@ -158,18 +169,10 @@ internal fun EntryStateHolder.prepareRunSubmission(
                 pendingCreate = pendingCreate,
                 attemptId = attemptId,
                 knownRunIds = knownRunIds,
-                selection = modelSelectionStore.read(requestEndpoint),
+                selection = null,
+                recordDraft = recordDraft,
             )
-        PreparedRunSubmission(
-            job = createRunJob(sessionId) { submitRun(work) },
-            persistence =
-                PendingSubmissionPersistence(
-                    key = PendingRunSubmissionKey(requestEndpoint, sessionId),
-                    recoveryKey = recoverySessionKey,
-                    knownRunIds = knownRunIds,
-                    attemptId = attemptId,
-                ),
-        )
+        createRunJob(sessionId) { submitRun(work) }
     }
 
 internal fun EntryStateHolder.submissionPersisted(
@@ -210,21 +213,4 @@ internal fun EntryStateHolder.recordSubmissionDraft(
         )
     pendingRunDrafts[sessionId] = draft
     sessionDrafts[sessionId] = input
-    sessionDraftStore.write(sessionDraftKey(sessionId), input)
-}
-
-internal fun EntryStateHolder.claimAndStartRunJob(submission: PreparedRunSubmission) {
-    try {
-        val claimed =
-            runSubmissionUncertaintyStore.add(
-                submission.persistence.key,
-                submission.persistence.knownRunIds,
-                submission.persistence.attemptId,
-            )
-        if (!claimed) error("A Gateway Run submission is already unresolved.")
-    } catch (_: Exception) {
-        abortUnclaimedRunJob(submission)
-        return
-    }
-    submission.job.start()
 }
