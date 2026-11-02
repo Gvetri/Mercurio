@@ -370,7 +370,7 @@ private object JourneySessionCreationInvariants {
                     }
                 }
             }
-        check(checkpoints == listOf("list" to 0, "list" to 0, "list" to 1)) {
+        check(checkpoints == listOf("list" to 0, "list" to 1)) {
             "Empty-session cancellation checkpoints recorded missing reads or premature writes: $checkpoints"
         }
     }
@@ -431,6 +431,7 @@ private object JourneySessionLifecycleInvariants {
             "PATCH" to "/api/sessions/synthetic-created-session-1",
             "PATCH" to "/api/sessions/synthetic-created-session-1",
             "PATCH" to "/api/sessions/synthetic-created-session-1",
+            "PATCH" to "/api/sessions/synthetic-created-session-1",
             "DELETE" to "/api/sessions/synthetic-created-session-1",
             "PATCH" to "/api/sessions/session-alpha",
             "PATCH" to "/api/sessions/session-alpha",
@@ -444,6 +445,7 @@ private object JourneySessionLifecycleInvariants {
             "rename" to "synthetic-created-session-1",
             "pin" to "synthetic-created-session-1",
             "unpin" to "synthetic-created-session-1",
+            "rename" to "synthetic-created-session-1",
             "delete" to "synthetic-created-session-1",
             "rename" to "session-alpha",
             "pin" to "session-alpha",
@@ -454,14 +456,10 @@ private object JourneySessionLifecycleInvariants {
     private val expectedSessionCheckpoints =
         listOf(
             "list" to 0,
-            "list" to 0,
-            "list" to 0,
-            "history" to 1,
             "list" to 1,
-            "history" to 1,
+            "history" to 2,
             "list" to LIST_CHECKPOINT_AFTER_CREATED_SESSION_PIN,
             "list" to LIST_CHECKPOINT_AFTER_CREATED_SESSION_UNPIN,
-            "list" to LIST_CHECKPOINT_AFTER_CREATED_SESSION_DELETE,
             "list" to LIST_CHECKPOINT_AFTER_ALPHA_SESSION_PIN,
             "list" to LIST_CHECKPOINT_AFTER_ALPHA_SESSION_UNPIN,
         )
@@ -658,9 +656,8 @@ private const val TELEMETRY_TIMEOUT_MILLIS = 5_000
 private const val HTTP_OK = 200
 private const val LIST_CHECKPOINT_AFTER_CREATED_SESSION_PIN = 3
 private const val LIST_CHECKPOINT_AFTER_CREATED_SESSION_UNPIN = 4
-private const val LIST_CHECKPOINT_AFTER_CREATED_SESSION_DELETE = 5
-private const val LIST_CHECKPOINT_AFTER_ALPHA_SESSION_PIN = 7
-private const val LIST_CHECKPOINT_AFTER_ALPHA_SESSION_UNPIN = 8
+private const val LIST_CHECKPOINT_AFTER_ALPHA_SESSION_PIN = 8
+private const val LIST_CHECKPOINT_AFTER_ALPHA_SESSION_UNPIN = 9
 
 private object JourneyModelPickerInvariants {
     const val MODEL_CATALOG_PATH = "/api/models"

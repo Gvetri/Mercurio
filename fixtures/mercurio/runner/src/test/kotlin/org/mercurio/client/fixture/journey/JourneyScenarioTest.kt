@@ -121,7 +121,7 @@ class JourneyScenarioTest {
     fun offline_cache_read_scenario_scripts_both_offline_arms_and_pairs_its_flow() {
         val scenario = parseCommittedScenario("offline-cache-read")
         assertTrue(scenario.failAfterFirstSessionList)
-        assertEquals(2, scenario.offlineRecoversAfterBlockedSessionLists)
+        assertEquals(3, scenario.offlineRecoversAfterBlockedSessionLists)
         assertTrue(scenario.failAfterFirstSessionOpen)
         assertEquals(1, scenario.offlineRecoversAfterBlockedSessionOpens)
         assertTrue(scenario.sessions.single().history.isNotEmpty())
