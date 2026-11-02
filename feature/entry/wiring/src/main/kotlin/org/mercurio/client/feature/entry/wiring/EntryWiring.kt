@@ -9,12 +9,14 @@ import kotlinx.coroutines.SupervisorJob
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.LoadEntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
+import org.mercurio.client.feature.entry.application.UNKNOWN_CLIENT_VERSION
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.data.DefaultGatewayClient
 import org.mercurio.client.feature.entry.data.DefaultGatewayConnectionRepository
 import org.mercurio.client.feature.entry.data.EndpointScopedRunRecoveryRegistry
 import org.mercurio.client.feature.entry.data.RollingLocalDiagnosticsBuffer
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
+import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
 import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryStateHolderDependencies
 import org.mercurio.client.feature.entry.presentation.LocalDiagnosticsPorts
@@ -25,7 +27,6 @@ object EntryWiring {
     fun createEntryStateHolder(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
-        clientVersion: String = androidClientVersion(context),
         requestRunStatusNotificationPermission: (() -> Unit)? = null,
     ): EntryStateHolder {
         val dataSource = SharedPreferencesGatewayConnectionDataSource(context)
@@ -33,7 +34,9 @@ object EntryWiring {
         val repository = DefaultGatewayConnectionRepository(dataSource, credentialStore)
         val recoveryEndpoint = AtomicReference(dataSource.loadEndpoint())
         val runRecoveryRegistry = buildRunRecoveryRegistry(context, recoveryEndpoint)
-        val initialState = LoadEntryState(repository).execute().copy(clientVersion = clientVersion)
+        val installedBuildProvider = resolveInstalledBuildProvider(context, overrides)
+        val initialState = LoadEntryState(repository, installedBuildProvider).execute()
+        val clientVersion = initialState.clientVersion
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
@@ -72,7 +75,7 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
-                    errorReporting = createErrorReporting(context, overrides, clientVersion),
+                    errorReporting = buildErrorReporting(context, overrides, clientVersion),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -89,14 +92,26 @@ object EntryWiring {
     fun createErrorReporting(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
-        clientVersion: String = androidClientVersion(context),
-    ): ErrorReporting = buildErrorReporting(context, overrides, clientVersion)
+    ): ErrorReporting =
+        buildErrorReporting(
+            context = context,
+            overrides = overrides,
+            clientVersion =
+                resolveInstalledBuildProvider(context, overrides)
+                    .installedBuild()
+                    .versionNameOr(UNKNOWN_CLIENT_VERSION),
+        )
 
     private fun entryScope(
         coroutineScope: CoroutineScope?,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ): CoroutineScope = coroutineScope ?: CoroutineScope(SupervisorJob() + ioDispatcher)
 }
+
+private fun resolveInstalledBuildProvider(
+    context: Context,
+    overrides: EntryWiringOverrides,
+): InstalledBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuildProvider(context)
 
 private fun buildRunRecoveryRegistry(
     context: Context,

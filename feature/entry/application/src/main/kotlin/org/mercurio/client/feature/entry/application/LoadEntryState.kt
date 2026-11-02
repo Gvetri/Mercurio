@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.application
 
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
+import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
 
 const val UNKNOWN_CLIENT_VERSION = "unknown"
 
@@ -13,6 +14,7 @@ data class EntryState(
 
 class LoadEntryState(
     private val gatewayConnectionRepository: GatewayConnectionRepository,
+    private val installedBuildProvider: InstalledBuildProvider,
 ) {
     fun execute(): EntryState {
         val connection = gatewayConnectionRepository.load()
@@ -21,6 +23,7 @@ class LoadEntryState(
             isGatewayConnectionConfigured = configuredEndpoint != null,
             configuredEndpoint = configuredEndpoint,
             configuredCredential = connection?.bearerCredential,
+            clientVersion = installedBuildProvider.installedBuild().versionNameOr(UNKNOWN_CLIENT_VERSION),
         )
     }
 }
