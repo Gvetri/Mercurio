@@ -21,9 +21,12 @@ trip the check before it measured anything (issue #238).
 
 ## Required checks
 
-`quality-gate` is the single required GitHub status. It fails unless every declared check below
-executed and passed for the event that triggered the run. A check the event routes out of the run
-must report `skipped`, and any other outcome fails the aggregate; see
+A pull request merges only when both required contexts pass: `quality-gate`, the aggregate of the
+checks below, and `pr-template`, the body check.
+[What a pull request must satisfy](agents/pull-request-checks.md) names what each verifies.
+`quality-gate` fails unless every declared check below executed and passed for the event that
+triggered the run. A check the event routes out of the run must report `skipped`, and any other
+outcome fails the aggregate; see
 [The protected main branch and the pull-request workflow](protected-main-workflow.md) for the routing.
 
 | GitHub status | Gradle entry point | Fails when |
@@ -73,7 +76,7 @@ complete gate.
 The aggregate job compares `.github/quality-gate/required-checks.txt` (plus the `buildsrc_contracts`
 support job) with its own `needs` list, so a check can neither be dropped from the declaration
 silently nor added without updating the declaration. Support jobs such as `buildsrc_contracts` are
-not declared GitHub statuses; the aggregate `quality-gate` remains the single required status. The
+not declared GitHub statuses; the required statuses are `quality-gate` and `pr-template`. The
 workflow contracts are self-tested in
 `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/QualityGateConfigurationTest.kt`, the
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,

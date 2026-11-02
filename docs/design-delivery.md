@@ -125,6 +125,10 @@ A state that the previous implementation did not have has no before capture, and
 frame is the reference for it. The pull request states which captures are in that position instead of
 leaving the row empty.
 
+The pull request's design evidence section is reviewer material: no check reads it, and the body
+check requires only the four headings
+([What a pull request must satisfy](agents/pull-request-checks.md)).
+
 ## The stop rule
 
 When the code cannot match the approved design, stop. Do not improvise a value, do not approximate a
