@@ -2,7 +2,9 @@
 
 `main` is protected by the repository ruleset `Main`. Every change lands through an issue-scoped
 branch and a pull request, and the protected branch accepts a merge only when the current head of
-that pull request passed the aggregate `quality-gate` status.
+that pull request passed both required contexts: the aggregate `quality-gate` status and the
+`pr-template` body check. [What a pull request must satisfy](agents/pull-request-checks.md) names
+what each verifies.
 
 ## Rules enforced on `main`
 
@@ -10,7 +12,7 @@ that pull request passed the aggregate `quality-gate` status.
 | --- | --- |
 | Pull request before merging | Required; direct pushes are refused for every account, administrators included |
 | Merge strategy | Squash only. Merge commits and rebase merges are disabled on the repository as well |
-| Required status | Exactly one: `quality-gate`, the aggregate check of the workflow below |
+| Required statuses | Two: `quality-gate`, the aggregate check of the workflow below, and `pr-template`, the body check |
 | Required approvals | Zero, because one operator maintains the repository |
 | Stale reviews | Dismissed when a new commit arrives |
 | Up-to-date branch | Required, so the status describes the head that is merged and not an older result |
@@ -40,10 +42,11 @@ owner to request the review.
 that re-evaluates the head as it is at that moment, so a result from an earlier state of a pull
 request never stands for the current one, and adding the `run-maestro` label starts the labeled
 emulator suites on an open pull request. A title edit and a draft transition change no code, so they
-start no run; adding any other label starts only a no-op run whose validation jobs report `skipped`
-while its aggregate re-reports the decision of the newest completed `quality-gate` check run on that
-same head, so the last completed gate stays authoritative and a label can neither clear a failed
-gate nor block a green one.
+start no `quality-gate` run; the body check has its own `edited` trigger, so an edit of the title or
+the body re-runs `pr-template` alone. Adding any other label starts only a no-op run whose validation
+jobs report `skipped` while its aggregate re-reports the decision of the newest completed
+`quality-gate` check run on that same head, so the last completed gate stays authoritative and a
+label can neither clear a failed gate nor block a green one.
 
 With `cancel-in-progress: true`, pull-request runs group per pull-request number and push runs group
 per ref: a newer run supersedes the obsolete run of the same pull request or ref. Scheduled runs
@@ -51,12 +54,11 @@ keep sharing the per-ref group. A hand-started run instead groups on its own run
 cancel a validation the Nightly started, and separate hand starts cannot cancel one another; a
 `labeled` run without the `run-maestro` label groups on its own run id too, so its no-op result never
 cancels an in-flight gate.
-Results are published per check, and only the aggregate job named
-`quality-gate` is a required status. On a run that validates the head, the aggregate fails unless
-every check declared in `.github/quality-gate/required-checks.txt` reports the outcome the event
-expects; on a non-maestro label run it instead fails unless the newest completed `quality-gate`
-check run on the same head carries a pass conclusion, so a no-op result is never more permissive
-than the gate it mirrors.
+Results are published per check, and `quality-gate` is a required status. On a run that validates the
+head, the aggregate fails unless every check declared in `.github/quality-gate/required-checks.txt`
+reports the outcome the event expects; on a non-maestro label run it instead fails unless the newest
+completed `quality-gate` check run on the same head carries a pass conclusion, so a no-op result is
+never more permissive than the gate it mirrors.
 
 | Run | Checks that execute | Checks that stay skipped |
 | --- | --- | --- |

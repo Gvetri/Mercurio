@@ -70,8 +70,10 @@ change that depends on an unmerged pull request waits for that merge and then ba
 `main` instead of stacking on the open branch.
 
 While the pull request is a draft it runs `formatCheck` and `:app:lintDebug`
-only; marking it ready for review runs the complete gate against the same head, and only the
-aggregate `quality-gate` status is required. Merging is squash-only, the squash subject is the
+only; marking it ready for review runs the complete gate against the same head, and the ruleset
+requires both `quality-gate` and `pr-template`.
+[What a pull request must satisfy](docs/agents/pull-request-checks.md) states the body headings, and
+what blocked, behind, and mergeable each mean. Merging is squash-only, the squash subject is the
 pull-request title, and both that title and every commit must be a Conventional Commit. Do not merge
 or cherry-pick an external fork directly: carry the change onto an in-repository branch first. See
 [The protected main branch and the pull-request workflow](docs/protected-main-workflow.md).
