@@ -30,7 +30,7 @@ class EntryStateHolderTest {
 
         stateHolder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
 
-        assertTrue(stateHolder.uiState.value.connectionSetupRequested)
+        awaitState(stateHolder, "connection setup") { it.connectionSetupRequested }
     }
 
     @Test

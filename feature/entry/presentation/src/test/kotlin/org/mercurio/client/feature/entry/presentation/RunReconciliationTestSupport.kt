@@ -81,8 +81,8 @@ internal fun assertParentCancellationReleasesObserver(cancelDuringRegistration: 
         holder.onEvent(EntryUiEvent.ComposerTextChanged("Cancel the parent"))
         holder.onEvent(EntryUiEvent.SendMessageClicked)
         dispatcher.runNext()
+        dispatcher.runUntil { registrations.get() >= 1 }
         if (!cancelDuringRegistration) {
-            assertEquals(1, dispatcher.queuedCount)
             assertTrue(observerJobs.values.single().isActive)
         }
 
@@ -671,6 +671,18 @@ internal class ReconciliationPausingDispatcher(
     fun runNext() = synchronized(queued) { queued.removeFirst() }.run()
 
     fun runLast() = synchronized(queued) { queued.removeLast() }.run()
+
+    fun runUntil(condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + RECONCILIATION_TIMEOUT_MILLIS
+        while (!condition()) {
+            if (queuedCount == 0) {
+                check(System.currentTimeMillis() < deadline) { "Condition did not settle." }
+                Thread.sleep(2)
+            } else {
+                runNext()
+            }
+        }
+    }
 
     fun drain() {
         repeat(100) {

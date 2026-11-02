@@ -1,14 +1,17 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.coroutines.ContinuationInterceptor
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
@@ -358,6 +361,8 @@ class EntryStateHolder(
     initialState: EntryState,
     internal val verifyGatewayConnection: VerifyGatewayConnection? = null,
     internal val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    internal val commandDispatcher: CoroutineDispatcher =
+        scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.Default,
     internal val sessionGatewayFactory: ((endpoint: String, bearerCredential: String) -> SessionGatewayPort)? = null,
     internal val runGatewayFactory: ((endpoint: String, bearerCredential: String) -> RunGatewayPort)? = null,
     dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
@@ -392,6 +397,8 @@ class EntryStateHolder(
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
 
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
+    internal val holderCommandChannel = Channel<EntryStateHolderCommand>(Channel.UNLIMITED)
+    internal var holderConsumerJob: Job? = null
     internal var verificationJob: Job? = null
 
     @Volatile
@@ -454,6 +461,10 @@ class EntryStateHolder(
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
 
     fun onEvent(event: EntryUiEvent) {
+        enqueueEvent(event)
+    }
+
+    internal fun handleEntryEvent(event: EntryUiEvent) {
         when (event) {
             is EntryUiEvent.InboundUri -> handleInboundUri(event.rawUri)
             is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
@@ -566,15 +577,14 @@ class EntryStateHolder(
 
     /**
      * Releases the connection state and clears the removal confirmation so a closed holder never
-     * reports an open dialog.
+     * reports an open dialog. The consumer applies the teardown after the commands already queued.
      */
     fun close() {
-        mutableUiState.value = mutableUiState.value.copy(isRemoveConfirmationOpen = false)
-        val released = releaseConnectionState()
-        released.jobs.forEach(Job::cancel)
-        released.observations.forEach(RunEventObservation::close)
-        persistPendingCreatesOffThread(released.pendingCreates)
-        scope.cancel()
+        enqueueClose()
+    }
+
+    init {
+        startCommandConsumer()
     }
 }
 

@@ -47,7 +47,8 @@ internal class MainThreadStorageBoundaryTest {
             open(holder, gateway, session.id)
             gateway.enqueueRun(activeRun())
             holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
-            recorder.assertOperationsRanOn(eventThread, "draft.write", "uncertainty.contains")
+            awaitState(holder) { it.sessionList?.openedSession?.composerText == "Run once" }
+            recorder.assertOperationsRanOffThread(eventThread, "draft.write", "uncertainty.contains")
             recorder.reset()
 
             holder.onEvent(EntryUiEvent.SendMessageClicked)

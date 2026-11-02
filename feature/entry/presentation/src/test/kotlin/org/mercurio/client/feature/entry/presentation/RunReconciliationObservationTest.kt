@@ -503,25 +503,29 @@ class RunReconciliationObservationTest {
             holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
             holder.onEvent(EntryUiEvent.SendMessageClicked)
             dispatcher.runNext()
-            assertEquals(firstRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
-            assertEquals(1, dispatcher.queuedCount)
+            dispatcher.runUntil {
+                holder.uiState.value.sessionList?.openedSession?.latestRun?.id == firstRun.id
+            }
             assertTrue(gateway.observedRunIds.isEmpty())
 
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            dispatcher.runLast()
-            assertEquals(
-                RunPresentationState.SUCCEEDED,
-                holder.uiState.value.sessionList?.openedSession?.latestRunState,
-            )
+            dispatcher.runUntil {
+                holder.uiState.value.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED
+            }
             holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
             holder.onEvent(EntryUiEvent.SendMessageClicked)
-            dispatcher.runLast()
-            assertEquals(nextRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
+            dispatcher.runUntil {
+                holder.uiState.value.sessionList?.openedSession?.latestRun?.id == nextRun.id
+            }
             assertEquals(2, gateway.runRequests.size)
             assertTrue(gateway.observedRunIds.isEmpty())
 
+            val deadline = System.currentTimeMillis() + RECONCILIATION_TIMEOUT_MILLIS
+            while (gateway.observedRunIds.isEmpty() && System.currentTimeMillis() < deadline) {
+                dispatcher.drain()
+                Thread.sleep(2)
+            }
             dispatcher.drain()
-
             assertEquals(listOf(nextRun.id), gateway.observedRunIds)
             assertEquals("Replacement event", holder.uiState.value.sessionList?.openedSession?.activeResponse?.content)
         } finally {

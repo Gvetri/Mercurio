@@ -84,6 +84,15 @@ internal fun EntryStateHolder.prepareRunObservation(
         }
         val startRequest =
             ObserverStartRequest(run, connectionGeneration, sessionRequestGeneration)
+        runObservationJobs[sessionId]
+            ?.takeIf(Job::isCompleted)
+            ?.let { completedJob ->
+                if (runObservationJobs[sessionId] === completedJob) {
+                    runObservationJobs.remove(sessionId)
+                }
+                runObservationRunIds.remove(sessionId)
+                pendingRunObservationRequests.remove(sessionId)
+            }
         val existingJob = runObservationJobs[sessionId]
         if (existingJob != null) {
             startRunObservationHandoff(sessionId, run, startRequest, existingJob)

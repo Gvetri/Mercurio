@@ -126,6 +126,18 @@ internal fun awaitState(
     }
 }
 
+internal fun awaitCommands(holder: EntryStateHolder) {
+    try {
+        runBlocking {
+            withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) {
+                holder.onHolderState { }
+            }
+        }
+    } catch (_: TimeoutCancellationException) {
+        throw AssertionError("Timed out waiting for the holder command queue to drain.")
+    }
+}
+
 internal fun entrySession(
     id: String,
     title: String? = null,

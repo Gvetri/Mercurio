@@ -389,6 +389,9 @@ class EntryScreenTest {
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("Second draft")) }
+            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+                holder.uiState.value.sessionList?.openedSession?.composerText == "Second draft"
+            }
             composeTestRule.onNodeWithText("[ send ]").assertIsEnabled()
             composeTestRule.onNodeWithText("[ send ]").performClick()
             assertTrue(gateway.secondRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))

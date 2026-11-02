@@ -462,6 +462,7 @@ class EntryStateHolderSessionActionsTest {
         holder.onEvent(EntryUiEvent.CreateSessionClicked)
         assertEquals(1, gateway.createCalls)
         holder.onEvent(EntryUiEvent.CreateSessionClicked)
+        awaitCommands(holder)
         assertEquals(1, gateway.createCalls)
 
         gateway.completeCreate()

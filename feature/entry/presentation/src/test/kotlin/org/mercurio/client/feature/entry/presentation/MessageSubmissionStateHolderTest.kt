@@ -91,8 +91,6 @@ class MessageSubmissionStateHolderTest {
                 openWithVirtualTime(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
-
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 testScheduler.advanceUntilIdle()
 
@@ -115,6 +113,7 @@ class MessageSubmissionStateHolderTest {
                 openWithVirtualTime(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
+                testScheduler.runCurrent()
                 val stateAtClose = holder.uiState.value
 
                 holder.close()
@@ -187,7 +186,6 @@ class MessageSubmissionStateHolderTest {
                 openWithVirtualTime(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("New draft"))

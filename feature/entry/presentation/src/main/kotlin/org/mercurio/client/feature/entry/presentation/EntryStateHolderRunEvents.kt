@@ -102,6 +102,8 @@ internal fun EntryStateHolder.markRunObservationUncertain(
         }
         val previous = observationStateFor(sessionId, runId) ?: return@synchronized
         if (previous.state.isTerminal() || !previous.run.isActive()) return@synchronized
+        val authoritative = authoritativeSessionRuns[sessionId]?.lastOrNull { it.id == runId }
+        if (authoritative?.isActive() == false) return@synchronized
         val next = RunEventStateTransition.interrupted(previous)
         rememberObservationState(next)
         val current = mutableUiState.value.sessionList ?: return@synchronized
