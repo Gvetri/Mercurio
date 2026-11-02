@@ -3,6 +3,11 @@ name: empty-sessions
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Send crash and error reports[?]"
+    commands:
+      - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
 - tapOn: "Gateway HTTPS endpoint"
 - inputText: "https://10.0.2.2:18443"

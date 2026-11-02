@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.ErrorReport
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 
 class SentryErrorReporterTest {
     @Test

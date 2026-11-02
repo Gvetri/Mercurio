@@ -1,4 +1,4 @@
-package org.mercurio.client.feature.entry.wiring
+package org.mercurio.client.feature.entry.domain
 
 interface ErrorReportingConsentStore {
     /**

@@ -1,4 +1,4 @@
-package org.mercurio.client.feature.entry.wiring
+package org.mercurio.client.feature.entry.domain
 
 /** The stored answer to the request to send crash, error, and not-responding reports. */
 enum class ErrorReportingConsent {

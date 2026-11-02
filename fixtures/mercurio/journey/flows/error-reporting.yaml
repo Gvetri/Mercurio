@@ -3,6 +3,11 @@ name: error-reporting
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Send crash and error reports[?]"
+    commands:
+      - tapOn: "Don't send"
 - openLink: "mercurio-journey://error-reporting"
 - extendedWaitUntil:
     visible: "Error report captured"

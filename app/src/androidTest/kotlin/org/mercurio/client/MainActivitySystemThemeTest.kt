@@ -29,7 +29,7 @@ class MainActivitySystemLightThemeTest {
     companion object {
         @BeforeClass
         @JvmStatic
-        fun clearSavedConnection() = clearSavedGatewayConnection()
+        fun clearSavedConnection() = prepareFirstUseInstall()
     }
 
     @get:Rule
@@ -74,7 +74,7 @@ class MainActivitySystemDarkThemeTest {
     companion object {
         @BeforeClass
         @JvmStatic
-        fun clearSavedConnection() = clearSavedGatewayConnection()
+        fun clearSavedConnection() = prepareFirstUseInstall()
     }
 
     @get:Rule
