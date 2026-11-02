@@ -12,38 +12,32 @@ import androidx.compose.ui.res.stringResource
  * Gateway supplied, which the client never translates.
  */
 sealed interface UiText {
-    /** Copy the client already holds as data, such as a Session title. */
     data class Value(
         val value: String,
     ) : UiText
 
-    /** One string resource, with optional format arguments. */
     data class Resource(
         val id: Int,
         val arguments: List<Any> = emptyList(),
     ) : UiText
 
-    /** One plural resource, selected by [count]. */
     data class Plural(
         val id: Int,
         val count: Int,
         val arguments: List<Any> = emptyList(),
     ) : UiText
 
-    /** Several pieces of copy joined by a design separator. */
     data class Joined(
         val parts: List<UiText>,
         val separator: String,
     ) : UiText
 }
 
-/** One string resource with its format arguments, in the order the resource names them. */
 internal fun uiText(
     id: Int,
     vararg arguments: Any,
 ): UiText = UiText.Resource(id, arguments.toList())
 
-/** Resolves the copy against the composition's locale. */
 @Suppress("SpreadOperator")
 @Composable
 internal fun UiText.resolve(): String =
