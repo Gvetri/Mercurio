@@ -1,11 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -302,44 +299,46 @@ class EntryStateHolderInboundLinkTest {
         }
 
     @Test
-    fun a_blank_id_link_during_the_first_page_load_restarts_the_cancelled_request() {
-        val gateway = BlockingListGateway(entrySession("listed-session"))
-        val holder = scriptedHolder(gateway, Dispatchers.Default)
-        verify(holder)
-        assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
+    fun a_blank_id_link_during_the_first_page_load_restarts_the_cancelled_request() =
+        runTest {
+            val gateway = BlockingListGateway(entrySession("listed-session"))
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            verify(holder)
+            assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
 
-        holder.applyInboundLink(EntryLink.Session(null))
+            holder.applyInboundLink(EntryLink.Session(null))
 
-        awaitStateRealTime(holder, "the restarted first page") {
-            it.sessionList?.sessions?.isNotEmpty() == true
+            awaitStateRealTime(holder, "the restarted first page") {
+                it.sessionList?.sessions?.isNotEmpty() == true
+            }
+            assertTrue(gateway.listCalls >= 2)
+            assertFalse(requireNotNull(holder.uiState.value.sessionList).isStale)
+            gateway.releaseList.countDown()
+            holder.close()
         }
-        assertTrue(gateway.listCalls >= 2)
-        assertFalse(requireNotNull(holder.uiState.value.sessionList).isStale)
-        gateway.releaseList.countDown()
-        holder.close()
-    }
 
     @Test
-    fun an_unknown_session_link_during_the_first_page_load_restarts_the_cancelled_request() {
-        val gateway = BlockingListGateway(entrySession("listed-session"))
-        gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
-        val holder = scriptedHolder(gateway, Dispatchers.Default)
-        verify(holder)
-        assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
+    fun an_unknown_session_link_during_the_first_page_load_restarts_the_cancelled_request() =
+        runTest {
+            val gateway = BlockingListGateway(entrySession("listed-session"))
+            gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            verify(holder)
+            assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
 
-        holder.applyInboundLink(EntryLink.Session("foreign-session"))
+            holder.applyInboundLink(EntryLink.Session("foreign-session"))
 
-        awaitStateRealTime(holder, "the unknown link notice") {
-            it.inboundLinkNotice == InboundLinkNoticeCategory.SESSION_LINK_UNKNOWN
+            awaitStateRealTime(holder, "the unknown link notice") {
+                it.inboundLinkNotice == InboundLinkNoticeCategory.SESSION_LINK_UNKNOWN
+            }
+            awaitStateRealTime(holder, "the restarted first page") {
+                it.sessionList?.sessions?.isNotEmpty() == true
+            }
+            assertTrue(gateway.listCalls >= 2)
+            assertFalse(requireNotNull(holder.uiState.value.sessionList).isStale)
+            gateway.releaseList.countDown()
+            holder.close()
         }
-        awaitStateRealTime(holder, "the restarted first page") {
-            it.sessionList?.sessions?.isNotEmpty() == true
-        }
-        assertTrue(gateway.listCalls >= 2)
-        assertFalse(requireNotNull(holder.uiState.value.sessionList).isStale)
-        gateway.releaseList.countDown()
-        holder.close()
-    }
 
     @Test
     fun the_intent_event_entry_routes_a_link_through_the_holder() =
@@ -365,40 +364,35 @@ class EntryStateHolderInboundLinkTest {
         }
 
     @Test
-    fun a_session_link_fired_while_the_first_page_loads_still_opens_and_clears_the_request() {
-        val session = entrySession("linked-session")
-        val gateway = BlockingListGateway(session)
-        val holder = scriptedHolder(gateway, Dispatchers.Default)
-        verify(holder)
-        assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
+    fun a_session_link_fired_while_the_first_page_loads_still_opens_and_clears_the_request() =
+        runTest {
+            val session = entrySession("linked-session")
+            val gateway = BlockingListGateway(session)
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            verify(holder)
+            assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
 
-        holder.applyInboundLink(EntryLink.Session("linked-session"))
-        gateway.releaseList.countDown()
+            holder.applyInboundLink(EntryLink.Session("linked-session"))
+            gateway.releaseList.countDown()
 
-        awaitStateRealTime(holder, "the linked Session during the list load") {
-            it.sessionList?.openedSession?.session?.id == SessionId("linked-session")
+            awaitStateRealTime(holder, "the linked Session during the list load") {
+                it.sessionList?.openedSession?.session?.id == SessionId("linked-session")
+            }
+            val list = requireNotNull(holder.uiState.value.sessionList)
+            assertFalse(list.isLoading)
+            assertFalse(list.isRefreshing)
+            assertTrue(list.isStale)
+            holder.close()
         }
-        val list = requireNotNull(holder.uiState.value.sessionList)
-        assertFalse(list.isLoading)
-        assertFalse(list.isRefreshing)
-        assertTrue(list.isStale)
-        holder.close()
-    }
 }
 
-private fun awaitStateRealTime(
+private suspend fun awaitStateRealTime(
     holder: EntryStateHolder,
     description: String,
     predicate: (EntryUiState) -> Boolean,
 ) {
-    try {
-        runBlocking {
-            withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) {
-                holder.uiState.first(predicate)
-            }
-        }
-    } catch (_: TimeoutCancellationException) {
-        throw AssertionError("Timed out waiting for $description.")
+    withContext(Dispatchers.Default) {
+        awaitState(holder, description, predicate)
     }
 }
 
