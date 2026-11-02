@@ -2,10 +2,12 @@ package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -24,8 +26,8 @@ import java.util.TimeZone
  * compared with the design page by the reviewer checklist, not by a pixel diff across renderers.
  *
  * Two states are named with the issue that owns their renderer instead of being drawn here: the
- * image states wait on #257, the math states on #259, the pipe table on #256, the table viewer on
- * #256's extension, and the Session switch on the Session list's own run status.
+ * image states wait on #257 and the math states on #259. The pipe table and its viewer are frames
+ * 21 and 30, drawn by #256. The Session switch waits on the Session list's own run status.
  *
  * Frame 14 differs from frame 13 only by the keyboard, which the design itself calls chrome: the
  * IME band is not app UI, so the two captures share the app's part.
@@ -204,6 +206,52 @@ class ChatDesignStatesTest {
     @Test
     @Config(qualifiers = "w360dp-h800dp-night")
     fun chat_20_code_block_dark() = captureChat(ChatDesignFixtures.codeBlock(), dark = true)
+
+    @Test
+    fun chat_21_pipe_table_light() = captureChat(ChatDesignFixtures.pipeTable(), dark = false)
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun chat_21_pipe_table_dark() = captureChat(ChatDesignFixtures.pipeTable(), dark = true)
+
+    @Test
+    @Config(qualifiers = "w360dp-h520dp-notnight")
+    fun chat_21_pipe_table_font_scale_200_light() =
+        captureChat(
+            detail = ChatDesignFixtures.pipeTable(),
+            dark = false,
+            fontScale = 2f,
+            beforeCapture = { composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(2) },
+        )
+
+    @Test
+    @Config(qualifiers = "w360dp-h520dp-night")
+    fun chat_21_pipe_table_font_scale_200_dark() =
+        captureChat(
+            detail = ChatDesignFixtures.pipeTable(),
+            dark = true,
+            fontScale = 2f,
+            beforeCapture = { composeTestRule.onNode(hasScrollToIndexAction()).performScrollToIndex(2) },
+        )
+
+    @Test
+    fun chat_30_table_viewer_light() {
+        captureChat(
+            detail = ChatDesignFixtures.tableExpanded(),
+            dark = false,
+            beforeCapture = { composeTestRule.onNodeWithTag("table-expand").performClick() },
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun chat_30_table_viewer_dark() {
+        captureChat(
+            detail = ChatDesignFixtures.tableExpanded(),
+            dark = true,
+            beforeCapture = { composeTestRule.onNodeWithTag("table-expand").performClick() },
+        )
+    }
 
     @Test
     fun chat_27_message_action_menu_light() {
