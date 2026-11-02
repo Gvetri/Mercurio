@@ -4,6 +4,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 
 /**
  * The Settings cache-clear confirmation contract: dismissal or Back leaves the store
@@ -15,23 +16,18 @@ import androidx.compose.runtime.Composable
 internal fun ClearHistoryCacheConfirmation(onEvent: (EntryUiEvent) -> Unit) {
     AlertDialog(
         onDismissRequest = { onEvent(EntryUiEvent.CancelClearHistoryCacheClicked) },
-        title = { Text(text = "Clear cached conversations?") },
+        title = { Text(text = stringResource(R.string.dialog_clear_history_cache_title)) },
         text = {
-            Text(
-                text =
-                    "Remove the cached conversations stored on this device. " +
-                        "Remote Sessions and Runs are not deleted or changed. " +
-                        "Diagnostic files you already exported are not removed.",
-            )
+            Text(text = stringResource(R.string.dialog_clear_history_cache_body))
         },
         confirmButton = {
             TextButton(onClick = { onEvent(EntryUiEvent.ConfirmClearHistoryCacheClicked) }) {
-                Text(text = "Clear")
+                Text(text = stringResource(R.string.action_clear))
             }
         },
         dismissButton = {
             TextButton(onClick = { onEvent(EntryUiEvent.CancelClearHistoryCacheClicked) }) {
-                Text(text = "Cancel")
+                Text(text = stringResource(R.string.action_cancel))
             }
         },
     )

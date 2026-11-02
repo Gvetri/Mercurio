@@ -54,7 +54,7 @@ class ModelPickerStateHolderTest {
             assertEquals(setOf("beta"), picker.favorites)
             assertEquals(listOf("alpha"), picker.recents)
             assertEquals(true, picker.showsSelectionControl)
-            assertEquals("Second Model", picker.controlLabel)
+            assertEquals(UiText.Value("Second Model"), picker.controlLabel)
             assertEquals(1, catalog.fetchCount)
         } finally {
             holder.close()
@@ -226,7 +226,7 @@ class ModelPickerStateHolderTest {
             holder.onEvent(EntryUiEvent.ServerDefaultModelClicked)
             assertEquals(null, pickerState(holder).selection)
             assertEquals(listOf(PICKER_ENDPOINT), store.clears)
-            assertEquals("Server default", pickerState(holder).controlLabel)
+            assertEquals(UiText.Resource(R.string.model_server_default), pickerState(holder).controlLabel)
         } finally {
             holder.close()
         }
@@ -333,7 +333,7 @@ class ModelPickerStateHolderTest {
             val picker = pickerState(holder)
             assertEquals(pickerCatalog(), picker.catalog)
             assertEquals(true, picker.showsSelectionControl)
-            assertEquals("Server default", picker.controlLabel)
+            assertEquals(UiText.Resource(R.string.model_server_default), picker.controlLabel)
         } finally {
             holder.close()
         }

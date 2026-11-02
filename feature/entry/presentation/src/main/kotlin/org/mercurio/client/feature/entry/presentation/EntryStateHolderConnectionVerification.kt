@@ -115,10 +115,9 @@ internal fun EntryStateHolder.connectVerifiedGateway(
             mutableUiState.value =
                 mutableUiState.value.copy(
                     endpoint = normalizedEndpoint,
-                    title = "Gateway connected",
-                    supportingText =
-                        "The Gateway contract was verified successfully.",
-                    actionLabel = "Connected",
+                    title = UiText.Resource(R.string.entry_title_connected),
+                    supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                    actionLabel = UiText.Resource(R.string.entry_action_connected),
                     isChangingCredential = false,
                     isVerifying = false,
                     isSaving = false,

@@ -109,7 +109,7 @@ class SettingsScreenTest {
         }
 
         composeTestRule
-            .onNodeWithText(RunStatusNotificationExplanation.PERMISSION_DENIED.safeMessage)
+            .onNodeWithText(copy(RunStatusNotificationExplanation.PERMISSION_DENIED.messageRes))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -377,9 +377,9 @@ class SettingsScreenTest {
         clientVersion: String = "unknown",
     ): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "The Gateway contract was verified successfully.",
-            actionLabel = "Connected",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+            actionLabel = UiText.Resource(R.string.entry_action_connected),
             isConnected = true,
             isSettingsOpen = isSettingsOpen,
             clientVersion = clientVersion,

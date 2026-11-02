@@ -173,7 +173,7 @@ class MessageComposerScreenTest {
 
         composeTestRule.onNodeWithText("Keep this draft").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+            .onNodeWithText(copy(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("[ send ]").assertIsEnabled().performClick()
 
@@ -230,7 +230,9 @@ class MessageComposerScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(copy(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
+            .assertIsDisplayed()
         composeTestRule.onNodeWithText("Discard unsent record").assertHasClickAction().performClick()
 
         assertEquals(listOf(EntryUiEvent.DiscardUnresolvedSendClicked), events)
@@ -319,7 +321,7 @@ class MessageComposerScreenTest {
                                     content = "Answer",
                                     runId = runId,
                                     runState = RunPresentationState.FAILED,
-                                    failureSafeMessage = "This Run failed. Your conversation is preserved.",
+                                    failureMessage = UiText.Resource(R.string.error_run_failed),
                                     retryAvailable = retryAvailable,
                                 ),
                             ),
@@ -337,9 +339,9 @@ class MessageComposerScreenTest {
         sendErrorCategory: MessageSendErrorCategory? = null,
     ): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "Connected",
-            actionLabel = "Connected",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Resource(R.string.entry_action_connected),
+            actionLabel = UiText.Resource(R.string.entry_action_connected),
             isConnected = true,
             sessionList =
                 SessionListUiState(

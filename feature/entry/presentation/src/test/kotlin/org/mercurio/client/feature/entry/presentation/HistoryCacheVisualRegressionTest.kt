@@ -94,9 +94,9 @@ class HistoryCacheVisualRegressionTest {
 
     private fun cachedListState(): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "",
-            actionLabel = "",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Value(""),
+            actionLabel = UiText.Value(""),
             isConnected = true,
             sessionList =
                 SessionListUiState(
@@ -110,9 +110,9 @@ class HistoryCacheVisualRegressionTest {
 
     private fun cachedTranscriptState(): EntryUiState =
         EntryUiState(
-            title = "Gateway connected",
-            supportingText = "",
-            actionLabel = "",
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Value(""),
+            actionLabel = UiText.Value(""),
             isConnected = true,
             sessionList =
                 SessionListUiState(

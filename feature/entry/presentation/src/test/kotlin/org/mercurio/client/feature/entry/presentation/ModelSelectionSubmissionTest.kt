@@ -138,7 +138,7 @@ class ModelSelectionSubmissionTest {
 
             val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
             val failedMessage = opened.messages.single { it.runId == failedRunId && it.isFailedRun }
-            assertEquals(expected.safeMessage, failedMessage.failureSafeMessage)
+            assertEquals(UiText.Resource(expected.messageRes), failedMessage.failureMessage)
             assertTrue(failedMessage.retryAvailable)
         } finally {
             holder.close()
@@ -175,7 +175,7 @@ class ModelSelectionSubmissionTest {
 
             val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
             val failedMessage = opened.messages.single { it.runId == failedRunId && it.isFailedRun }
-            assertEquals(RunFailureCategory.GATEWAY_REPORTED.safeMessage, failedMessage.failureSafeMessage)
+            assertEquals(UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes), failedMessage.failureMessage)
         } finally {
             holder.close()
         }

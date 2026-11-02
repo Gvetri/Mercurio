@@ -4,12 +4,8 @@ package org.mercurio.client.feature.entry.presentation
 internal data class ChatComposerState(
     val fieldEnabled: Boolean,
     val sendEnabled: Boolean,
-    val reason: String?,
+    val reason: UiText?,
 )
-
-internal const val CHAT_PLACEHOLDER = "write a message"
-
-internal const val CHAT_SEND_LABEL = "[ send ]"
 
 /**
  * The composer's contract in one place: a disabled field always states why, and the action
@@ -36,14 +32,14 @@ private fun OpenSessionUiState.chatFieldEnabled(): Boolean =
         !chatLoadingFirstHistory() &&
         !chatStaleRun()
 
-private fun OpenSessionUiState.chatComposerReason(): String? =
+private fun OpenSessionUiState.chatComposerReason(): UiText? =
     when {
-        isSending -> "Waiting for the Gateway to accept the message."
-        isReconciliationInProgress -> "Reconciling the Run state."
-        chatLoadingFirstHistory() -> "Sending is unavailable until the history loads."
-        isRefreshing -> "Refreshing history."
-        chatStaleRun() -> "The Run result may be stale. Refresh history to resolve."
-        sendErrorCategory != null -> sendErrorCategory.safeMessage
-        hasUnresolvedSubmission -> "The Run result may be stale. Refresh history to resolve."
+        isSending -> UiText.Resource(R.string.chat_reason_waiting_accept)
+        isReconciliationInProgress -> UiText.Resource(R.string.chat_reason_reconciling)
+        chatLoadingFirstHistory() -> UiText.Resource(R.string.chat_reason_history_loading)
+        isRefreshing -> UiText.Resource(R.string.chat_reason_refreshing)
+        chatStaleRun() -> UiText.Resource(R.string.chat_reason_stale_run)
+        sendErrorCategory != null -> UiText.Resource(sendErrorCategory.messageRes)
+        hasUnresolvedSubmission -> UiText.Resource(R.string.chat_reason_stale_run)
         else -> null
     }

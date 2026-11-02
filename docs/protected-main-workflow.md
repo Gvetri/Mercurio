@@ -26,6 +26,12 @@ to merge a draft pull request at all.
 Use one issue-scoped branch per change, in the form `<type>/<issue>-<short-description>`, for example
 `feat/25-protected-main-workflow`. The type is the Conventional Commit type of the change.
 
+## Review routing
+
+The pull-request review routes on the owner list in `CODEOWNERS`: a pull request authored by a
+listed owner is reviewed automatically, and a pull request authored by anyone else needs a listed
+owner to request the review.
+
 ## What the workflow runs
 
 `.github/workflows/quality-gate.yml` runs on a pull request, a push to `main`, a nightly schedule at

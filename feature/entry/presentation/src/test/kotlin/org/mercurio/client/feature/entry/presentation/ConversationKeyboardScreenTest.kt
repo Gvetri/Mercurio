@@ -125,7 +125,7 @@ class ConversationKeyboardScreenTest {
                         hasUnresolvedSubmission = error == MessageSendErrorCategory.UNCERTAIN,
                     )
             }
-            composeTestRule.onNodeWithText(error.safeMessage).performScrollTo().assertIsDisplayed()
+            composeTestRule.onNodeWithText(copy(error.messageRes)).performScrollTo().assertIsDisplayed()
             val action = composeTestRule.onNodeWithText("[ send ]").performScrollTo().assertIsDisplayed()
             assertTrue(action.fetchSemanticsNode().boundsInWindow.bottom <= windowHeight - imeInset + 1f)
             composeTestRule.onNodeWithTag("conversation-message-input").performScrollTo().assertIsDisplayed()

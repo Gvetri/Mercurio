@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -32,6 +33,7 @@ internal fun SessionActionMenu(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     var expanded by remember(session.id, enabled) { mutableStateOf(false) }
+    val menuDescription = stringResource(R.string.sessions_action_menu, sessionTitle(session))
     Box {
         IconButton(
             onClick = { expanded = true },
@@ -39,7 +41,7 @@ internal fun SessionActionMenu(
             modifier =
                 Modifier.size(48.dp).testTag("sessions-row-actions").semantics {
                     testTagsAsResourceId = true
-                    contentDescription = "Session actions for ${session.title}"
+                    contentDescription = menuDescription
                 },
         ) {
             Icon(imageVector = Icons.Default.MoreVert, contentDescription = null)
@@ -61,7 +63,12 @@ internal fun ColumnScope.SessionActionMenuItems(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     DropdownMenuItem(
-        text = { Text(if (session.pinned) "Unpin Session" else "Pin Session") },
+        text =
+            {
+                Text(
+                    stringResource(if (session.pinned) R.string.sessions_unpin else R.string.sessions_pin),
+                )
+            },
         onClick = {
             onDismiss()
             onEvent(
@@ -74,7 +81,7 @@ internal fun ColumnScope.SessionActionMenuItems(
         },
     )
     DropdownMenuItem(
-        text = { Text("Rename Session") },
+        text = { Text(stringResource(R.string.sessions_rename)) },
         onClick = {
             onDismiss()
             onEvent(EntryUiEvent.RenameSessionClicked(session.id))
@@ -82,7 +89,7 @@ internal fun ColumnScope.SessionActionMenuItems(
     )
     HorizontalDivider()
     DropdownMenuItem(
-        text = { Text("Delete Session") },
+        text = { Text(stringResource(R.string.sessions_delete)) },
         onClick = {
             onDismiss()
             onEvent(EntryUiEvent.DeleteSessionClicked(session.id))

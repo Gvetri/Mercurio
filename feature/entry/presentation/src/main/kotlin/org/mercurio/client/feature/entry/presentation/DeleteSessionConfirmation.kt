@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 /**
@@ -21,14 +22,22 @@ internal fun DeleteSessionConfirmation(
     modifier: Modifier = Modifier,
 ) {
     val delete = pending.mutation.delete ?: return
+    val title = sessionTitle(pending.session)
     AlertDialog(
         onDismissRequest = { onEvent(EntryUiEvent.CancelDeleteSessionClicked(pending.session.id)) },
-        title = { Text(text = "Delete “${pending.session.title}”?") },
+        title = { Text(text = stringResource(R.string.dialog_delete_session_title, title)) },
         text = {
             Column {
-                Text(text = "The session and its transcript are removed from this client. This cannot be undone here.")
-                SessionMutationProgress(visible = delete.isSubmitting, label = "Deleting Session…", topSpacing = 4.dp)
-                SessionMutationErrorMessage(message = pending.mutation.errorCategory?.safeMessage, topSpacing = 4.dp)
+                Text(text = stringResource(R.string.dialog_delete_session_body))
+                SessionMutationProgress(
+                    visible = delete.isSubmitting,
+                    label = stringResource(R.string.sessions_deleting),
+                    topSpacing = 4.dp,
+                )
+                SessionMutationErrorMessage(
+                    message = pending.mutation.errorCategory?.messageRes,
+                    topSpacing = 4.dp,
+                )
             }
         },
         confirmButton = {
@@ -36,7 +45,14 @@ internal fun DeleteSessionConfirmation(
                 onClick = { onEvent(EntryUiEvent.ConfirmDeleteSessionClicked(pending.session.id)) },
                 enabled = pending.allowsMutation && !delete.isSubmitting,
             ) {
-                Text(text = if (pending.mutation.errorCategory == null) "Delete" else "Try again")
+                Text(
+                    text =
+                        if (pending.mutation.errorCategory == null) {
+                            stringResource(R.string.action_delete)
+                        } else {
+                            stringResource(R.string.action_try_again)
+                        },
+                )
             }
         },
         dismissButton = {
@@ -44,7 +60,7 @@ internal fun DeleteSessionConfirmation(
                 onClick = { onEvent(EntryUiEvent.CancelDeleteSessionClicked(pending.session.id)) },
                 enabled = !delete.isSubmitting,
             ) {
-                Text(text = "Cancel")
+                Text(text = stringResource(R.string.action_cancel))
             }
         },
         modifier = modifier,

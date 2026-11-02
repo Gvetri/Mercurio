@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -39,13 +40,13 @@ internal fun SettingsContent(
                 .padding(LocalHermesDesignTokens.current.spacing.xl),
     ) {
         Text(
-            text = "Settings",
+            text = stringResource(R.string.settings_title),
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "App version ${state.clientVersion}",
+            text = stringResource(R.string.settings_version, state.clientVersion),
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -62,7 +63,7 @@ internal fun SettingsContent(
             onClick = { onEvent(EntryUiEvent.CloseSettingsClicked) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Back to Sessions")
+            Text(text = stringResource(R.string.action_back_to_sessions))
         }
     }
 }
@@ -72,18 +73,19 @@ private fun SettingsNotificationControls(
     state: RunStatusNotificationsUiState,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
+    val notificationsDescription = stringResource(R.string.settings_run_status_notifications)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Run status notifications",
+                text = stringResource(R.string.settings_run_status_notifications),
                 style = MaterialTheme.typography.bodyLarge,
             )
             state.explanation?.let { explanation ->
                 Text(
-                    text = explanation.safeMessage,
+                    text = stringResource(explanation.messageRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -96,7 +98,7 @@ private fun SettingsNotificationControls(
                 Modifier
                     .testTag("settings-run-status-notifications")
                     .semantics {
-                        contentDescription = "Run status notifications"
+                        contentDescription = notificationsDescription
                     },
         )
     }
@@ -113,20 +115,18 @@ private fun SettingsGatewayControls(
         enabled = diagnosticsEnabled,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Text(text = "Local diagnostics")
+        Text(text = stringResource(R.string.settings_local_diagnostics))
     }
     Spacer(modifier = Modifier.height(16.dp))
     OutlinedButton(
         onClick = { onEvent(EntryUiEvent.ChangeGatewayCredentialClicked) },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Text(text = "Change Gateway credential")
+        Text(text = stringResource(R.string.action_change_credential))
     }
     Spacer(modifier = Modifier.height(16.dp))
     Text(
-        text =
-            "Clearing removes cached conversations from this device only. " +
-                "Remote Sessions and Runs are not deleted, and diagnostic files you already exported are not removed.",
+        text = stringResource(R.string.settings_clear_history_cache_summary),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -140,14 +140,14 @@ private fun SettingsGatewayControls(
                 .heightIn(min = 48.dp)
                 .testTag("settings-clear-history-cache"),
     ) {
-        Text(text = "Clear cached conversations")
+        Text(text = stringResource(R.string.settings_clear_history_cache))
     }
     Spacer(modifier = Modifier.height(16.dp))
     OutlinedButton(
         onClick = { onEvent(EntryUiEvent.RemoveGatewayConnectionClicked) },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Text(text = "Remove Gateway Connection")
+        Text(text = stringResource(R.string.action_remove_connection))
     }
 }
 

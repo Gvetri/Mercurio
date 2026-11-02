@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.mercurio.client.feature.entry.domain.SessionId
@@ -93,7 +94,9 @@ private fun LazyListScope.sessionListContent(
     when {
         state.isLoading && state.sessions.isEmpty() -> {
             sessionListSkeletonItems()
-            item(key = "loading-footer") { SessionListFooter(label = "loading sessions…") }
+            item(key = "loading-footer") {
+                SessionListFooter(label = stringResource(R.string.sessions_loading))
+            }
         }
         state.visibleSessions.isEmpty() -> {
             item(key = "empty") {
@@ -139,7 +142,9 @@ private fun LazyListScope.sessionRows(
     val pinned = sessions.filter { it.pinned }
     val unpinned = sessions.filterNot { it.pinned }
     if (pinned.isNotEmpty()) {
-        item(key = "pinned-header") { SessionSectionHeader(label = "PINNED") }
+        item(key = "pinned-header") {
+            SessionSectionHeader(label = stringResource(R.string.sessions_pinned_header))
+        }
         items(items = pinned, key = { session -> session.id.value }) { session ->
             SessionRow(
                 row = sessionRowState(session, state, selectedSessionId, onEvent),
@@ -148,7 +153,7 @@ private fun LazyListScope.sessionRows(
         }
     }
     item(key = "all-sessions-header") {
-        SessionSectionHeader(label = "ALL SESSIONS · ${unpinned.size}")
+        SessionSectionHeader(label = stringResource(R.string.sessions_all_header, unpinned.size))
     }
     items(items = unpinned, key = { session -> session.id.value }) { session ->
         SessionRow(
@@ -194,8 +199,8 @@ private fun SessionListFooterTrigger(
         if (canLoadMore) onEvent(EntryUiEvent.LoadMoreSessionsClicked)
     }
     when {
-        state.isLoadingMore -> SessionListFooter(label = "loading more…")
-        state.isLoading -> SessionListFooter(label = "loading sessions…")
+        state.isLoadingMore -> SessionListFooter(label = stringResource(R.string.sessions_loading_more))
+        state.isLoading -> SessionListFooter(label = stringResource(R.string.sessions_loading))
         else -> Unit
     }
 }
