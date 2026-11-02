@@ -6,7 +6,7 @@ that is merged:
 | Required context | What it verifies |
 | --- | --- |
 | `quality-gate` | The aggregate gate: every check declared in `.github/quality-gate/required-checks.txt` reports the outcome its event expects, so one failing, missing, or misrouted check fails it. [Quality gates](../quality-gates.md) lists the checks and the routing. |
-| `pr-template` | The body carries the four template headings, each as a line of its own, verbatim; a pull request authored by `dependabot[bot]` is exempt, because Dependabot writes its own body |
+| `pr-template` | The body carries the four template headings, each as a line of its own, verbatim; a pull request authored by `dependabot[bot]` is exempt, because Dependabot writes its own body. |
 
 `.github/scripts/verify-repository-conformance.py` reads the ruleset back and fails when either
 context stops being required, and it runs the body check for a Dependabot author, another bot, and a
