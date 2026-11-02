@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -60,7 +61,7 @@ private fun ConsentWordmarkBar() {
                 .clip(tokens.shapes.large)
                 .background(tokens.colorScheme.surface)
                 .heightIn(min = CONSENT_BAR_HEIGHT)
-                .padding(start = tokens.spacing.l, end = tokens.spacing.s),
+                .padding(start = tokens.spacing.m, end = tokens.spacing.xs),
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
@@ -116,6 +117,7 @@ private fun ConsentDecision(
             Button(
                 onClick = { onEvent(EntryUiEvent.ErrorReportingConsentGranted) },
                 modifier = Modifier.fillMaxWidth().height(CONSENT_ACTION_HEIGHT),
+                shape = tokens.shapes.small,
             ) {
                 Text(text = stringResource(R.string.consent_send_reports))
             }
@@ -123,6 +125,8 @@ private fun ConsentDecision(
             OutlinedButton(
                 onClick = { onEvent(EntryUiEvent.ErrorReportingConsentDeclined) },
                 modifier = Modifier.fillMaxWidth().height(CONSENT_ACTION_HEIGHT),
+                shape = tokens.shapes.small,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = tokens.colorScheme.onSurface),
             ) {
                 Text(text = stringResource(R.string.consent_do_not_send))
             }
