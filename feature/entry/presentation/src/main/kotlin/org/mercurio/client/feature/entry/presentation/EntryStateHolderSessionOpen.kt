@@ -12,56 +12,60 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 
-internal fun EntryStateHolder.showOpenedSessionFailure(requestGeneration: Long) {
-    updateCurrentSessionRequest(requestGeneration) { current ->
-        current.openedSession?.let { openedSession ->
-            val cachedMessages =
-                openedSession.messages.ifEmpty { cachedTranscriptUiMessages(openedSession.session.id) }
-            current.copy(
-                openedSession =
-                    openedSession.copy(
-                        isRefreshing = false,
-                        isStale = true,
-                        isCached =
-                            openedSession.isCached ||
-                                (openedSession.messages.isEmpty() && cachedMessages.isNotEmpty()),
-                        messages = cachedMessages,
-                        errorCategory = SessionHistoryErrorCategory.GATEWAY_REQUEST_FAILED,
-                    ),
-            )
-        } ?: current
-    }
+internal fun EntryStateHolder.openSession(sessionId: SessionId) {
+    startSessionOpen(sessionId, linked = false)
 }
 
-internal fun EntryStateHolder.openSession(sessionId: SessionId) {
-    val gateway = sessionGateway ?: return
+internal fun EntryStateHolder.startSessionOpen(
+    sessionId: SessionId,
+    linked: Boolean,
+): Boolean {
+    val gateway = sessionGateway ?: return false
     val job =
         synchronized(sessionRequestLock) {
             val state = mutableUiState.value
-            val sessionList = state.sessionList ?: return@synchronized null
-            val sessionCanOpen = sessionList.sessions.any { it.id == sessionId }
-            val mutationPending = sessionList.sessionMutations[sessionId]?.pendingAction != null
-            if (sessionList.blocksSessionOpen() || !sessionCanOpen || mutationPending) {
+            val sessionList = state.sessionList
+            if (sessionList == null || !sessionList.allowsSessionOpen(sessionId, linked)) {
                 return@synchronized null
             }
+            val interrupted = sessionList.interruptsListRequest()
+            inboundLinkListRequestInterrupted = linked && (interrupted || sessionList.isStale)
             val replacedSessionId = sessionList.openedSession?.session?.id?.takeIf { it != sessionId }
             val request =
-                SessionRequestContext(beginSessionRequest(), sessionList.searchQuery, offset = null)
+                SessionRequestContext(
+                    generation = beginSessionRequest(),
+                    query = sessionList.searchQuery,
+                    offset = null,
+                    linked = linked,
+                )
             val requestConnectionGeneration = connectionGeneration
             mutableUiState.value =
                 state.copy(
+                    inboundLinkNotice = null,
                     sessionList =
                         sessionList.copy(
                             openingSessionId = sessionId,
+                            isLoading = false,
+                            isRefreshing = false,
+                            isSearching = false,
+                            isLoadingMore = false,
+                            isStale = sessionList.isStale || (linked && interrupted),
                             errorCategory = null,
                             creationErrorCategory = null,
                         ),
                 )
             createSessionJob {
-                openSessionJob(gateway, request, requestConnectionGeneration, sessionId, replacedSessionId)
+                openSessionJob(
+                    gateway = gateway,
+                    request = request,
+                    requestConnectionGeneration = requestConnectionGeneration,
+                    sessionId = sessionId,
+                    replacedSessionId = replacedSessionId,
+                )
             }
-        } ?: return
-    job.start()
+        }
+    job?.start()
+    return job != null
 }
 
 internal suspend fun EntryStateHolder.openSessionJob(
@@ -102,9 +106,22 @@ internal suspend fun EntryStateHolder.openSessionJob(
     } catch (error: CancellationException) {
         throw error
     } catch (_: GatewayException) {
-        showSessionOpenFailure(request.generation, sessionId, openedSessionBeforeAttempt)
+        showOpenFailure(request.generation, sessionId, openedSessionBeforeAttempt, request.linked)
     } catch (_: Exception) {
-        showSessionOpenFailure(request.generation, sessionId, openedSessionBeforeAttempt)
+        showOpenFailure(request.generation, sessionId, openedSessionBeforeAttempt, request.linked)
+    }
+}
+
+private fun EntryStateHolder.showOpenFailure(
+    requestGeneration: Long,
+    sessionId: SessionId,
+    openedSessionToRestore: OpenSessionUiState?,
+    linked: Boolean,
+) {
+    if (linked) {
+        showLinkedSessionOpenFailure(requestGeneration)
+    } else {
+        showSessionOpenFailure(requestGeneration, sessionId, openedSessionToRestore)
     }
 }
 
@@ -113,7 +130,6 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
     openedSession: OpenedSession,
     sessionId: SessionId,
 ): SessionListUiState {
-    val authoritativeSession = openedSession.session.toSessionItemUiState()
     val knownRuns = rememberSessionRuns(sessionId, openedSession)
     val latestObservation = latestObservationState(sessionId, knownRuns)
     val recoveryLoadBlocksSession =
@@ -123,14 +139,10 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
             sessionId in recoverySessionCounts
     return current.copy(
         sessions =
-            current.sessions
-                .map { item ->
-                    if (item.id == sessionId) authoritativeSession else item
-                }
-                .orderedSessions(),
+            current.sessions.mergeAuthoritative(openedSession.session),
         sessionMutations = retainSessionMutation(current.sessionMutations, sessionId),
         openingSessionId = null,
-        isStale = false,
+        isStale = inboundLinkListRequestInterrupted,
         isUnavailable = false,
         openedSession =
             openedSession.toOpenSessionUiState(
@@ -161,7 +173,6 @@ internal fun EntryStateHolder.applyOpenedSessionMetadata(
     session: Session,
     sessionId: SessionId,
 ): SessionListUiState {
-    val authoritativeSession = session.toSessionItemUiState()
     val knownRuns = sessionRuns[sessionId].orEmpty()
     val latestObservation = latestObservationState(sessionId, knownRuns)
     val recoveryLoadBlocksSession =
@@ -173,11 +184,9 @@ internal fun EntryStateHolder.applyOpenedSessionMetadata(
         OpenedSession(session = session, history = SessionHistory(sessionId, emptyList()))
     return current.copy(
         sessions =
-            current.sessions
-                .map { item -> if (item.id == sessionId) authoritativeSession else item }
-                .orderedSessions(),
+            current.sessions.mergeAuthoritative(session),
         sessionMutations = retainSessionMutation(current.sessionMutations, sessionId),
-        isStale = false,
+        isStale = inboundLinkListRequestInterrupted,
         isUnavailable = false,
         openedSession =
             sessionWithoutHistory.toOpenSessionUiState(
@@ -276,6 +285,7 @@ internal fun EntryStateHolder.returnToSessionList() {
             }
         mutableUiState.value =
             mutableUiState.value.copy(
+                inboundLinkNotice = null,
                 sessionList =
                     current.copy(
                         sessions =
@@ -290,27 +300,4 @@ internal fun EntryStateHolder.returnToSessionList() {
     }
     observationJobToCancel?.cancel()
     observationToClose?.close()
-}
-
-internal fun EntryStateHolder.updateComposerText(value: String) {
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value.sessionList ?: return
-        val opened = current.openedSession ?: return
-        sessionDrafts[opened.session.id] = value
-        sessionDraftRevisions[opened.session.id] =
-            sessionDraftRevisions[opened.session.id]?.plus(1) ?: 1L
-        sessionDraftStore.write(sessionDraftKey(opened.session.id), value)
-        sessionSendErrors.remove(opened.session.id)
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                composerText = value,
-                                sendErrorCategory = sendErrorCategoryFor(opened.session.id),
-                            ),
-                    ),
-            )
-    }
 }
