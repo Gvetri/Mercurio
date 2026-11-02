@@ -72,6 +72,7 @@ fun EntryScreen(
                     state = sessionList,
                     onEvent = onEvent,
                     modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.s),
+                    notice = state.inboundLinkNotice,
                 )
             } else {
                 ConnectionContent(state = state, onEvent = onEvent)
@@ -117,6 +118,7 @@ private fun ConnectionContent(
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
+        ConnectionInboundLinkNotice(notice = state.inboundLinkNotice)
         Text(
             text = state.title.resolve(),
             style = MaterialTheme.typography.headlineSmall,
@@ -177,5 +179,15 @@ private fun ConnectedGatewayContent(onEvent: (EntryUiEvent) -> Unit) {
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
         Text(text = stringResource(R.string.action_remove_connection))
+    }
+}
+
+@Composable
+private fun ConnectionInboundLinkNotice(notice: InboundLinkNoticeCategory?) {
+    if (notice != null) {
+        InboundLinkNoticeText(
+            notice = notice,
+            modifier = Modifier.padding(bottom = 16.dp),
+        )
     }
 }

@@ -25,3 +25,26 @@ internal fun EntryStateHolder.restoredSessionDraft(sessionId: SessionId): String
                 }
             }
     }.orEmpty()
+
+internal fun EntryStateHolder.updateComposerText(value: String) {
+    synchronized(sessionRequestLock) {
+        val current = mutableUiState.value.sessionList ?: return
+        val opened = current.openedSession ?: return
+        sessionDrafts[opened.session.id] = value
+        sessionDraftRevisions[opened.session.id] =
+            sessionDraftRevisions[opened.session.id]?.plus(1) ?: 1L
+        sessionDraftStore.write(sessionDraftKey(opened.session.id), value)
+        sessionSendErrors.remove(opened.session.id)
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        openedSession =
+                            opened.copy(
+                                composerText = value,
+                                sendErrorCategory = sendErrorCategoryFor(opened.session.id),
+                            ),
+                    ),
+            )
+    }
+}

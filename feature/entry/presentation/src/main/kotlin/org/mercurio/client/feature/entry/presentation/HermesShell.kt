@@ -55,11 +55,12 @@ internal fun SessionShell(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier = Modifier,
+    notice: InboundLinkNoticeCategory? = null,
 ) {
     if (LocalConfiguration.current.screenWidthDp >= TWO_PANE_MIN_WIDTH_DP) {
-        TwoPaneSessionContent(state, onEvent, modifier)
+        TwoPaneSessionContent(state, onEvent, modifier, notice)
     } else {
-        SinglePaneSessionContent(state, onEvent, modifier)
+        SinglePaneSessionContent(state, onEvent, modifier, notice)
     }
 }
 
@@ -94,12 +95,14 @@ private fun SinglePaneSessionContent(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier,
+    notice: InboundLinkNoticeCategory?,
 ) {
     SessionShellBackHandling(state, onEvent)
     SessionListContent(
         state = state,
         onEvent = onEvent,
         modifier = modifier,
+        notice = notice,
     )
 }
 
@@ -108,6 +111,7 @@ private fun TwoPaneSessionContent(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     modifier: Modifier,
+    notice: InboundLinkNoticeCategory?,
 ) {
     SessionShellBackHandling(state, onEvent)
     Row(modifier = modifier.fillMaxSize()) {
@@ -116,6 +120,7 @@ private fun TwoPaneSessionContent(
             onEvent = onEvent,
             modifier = Modifier.weight(SESSION_LIST_PANE_WEIGHT).fillMaxHeight(),
             selectedSessionId = state.openedSession?.session?.id,
+            notice = notice,
         )
         VerticalDivider(modifier = Modifier.fillMaxHeight())
         ConversationPaneHost(
