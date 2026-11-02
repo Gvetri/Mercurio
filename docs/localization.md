@@ -19,6 +19,11 @@ name does not change with the reader's language.
 
 ## How a state names copy
 
+A Session the Gateway has not titled yet stores no title at all: the pending-title placeholder is
+copy the renderer supplies. Two consequences follow deliberately. Search matches server-provided
+titles and previews only, so it never matches the placeholder text, and a rename draft for such a
+Session starts empty rather than from the placeholder the reader sees.
+
 A UI state never holds a resolved string for copy the client authored. `UiText` carries it instead:
 
 - `UiText.Resource(id)` and `UiText.Plural(id, count)` name one resource, with format arguments.
