@@ -169,6 +169,23 @@ class PreCommitHookTest(HookTestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertNotIn("run-live-smoke.sh", completed.stderr)
 
+    def test_the_staged_bytes_are_judged_after_a_worktree_edit(self):
+        relative = self.write("tools/run-live-smoke.sh", "#!/usr/bin/env bash\n# run the smoke\nset -euo pipefail\n")
+        self.stage(relative)
+        (self.root / relative).write_text("#!/usr/bin/env bash\nset -euo pipefail\n", encoding="utf-8")
+        completed = self.run_hook("pre-commit")
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("line comment is not allowed", completed.stderr)
+
+    def test_a_comment_staged_after_a_clean_commit_does_not_block_it(self):
+        relative = self.write("tools/run-live-smoke.sh", "#!/usr/bin/env bash\nset -euo pipefail\n")
+        self.stage(relative)
+        (self.root / relative).write_text(
+            "#!/usr/bin/env bash\n# run the smoke\nset -euo pipefail\n", encoding="utf-8"
+        )
+        completed = self.run_hook("pre-commit")
+        self.assertEqual(0, completed.returncode, completed.stderr)
+
     def test_a_staged_kotlin_file_with_unstaged_changes_is_refused(self):
         self.write("app/src/main/Present.kt", "package app\n\ninternal fun present(): Int = 1\n")
         self.stage("app/src/main/Present.kt")

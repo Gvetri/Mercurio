@@ -7,7 +7,8 @@ files the class table excludes. Every tracked file gets a reading; a class this 
 know fails instead of passing, so a new file class is decided in the same change that adds it.
 
 A caller that already knows the scope it cares about, the pre-commit hook that reads the staged
-files, names it with `--files`. A named scope that holds no in-scope file passes, because the caller
+files, names it with `--files`, and `--staged` reads those files as the index holds them instead of
+as the worktree holds them. A named scope that holds no in-scope file passes, because the caller
 declared the scope rather than the repository being empty.
 """
 import argparse
@@ -423,7 +424,25 @@ def tracked_files(root):
     return sorted(name.decode("utf-8") for name in completed.stdout.split(b"\0") if name)
 
 
-def scan(root, files=None):
+def staged_text(root, relative):
+    completed = subprocess.run(
+        ["git", "-C", str(root), "show", f":{relative}"],
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise SystemExit(
+            f"Comments verification could not read the staged {relative}: "
+            f"{completed.stderr.decode('utf-8', 'replace').strip()}"
+        )
+    try:
+        return completed.stdout.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise SystemExit(f"Comments verification could not read the staged {relative}: {error}") from error
+
+
+def scan(root, files=None, staged=False):
     reports = []
     scanned = 0
     relatives = tracked_files(root) if files is None else [str(pathlib.PurePosixPath(name)) for name in files]
@@ -434,10 +453,13 @@ def scan(root, files=None):
         if handler is None:
             reports.append(describe(relative, 1, UNDECLARED))
             continue
-        try:
-            text = pathlib.Path(root, relative).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as error:
-            raise SystemExit(f"Comments verification could not read {relative}: {error}")
+        if staged:
+            text = staged_text(root, relative)
+        else:
+            try:
+                text = pathlib.Path(root, relative).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as error:
+                raise SystemExit(f"Comments verification could not read {relative}: {error}")
         scanned += 1
         for line, kind in violations_for(relative, text):
             reports.append(describe(relative, line, kind))
@@ -457,8 +479,15 @@ def main(argv=None):
         default=None,
         help="verify these repository-relative files instead of every tracked file, as the pre-commit hook does",
     )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="read each named file as the index holds it instead of as the worktree holds it",
+    )
     arguments = parser.parse_args(argv)
-    reports, scanned = scan(pathlib.Path(arguments.repository_root).resolve(), arguments.files)
+    if arguments.staged and arguments.files is None:
+        parser.error("--staged requires --files")
+    reports, scanned = scan(pathlib.Path(arguments.repository_root).resolve(), arguments.files, arguments.staged)
     if reports:
         print("\n".join(reports), file=sys.stderr)
         print(f"Comments verified: {len(reports)} violation(s) across {scanned} in-scope file(s).", file=sys.stderr)

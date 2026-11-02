@@ -140,6 +140,21 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun the_commit_header_rule_is_shared_with_the_commit_message_hook() {
+        runPythonSuite(".github/scripts/tests/test_commit_header.py")
+    }
+
+    @Test
+    fun the_committed_hooks_judge_the_message_and_the_staged_change() {
+        runPythonSuite(".github/scripts/tests/test_git_hooks.py")
+    }
+
+    @Test
+    fun the_protected_main_and_commit_message_contracts_hold() {
+        runPythonSuite(".github/scripts/tests/test_protected_main.py")
+    }
+
+    @Test
     fun the_comment_policy_check_runs_in_the_formatting_job_and_the_local_gate() {
         val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
         val buildScript = repositoryRoot.resolve("build.gradle.kts").readText()

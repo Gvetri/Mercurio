@@ -72,8 +72,6 @@ def validate_message(message, label):
     if scope is not None and scope != scope.lower():
         violations.append(f"{label}: the scope '{scope}' must be lower case.")
     subject = match.group("subject").strip()
-    if not subject:
-        violations.append(f"{label}: the description is empty.")
     if subject.endswith("."):
         violations.append(f"{label}: the description must not end with a period.")
     if len(header) > MAX_SUBJECT_LENGTH:

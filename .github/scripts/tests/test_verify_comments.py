@@ -307,6 +307,20 @@ class CommentsPolicyTest(unittest.TestCase):
         self.assert_accepted(result)
         self.assertIn("0 of 1 named file(s)", result.stdout)
 
+    def test_a_staged_scope_reads_the_index_not_the_worktree(self):
+        relative = "tools/run.sh"
+        target = self.root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("#!/usr/bin/env bash\n# run it\nset -euo pipefail\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True, capture_output=True, timeout=60)
+        subprocess.run(["git", "-C", str(self.root), "add", relative], check=True, capture_output=True, timeout=60)
+        target.write_text("#!/usr/bin/env bash\nset -euo pipefail\n", encoding="utf-8")
+        checked = subprocess.run(
+            [sys.executable, str(CHECK), "--repository-root", str(self.root), "--files", relative, "--staged"],
+            capture_output=True, text=True, timeout=120,
+        )
+        self.assert_rejected(checked, "tools/run.sh:2", "line comment")
+
     def test_a_hook_carrying_a_shell_comment_fails(self):
         result = self.check_named({
             ".githooks/pre-commit": "#!/usr/bin/env bash\n# format the staged files\nset -euo pipefail\n",

@@ -38,4 +38,4 @@ if [[ "${#kotlin[@]}" -gt 0 ]]; then
   git add -- "${kotlin[@]}"
 fi
 
-python3 .github/scripts/verify-comments.py --files "${staged[@]}" >/dev/null
+python3 .github/scripts/verify-comments.py --files "${staged[@]}" --staged >/dev/null

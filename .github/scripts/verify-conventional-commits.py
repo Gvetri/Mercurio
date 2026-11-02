@@ -20,9 +20,13 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from commit_header import MessageError as VerificationError, validate_message
+from commit_header import MessageError, validate_message
 
 COMMITS_PER_PAGE = 100
+
+
+class VerificationError(MessageError):
+    """A condition that must fail the check rather than pass it."""
 
 
 def api_url(path):

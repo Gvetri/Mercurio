@@ -23,8 +23,9 @@ answer and the CI answer cannot disagree. A merge subject passes locally as it d
   own staged-file filter, naming exactly the staged Kotlin sources (`.kt` and `.kts`). The formatted
   files are staged again, so the commit carries the formatted content. The hook needs the same
   configured build the fast loop needs.
-- The comments policy, through `.github/scripts/verify-comments.py --files`, which judges the same
-  staged set and ignores every file you have not staged.
+- The comments policy, through `.github/scripts/verify-comments.py --files ... --staged`, which reads
+  the staged bytes of that set and ignores every file you have not staged, so an edit you have not
+  staged neither hides nor invents a violation.
 
 The hook refuses the commit when a staged Kotlin file also carries unstaged changes: the formatter
 rewrites the worktree copy, so staging it again would carry the unstaged hunks into the commit.
