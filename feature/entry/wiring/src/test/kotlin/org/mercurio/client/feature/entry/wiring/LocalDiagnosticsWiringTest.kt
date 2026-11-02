@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,8 +17,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.application.UNKNOWN_CLIENT_VERSION
 import org.mercurio.client.feature.entry.data.LocalDiagnosticsRecords
 import org.mercurio.client.feature.entry.data.RollingLocalDiagnosticsBuffer
+import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticEventType
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticStatus
@@ -236,7 +239,6 @@ class LocalDiagnosticsWiringTest {
                         coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
                         historyCacheStore = NoOpHistoryCacheStore,
                     ),
-                clientVersion = "0.1.0",
             )
         holders += holder
         holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
@@ -246,11 +248,18 @@ class LocalDiagnosticsWiringTest {
     }
 
     @Test
-    fun an_installation_without_a_version_name_still_records_a_safe_client_version() {
-        val clientVersion = androidClientVersion(context)
+    fun reads_the_installed_build_from_this_installations_package_metadata() {
+        val installedBuild = AndroidInstalledBuildProvider(context).installedBuild()
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
 
-        assertTrue(LocalDiagnosticsRecords.isSafeFieldValue(clientVersion))
-        assertTrue(clientVersion.isNotBlank())
+        assertEquals(PackageInfoCompat.getLongVersionCode(packageInfo), installedBuild.versionCode)
+        assertEquals(packageInfo.versionName.orEmpty(), installedBuild.versionName)
+        assertEquals(InstallSource.OTHER_SOURCE, installedBuild.installSource)
+        assertTrue(
+            LocalDiagnosticsRecords.isSafeFieldValue(
+                installedBuild.versionNameOr(UNKNOWN_CLIENT_VERSION),
+            ),
+        )
     }
 
     private fun buffer(): RollingLocalDiagnosticsBuffer {
