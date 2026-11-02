@@ -3,6 +3,7 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,52 +28,48 @@ import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 
-/**
- * Journey-shaped isolation verification for #284: the traffic of the cache-run-isolation
- * and offline-cache-read journeys — connect, open, submit, reconcile after a restart —
- * replayed against presentation state. The authoritative traffic must be byte-identical
- * with a poisoned store behind it, must never mark a surface cached, and must never read
- * the store outside the sanctioned offline arms.
- */
+/** The #284 journey-shaped isolation verification. */
 class HistoryCacheIsolationJourneyTest {
     @Test
-    fun the_run_isolation_journey_traffic_never_reads_or_marks_the_populated_cache() {
-        val cache = RecordingHistoryCacheStore()
-        val withoutCache = runIsolationJourney(NoOpHistoryCacheStore)
-        poisonCache(cache)
-        val withCache = runIsolationJourney(cache)
+    fun the_run_isolation_journey_traffic_never_reads_or_marks_the_populated_cache() =
+        runTest {
+            val cache = RecordingHistoryCacheStore()
+            val withoutCache = runIsolationJourney(NoOpHistoryCacheStore)
+            poisonCache(cache)
+            val withCache = runIsolationJourney(cache)
 
-        assertEquals(withoutCache, withCache)
-        assertTrue(cache.reads().isEmpty())
-        assertEquals(emptyList<String>(), withCache.cachedMarkedSurfaces())
-    }
+            assertEquals(withoutCache, withCache)
+            assertTrue(cache.reads().isEmpty())
+            assertEquals(emptyList<String>(), withCache.cachedMarkedSurfaces())
+        }
 
     @Test
-    fun the_reconciled_open_and_list_refresh_journey_never_reads_or_marks_the_store() {
-        val gateway = ReconciliationFakeGateway(journeySession())
-        gateway.histories += SessionHistory(gateway.session.id, emptyList())
-        gateway.histories += SessionHistory(gateway.session.id, emptyList())
-        val registry = InMemoryRunRecoveryRegistry(listOf(RunRecoveryEntry(gateway.session.id, RECOVERY_RUN_ID)))
-        val cache = RecordingHistoryCacheStore()
-        poisonCache(cache)
-        val holder = journeyHolder(gateway, cache, registry)
-        try {
-            openReconciledSession(holder, gateway)
-            holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            awaitState(holder, "settled authoritative list") { state ->
-                val list = state.sessionList
-                list != null && !list.isLoading && !list.isRefreshing && list.sessions.isNotEmpty()
-            }
+    fun the_reconciled_open_and_list_refresh_journey_never_reads_or_marks_the_store() =
+        runTest {
+            val gateway = ReconciliationFakeGateway(journeySession())
+            gateway.histories += SessionHistory(gateway.session.id, emptyList())
+            gateway.histories += SessionHistory(gateway.session.id, emptyList())
+            val registry = InMemoryRunRecoveryRegistry(listOf(RunRecoveryEntry(gateway.session.id, RECOVERY_RUN_ID)))
+            val cache = RecordingHistoryCacheStore()
+            poisonCache(cache)
+            val holder = journeyHolder(gateway, cache, registry)
+            try {
+                openReconciledSession(holder, gateway)
+                holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                awaitState(holder, "settled authoritative list") { state ->
+                    val list = state.sessionList
+                    list != null && !list.isLoading && !list.isRefreshing && list.sessions.isNotEmpty()
+                }
 
-            val state = requireNotNull(holder.uiState.value.sessionList)
-            assertEquals(emptyList<String>(), state.cachedMarkedSurfaces())
-            assertTrue(state.sessions.isNotEmpty())
-            assertTrue(cache.reads().isEmpty())
-        } finally {
-            holder.close()
+                val state = requireNotNull(holder.uiState.value.sessionList)
+                assertEquals(emptyList<String>(), state.cachedMarkedSurfaces())
+                assertTrue(state.sessions.isNotEmpty())
+                assertTrue(cache.reads().isEmpty())
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     private fun poisonCache(cache: RecordingHistoryCacheStore) {
         cache.writeSessionList(
@@ -85,7 +82,7 @@ class HistoryCacheIsolationJourneyTest {
         )
     }
 
-    private fun runIsolationJourney(cache: HistoryCacheStore): SessionListUiState {
+    private suspend fun runIsolationJourney(cache: HistoryCacheStore): SessionListUiState {
         val session = journeySession()
         val gateway = FakeGateway(listOf(session))
         gateway.enqueueRun(Run(RUN_ID, session.id, "starting"))

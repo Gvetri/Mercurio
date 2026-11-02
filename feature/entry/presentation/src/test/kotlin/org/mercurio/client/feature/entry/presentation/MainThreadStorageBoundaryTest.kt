@@ -3,6 +3,7 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,7 +29,6 @@ import java.util.concurrent.TimeUnit
 
 private const val SEND_CLAIM_AND_CLOSE_MARKER_ADDS = 2
 
-/** The test thread plays the Android main thread; the holder runs on [Dispatchers.Default]. */
 internal class MainThreadStorageBoundaryTest {
     private val eventThread = Thread.currentThread()
     private val recorder = StorageCallRecorder()
@@ -41,124 +41,129 @@ internal class MainThreadStorageBoundaryTest {
     private val notificationSettingsStore = RecordingRunStatusNotificationSettingsStore(recorder)
 
     @Test
-    fun a_send_keeps_run_storage_off_the_event_thread() {
-        val holder = storageBoundaryHolder()
-        try {
-            open(holder, gateway, session.id)
-            gateway.enqueueRun(activeRun())
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
-            recorder.assertOperationsRanOn(eventThread, "draft.write", "uncertainty.contains")
-            recorder.reset()
+    fun a_send_keeps_run_storage_off_the_event_thread() =
+        runTest {
+            val holder = storageBoundaryHolder()
+            try {
+                open(holder, gateway, session.id)
+                gateway.enqueueRun(activeRun())
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
+                recorder.assertOperationsRanOn(eventThread, "draft.write", "uncertainty.contains")
+                recorder.reset()
 
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
-            awaitState(holder) { it.sessionList?.openedSession?.latestRun != null }
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
+                awaitState(holder) { it.sessionList?.openedSession?.latestRun != null }
 
-            recorder.assertOperationsRanOffThread(
-                eventThread,
-                "draft.write",
-                "selection.read",
-                "uncertainty.add",
-                "recovery.save",
-            )
-        } finally {
-            holder.close()
-        }
-    }
-
-    @Test
-    fun connection_removal_never_touches_storage_on_the_event_thread() {
-        val holder = storageBoundaryHolder()
-        try {
-            connect(holder, gateway)
-            recorder.reset()
-
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
-            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-            awaitState(holder) { !it.isGatewayConnectionConfigured && it.sessionList == null }
-            assertTrue(selectionStore.cleared.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-
-            recorder.assertOperationsRanOffThread(
-                eventThread,
-                "repository.load",
-                "repository.clear",
-                "uncertainty.clearEndpoint",
-                "draft.clearEndpoint",
-                "selection.clearEndpoint",
-            )
-            recorder.assertOperationsNeverRan("notificationSettings.load", "notificationSettings.save")
-        } finally {
-            holder.close()
-        }
-    }
-
-    @Test
-    fun close_persists_a_pending_submission_off_the_event_thread() {
-        val blockedGateway =
-            FakeGateway(listOf(session)).apply {
-                enqueueRun(activeRun())
-                blockRunCreation = true
+                recorder.assertOperationsRanOffThread(
+                    eventThread,
+                    "draft.write",
+                    "selection.read",
+                    "uncertainty.add",
+                    "recovery.save",
+                )
+            } finally {
+                holder.close()
             }
-        val holder = storageBoundaryHolder(blockedGateway)
-        try {
-            open(holder, blockedGateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            assertTrue(blockedGateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            recorder.reset()
-
-            holder.close()
-            recorder.assertNoCallOn(eventThread)
-            assertTrue(uncertaintyStore.awaitAdds())
-            recorder.assertOperationsRanOffThread(eventThread, "uncertainty.add")
-        } finally {
-            blockedGateway.releaseRun.countDown()
         }
-    }
 
     @Test
-    fun connection_removal_writes_the_pending_marker_before_it_purges() {
-        val blockedGateway =
-            FakeGateway(listOf(session)).apply {
-                enqueueRun(activeRun())
-                blockRunCreation = true
+    fun connection_removal_never_touches_storage_on_the_event_thread() =
+        runTest {
+            val holder = storageBoundaryHolder()
+            try {
+                connect(holder, gateway)
+                recorder.reset()
+
+                holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+                awaitState(holder) { !it.isGatewayConnectionConfigured && it.sessionList == null }
+                assertTrue(selectionStore.cleared.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+
+                recorder.assertOperationsRanOffThread(
+                    eventThread,
+                    "repository.load",
+                    "repository.clear",
+                    "uncertainty.clearEndpoint",
+                    "draft.clearEndpoint",
+                    "selection.clearEndpoint",
+                )
+                recorder.assertOperationsNeverRan("notificationSettings.load", "notificationSettings.save")
+            } finally {
+                holder.close()
             }
-        val holder = storageBoundaryHolder(blockedGateway)
-        try {
-            open(holder, blockedGateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            assertTrue(blockedGateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            recorder.reset()
-
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
-            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-            assertTrue(selectionStore.cleared.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-
-            recorder.assertRanInOrder("uncertainty.add", "repository.clear", "uncertainty.clearEndpoint")
-        } finally {
-            blockedGateway.releaseRun.countDown()
-            holder.close()
         }
-    }
 
     @Test
-    fun model_picker_selection_never_touches_storage_on_the_event_thread() {
-        val holder = storageBoundaryHolder()
-        try {
-            connect(holder, gateway)
-            recorder.reset()
+    fun close_persists_a_pending_submission_off_the_event_thread() =
+        runTest {
+            val blockedGateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRun(activeRun())
+                    blockRunCreation = true
+                }
+            val holder = storageBoundaryHolder(blockedGateway)
+            try {
+                open(holder, blockedGateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertTrue(blockedGateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                recorder.reset()
 
-            holder.onEvent(EntryUiEvent.ModelPickerClicked)
-            awaitState(holder) { it.sessionList?.modelPicker?.isPickerOpen == true }
-            holder.onEvent(EntryUiEvent.ModelRowClicked("alpha"))
-            awaitState(holder) { it.sessionList?.modelPicker?.selection?.model == "alpha" }
-
-            recorder.assertOperationsRanOffThread(eventThread, "selection.read", "selection.write")
-        } finally {
-            holder.close()
+                holder.close()
+                recorder.assertNoCallOn(eventThread)
+                assertTrue(uncertaintyStore.awaitAdds())
+                recorder.assertOperationsRanOffThread(eventThread, "uncertainty.add")
+            } finally {
+                blockedGateway.releaseRun.countDown()
+            }
         }
-    }
+
+    @Test
+    fun connection_removal_writes_the_pending_marker_before_it_purges() =
+        runTest {
+            val blockedGateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRun(activeRun())
+                    blockRunCreation = true
+                }
+            val holder = storageBoundaryHolder(blockedGateway)
+            try {
+                open(holder, blockedGateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertTrue(blockedGateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                recorder.reset()
+
+                holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+                assertTrue(selectionStore.cleared.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+
+                recorder.assertRanInOrder("uncertainty.add", "repository.clear", "uncertainty.clearEndpoint")
+            } finally {
+                blockedGateway.releaseRun.countDown()
+                holder.close()
+            }
+        }
+
+    @Test
+    fun model_picker_selection_never_touches_storage_on_the_event_thread() =
+        runTest {
+            val holder = storageBoundaryHolder()
+            try {
+                connect(holder, gateway)
+                recorder.reset()
+
+                holder.onEvent(EntryUiEvent.ModelPickerClicked)
+                awaitState(holder) { it.sessionList?.modelPicker?.isPickerOpen == true }
+                holder.onEvent(EntryUiEvent.ModelRowClicked("alpha"))
+                awaitState(holder) { it.sessionList?.modelPicker?.selection?.model == "alpha" }
+
+                recorder.assertOperationsRanOffThread(eventThread, "selection.read", "selection.write")
+            } finally {
+                holder.close()
+            }
+        }
 
     private fun storageBoundaryHolder(holderGateway: FakeGateway = gateway): EntryStateHolder =
         EntryStateHolder(

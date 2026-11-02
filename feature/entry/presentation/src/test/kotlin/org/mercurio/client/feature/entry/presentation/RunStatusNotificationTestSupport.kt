@@ -4,9 +4,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
@@ -106,7 +103,7 @@ internal fun notificationHolder(
     )
 }
 
-internal fun connectAndOpenNotifiedSession(
+internal suspend fun connectAndOpenNotifiedSession(
     holder: EntryStateHolder,
     gateway: NotificationScriptedGateway,
     sessionId: SessionId,
@@ -120,30 +117,10 @@ internal fun connectAndOpenNotifiedSession(
     awaitNotificationState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
 }
 
-internal fun awaitNotificationState(
+internal suspend fun awaitNotificationState(
     holder: EntryStateHolder,
     predicate: (EntryUiState) -> Boolean,
-) {
-    runBlocking {
-        try {
-            withTimeout(NOTIFICATION_TIMEOUT_MILLIS) {
-                holder.uiState.first(predicate)
-            }
-        } catch (error: kotlinx.coroutines.TimeoutCancellationException) {
-            val state = holder.uiState.value
-            error(
-                "Timed out waiting for state. Current: " +
-                    "opened=${state.sessionList?.openedSession != null}, " +
-                    "latestRunState=${state.sessionList?.openedSession?.latestRunState}, " +
-                    "sendError=${state.sessionList?.openedSession?.sendErrorCategory}, " +
-                    "error=${state.sessionList?.openedSession?.errorCategory}, " +
-                    "composer=${state.sessionList?.openedSession?.composerText}, " +
-                    "runs=${state.sessionList?.openedSession?.activeRuns?.map { it.id }}, " +
-                    "sessions=${state.sessionList?.sessions?.map { it.id }}",
-            )
-        }
-    }
-}
+) = holder.awaitUiState("the notification state", predicate)
 
 internal fun notificationSession(id: String): Session =
     Session(

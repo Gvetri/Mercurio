@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,185 +17,192 @@ import org.mercurio.client.fixture.SyntheticGatewaySession
 
 class EntryStateHolderRunHistoryFixtureTest {
     @Test
-    fun refresh_replaces_real_gateway_metadata_preserves_only_an_unsent_draft_and_recovers_from_remote_deletion() {
-        val targetId = SessionId(SERVER_A)
-        val behavior =
-            SyntheticGatewayBehavior(
-                initialSessions =
-                    listOf(
-                        fixtureSession(SERVER_A, "Listed title", pinned = false),
-                        fixtureSession(SERVER_B, "Removed on refresh", pinned = false),
-                    ),
-            )
+    fun refresh_replaces_real_gateway_metadata_preserves_only_an_unsent_draft_and_recovers_from_remote_deletion() =
+        runTest {
+            val targetId = SessionId(SERVER_A)
+            val behavior =
+                SyntheticGatewayBehavior(
+                    initialSessions =
+                        listOf(
+                            fixtureSession(SERVER_A, "Listed title", pinned = false),
+                            fixtureSession(SERVER_B, "Removed on refresh", pinned = false),
+                        ),
+                )
 
-        fixture(behavior).execute { context ->
-            val holder = stateHolder(client(context))
-            try {
-                connect(holder)
-                holder.onEvent(EntryUiEvent.RenameSessionClicked(targetId))
-                holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(targetId, "Unsent draft"))
+            fixture(behavior).execute { context ->
+                val holder = stateHolder(client(context))
+                try {
+                    connect(holder)
+                    holder.onEvent(EntryUiEvent.RenameSessionClicked(targetId))
+                    holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(targetId, "Unsent draft"))
 
-                behavior.sessions.clear()
-                behavior.sessions +=
-                    fixtureSession(SERVER_A, "Server replacement", pinned = true, preview = "Server preview")
-                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                    behavior.sessions.clear()
+                    behavior.sessions +=
+                        fixtureSession(SERVER_A, "Server replacement", pinned = true, preview = "Server preview")
+                    holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
 
-                val refreshed = requireNotNull(holder.uiState.value.sessionList)
-                assertEquals(listOf(SERVER_A), refreshed.sessions.map { it.id.value })
-                assertEquals("Server replacement", refreshed.sessions.single().title)
-                assertEquals("Server preview", refreshed.sessions.single().preview)
-                assertTrue(refreshed.sessions.single().pinned)
-                assertEquals("Unsent draft", refreshed.sessionMutations[targetId]?.rename?.titleDraft)
-                assertFalse(refreshed.isStale)
-                assertFalse(refreshed.isUnavailable)
+                    val refreshed = requireNotNull(holder.uiState.value.sessionList)
+                    assertEquals(listOf(SERVER_A), refreshed.sessions.map { it.id.value })
+                    assertEquals("Server replacement", refreshed.sessions.single().title)
+                    assertEquals("Server preview", refreshed.sessions.single().preview)
+                    assertTrue(refreshed.sessions.single().pinned)
+                    assertEquals("Unsent draft", refreshed.sessionMutations[targetId]?.rename?.titleDraft)
+                    assertFalse(refreshed.isStale)
+                    assertFalse(refreshed.isUnavailable)
 
-                behavior.sessions.clear()
-                holder.onEvent(EntryUiEvent.SessionClicked(targetId))
-                val deleted = requireNotNull(holder.uiState.value.sessionList)
-                assertEquals(SessionListErrorCategory.SESSION_UNAVAILABLE, deleted.errorCategory)
-                assertTrue(deleted.isUnavailable)
-                assertEquals(listOf(SERVER_A), deleted.sessions.map { it.id.value })
-                assertEquals("Unsent draft", deleted.sessionMutations[targetId]?.rename?.titleDraft)
+                    behavior.sessions.clear()
+                    holder.onEvent(EntryUiEvent.SessionClicked(targetId))
+                    val deleted = requireNotNull(holder.uiState.value.sessionList)
+                    assertEquals(SessionListErrorCategory.SESSION_UNAVAILABLE, deleted.errorCategory)
+                    assertTrue(deleted.isUnavailable)
+                    assertEquals(listOf(SERVER_A), deleted.sessions.map { it.id.value })
+                    assertEquals("Unsent draft", deleted.sessionMutations[targetId]?.rename?.titleDraft)
 
-                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                val recovered = requireNotNull(holder.uiState.value.sessionList)
-                assertTrue(recovered.sessions.isEmpty())
-                assertTrue(recovered.sessionMutations.isEmpty())
-                assertFalse(recovered.isStale)
-                assertFalse(recovered.isUnavailable)
-                assertEquals(null, recovered.errorCategory)
-            } finally {
-                holder.close()
+                    holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                    val recovered = requireNotNull(holder.uiState.value.sessionList)
+                    assertTrue(recovered.sessions.isEmpty())
+                    assertTrue(recovered.sessionMutations.isEmpty())
+                    assertFalse(recovered.isStale)
+                    assertFalse(recovered.isUnavailable)
+                    assertEquals(null, recovered.errorCategory)
+                } finally {
+                    holder.close()
+                }
             }
         }
-    }
 
     @Test
-    fun restart_reconciles_a_known_local_run_through_the_gateway_fixture() {
-        val scenario = restartScenario()
+    fun restart_reconciles_a_known_local_run_through_the_gateway_fixture() =
+        runTest {
+            val scenario = restartScenario()
 
-        fixture(scenario.behavior).execute { context ->
-            stateHolder(
-                client(context),
-                runGateway = scenario.runGateway,
-                recoveryRegistry = scenario.recoveryRegistry,
-            ).close()
-            val holder =
+            fixture(scenario.behavior).execute { context ->
                 stateHolder(
                     client(context),
                     runGateway = scenario.runGateway,
                     recoveryRegistry = scenario.recoveryRegistry,
-                )
-            try {
-                assertEquals(
-                    listOf(RunRecoveryEntry(scenario.session, scenario.localRun.id)),
-                    scenario.recoveryRegistry.load(),
-                )
-                connect(holder)
-                awaitFixtureState(holder) { state ->
-                    state.sessionList?.sessions?.singleOrNull()?.id == scenario.session &&
-                        scenario.runGateway.statusRequests == listOf(scenario.localRun.id) &&
-                        scenario.recoveryRegistry.load().isEmpty()
-                }
+                ).close()
+                val holder =
+                    stateHolder(
+                        client(context),
+                        runGateway = scenario.runGateway,
+                        recoveryRegistry = scenario.recoveryRegistry,
+                    )
+                try {
+                    assertEquals(
+                        listOf(RunRecoveryEntry(scenario.session, scenario.localRun.id)),
+                        scenario.recoveryRegistry.load(),
+                    )
+                    connect(holder)
+                    awaitFixtureState(holder) { state ->
+                        state.sessionList?.sessions?.singleOrNull()?.id == scenario.session &&
+                            scenario.runGateway.statusRequests == listOf(scenario.localRun.id) &&
+                            scenario.recoveryRegistry.load().isEmpty()
+                    }
 
-                holder.onEvent(EntryUiEvent.SessionClicked(scenario.session))
-                awaitFixtureState(holder) { state ->
-                    val opened = state.sessionList?.openedSession
-                    opened?.latestRun?.id == scenario.localRun.id &&
-                        opened.latestRunState == RunPresentationState.SUCCEEDED &&
-                        !opened.isReconciliationInProgress &&
-                        scenario.runGateway.statusRequests == listOf(scenario.localRun.id, scenario.localRun.id)
+                    holder.onEvent(EntryUiEvent.SessionClicked(scenario.session))
+                    awaitFixtureState(holder) { state ->
+                        val opened = state.sessionList?.openedSession
+                        opened?.latestRun?.id == scenario.localRun.id &&
+                            opened.latestRunState == RunPresentationState.SUCCEEDED &&
+                            !opened.isReconciliationInProgress &&
+                            scenario.runGateway.statusRequests == listOf(scenario.localRun.id, scenario.localRun.id)
+                    }
+                    assertTrue(scenario.recoveryRegistry.load().isEmpty())
+                } finally {
+                    holder.close()
                 }
-                assertTrue(scenario.recoveryRegistry.load().isEmpty())
-            } finally {
-                holder.close()
             }
         }
-    }
 
     @Test
-    fun history_without_run_metadata_never_invents_runs_or_local_recovery_entries() {
-        val scenario = externalRunsScenario()
-        val session = SessionId(scenario.sessionId)
+    fun history_without_run_metadata_never_invents_runs_or_local_recovery_entries() =
+        runTest {
+            val scenario = externalRunsScenario()
+            val session = SessionId(scenario.sessionId)
 
-        fixture(scenario.behavior).execute { context ->
-            val holder = stateHolder(client(context), runGateway = scenario.runGateway)
-            try {
-                connect(holder)
-                holder.onEvent(EntryUiEvent.SessionClicked(session))
-                awaitFixtureState(holder) { state ->
-                    val opened = state.sessionList?.openedSession
-                    opened?.messages?.map { it.id } ==
-                        listOf("external-message-failed", "external-message-succeeded") &&
-                        !opened.isRefreshing
+            fixture(scenario.behavior).execute { context ->
+                val holder = stateHolder(client(context), runGateway = scenario.runGateway)
+                try {
+                    connect(holder)
+                    holder.onEvent(EntryUiEvent.SessionClicked(session))
+                    awaitFixtureState(holder) { state ->
+                        val opened = state.sessionList?.openedSession
+                        opened?.messages?.map { it.id } ==
+                            listOf("external-message-failed", "external-message-succeeded") &&
+                            !opened.isRefreshing
+                    }
+
+                    val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                    assertEquals(listOf("Remote failure", "Remote result"), opened.messages.map { it.content })
+                    assertTrue(opened.messages.all { it.runId == null && it.runStatus == null && it.runResult == null })
+                    assertEquals(null, opened.latestRun)
+                    assertTrue(scenario.runGateway.statusRequests.isEmpty())
+                    assertTrue(sessionRunsTrackedBy(holder, session).isEmpty())
+
+                    scenario.behavior.requests.clear()
+                    holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                    awaitFixtureState(holder) { state ->
+                        val refreshed = state.sessionList?.openedSession
+                        refreshed?.messages?.map { it.id } ==
+                            listOf("external-message-failed", "external-message-succeeded") &&
+                            !refreshed.isRefreshing
+                    }
+
+                    val refreshed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                    assertTrue(refreshed.messages.all { it.runId == null && it.runStatus == null })
+                    assertTrue(scenario.runGateway.statusRequests.isEmpty())
+                    assertTrue(sessionRunsTrackedBy(holder, session).isEmpty())
+                } finally {
+                    holder.close()
                 }
-
-                val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-                assertEquals(listOf("Remote failure", "Remote result"), opened.messages.map { it.content })
-                assertTrue(opened.messages.all { it.runId == null && it.runStatus == null && it.runResult == null })
-                assertEquals(null, opened.latestRun)
-                assertTrue(scenario.runGateway.statusRequests.isEmpty())
-                assertTrue(sessionRunsTrackedBy(holder, session).isEmpty())
-
-                scenario.behavior.requests.clear()
-                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                awaitFixtureState(holder) { state ->
-                    val refreshed = state.sessionList?.openedSession
-                    refreshed?.messages?.map { it.id } ==
-                        listOf("external-message-failed", "external-message-succeeded") &&
-                        !refreshed.isRefreshing
-                }
-
-                val refreshed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-                assertTrue(refreshed.messages.all { it.runId == null && it.runStatus == null })
-                assertTrue(scenario.runGateway.statusRequests.isEmpty())
-                assertTrue(sessionRunsTrackedBy(holder, session).isEmpty())
-            } finally {
-                holder.close()
             }
         }
-    }
 
     @Test
-    fun a_created_run_stays_locally_tracked_after_history_refresh_without_inventing_history_runs() {
-        val scenario = createdRunScenario()
+    fun a_created_run_stays_locally_tracked_after_history_refresh_without_inventing_history_runs() =
+        runTest {
+            val scenario = createdRunScenario()
 
-        fixture(scenario.behavior).execute { context ->
-            val client = client(context)
-            val holder = stateHolder(client, runGateway = scenario.runGateway)
-            try {
-                connect(holder)
-                holder.onEvent(EntryUiEvent.SessionClicked(scenario.session))
-                awaitFixtureState(holder) { state ->
-                    val opened = state.sessionList?.openedSession
-                    opened?.messages?.map { it.id } ==
-                        listOf("external-message-failed", "external-message-succeeded") &&
-                        !opened.isRefreshing
+            fixture(scenario.behavior).execute { context ->
+                val client = client(context)
+                val holder = stateHolder(client, runGateway = scenario.runGateway)
+                try {
+                    connect(holder)
+                    holder.onEvent(EntryUiEvent.SessionClicked(scenario.session))
+                    awaitFixtureState(holder) { state ->
+                        val opened = state.sessionList?.openedSession
+                        opened?.messages?.map { it.id } ==
+                            listOf("external-message-failed", "external-message-succeeded") &&
+                            !opened.isRefreshing
+                    }
+                    assertTrue(sessionRunsTrackedBy(holder, scenario.session).isEmpty())
+
+                    sendLocalRequestAndAwaitTracking(holder, scenario)
+
+                    assertEquals(listOf(scenario.session to "Local request"), scenario.runGateway.createdRunRequests)
+                    val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                    assertTrue(opened.messages.all { it.runId == null && it.runStatus == null && it.runResult == null })
+                    assertEquals(
+                        listOf(
+                            "2026-09-08T19:00:00Z",
+                            "2026-09-08T20:00:00Z",
+                            "2026-09-08T21:00:00Z",
+                            "2026-09-08T22:00:00Z",
+                        ),
+                        opened.messages.map { it.timestamp?.toString() },
+                    )
+                    assertEquals(
+                        listOf(scenario.localRun.id),
+                        sessionRunsTrackedBy(holder, scenario.session).map { it.id },
+                    )
+
+                    assertRefreshedRunStaysTracked(holder, scenario)
+                } finally {
+                    holder.close()
                 }
-                assertTrue(sessionRunsTrackedBy(holder, scenario.session).isEmpty())
-
-                sendLocalRequestAndAwaitTracking(holder, scenario)
-
-                assertEquals(listOf(scenario.session to "Local request"), scenario.runGateway.createdRunRequests)
-                val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-                assertTrue(opened.messages.all { it.runId == null && it.runStatus == null && it.runResult == null })
-                assertEquals(
-                    listOf(
-                        "2026-09-08T19:00:00Z",
-                        "2026-09-08T20:00:00Z",
-                        "2026-09-08T21:00:00Z",
-                        "2026-09-08T22:00:00Z",
-                    ),
-                    opened.messages.map { it.timestamp?.toString() },
-                )
-                assertEquals(listOf(scenario.localRun.id), sessionRunsTrackedBy(holder, scenario.session).map { it.id })
-
-                assertRefreshedRunStaysTracked(holder, scenario)
-            } finally {
-                holder.close()
             }
         }
-    }
 }
 
 internal fun restartScenario(): RestartScenario {

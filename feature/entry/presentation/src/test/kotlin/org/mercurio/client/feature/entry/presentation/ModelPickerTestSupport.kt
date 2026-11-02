@@ -79,10 +79,6 @@ internal fun pickerEffortCatalog(): ModelCatalog =
             ),
     )
 
-/**
- * A model-catalog port double: serves a canned result and counts fetches so tests can
- * prove the fail-closed ladder never fetches or refetches when it must not.
- */
 internal class PickerFakeGateway(
     private val delegate: RetryFakeGateway,
     var catalogResult: Result<ModelCatalog> =
@@ -147,11 +143,6 @@ internal class FakePickerSelectionStore(
 
 internal val PICKER_CREATED_SESSION_ID = SessionId("created-session")
 
-/**
- * A direct three-port double for the create-session path: it lands a created Session
- * on the composer without any SessionClicked and counts catalog fetches, so a test
- * can prove the picker is armed by that landing rather than by opening a Session.
- */
 internal class PickerCreateFakeGateway(
     var catalogResult: Result<ModelCatalog> = Result.success(pickerCatalog()),
 ) : SessionGatewayPort,
@@ -225,13 +216,13 @@ internal fun pickerHolder(
             ),
     )
 
-internal fun EntryStateHolder.connectAndOpenPickerSession(gateway: RetryFakeGateway) {
+internal suspend fun EntryStateHolder.connectAndOpenPickerSession(gateway: RetryFakeGateway) {
     connectRetryGateway(this, gateway)
     onEvent(EntryUiEvent.SessionClicked(PICKER_SESSION_ID))
     awaitRetryState(this) { it.sessionList?.openedSession?.session?.id == PICKER_SESSION_ID }
 }
 
-internal fun awaitPickerState(
+internal suspend fun awaitPickerState(
     holder: EntryStateHolder,
     predicate: (ModelPickerUiState) -> Boolean,
 ) {

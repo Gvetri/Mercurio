@@ -4,10 +4,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
@@ -55,7 +52,7 @@ internal fun holder(
         dependencies = submissionHolderDependencies(repository, uncertaintyStore, gateway.runFinished::countDown),
     )
 
-internal fun connect(
+internal suspend fun connect(
     holder: EntryStateHolder,
     gateway: FakeGateway,
 ) {
@@ -69,7 +66,7 @@ internal fun connect(
     }
 }
 
-internal fun open(
+internal suspend fun open(
     holder: EntryStateHolder,
     gateway: FakeGateway,
     sessionId: SessionId,
@@ -108,16 +105,10 @@ internal fun TestScope.openWithVirtualTime(
     )
 }
 
-internal fun awaitState(
+internal suspend fun awaitState(
     holder: EntryStateHolder,
     predicate: (EntryUiState) -> Boolean,
-) {
-    runBlocking {
-        withTimeout(TEST_TIMEOUT_MILLIS) {
-            holder.uiState.first(predicate)
-        }
-    }
-}
+) = holder.awaitUiState("the submission state", predicate)
 
 internal fun session(id: String): Session =
     Session(
@@ -151,6 +142,7 @@ internal class FakeGateway(
     val runFinished = CountDownLatch(1)
     val releaseRun = CountDownLatch(1)
     var blockRunCreation = false
+    var onCreateRun: (() -> Unit)? = null
 
     fun enqueueRun(run: Run) {
         runResults += Result.success(run)
@@ -193,6 +185,7 @@ internal class FakeGateway(
         input: String,
     ): Run {
         runRequests += sessionId to input
+        onCreateRun?.invoke()
         if (blockRunCreation) {
             runStarted.countDown()
             check(releaseRun.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {

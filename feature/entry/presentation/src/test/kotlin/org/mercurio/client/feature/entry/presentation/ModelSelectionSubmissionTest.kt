@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -14,70 +15,75 @@ import org.mercurio.client.feature.entry.domain.RunId
 
 class ModelSelectionSubmissionTest {
     @Test
-    fun a_selected_override_flows_into_the_run_create_request_and_records_the_model_use() {
-        val session = retrySession("session-1")
-        val gateway = RetryFakeGateway(sessions = listOf(session))
-        gateway.enqueueRun(Run(RunId("run-selected"), session.id, "running"))
-        val store = FakeModelSelectionStore(selection = ModelSelection("deepseek-v4-flash", "medium"))
-        val holder = retryHolder(gateway, modelSelectionStore = store)
+    fun a_selected_override_flows_into_the_run_create_request_and_records_the_model_use() =
+        runTest {
+            val session = retrySession("session-1")
+            val gateway = RetryFakeGateway(sessions = listOf(session))
+            gateway.enqueueRun(Run(RunId("run-selected"), session.id, "running"))
+            val store = FakeModelSelectionStore(selection = ModelSelection("deepseek-v4-flash", "medium"))
+            val holder = retryHolder(gateway, modelSelectionStore = store)
 
-        try {
-            openRetrySession(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Selected request"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            awaitRetryState(holder) { it.sessionList?.openedSession?.latestRun?.id?.value == "run-selected" }
+            try {
+                openRetrySession(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Selected request"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                awaitRetryState(holder) { it.sessionList?.openedSession?.latestRun?.id?.value == "run-selected" }
 
-            val request = gateway.runCreateRequests.single()
-            assertEquals("deepseek-v4-flash", request.model)
-            assertEquals("medium", request.effort)
-            assertEquals(listOf("deepseek-v4-flash"), store.recents(ENDPOINT))
-        } finally {
-            holder.close()
+                val request = gateway.runCreateRequests.single()
+                assertEquals("deepseek-v4-flash", request.model)
+                assertEquals("medium", request.effort)
+                assertEquals(listOf("deepseek-v4-flash"), store.recents(ENDPOINT))
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
-    fun a_cleared_override_submits_a_request_equal_to_the_pinned_two_key_body() {
-        val session = retrySession("session-1")
-        val gateway = RetryFakeGateway(sessions = listOf(session))
-        gateway.enqueueRun(Run(RunId("run-cleared"), session.id, "running"))
-        val store = FakeModelSelectionStore(selection = ModelSelection("deepseek-v4-flash", "medium"))
-        store.clear(ENDPOINT)
-        val holder = retryHolder(gateway, modelSelectionStore = store)
+    fun a_cleared_override_submits_a_request_equal_to_the_pinned_two_key_body() =
+        runTest {
+            val session = retrySession("session-1")
+            val gateway = RetryFakeGateway(sessions = listOf(session))
+            gateway.enqueueRun(Run(RunId("run-cleared"), session.id, "running"))
+            val store = FakeModelSelectionStore(selection = ModelSelection("deepseek-v4-flash", "medium"))
+            store.clear(ENDPOINT)
+            val holder = retryHolder(gateway, modelSelectionStore = store)
 
-        try {
-            openRetrySession(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Default request"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            awaitRetryState(holder) { it.sessionList?.openedSession?.latestRun?.id?.value == "run-cleared" }
+            try {
+                openRetrySession(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Default request"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                awaitRetryState(holder) { it.sessionList?.openedSession?.latestRun?.id?.value == "run-cleared" }
 
-            val request = gateway.runCreateRequests.single()
-            assertEquals(RunCreateRequest(sessionId = session.id, input = "Default request"), request)
-            assertTrue(gateway.runCreateRequests.single().effort == null)
-        } finally {
-            holder.close()
+                val request = gateway.runCreateRequests.single()
+                assertEquals(RunCreateRequest(sessionId = session.id, input = "Default request"), request)
+                assertTrue(gateway.runCreateRequests.single().effort == null)
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
-    fun a_model_refusal_at_admission_shows_the_distinct_model_send_copy() {
-        assertSendCategoryAfterRefusal(GatewayErrorCategory.MODEL_REFUSED, MessageSendErrorCategory.MODEL_REFUSED)
-    }
+    fun a_model_refusal_at_admission_shows_the_distinct_model_send_copy() =
+        runTest {
+            assertSendCategoryAfterRefusal(GatewayErrorCategory.MODEL_REFUSED, MessageSendErrorCategory.MODEL_REFUSED)
+        }
 
     @Test
-    fun an_effort_refusal_at_admission_shows_the_distinct_effort_send_copy() {
-        assertSendCategoryAfterRefusal(GatewayErrorCategory.EFFORT_REFUSED, MessageSendErrorCategory.EFFORT_REFUSED)
-    }
+    fun an_effort_refusal_at_admission_shows_the_distinct_effort_send_copy() =
+        runTest {
+            assertSendCategoryAfterRefusal(GatewayErrorCategory.EFFORT_REFUSED, MessageSendErrorCategory.EFFORT_REFUSED)
+        }
 
     @Test
-    fun a_non_refusal_admission_failure_keeps_the_generic_send_copy() {
-        assertSendCategoryAfterRefusal(
-            GatewayErrorCategory.GATEWAY_REQUEST_FAILED,
-            MessageSendErrorCategory.GATEWAY_REQUEST_FAILED,
-        )
-    }
+    fun a_non_refusal_admission_failure_keeps_the_generic_send_copy() =
+        runTest {
+            assertSendCategoryAfterRefusal(
+                GatewayErrorCategory.GATEWAY_REQUEST_FAILED,
+                MessageSendErrorCategory.GATEWAY_REQUEST_FAILED,
+            )
+        }
 
-    private fun assertSendCategoryAfterRefusal(
+    private suspend fun assertSendCategoryAfterRefusal(
         gatewayCategory: GatewayErrorCategory,
         expectedSendCategory: MessageSendErrorCategory,
     ) {
@@ -100,12 +106,16 @@ class ModelSelectionSubmissionTest {
     }
 
     @Test
-    fun an_async_failure_of_a_selected_run_uses_the_refused_model_run_copy() {
-        assertSelectedRunFailureCopy(ModelSelection("deepseek-v4-flash", "medium"), RunFailureCategory.EFFORT_REFUSED)
-        assertSelectedRunFailureCopy(ModelSelection("deepseek-v4-flash"), RunFailureCategory.MODEL_REFUSED)
-    }
+    fun an_async_failure_of_a_selected_run_uses_the_refused_model_run_copy() =
+        runTest {
+            assertSelectedRunFailureCopy(
+                ModelSelection("deepseek-v4-flash", "medium"),
+                RunFailureCategory.EFFORT_REFUSED,
+            )
+            assertSelectedRunFailureCopy(ModelSelection("deepseek-v4-flash"), RunFailureCategory.MODEL_REFUSED)
+        }
 
-    private fun assertSelectedRunFailureCopy(
+    private suspend fun assertSelectedRunFailureCopy(
         selection: ModelSelection,
         expected: RunFailureCategory,
     ) {
@@ -146,40 +156,44 @@ class ModelSelectionSubmissionTest {
     }
 
     @Test
-    fun an_async_failure_of_an_unselected_run_keeps_the_generic_run_copy() {
-        val session = retrySession("session-1")
-        val failedRunId = RunId("run-async-failed")
-        val gateway =
-            RetryFakeGateway(
-                sessions = listOf(session),
-                runStatuses = mapOf(failedRunId to Run(failedRunId, session.id, "failed")),
+    fun an_async_failure_of_an_unselected_run_keeps_the_generic_run_copy() =
+        runTest {
+            val session = retrySession("session-1")
+            val failedRunId = RunId("run-async-failed")
+            val gateway =
+                RetryFakeGateway(
+                    sessions = listOf(session),
+                    runStatuses = mapOf(failedRunId to Run(failedRunId, session.id, "failed")),
+                )
+            gateway.setHistory(
+                retryHistory(
+                    session.id,
+                    retryUserMessage("Default request", failedRunId),
+                    retryFailedMessage(failedRunId, "Provider refused"),
+                ),
             )
-        gateway.setHistory(
-            retryHistory(
-                session.id,
-                retryUserMessage("Default request", failedRunId),
-                retryFailedMessage(failedRunId, "Provider refused"),
-            ),
-        )
-        gateway.enqueueRun(Run(failedRunId, session.id, "failed"))
-        val holder = retryHolder(gateway)
+            gateway.enqueueRun(Run(failedRunId, session.id, "failed"))
+            val holder = retryHolder(gateway)
 
-        try {
-            openRetrySession(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Default request"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            awaitRetryState(holder) {
-                it.sessionList?.openedSession?.messages
-                    ?.any { message -> message.runId == failedRunId && message.isFailedRun } == true
+            try {
+                openRetrySession(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Default request"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                awaitRetryState(holder) {
+                    it.sessionList?.openedSession?.messages
+                        ?.any { message -> message.runId == failedRunId && message.isFailedRun } == true
+                }
+
+                val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                val failedMessage = opened.messages.single { it.runId == failedRunId && it.isFailedRun }
+                assertEquals(
+                    UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes),
+                    failedMessage.failureMessage,
+                )
+            } finally {
+                holder.close()
             }
-
-            val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            val failedMessage = opened.messages.single { it.runId == failedRunId && it.isFailedRun }
-            assertEquals(UiText.Resource(RunFailureCategory.GATEWAY_REPORTED.messageRes), failedMessage.failureMessage)
-        } finally {
-            holder.close()
         }
-    }
 
     @Test
     fun the_single_mapping_layer_gives_refusals_their_own_send_categories_and_generic_connection_copy() {

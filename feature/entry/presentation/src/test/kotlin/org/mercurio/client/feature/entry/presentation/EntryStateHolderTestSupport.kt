@@ -4,10 +4,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
@@ -24,10 +20,7 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 internal const val ASYNC_TEST_TIMEOUT_MILLIS = 5_000L
 
@@ -61,22 +54,10 @@ internal fun verify(holder: EntryStateHolder) {
     holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
 }
 
-internal fun blockingCreationHolder(gateway: BlockingCreateGateway): EntryStateHolder =
-    EntryStateHolder(
-        initialState = EntryState(isGatewayConnectionConfigured = false),
-        verifyGatewayConnection =
-            VerifyGatewayConnection(
-                FakeGatewayConnectionRepository(),
-            ) { _, _ ->
-                clientManifestCapabilities()
-            },
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        sessionGatewayFactory = { _, _ -> gateway },
-    )
-
-internal fun slowHolder(
+internal fun scriptedHolder(
     gateway: SessionGatewayPort,
-    dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
+    dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
 ): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
@@ -88,20 +69,17 @@ internal fun slowHolder(
             },
         scope = CoroutineScope(SupervisorJob() + dispatcher),
         sessionGatewayFactory = { _, _ -> gateway },
+        dependencies = dependencies,
     )
 
-internal fun verifySlow(
-    holder: EntryStateHolder,
-    gateway: SlowSessionGateway,
-) {
+internal suspend fun verifyScripted(holder: EntryStateHolder) {
     verify(holder)
-    gateway.awaitRequest(SessionListRequest())
     awaitState(holder, "initial Session list") {
         it.sessionList?.sessions?.isNotEmpty() == true
     }
 }
 
-internal fun awaitSessions(
+internal suspend fun awaitSessions(
     holder: EntryStateHolder,
     vararg ids: String,
 ) {
@@ -110,21 +88,11 @@ internal fun awaitSessions(
     }
 }
 
-internal fun awaitState(
+internal suspend fun awaitState(
     holder: EntryStateHolder,
     description: String,
     predicate: (EntryUiState) -> Boolean,
-) {
-    try {
-        runBlocking {
-            withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) {
-                holder.uiState.first(predicate)
-            }
-        }
-    } catch (_: TimeoutCancellationException) {
-        throw AssertionError("Timed out waiting for $description.")
-    }
-}
+) = holder.awaitUiState(description, predicate)
 
 internal fun entrySession(
     id: String,
@@ -220,12 +188,10 @@ internal class FakeSessionGateway : SessionGatewayPort {
     override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 }
 
-internal class BlockingCreateGateway(
+internal class ScriptedCreateGateway(
     private val initialSession: Session,
     private val createdSession: Session,
 ) : SessionGatewayPort {
-    private val createResult = CompletableFuture<Session>()
-    val createStarted = CountDownLatch(1)
     val listRequests = CopyOnWriteArrayList<SessionListRequest>()
     val operations = CopyOnWriteArrayList<String>()
     var createCalls = 0
@@ -239,11 +205,9 @@ internal class BlockingCreateGateway(
 
     override fun createSession(title: String?): Session {
         operations += "create"
-        synchronized(this) { createCalls += 1 }
-        createStarted.countDown()
-        return createResult.get(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).also {
-            created = true
-        }
+        createCalls += 1
+        created = true
+        return createdSession
     }
 
     override fun openSession(sessionId: SessionId): Session {
@@ -267,27 +231,20 @@ internal class BlockingCreateGateway(
     override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
     override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
-
-    fun completeCreate() {
-        createResult.complete(createdSession)
-    }
 }
 
-internal class BlockingSessionGateway(
-    private val blockHistoryRefresh: Boolean = false,
-    private val blockListRefresh: Boolean = false,
+internal class ScriptedRefreshGateway(
     private val nextPageOffset: Int? = null,
 ) : SessionGatewayPort {
     val sessionId = SessionId("session-one")
-    val refreshStarted = CountDownLatch(1)
-    val historyRefreshStarted = CountDownLatch(1)
-    val releaseRefresh = CountDownLatch(1)
-    val listRefreshStarted = CountDownLatch(1)
-    val releaseListRefresh = CountDownLatch(1)
-    val pinStarted = CountDownLatch(1)
     var pinCalls = 0
+        private set
     var historyCalls = 0
-    private var listCalls = 0
+        private set
+    var listCalls = 0
+        private set
+    var onList: ((Int) -> Unit)? = null
+    var onHistory: ((Int) -> Unit)? = null
     private val listedSession =
         Session(
             id = sessionId,
@@ -297,15 +254,8 @@ internal class BlockingSessionGateway(
         )
 
     override fun listSessions(request: SessionListRequest): SessionPage {
-        val call =
-            synchronized(this) {
-                listCalls += 1
-                listCalls
-            }
-        if (blockListRefresh && call > 1) {
-            listRefreshStarted.countDown()
-            awaitRelease(releaseListRefresh, "list refresh")
-        }
+        listCalls += 1
+        onList?.invoke(listCalls)
         return SessionPage(listOf(listedSession), nextPageOffset)
     }
 
@@ -318,21 +268,11 @@ internal class BlockingSessionGateway(
 
     override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
         check(sessionId == this.sessionId) { "Unexpected Session history: $sessionId" }
-        val call =
-            synchronized(this) {
-                historyCalls += 1
-                historyCalls
-            }
-        if (call > 1) {
-            historyRefreshStarted.countDown()
-        }
-        if (blockHistoryRefresh && call > 1) {
-            refreshStarted.countDown()
-            awaitRelease(releaseRefresh, "history refresh")
-        }
+        historyCalls += 1
+        onHistory?.invoke(historyCalls)
         return SessionHistory(
             sessionId = this.sessionId,
-            messages = listOf(GatewayHistoryMessage("message-$call", null, null)),
+            messages = listOf(GatewayHistoryMessage("message-$historyCalls", null, null)),
         )
     }
 
@@ -345,111 +285,32 @@ internal class BlockingSessionGateway(
 
     override fun pinSession(sessionId: SessionId): SessionPinResult {
         check(sessionId == this.sessionId) { "Unexpected Session pin: $sessionId" }
-        synchronized(this) {
-            pinCalls += 1
-        }
-        pinStarted.countDown()
+        pinCalls += 1
         return SessionPinResult(sessionId, pinned = true)
     }
 
     override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
-
-    private fun awaitRelease(
-        latch: CountDownLatch,
-        operation: String,
-    ) {
-        if (!latch.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-            throw AssertionError("Timed out waiting for $operation release.")
-        }
-    }
 }
 
-internal class SlowSessionGateway(
+internal class ScriptedSessionGateway(
     private val initialPage: SessionPage,
 ) : SessionGatewayPort {
     val listRequests = CopyOnWriteArrayList<SessionListRequest>()
-    private val requestMonitor = Object()
-    private val requestGates = mutableMapOf<SessionListRequest, MutableList<RequestGate>>()
-    private val beforeReturnActions = mutableMapOf<RequestKey, () -> Unit>()
+    private val queuedPages = ArrayDeque<SessionPage>()
+    private val requestOccurrences = mutableMapOf<SessionListRequest, Int>()
+    var onList: ((SessionListRequest, Int) -> Unit)? = null
+
+    fun enqueuePage(page: SessionPage) {
+        queuedPages += page
+    }
 
     override fun listSessions(request: SessionListRequest): SessionPage {
-        val (occurrence, gate) =
-            synchronized(requestMonitor) {
-                val gates = requestGates.getOrPut(request) { mutableListOf() }
-                val occurrence = gates.size
-                val gate = RequestGate()
-                gates += gate
-                listRequests += request
-                requestMonitor.notifyAll()
-                occurrence to gate
-            }
+        val occurrence = requestOccurrences.merge(request, 1, Int::plus)!! - 1
+        listRequests += request
+        onList?.invoke(request, occurrence)
         if (request == SessionListRequest() && occurrence == 0) return initialPage
-        val result =
-            try {
-                gate.result.get(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-            } catch (_: java.util.concurrent.TimeoutException) {
-                throw AssertionError(
-                    "Timed out waiting for SessionPage for request $request occurrence $occurrence.",
-                )
-            }
-        synchronized(requestMonitor) {
-            beforeReturnActions.remove(RequestKey(request, occurrence))?.invoke()
-        }
-        return result
-    }
-
-    fun awaitRequest(
-        request: SessionListRequest,
-        occurrence: Int = 0,
-    ) {
-        awaitGate(request, occurrence)
-    }
-
-    fun beforeReturn(
-        request: SessionListRequest,
-        occurrence: Int = 0,
-        action: () -> Unit,
-    ) {
-        synchronized(requestMonitor) {
-            beforeReturnActions[RequestKey(request, occurrence)] = action
-        }
-    }
-
-    fun complete(
-        request: SessionListRequest,
-        page: SessionPage,
-        occurrence: Int = 0,
-    ) {
-        val gate = awaitGate(request, occurrence)
-        gate.result.complete(page)
-    }
-
-    private fun awaitGate(
-        request: SessionListRequest,
-        occurrence: Int,
-    ): RequestGate =
-        synchronized(requestMonitor) {
-            val deadline =
-                System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(ASYNC_TEST_TIMEOUT_MILLIS)
-            while (requestGates[request].orEmpty().size <= occurrence) {
-                val remaining = deadline - System.nanoTime()
-                if (remaining <= 0) {
-                    throw AssertionError(
-                        "Timed out waiting for request $request occurrence $occurrence.",
-                    )
-                }
-                TimeUnit.NANOSECONDS.timedWait(requestMonitor, remaining)
-            }
-            requestGates.getValue(request)[occurrence]
-        }
-
-    private data class RequestKey(
-        val request: SessionListRequest,
-        val occurrence: Int,
-    )
-
-    private class RequestGate {
-        val result = CompletableFuture<SessionPage>()
+        return queuedPages.pollFirst()
+            ?: error("No SessionPage was queued for request $request occurrence $occurrence.")
     }
 
     override fun createSession(title: String?): Session = error("not used")
