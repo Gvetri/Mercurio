@@ -21,15 +21,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-
-/** Accessibility description of the progress indicator shown while the buffer is read. */
-internal const val READING_DIAGNOSTICS_DESCRIPTION = "Reading local diagnostics"
 
 /**
  * The Local diagnostics surface: a private, redacted buffer of approved
@@ -60,15 +59,13 @@ internal fun LocalDiagnosticsContent(
                 .padding(LocalHermesDesignTokens.current.spacing.xl),
     ) {
         Text(
-            text = "Local diagnostics",
+            text = stringResource(R.string.diagnostics_title),
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text =
-                "Diagnostics stay on this device. They hold redacted operational metadata only: " +
-                    "no credentials, endpoints, prompts, responses, or identifiers.",
+            text = stringResource(R.string.diagnostics_body),
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -85,31 +82,32 @@ internal fun LocalDiagnosticsContent(
             onClick = { onEvent(EntryUiEvent.CloseLocalDiagnosticsClicked) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Back to Sessions")
+            Text(text = stringResource(R.string.action_back_to_sessions))
         }
     }
 }
 
 @Composable
 private fun DiagnosticsRecordSummary(state: LocalDiagnosticsUiState) {
+    val readingDescription = stringResource(R.string.diagnostics_reading)
     if (state.isLoadingRecords) {
         CircularProgressIndicator(
             modifier =
                 Modifier.semantics {
-                    contentDescription = READING_DIAGNOSTICS_DESCRIPTION
+                    contentDescription = readingDescription
                 },
         )
     } else {
         Text(
             text =
                 if (state.hasRecords) {
-                    if (state.recordCount == 1) {
-                        "1 diagnostic record stored on this device."
-                    } else {
-                        "${state.recordCount} diagnostic records stored on this device."
-                    }
+                    pluralStringResource(
+                        R.plurals.diagnostics_record_count,
+                        state.recordCount,
+                        state.recordCount,
+                    )
                 } else {
-                    "No diagnostics available"
+                    stringResource(R.string.diagnostics_empty)
                 },
             style = MaterialTheme.typography.titleMedium,
             modifier =
@@ -130,19 +128,19 @@ private fun DiagnosticsExportControls(
         enabled = state.isExportEnabled,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Text(text = "Export diagnostics")
+        Text(text = stringResource(R.string.diagnostics_export))
     }
     if (state.isExporting) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Exporting diagnostics…",
+            text = stringResource(R.string.diagnostics_exporting),
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
     }
     state.exportFailure?.let { failure ->
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = failure.safeMessage,
+            text = stringResource(failure.messageRes),
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
         )
@@ -162,7 +160,7 @@ private fun DiagnosticsClearControls(
             enabled = state.hasRecords,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Clear diagnostics")
+            Text(text = stringResource(R.string.diagnostics_clear))
         }
     }
 }
@@ -174,7 +172,7 @@ private fun ClearDiagnosticsConfirmation(onEvent: (EntryUiEvent) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Clear all local diagnostics on this device? Exported copies are not affected.",
+            text = stringResource(R.string.diagnostics_clear_confirmation),
             style = MaterialTheme.typography.bodyLarge,
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -182,14 +180,14 @@ private fun ClearDiagnosticsConfirmation(onEvent: (EntryUiEvent) -> Unit) {
             onClick = { onEvent(EntryUiEvent.ConfirmClearDiagnosticsClicked) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Clear diagnostics")
+            Text(text = stringResource(R.string.diagnostics_clear))
         }
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedButton(
             onClick = { onEvent(EntryUiEvent.CancelClearDiagnosticsClicked) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
-            Text(text = "Cancel")
+            Text(text = stringResource(R.string.action_cancel))
         }
     }
 }

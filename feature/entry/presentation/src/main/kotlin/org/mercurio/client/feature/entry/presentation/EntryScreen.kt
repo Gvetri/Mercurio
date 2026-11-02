@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -109,7 +110,7 @@ private fun ConnectionContent(
     ) {
         if (!showConnectionForm) {
             Text(
-                text = "Mercurio",
+                text = stringResource(R.string.brand_name),
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { heading() },
@@ -117,14 +118,14 @@ private fun ConnectionContent(
             Spacer(modifier = Modifier.height(24.dp))
         }
         Text(
-            text = state.title,
+            text = state.title.resolve(),
             style = MaterialTheme.typography.headlineSmall,
             textAlign = if (showConnectionForm) TextAlign.Start else TextAlign.Center,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = state.supportingText,
+            text = state.supportingText.resolve(),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = if (showConnectionForm) TextAlign.Start else TextAlign.Center,
@@ -147,7 +148,7 @@ private fun ConnectionContent(
                             .fillMaxWidth()
                             .heightIn(min = 48.dp),
                 ) {
-                    Text(text = state.actionLabel)
+                    Text(text = state.actionLabel.resolve())
                 }
         }
     }
@@ -156,7 +157,7 @@ private fun ConnectionContent(
 @Composable
 private fun ConnectedGatewayContent(onEvent: (EntryUiEvent) -> Unit) {
     Text(
-        text = "Connected to Gateway",
+        text = stringResource(R.string.entry_connected_to_gateway),
         style = MaterialTheme.typography.titleMedium,
         modifier =
             Modifier.semantics {
@@ -168,13 +169,13 @@ private fun ConnectedGatewayContent(onEvent: (EntryUiEvent) -> Unit) {
         onClick = { onEvent(EntryUiEvent.ChangeGatewayCredentialClicked) },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Text(text = "Change Gateway credential")
+        Text(text = stringResource(R.string.action_change_credential))
     }
     Spacer(modifier = Modifier.height(8.dp))
     OutlinedButton(
         onClick = { onEvent(EntryUiEvent.RemoveGatewayConnectionClicked) },
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
-        Text(text = "Remove Gateway Connection")
+        Text(text = stringResource(R.string.action_remove_connection))
     }
 }

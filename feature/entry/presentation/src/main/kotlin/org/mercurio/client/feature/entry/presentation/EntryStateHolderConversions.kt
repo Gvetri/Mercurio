@@ -39,7 +39,7 @@ internal fun RunObservationState.toSessionMessageUiState(
         runState = state,
         isStreaming = isStreaming,
         streamInterrupted = isStreamInterrupted,
-        failureSafeMessage =
+        failureMessage =
             if (state == RunPresentationState.FAILED) runFailureMessageFor(modelSelection) else null,
         retryAvailable = isRunRetryEligible(state, retryInput),
     )
@@ -63,9 +63,9 @@ internal fun mergeRuns(
 
 internal fun EntryUiState.connectionSetupState(): EntryUiState =
     copy(
-        title = "Verify a Hermes Gateway",
-        supportingText = "Enter the HTTPS endpoint and bearer credential for your Gateway.",
-        actionLabel = "Verify Gateway Connection",
+        title = UiText.Resource(R.string.entry_title_verify_new),
+        supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
+        actionLabel = UiText.Resource(R.string.entry_action_verify),
         connectionSetupRequested = true,
         errorCategory = null,
     )

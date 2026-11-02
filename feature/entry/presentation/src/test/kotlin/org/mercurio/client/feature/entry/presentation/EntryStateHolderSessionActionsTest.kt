@@ -361,7 +361,8 @@ class EntryStateHolderSessionActionsTest {
         assertNull(state.createSession)
         assertNull(state.creationErrorCategory)
         val row = state.sessions.first { session -> session.id == created.id }
-        assertEquals("New session", row.title)
+        assertEquals("", row.title)
+        assertTrue(row.isPendingTitle)
         assertTrue(row.isPendingTitle)
         holder.close()
     }

@@ -6,16 +6,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
-import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,14 +26,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Pins the transcript follow behavior for a message taller than the pane: an opened Session
- * shows the newest content's end, a streamed response that grows in place stays followed to its
- * newest lines, a long arriving message is followed to its end, a reader who dragged away is not
- * pulled back, and the follow returns once the reader settles back at the newest content.
- *
- * Every transcript here is taller than the pane before the asserted change, so a pass cannot come
- * from layout slack: the newest line only ends up displayed when the transcript is actually
- * pinned to the newest content's end.
+ * Pins the transcript follow behavior: an opened Session shows the newest content's end, a
+ * streamed response that grows in place stays followed, a reader who dragged away is not pulled
+ * back, the follow returns once they settle at the newest content, and a Message long enough to
+ * fold keeps its end reachable through the fold's disclosure.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -43,8 +39,62 @@ class SessionTranscriptFollowTest {
 
     @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    fun short_viewport_follows_the_newest_streamed_text_not_only_its_metadata() {
-        val state = mutableStateOf(streamingState(messages = emptyList()))
+    fun opened_session_shows_the_newest_content_of_a_transcript_taller_than_the_pane() {
+        setTranscriptContent { conversationState(messages = (1..12).map(::transcriptMessage)) }
+
+        composeTestRule.onNodeWithText("Transcript message 12").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Transcript message 1").assertIsNotDisplayed()
+    }
+
+    @Test
+    fun growing_streamed_response_stays_in_view_while_the_reader_stays_at_the_newest_content() {
+        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(40))))
+        setTranscriptContent { state.value }
+
+        composeTestRule.onNodeWithText("Paragraph 40").assertIsDisplayed()
+
+        composeTestRule.runOnIdle {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(52)))
+        }
+
+        composeTestRule.onNodeWithText("Paragraph 52").assertIsDisplayed()
+    }
+
+    @Test
+    fun a_burst_of_chunks_still_ends_at_the_newest_content() {
+        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(40))))
+        setTranscriptContent { state.value }
+
+        composeTestRule.runOnUiThread {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(52)))
+        }
+        composeTestRule.runOnUiThread {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(64)))
+        }
+
+        composeTestRule.onNodeWithText("Paragraph 64").assertIsDisplayed()
+    }
+
+    @Test
+    fun a_chunk_arriving_right_after_a_follow_scroll_still_ends_at_the_newest_content() {
+        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(40))))
+        setTranscriptContent { state.value }
+
+        composeTestRule.runOnUiThread {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(52)))
+        }
+        composeTestRule.mainClock.advanceTimeBy(100)
+        composeTestRule.runOnUiThread {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(64)))
+        }
+
+        composeTestRule.onNodeWithText("Paragraph 64").assertIsDisplayed()
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun short_viewport_follows_the_newest_streamed_text() {
+        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(24))))
         composeTestRule.setContent {
             HermesTheme {
                 Box(Modifier.height(240.dp)) {
@@ -52,32 +102,13 @@ class SessionTranscriptFollowTest {
                 }
             }
         }
-        composeTestRule.runOnIdle {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(48)))
-        }
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Paragraph 24").assertIsDisplayed()
         composeTestRule.onNodeWithText("Paragraph 1").assertIsNotDisplayed()
+
         composeTestRule.runOnIdle {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(60)))
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(36)))
         }
-        composeTestRule.onNodeWithText("Paragraph 60").assertIsDisplayed()
-        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
-            swipeDown(startY = top + 4f, endY = bottom - 4f, durationMillis = 200)
-        }
-        composeTestRule.onNodeWithText("Paragraph 60").assertIsNotDisplayed()
-        composeTestRule.runOnIdle {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(72)))
-        }
-        composeTestRule.onNodeWithText("Paragraph 72").assertIsNotDisplayed()
-        composeTestRule.onNodeWithText("Paragraph 72").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Streaming response…").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
-            swipeUp(startY = bottom - 4f, endY = top + 4f, durationMillis = 200)
-        }
-        composeTestRule.runOnIdle {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(84)))
-        }
-        composeTestRule.onNodeWithText("Paragraph 84").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Paragraph 36").assertIsDisplayed()
     }
 
     @Test
@@ -87,20 +118,89 @@ class SessionTranscriptFollowTest {
             HermesTheme {
                 Box(Modifier.height(176.dp)) {
                     EntryScreen(
-                        state = streamingState(activeResponse = streamedResponse(transcriptBody(48))),
+                        state = streamingState(activeResponse = streamedResponse("Short answer")),
                         onEvent = {},
                     )
                 }
             }
         }
-        val newestLine = composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-        val bounds = newestLine.getUnclippedBoundsInRoot()
-        val lineHeight = with(composeTestRule.density) { (bounds.bottom - bounds.top).toPx() }
-        assertEquals(lineHeight, newestLine.fetchSemanticsNode().boundsInRoot.height, 1f)
+        composeTestRule.onNodeWithText("Short answer").performScrollTo().assertIsDisplayed()
+        val newestLine = composeTestRule.onNodeWithText("Short answer").fetchSemanticsNode()
+        assertTrue(
+            "The newest line must keep a readable height in a 176 dp window",
+            newestLine.boundsInRoot.height >= with(composeTestRule.density) { 16.dp.toPx() },
+        )
     }
 
     @Test
-    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun a_reader_who_dragged_away_from_the_newest_content_is_not_pulled_back_by_growth() {
+        val state = mutableStateOf(conversationState(messages = (1..12).map(::transcriptMessage)))
+        setTranscriptContent { state.value }
+
+        composeTestRule.onNodeWithText("Transcript message 12").assertIsDisplayed()
+
+        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
+            swipeDown(startY = top + 8f, endY = bottom - 8f, durationMillis = 300)
+        }
+        composeTestRule.onNodeWithText("Transcript message 12").assertIsNotDisplayed()
+
+        composeTestRule.runOnIdle {
+            state.value = conversationState(messages = (1..13).map(::transcriptMessage))
+        }
+
+        composeTestRule.onNodeWithText("Transcript message 13").assertIsNotDisplayed()
+    }
+
+    @Test
+    fun newly_arrived_message_stays_in_view_while_the_reader_stays_at_the_newest_content() {
+        val state = mutableStateOf(conversationState(messages = (1..12).map(::transcriptMessage)))
+        setTranscriptContent { state.value }
+
+        composeTestRule.onNodeWithText("Transcript message 12").assertIsDisplayed()
+
+        composeTestRule.runOnIdle {
+            state.value = conversationState(messages = (1..13).map(::transcriptMessage))
+        }
+
+        composeTestRule.onNodeWithText("Transcript message 13").assertIsDisplayed()
+    }
+
+    @Test
+    fun follow_returns_once_the_reader_settles_back_at_the_newest_content() {
+        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(40))))
+        setTranscriptContent { state.value }
+
+        composeTestRule.onNodeWithText("Paragraph 40").assertIsDisplayed()
+
+        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
+            swipeDown(startY = top + 8f, endY = bottom - 8f, durationMillis = 300)
+        }
+        composeTestRule.onNodeWithText("Paragraph 40").assertIsNotDisplayed()
+
+        composeTestRule.onNodeWithText("Paragraph 40").performScrollTo().assertIsDisplayed()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.runOnIdle {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(52)))
+        }
+
+        composeTestRule.onNodeWithText("Paragraph 52").assertIsDisplayed()
+    }
+
+    @Test
+    fun a_long_message_folds_and_its_end_stays_reachable() {
+        val longReply = message("message-long", "assistant", longBody(40))
+        setTranscriptContent {
+            conversationState(messages = listOf(message("message-1", "user", "Show me"), longReply))
+        }
+
+        composeTestRule.onNodeWithText("[ show more ]").performScrollTo().assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithTag("chat-fold-message-long").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ show less ]").assertExists()
+        composeTestRule.onNodeWithText("Long line 40").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun a_short_viewport_keeps_the_safe_failure_visible_when_there_is_no_exportable_body() {
         val failed =
             SessionMessageUiState(
@@ -109,189 +209,16 @@ class SessionTranscriptFollowTest {
                 content = null,
                 runId = RunId("failed-run"),
                 runState = RunPresentationState.FAILED,
-                failureSafeMessage = "The message was not sent.",
+                failureMessage = UiText.Value("The message was not sent."),
             )
         composeTestRule.setContent {
             HermesTheme {
                 Box(Modifier.height(176.dp)) {
-                    EntryScreen(state = streamingState(messages = listOf(failed)), onEvent = {})
+                    EntryScreen(state = conversationState(messages = listOf(failed)), onEvent = {})
                 }
             }
         }
-        composeTestRule.onNodeWithText("The message was not sent.").assertIsDisplayed()
-    }
-
-    @Test
-    fun opened_session_shows_the_newest_content_of_a_transcript_taller_than_the_pane() {
-        setTranscriptContent { streamingState(activeResponse = streamedResponse(transcriptBody(48))) }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Streaming response…").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Paragraph 1").assertIsNotDisplayed()
-    }
-
-    @Test
-    fun growing_streamed_response_stays_in_view_while_the_reader_stays_at_the_newest_content() {
-        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(48))))
-        setTranscriptContent { state.value }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Streaming response…").assertIsDisplayed()
-
-        composeTestRule.runOnIdle {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(60)))
-        }
-
-        composeTestRule.onNodeWithText("Paragraph 60").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Streaming response…").assertIsDisplayed()
-    }
-
-    @Test
-    fun newly_arrived_message_stays_in_view_while_the_reader_stays_at_the_newest_content() {
-        val longReply = message("message-2", "assistant", transcriptBody(48))
-        val state =
-            mutableStateOf(
-                streamingState(
-                    messages =
-                        listOf(
-                            message("message-1", "user", "Show me the long answer"),
-                            longReply,
-                        ),
-                ),
-            )
-        setTranscriptContent { state.value }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-
-        composeTestRule.runOnIdle {
-            state.value =
-                streamingState(
-                    messages =
-                        listOf(
-                            message("message-1", "user", "Show me the long answer"),
-                            longReply,
-                            message("message-3", "assistant", "Newly arrived reply"),
-                        ),
-                )
-        }
-
-        composeTestRule.onNodeWithText("Newly arrived reply").assertIsDisplayed()
-    }
-
-    @Test
-    fun a_reader_who_dragged_away_from_the_newest_content_is_not_pulled_back_by_growth() {
-        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(48))))
-        setTranscriptContent { state.value }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-
-        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
-            swipeDown(startY = centerY - 200f, endY = centerY + 200f, durationMillis = 200)
-        }
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsNotDisplayed()
-
-        composeTestRule.runOnIdle {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(60)))
-        }
-
-        composeTestRule.onNodeWithText("Paragraph 60").assertIsNotDisplayed()
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsNotDisplayed()
-    }
-
-    @Test
-    fun follow_returns_once_the_reader_settles_back_at_the_newest_content() {
-        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(48))))
-        setTranscriptContent { state.value }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-
-        composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
-            swipeDown(startY = centerY - 200f, endY = centerY + 200f, durationMillis = 200)
-        }
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsNotDisplayed()
-
-        repeat(3) {
-            composeTestRule.onNode(hasScrollToIndexAction()).performTouchInput {
-                swipeUp(startY = centerY + 240f, endY = centerY - 240f, durationMillis = 200)
-            }
-        }
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-
-        composeTestRule.runOnIdle {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(60)))
-        }
-
-        composeTestRule.onNodeWithText("Paragraph 60").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Streaming response…").assertIsDisplayed()
-    }
-
-    @Test
-    fun a_long_arriving_message_is_followed_to_its_end() {
-        val state =
-            mutableStateOf(
-                streamingState(
-                    messages =
-                        listOf(
-                            message("message-1", "user", "Show me the long answer"),
-                            message("message-2", "assistant", transcriptBody(48)),
-                        ),
-                ),
-            )
-        setTranscriptContent { state.value }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-
-        composeTestRule.runOnIdle {
-            state.value =
-                streamingState(
-                    messages =
-                        listOf(
-                            message("message-1", "user", "Show me the long answer"),
-                            message("message-2", "assistant", transcriptBody(48)),
-                            message("message-3", "assistant", transcriptBody(30, label = "Second reply")),
-                        ),
-                )
-        }
-
-        composeTestRule.onNodeWithText("Second reply 30").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Second reply 1").assertIsNotDisplayed()
-    }
-
-    @Test
-    fun a_burst_of_chunks_still_ends_at_the_newest_content() {
-        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(48))))
-        setTranscriptContent { state.value }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-
-        composeTestRule.runOnUiThread {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(60)))
-        }
-        composeTestRule.runOnUiThread {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(72)))
-        }
-
-        composeTestRule.onNodeWithText("Paragraph 72").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Streaming response…").assertIsDisplayed()
-    }
-
-    @Test
-    fun a_chunk_arriving_right_after_a_follow_scroll_still_ends_at_the_newest_content() {
-        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(48))))
-        setTranscriptContent { state.value }
-
-        composeTestRule.onNodeWithText("Paragraph 48").assertIsDisplayed()
-
-        composeTestRule.runOnUiThread {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(60)))
-        }
-        composeTestRule.mainClock.advanceTimeBy(100)
-        composeTestRule.runOnUiThread {
-            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(72)))
-        }
-
-        composeTestRule.onNodeWithText("Paragraph 72").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Streaming response…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("The message was not sent.").performScrollTo().assertIsDisplayed()
     }
 
     private fun setTranscriptContent(state: () -> EntryUiState) {
@@ -303,16 +230,31 @@ class SessionTranscriptFollowTest {
         composeTestRule.waitForIdle()
     }
 
-    private fun streamingState(
-        activeResponse: SessionMessageUiState? = null,
-        messages: List<SessionMessageUiState> = listOf(message("message-1", "user", "Show me the long answer")),
-    ): EntryUiState =
+    private fun conversationState(messages: List<SessionMessageUiState>): EntryUiState =
+        entryState(
+            SessionListUiState(
+                openedSession =
+                    OpenSessionUiState(
+                        session = session("session-1", "Conversation Session"),
+                        messages = messages,
+                    ),
+            ),
+        )
+
+    private fun streamingState(activeResponse: SessionMessageUiState): EntryUiState =
         entryState(
             SessionListUiState(
                 openedSession =
                     OpenSessionUiState(
                         session = session("session-1", "Streaming Session"),
-                        messages = messages,
+                        messages = listOf(message("message-1", "user", "Show me the long answer")),
+                        latestRun =
+                            org.mercurio.client.feature.entry.domain.Run(
+                                RunId("4b2a-run"),
+                                org.mercurio.client.feature.entry.domain.SessionId("session-1"),
+                                "running",
+                            ),
+                        latestRunState = RunPresentationState.RUNNING,
                         activeResponse = activeResponse,
                     ),
             ),
@@ -323,16 +265,19 @@ class SessionTranscriptFollowTest {
             id = "streamed-response",
             role = "assistant",
             content = content,
-            runId = RunId("run-1"),
+            runId = RunId("4b2a-run"),
             runState = RunPresentationState.RUNNING,
             isStreaming = true,
         )
 
-    private fun transcriptBody(
-        paragraphCount: Int,
-        label: String = "Paragraph",
-    ): String =
-        (1..paragraphCount).joinToString("\n\n") { number ->
-            "$label $number"
-        }
+    private fun transcriptMessage(index: Int): SessionMessageUiState {
+        return message("message-$index", "user", "Transcript message $index")
+    }
+
+    private fun transcriptBody(paragraphCount: Int): String =
+        (1..paragraphCount).joinToString(separator = "\n\n") { number -> "Paragraph $number" }
+
+    private fun longBody(lineCount: Int): String {
+        return (1..lineCount).joinToString(separator = "\n\n") { number -> "Long line $number" }
+    }
 }

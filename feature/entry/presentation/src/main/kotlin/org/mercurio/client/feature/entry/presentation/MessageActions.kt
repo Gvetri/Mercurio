@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -47,7 +48,11 @@ internal fun rememberMessageActions(): MessageActions {
             },
             copy = { text -> clipboard.setText(AnnotatedString(text)) },
             share = { text ->
-                runCatching { context.startActivity(messageShareIntent(text)) }
+                runCatching {
+                    context.startActivity(
+                        messageShareIntent(text, context.getString(R.string.chat_share_message)),
+                    )
+                }
             },
         )
     }
@@ -66,19 +71,20 @@ internal fun MessageActionMenu(
     actions: MessageActions,
 ) {
     var expanded by remember(messageId) { mutableStateOf(false) }
+    val actionsLabel = stringResource(R.string.chat_message_actions, messageId)
     Box {
         IconButton(
             onClick = { expanded = true },
             modifier =
                 Modifier.size(48.dp).semantics {
-                    contentDescription = "Message actions for $messageId"
+                    contentDescription = actionsLabel
                 },
         ) {
             Icon(imageVector = Icons.Default.MoreVert, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Copy message") },
+                text = { Text(stringResource(R.string.chat_copy_message)) },
                 onClick = {
                     expanded = false
                     payload?.let(actions.copy)
@@ -86,7 +92,7 @@ internal fun MessageActionMenu(
                 enabled = payload != null,
             )
             DropdownMenuItem(
-                text = { Text("Share message") },
+                text = { Text(stringResource(R.string.chat_share_message)) },
                 onClick = {
                     expanded = false
                     payload?.let(actions.share)

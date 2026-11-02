@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -18,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -31,6 +33,7 @@ internal fun SessionActionMenu(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     var expanded by remember(session.id, enabled) { mutableStateOf(false) }
+    val menuDescription = stringResource(R.string.sessions_action_menu, sessionTitle(session))
     Box {
         IconButton(
             onClick = { expanded = true },
@@ -38,40 +41,58 @@ internal fun SessionActionMenu(
             modifier =
                 Modifier.size(48.dp).testTag("sessions-row-actions").semantics {
                     testTagsAsResourceId = true
-                    contentDescription = "Session actions for ${session.title}"
+                    contentDescription = menuDescription
                 },
         ) {
             Icon(imageVector = Icons.Default.MoreVert, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(if (session.pinned) "Unpin Session" else "Pin Session") },
-                onClick = {
-                    expanded = false
-                    onEvent(
-                        if (session.pinned) {
-                            EntryUiEvent.UnpinSessionClicked(session.id)
-                        } else {
-                            EntryUiEvent.PinSessionClicked(session.id)
-                        },
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Rename Session") },
-                onClick = {
-                    expanded = false
-                    onEvent(EntryUiEvent.RenameSessionClicked(session.id))
-                },
-            )
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Delete Session") },
-                onClick = {
-                    expanded = false
-                    onEvent(EntryUiEvent.DeleteSessionClicked(session.id))
-                },
-            )
+            SessionActionMenuItems(session = session, onDismiss = { expanded = false }, onEvent = onEvent)
         }
     }
+}
+
+/**
+ * The Session actions every Session menu offers, whichever control opens it. Keeping them in
+ * one place means the top-bar control and the list row cannot drift apart.
+ */
+@Composable
+internal fun ColumnScope.SessionActionMenuItems(
+    session: SessionItemUiState,
+    onDismiss: () -> Unit,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    DropdownMenuItem(
+        text =
+            {
+                Text(
+                    stringResource(if (session.pinned) R.string.sessions_unpin else R.string.sessions_pin),
+                )
+            },
+        onClick = {
+            onDismiss()
+            onEvent(
+                if (session.pinned) {
+                    EntryUiEvent.UnpinSessionClicked(session.id)
+                } else {
+                    EntryUiEvent.PinSessionClicked(session.id)
+                },
+            )
+        },
+    )
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.sessions_rename)) },
+        onClick = {
+            onDismiss()
+            onEvent(EntryUiEvent.RenameSessionClicked(session.id))
+        },
+    )
+    HorizontalDivider()
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.sessions_delete)) },
+        onClick = {
+            onDismiss()
+            onEvent(EntryUiEvent.DeleteSessionClicked(session.id))
+        },
+    )
 }

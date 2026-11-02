@@ -1,13 +1,12 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -34,9 +33,9 @@ class EntryScreenSessionFlowsTest {
         val state =
             mutableStateOf(
                 EntryUiState(
-                    title = "Gateway connected",
-                    supportingText = "The Gateway contract was verified successfully.",
-                    actionLabel = "Connected",
+                    title = UiText.Resource(R.string.entry_title_connected),
+                    supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                    actionLabel = UiText.Resource(R.string.entry_action_connected),
                     isConnected = true,
                     sessionList =
                         SessionListUiState(
@@ -78,9 +77,9 @@ class EntryScreenSessionFlowsTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(
@@ -103,7 +102,7 @@ class EntryScreenSessionFlowsTest {
 
         composeTestRule.onNode(isDialog()).assertDoesNotExist()
         composeTestRule
-            .onNodeWithText(SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED.safeMessage)
+            .onNodeWithText(copy(SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("new session").assertHasClickAction().performClick()
         assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
@@ -118,9 +117,9 @@ class EntryScreenSessionFlowsTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList = state.value,
                         ),
@@ -160,9 +159,9 @@ class EntryScreenSessionFlowsTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(
@@ -193,7 +192,7 @@ class EntryScreenSessionFlowsTest {
 
         composeTestRule.onNodeWithText("Authoritative title").assertIsDisplayed()
         composeTestRule.onNodeWithText("Authoritative history").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithContentDescription("Back to Sessions").assertHasClickAction().performClick()
         assertEquals(EntryUiEvent.ReturnToSessionListClicked, events.single())
     }
 
@@ -204,9 +203,9 @@ class EntryScreenSessionFlowsTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(
@@ -237,9 +236,9 @@ class EntryScreenSessionFlowsTest {
                 EntryScreen(
                     state =
                         EntryUiState(
-                            title = "Gateway connected",
-                            supportingText = "The Gateway contract was verified successfully.",
-                            actionLabel = "Connected",
+                            title = UiText.Resource(R.string.entry_title_connected),
+                            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+                            actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             sessionList =
                                 SessionListUiState(
@@ -272,18 +271,10 @@ class EntryScreenSessionFlowsTest {
             }
         }
 
-        composeTestRule
-            .onNodeWithText("Partial answer")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText("Streaming response…")
-            .performScrollTo()
-            .assertIsDisplayed()
-        val runStateNodes = composeTestRule.onAllNodesWithText("Run state: Running")
-        runStateNodes.assertCountEquals(2)
-        runStateNodes[0].assertIsDisplayed()
-        runStateNodes[1].assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status: Running").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Partial answer").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ stop ]").assertIsDisplayed()
+        composeTestRule.onNodeWithText("streaming", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ send ]").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Run state: Running").assertDoesNotExist()
     }
 }

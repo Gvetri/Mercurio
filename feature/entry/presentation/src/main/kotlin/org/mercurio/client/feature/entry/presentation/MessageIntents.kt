@@ -20,10 +20,13 @@ internal fun externalBrowserIntent(destination: String): Intent? {
  * client: connection credentials, hidden diagnostics, and unrelated Session content
  * are never part of the payload.
  */
-internal fun messageShareIntent(content: String): Intent =
+internal fun messageShareIntent(
+    content: String,
+    chooserTitle: String,
+): Intent =
     Intent.createChooser(
         Intent(Intent.ACTION_SEND)
             .setType("text/plain")
             .putExtra(Intent.EXTRA_TEXT, content),
-        "Share message",
+        chooserTitle,
     )
