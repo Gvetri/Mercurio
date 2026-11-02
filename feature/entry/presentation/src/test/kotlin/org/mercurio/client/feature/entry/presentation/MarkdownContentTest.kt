@@ -49,19 +49,17 @@ class MarkdownContentTest {
     }
 
     @Test
-    fun pipe_tables_and_display_math_render_their_literal_source_text() {
-        val table = "| Name | Value |\n| ---- | ----- |\n| a | 1 |"
+    fun display_math_renders_its_literal_source_text() {
         val math = "\$\$\nE = mc^2\n\$\$"
         composeTestRule.setContent {
             HermesTheme {
                 MarkdownContent(
-                    markdown = "$table\n\n$math",
+                    markdown = math,
                     actions = RecordingActions().asMessageActions(),
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("| Name | Value | | ---- | ----- | | a | 1 |").assertIsDisplayed()
         composeTestRule.onNodeWithText("\$\$ E = mc^2 \$\$").assertIsDisplayed()
     }
 

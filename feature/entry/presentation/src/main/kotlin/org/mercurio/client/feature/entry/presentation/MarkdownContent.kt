@@ -35,14 +35,16 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Renders the supported Markdown subset of untrusted Gateway content as native Compose
- * text: headings, blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links,
- * and fenced code blocks. The content is never interpreted as markup beyond that subset,
- * so no HTML, script, or other executable content can run, and no WebView is involved.
- * Pipe tables and `$$…$$` display math parse into their own blocks but still render as
- * their literal source text, until their dedicated renderers land.
+ * content: headings, blockquotes, thematic breaks, paragraphs, lists, emphasis, HTTPS links,
+ * fenced code blocks, and pipe tables. A table becomes the approved table card; `$$…$$`
+ * display math still renders as its literal source text until its renderer lands. The content
+ * is never interpreted as markup beyond that subset, so no HTML, script, or other executable
+ * content can run, and no WebView is involved.
  *
  * Link destinations are carried as annotations built from [allowedExternalLinkDestination];
- * a blocked destination is rendered as its inert label and cannot be selected.
+ * a blocked destination is rendered as its inert label and cannot be selected. [onTableExpand]
+ * carries a table wider than its row to the host's full-screen viewer; without it the card
+ * keeps its in-place horizontal scroll and offers no control.
  */
 @Composable
 internal fun MarkdownContent(
@@ -50,6 +52,7 @@ internal fun MarkdownContent(
     actions: MessageActions,
     modifier: Modifier = Modifier,
     blockSpacing: Dp? = null,
+    onTableExpand: ((MarkdownBlock.Table) -> Unit)? = null,
 ) {
     val tokens = LocalHermesDesignTokens.current
     val spacing = tokens.spacing
@@ -78,7 +81,12 @@ internal fun MarkdownContent(
                         actions = actions,
                     )
                 is MarkdownBlock.CodeBlock -> MarkdownCodeBlock(block = block, onCopy = actions.copy)
-                is MarkdownBlock.Table -> MarkdownParagraph(spans = block.spans, actions = actions)
+                is MarkdownBlock.Table ->
+                    MarkdownTableCard(
+                        block = block,
+                        actions = actions,
+                        onExpand = onTableExpand?.let { expand -> { expand(block) } },
+                    )
                 is MarkdownBlock.DisplayMath -> MarkdownParagraph(spans = block.spans, actions = actions)
             }
         }
@@ -212,7 +220,7 @@ private const val HEADING_LEVEL_3 = 3
 
 private const val HEADING_LEVEL_4 = 4
 
-private fun List<MarkdownSpan>.toAnnotatedString(
+internal fun List<MarkdownSpan>.toAnnotatedString(
     linkColor: Color,
     onOpenLink: (String) -> Unit,
     codeBackground: Color?,

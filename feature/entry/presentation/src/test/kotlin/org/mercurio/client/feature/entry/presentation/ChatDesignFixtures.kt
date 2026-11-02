@@ -327,4 +327,75 @@ internal object ChatDesignFixtures {
                     ),
             ),
         )
+
+    fun pipeTable(): SessionDetailState =
+        details(
+            content(
+                messages =
+                    listOf(
+                        SessionMessageUiState(
+                            id = "message-1",
+                            role = "user",
+                            content = "Which roles drifted?",
+                            timestamp = Instant.parse("2026-11-01T09:15:00Z"),
+                        ),
+                        SessionMessageUiState(
+                            id = "message-2",
+                            role = "assistant",
+                            content =
+                                "| role | design | app | delta |\n" +
+                                    "| --- | --- | --- | --- |\n" +
+                                    "| surface-container-high | #E3E6EA | #E6E8EB | +2 R |\n" +
+                                    "| outline-variant | #D7DBE0 | #D7DBE0 | match |\n" +
+                                    "| on-surface-variant | #5B6168 | #5B6168 | match |\n" +
+                                    "| error | #C7222D | #C3242F | +1 R |",
+                            timestamp = Instant.parse("2026-11-01T09:15:00Z"),
+                        ),
+                    ),
+            ),
+        )
+
+    fun tableExpanded(): SessionDetailState =
+        details(
+            content(
+                messages =
+                    listOf(
+                        SessionMessageUiState(
+                            id = "message-1",
+                            role = "user",
+                            content = "Which checks gate the release?",
+                            timestamp = Instant.parse("2026-11-01T10:12:00Z"),
+                        ),
+                        SessionMessageUiState(
+                            id = "message-2",
+                            role = "assistant",
+                            content =
+                                "| gate | compares | runs | blocks merge |\n" +
+                                    "| --- | --- | --- | --- |\n" +
+                                    "| compose-jvm-tests | app against its own goldens | CI | yes |\n" +
+                                    "| check-design-values | design package against the theme | build host | yes |\n" +
+                                    "| verifyRoborazziDebug | current capture against baseline | CI | yes |\n" +
+                                    "| impeccable audit | implemented screen against the floor | reviewer | no |\n" +
+                                    "| journey-session-list | app against the scripted journey | emulator | yes |\n" +
+                                    "| release-readiness | bundle against the checklist | CI | yes |",
+                            timestamp = Instant.parse("2026-11-01T10:12:00Z"),
+                        ),
+                    ),
+            ),
+        )
+
+    fun narrowTable(): SessionDetailState =
+        details(
+            content(
+                messages =
+                    listOf(
+                        SessionMessageUiState(
+                            id = "message-1",
+                            role = "assistant",
+                            content = "| a | b |\n| --- | --- |\n| 1 | 2 |",
+                            timestamp = Instant.parse("2026-11-01T10:14:00Z"),
+                        ),
+                    ),
+            ),
+        )
 }

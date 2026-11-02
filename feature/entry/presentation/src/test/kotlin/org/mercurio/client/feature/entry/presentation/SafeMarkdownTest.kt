@@ -332,13 +332,14 @@ class SafeMarkdownTest {
     }
 
     @Test
-    fun a_pipe_table_keeps_its_literal_source_text_until_its_renderer_lands() {
-        val source = "| Name | Value |\n| ---- | ----- |\n| a | 1 |"
+    fun a_pipe_table_parses_into_its_header_rows_and_alignment() {
+        val source = "| Name | Value |\n| :--- | ---: |\n| a | 1 |"
 
-        val blocks = parseSafeMarkdown(source)
+        val table = parseSafeMarkdown(source).filterIsInstance<MarkdownBlock.Table>().single()
 
-        assertEquals(listOf("Table"), blocks.map { it::class.simpleName })
-        assertEquals(source.replace("\n", " "), blocks.plainText())
+        assertEquals(listOf("Name", "Value"), table.header)
+        assertEquals(listOf(listOf("a", "1")), table.rows)
+        assertEquals(listOf(TableAlignment.Start, TableAlignment.End), table.alignments)
     }
 
     @Test
@@ -562,7 +563,7 @@ private fun List<MarkdownBlock>.spans(): List<MarkdownSpan> =
             is MarkdownBlock.NumberedList -> block.items.flatMap { it.spans }
             is MarkdownBlock.CodeBlock -> emptyList()
             is MarkdownBlock.HorizontalRule -> emptyList()
-            is MarkdownBlock.Table -> block.spans
+            is MarkdownBlock.Table -> emptyList()
             is MarkdownBlock.DisplayMath -> block.spans
         }
     }
@@ -577,7 +578,10 @@ private fun List<MarkdownBlock>.plainText(): String =
             is MarkdownBlock.NumberedList -> block.items.joinToString(separator = "\n") { item -> item.spans.text() }
             is MarkdownBlock.CodeBlock -> block.code
             is MarkdownBlock.HorizontalRule -> ""
-            is MarkdownBlock.Table -> block.spans.joinToString(separator = "") { it.text }
+            is MarkdownBlock.Table ->
+                (listOf(block.header) + block.rows).joinToString(separator = "\n") { row ->
+                    row.joinToString(separator = "\t")
+                }
             is MarkdownBlock.DisplayMath -> block.spans.joinToString(separator = "") { it.text }
         }
     }

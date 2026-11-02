@@ -72,7 +72,7 @@ private fun ChatAssistantRow(
             callbacks = callbacks,
             modifier = Modifier.padding(bottom = tokens.spacing.xs),
         )
-        ChatMessageBody(row = row, actions = callbacks.actions)
+        ChatMessageBody(row = row, callbacks = callbacks)
     }
 }
 
@@ -115,7 +115,7 @@ private fun ChatUserRow(
                     pending = pending,
                     modifier = Modifier.padding(bottom = tokens.spacing.xs),
                 )
-                ChatMessageBody(row = row, actions = callbacks.actions)
+                ChatMessageBody(row = row, callbacks = callbacks)
             }
         }
     }
@@ -145,7 +145,7 @@ private fun ChatSystemRow(
                 callbacks = callbacks,
                 modifier = Modifier.padding(bottom = tokens.spacing.xs),
             )
-            ChatMessageBody(row = row, actions = callbacks.actions)
+            ChatMessageBody(row = row, callbacks = callbacks)
         }
     }
 }
@@ -174,7 +174,12 @@ private fun ChatFailedRow(
                 modifier = Modifier.padding(bottom = tokens.spacing.xs),
             )
             row.body?.let { body ->
-                MarkdownContent(markdown = body, actions = callbacks.actions, blockSpacing = tokens.spacing.xs)
+                MarkdownContent(
+                    markdown = body,
+                    actions = callbacks.actions,
+                    blockSpacing = tokens.spacing.xs,
+                    onTableExpand = callbacks.onTableExpand,
+                )
             }
             row.failure?.let { failure ->
                 Text(
