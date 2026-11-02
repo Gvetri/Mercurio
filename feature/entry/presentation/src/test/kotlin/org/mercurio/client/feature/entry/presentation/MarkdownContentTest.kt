@@ -50,21 +50,6 @@ class MarkdownContentTest {
     }
 
     @Test
-    fun display_math_renders_its_literal_source_text() {
-        val math = "\$\$\nE = mc^2\n\$\$"
-        composeTestRule.setContent {
-            HermesTheme {
-                TestMarkdownContent(
-                    markdown = math,
-                    actions = RecordingActions().asMessageActions(),
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("\$\$ E = mc^2 \$\$").assertIsDisplayed()
-    }
-
-    @Test
     fun a_code_block_stays_readable_in_a_horizontally_scrollable_region() {
         val code = "val total = \"a\" + \"b\" ".repeat(60)
         composeTestRule.setContent {

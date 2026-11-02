@@ -12,7 +12,17 @@ internal fun structuredBlock(lines: List<String>): MarkdownBlock? = displayMathB
 private fun displayMathBlock(lines: List<String>): MarkdownBlock.DisplayMath? {
     val source = lines.joinToString(separator = " ")
     val expression = displayMathExpression(source) ?: return null
-    return MarkdownBlock.DisplayMath(expression = expression, spans = parseInline(source))
+    val literal =
+        lines
+            .joinToString(separator = "\n")
+            .removePrefix(DISPLAY_MATH_DELIMITER)
+            .removeSuffix(DISPLAY_MATH_DELIMITER)
+            .trim()
+    return MarkdownBlock.DisplayMath(
+        expression = expression,
+        source = literal,
+        spans = parseInline(source),
+    )
 }
 
 private fun displayMathExpression(source: String): String? {

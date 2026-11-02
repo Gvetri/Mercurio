@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -228,7 +229,12 @@ private fun TableCell(
     val sticky = spec.columnIndex == 0
     val background = if (spec.header) tokens.componentColors.inset else tokens.colorScheme.surface
     val linkColor = MaterialTheme.colorScheme.primary
-    val annotated = remember(spec.text, linkColor, actions) { tableCellText(spec.text, linkColor, actions.openLink) }
+    val spans = remember(spec.text) { parseInline(spec.text) }
+    val math = rememberInlineMath(spans, style, LocalContentColor.current)
+    val annotated =
+        remember(spec.text, linkColor, actions, math) {
+            tableCellText(spec.text, linkColor, actions.openLink, math)
+        }
     Text(
         text = annotated,
         style = style,
@@ -236,6 +242,7 @@ private fun TableCell(
         softWrap = false,
         overflow = TextOverflow.Clip,
         textAlign = grid.alignments[spec.columnIndex].textAlign(),
+        inlineContent = math?.contents.orEmpty(),
         modifier =
             Modifier
                 .width(grid.widths[spec.columnIndex])
@@ -261,11 +268,13 @@ internal fun tableCellText(
     text: String,
     linkColor: Color,
     onOpenLink: (String) -> Unit,
+    math: InlineMathContent? = null,
 ): AnnotatedString =
     parseInline(text).toAnnotatedString(
         linkColor = linkColor,
         onOpenLink = onOpenLink,
         codeBackground = null,
+        math = math,
     )
 
 private fun MarkdownBlock.Table.collectionInfo(): CollectionInfo {
