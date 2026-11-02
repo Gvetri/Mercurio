@@ -73,54 +73,53 @@ private fun SettingsTopBar(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val actionsDescription = stringResource(R.string.settings_connection_actions)
+    val overflowMark = stringResource(R.string.settings_connection_actions_mark)
     var menuOpen by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = SETTINGS_TOP_BAR_HEIGHT)
-                    .clip(tokens.shapes.large)
-                    .background(tokens.colorScheme.surface)
-                    .border(1.dp, tokens.colorScheme.outlineVariant, tokens.shapes.large)
-                    .padding(start = tokens.spacing.m, end = tokens.spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.titleSmall.copy(letterSpacing = 0.02.em),
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
-            if (state.isGatewayConnectionConfigured || state.isConnected) {
-                Box {
-                    Box(
-                        modifier =
-                            Modifier
-                                .widthIn(min = SETTINGS_OVERFLOW_SIZE)
-                                .heightIn(min = SETTINGS_OVERFLOW_SIZE)
-                                .clip(tokens.shapes.small)
-                                .clickable { menuOpen = true }
-                                .semantics { contentDescription = actionsDescription },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(text = SETTINGS_OVERFLOW_MARK, style = MaterialTheme.typography.labelMedium)
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(R.string.settings_action_change_credential)) },
-                            onClick = {
-                                menuOpen = false
-                                onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(R.string.settings_action_remove_connection)) },
-                            onClick = {
-                                menuOpen = false
-                                onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
-                            },
-                        )
-                    }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = tokens.spacing.xxxl)
+                .clip(tokens.shapes.large)
+                .background(tokens.colorScheme.surface)
+                .border(1.dp, tokens.colorScheme.outlineVariant, tokens.shapes.large)
+                .padding(start = tokens.spacing.m, end = tokens.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.settings_title),
+            style = MaterialTheme.typography.titleSmall.copy(letterSpacing = 0.02.em),
+            modifier = Modifier.weight(1f).semantics { heading() },
+        )
+        if (state.isGatewayConnectionConfigured || state.isConnected) {
+            Box {
+                Box(
+                    modifier =
+                        Modifier
+                            .widthIn(min = tokens.spacing.xxxl)
+                            .heightIn(min = tokens.spacing.xxxl)
+                            .clip(tokens.shapes.small)
+                            .clickable { menuOpen = true }
+                            .semantics { contentDescription = actionsDescription },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = overflowMark, style = MaterialTheme.typography.labelMedium)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(text = stringResource(R.string.settings_action_change_credential)) },
+                        onClick = {
+                            menuOpen = false
+                            onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(text = stringResource(R.string.settings_action_remove_connection)) },
+                        onClick = {
+                            menuOpen = false
+                            onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+                        },
+                    )
                 }
             }
         }
@@ -159,18 +158,22 @@ private fun SettingsNotificationSection(
     val notifications = state.runStatusNotifications
     SettingsSectionHeader(stringResource(R.string.settings_section_notifications))
     SettingsSwitchRow(
-        supporting =
-            stringResource(
-                if (notifications.enabled) {
-                    R.string.settings_notifications_supporting_on
-                } else {
-                    R.string.settings_notifications_supporting_off
-                },
+        model =
+            SettingsSwitchRowModel(
+                label = stringResource(R.string.settings_section_notifications),
+                supporting =
+                    stringResource(
+                        if (notifications.enabled) {
+                            R.string.settings_notifications_supporting_on
+                        } else {
+                            R.string.settings_notifications_supporting_off
+                        },
+                    ),
+                checked = notifications.enabled,
+                description = stringResource(R.string.settings_run_status_notifications_description),
+                errorText = notifications.explanation?.let { stringResource(it.messageRes) },
             ),
-        errorText = notifications.explanation?.let { stringResource(it.messageRes) },
-        checked = notifications.enabled,
         onCheckedChange = { onEvent(EntryUiEvent.RunStatusNotificationsToggleClicked) },
-        contentDescription = stringResource(R.string.settings_run_status_notifications),
     )
 }
 
@@ -181,17 +184,21 @@ private fun SettingsMediaSection(
 ) {
     SettingsSectionHeader(stringResource(R.string.settings_section_media))
     SettingsSwitchRow(
-        supporting =
-            stringResource(
-                if (state.autoLoadImages) {
-                    R.string.settings_media_auto_load_on
-                } else {
-                    R.string.settings_media_auto_load_off
-                },
+        model =
+            SettingsSwitchRowModel(
+                label = stringResource(R.string.settings_media_auto_load),
+                supporting =
+                    stringResource(
+                        if (state.autoLoadImages) {
+                            R.string.settings_media_auto_load_on
+                        } else {
+                            R.string.settings_media_auto_load_off
+                        },
+                    ),
+                checked = state.autoLoadImages,
+                description = stringResource(R.string.settings_media_auto_load),
             ),
-        checked = state.autoLoadImages,
         onCheckedChange = { onEvent(EntryUiEvent.AutoLoadImagesToggleClicked) },
-        contentDescription = stringResource(R.string.settings_media_auto_load),
     )
 }
 
@@ -206,7 +213,6 @@ private fun SettingsDiagnosticsSection(
         label = stringResource(R.string.settings_local_diagnostics),
         enabled = state.sessionList?.hasPendingMutation != true,
         onClick = { onEvent(EntryUiEvent.OpenLocalDiagnosticsClicked) },
-        testTag = SETTINGS_LOCAL_DIAGNOSTICS_TAG,
     )
     Text(
         text = stringResource(R.string.settings_clear_history_cache_summary),
@@ -218,7 +224,6 @@ private fun SettingsDiagnosticsSection(
     SettingsActionRow(
         label = stringResource(R.string.settings_clear_history_cache),
         onClick = { onEvent(EntryUiEvent.ClearHistoryCacheClicked) },
-        testTag = SETTINGS_CLEAR_CACHE_TAG,
     )
 }
 
@@ -231,12 +236,7 @@ private fun SettingsAboutSection(state: EntryUiState) {
     )
     SettingsValueRow(
         label = stringResource(R.string.settings_about_build),
-        value =
-            if (state.buildNumber > 0L) {
-                state.buildNumber.toString()
-            } else {
-                stringResource(R.string.settings_value_unknown)
-            },
+        value = state.buildNumber?.takeIf { it > 0L }?.toString() ?: stringResource(R.string.settings_value_unknown),
     )
     SettingsValueRow(
         label = stringResource(R.string.settings_about_install_source),
@@ -265,13 +265,3 @@ internal fun SettingsBackHandling(
         else -> ShellBackHandler { onEvent(EntryUiEvent.CloseSettingsClicked) }
     }
 }
-
-private val SETTINGS_TOP_BAR_HEIGHT = 48.dp
-
-private val SETTINGS_OVERFLOW_SIZE = 48.dp
-
-private const val SETTINGS_OVERFLOW_MARK = "::"
-
-internal const val SETTINGS_LOCAL_DIAGNOSTICS_TAG = "settings-local-diagnostics"
-
-internal const val SETTINGS_CLEAR_CACHE_TAG = "settings-clear-history-cache"

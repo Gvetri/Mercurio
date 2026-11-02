@@ -37,7 +37,7 @@ class RunStatusNotificationScreenTest {
 
         composeTestRule.onNodeWithText("Notifications").assertIsDisplayed()
         composeTestRule
-            .onNodeWithContentDescription("Notifications")
+            .onNodeWithContentDescription("Run status notifications")
             .assertIsDisplayed()
             .assertIsOff()
             .assertHasClickAction()
@@ -61,7 +61,7 @@ class RunStatusNotificationScreenTest {
         }
 
         composeTestRule
-            .onNode(hasContentDescription("Notifications"))
+            .onNode(hasContentDescription("Run status notifications"))
             .assertIsOn()
     }
 
@@ -87,7 +87,7 @@ class RunStatusNotificationScreenTest {
             .onNodeWithText(copy(RunStatusNotificationExplanation.PERMISSION_DENIED.messageRes))
             .assertIsDisplayed()
         composeTestRule
-            .onNode(hasContentDescription("Notifications"))
+            .onNode(hasContentDescription("Run status notifications"))
             .assertIsOff()
     }
 

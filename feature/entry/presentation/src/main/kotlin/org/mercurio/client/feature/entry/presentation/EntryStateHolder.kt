@@ -270,7 +270,7 @@ data class EntryUiState(
     val isClearHistoryCacheConfirmationOpen: Boolean = false,
     val isSettingsOpen: Boolean = false,
     val clientVersion: String = "unknown",
-    val buildNumber: Long = 0L,
+    val buildNumber: Long? = null,
     val installSource: InstallSource = InstallSource.OTHER_SOURCE,
     val sessionList: SessionListUiState? = null,
     val runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),

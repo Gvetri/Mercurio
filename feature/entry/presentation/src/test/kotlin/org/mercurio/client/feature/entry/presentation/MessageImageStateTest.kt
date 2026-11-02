@@ -167,6 +167,7 @@ class MessageImageStateTest {
         MessageImageServices(
             loadImage = port::fetch,
             decoder = decoder,
+            autoLoad = true,
             concurrency = concurrency,
             timeoutMillis = timeoutMillis,
         )

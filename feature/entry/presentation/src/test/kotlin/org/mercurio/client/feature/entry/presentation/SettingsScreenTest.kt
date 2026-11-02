@@ -88,6 +88,21 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun settings_sections_are_ordered_from_top_to_bottom() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = connectedListState(isSettingsOpen = true), onEvent = {})
+            }
+        }
+
+        val tops =
+            listOf("CONNECTION", "NOTIFICATIONS", "MEDIA", "DIAGNOSTICS", "ABOUT").map { label ->
+                composeTestRule.onNodeWithText(label).fetchSemanticsNode().boundsInRoot.top
+            }
+        assertEquals(tops.sorted(), tops)
+    }
+
+    @Test
     fun settings_media_switch_defaults_on_and_routes_the_toggle_event() {
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
@@ -116,7 +131,7 @@ class SettingsScreenTest {
         }
 
         composeTestRule
-            .onNodeWithContentDescription("Notifications")
+            .onNodeWithContentDescription("Run status notifications")
             .performScrollTo()
             .assertIsOff()
             .performClick()
@@ -435,7 +450,7 @@ class SettingsScreenTest {
         isSettingsOpen: Boolean = false,
         searchQuery: String = "",
         clientVersion: String = "unknown",
-        buildNumber: Long = 0L,
+        buildNumber: Long? = null,
         installSource: InstallSource = InstallSource.OTHER_SOURCE,
     ): EntryUiState =
         EntryUiState(

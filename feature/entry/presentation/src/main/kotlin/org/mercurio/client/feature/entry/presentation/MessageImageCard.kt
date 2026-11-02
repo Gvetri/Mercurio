@@ -44,7 +44,7 @@ import org.mercurio.client.feature.entry.domain.MessageImageFetch
 @Composable
 fun MessageImageProvider(
     loadImage: suspend (String) -> MessageImageFetch,
-    autoLoad: Boolean = true,
+    autoLoad: Boolean,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current

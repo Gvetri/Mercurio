@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 
 internal fun EntryStateHolder.openSettings() {
@@ -14,7 +15,6 @@ internal fun EntryStateHolder.closeSettings() {
 }
 
 internal fun EntryStateHolder.toggleAutoLoadImages() {
-    val enabled = !mutableUiState.value.autoLoadImages
-    imageLoadingSettingsStore?.saveEnabled(enabled)
-    mutableUiState.update { current -> current.copy(autoLoadImages = enabled) }
+    val previous = mutableUiState.getAndUpdate { current -> current.copy(autoLoadImages = !current.autoLoadImages) }
+    imageLoadingSettingsStore?.saveEnabled(!previous.autoLoadImages)
 }

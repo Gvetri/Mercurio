@@ -40,6 +40,21 @@ name: settings
       text: "Clear cached conversations"
     direction: DOWN
 - assertVisible: "Clear cached conversations"
+- scrollUntilVisible:
+    element:
+      text: "Version"
+    direction: DOWN
+- assertVisible: "Version"
+- scrollUntilVisible:
+    element:
+      text: "Build"
+    direction: DOWN
+- assertVisible: "Build"
+- scrollUntilVisible:
+    element:
+      text: "Install source"
+    direction: DOWN
+- assertVisible: "Install source"
 - tapOn: "::"
 - assertVisible: "Change credential"
 - assertVisible: "Remove connection"

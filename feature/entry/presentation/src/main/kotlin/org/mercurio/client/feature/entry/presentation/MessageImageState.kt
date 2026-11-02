@@ -43,7 +43,7 @@ internal val MessageImageFailure.messageRes: Int
 internal class MessageImageServices(
     private val loadImage: suspend (String) -> MessageImageFetch,
     private val decoder: MessageImageDecoder,
-    val autoLoad: Boolean = true,
+    val autoLoad: Boolean,
     private val concurrency: Semaphore = Semaphore(MAX_CONCURRENT_IMAGE_LOADS),
     private val timeoutMillis: Long = IMAGE_LOAD_TIMEOUT_MILLIS,
 ) {

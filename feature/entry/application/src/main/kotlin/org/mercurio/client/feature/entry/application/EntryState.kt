@@ -9,6 +9,6 @@ data class EntryState(
     val configuredEndpoint: String? = null,
     val configuredCredential: String? = null,
     val clientVersion: String = UNKNOWN_CLIENT_VERSION,
-    val buildNumber: Long = 0L,
+    val buildNumber: Long? = null,
     val installSource: InstallSource = InstallSource.OTHER_SOURCE,
 )

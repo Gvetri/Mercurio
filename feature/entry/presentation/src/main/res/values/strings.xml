@@ -81,8 +81,6 @@
     <string name="dialog_delete_session_body">The session and its transcript are removed from this client. This cannot be undone here.</string>
 
     <string name="settings_title">Settings</string>
-    <string name="settings_version">App version %1$s</string>
-    <string name="settings_run_status_notifications">Notifications</string>
     <string name="settings_local_diagnostics">Local diagnostics</string>
     <string name="settings_clear_history_cache">Clear cached conversations</string>
     <string name="settings_clear_history_cache_summary">Clearing removes cached conversations from this device only. Remote Sessions and Runs are not deleted, and diagnostic files you already exported are not removed.</string>
@@ -92,6 +90,8 @@
     <string name="settings_section_diagnostics">Diagnostics</string>
     <string name="settings_section_about">About</string>
     <string name="settings_connection_actions">Connection actions</string>
+    <string name="settings_connection_actions_mark" translatable="false">::</string>
+    <string name="settings_run_status_notifications_description">Run status notifications</string>
     <string name="settings_connection_row">Connection</string>
     <string name="settings_connection_connected">Connected · gateway ready</string>
     <string name="settings_connection_saved">Saved connection</string>

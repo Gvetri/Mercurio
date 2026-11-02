@@ -12,19 +12,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import java.util.Locale
 
 @Composable
 internal fun SettingsSectionHeader(label: String) {
     val tokens = LocalHermesDesignTokens.current
     Text(
-        text = label.uppercase(),
+        text = label.uppercase(Locale.ROOT),
         style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.16.em),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
@@ -67,7 +67,6 @@ internal fun SettingsActionRow(
     label: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    testTag: String? = null,
 ) {
     val tokens = LocalHermesDesignTokens.current
     val contentColor =
@@ -80,9 +79,8 @@ internal fun SettingsActionRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = SETTINGS_ACTION_ROW_HEIGHT)
+                .heightIn(min = tokens.spacing.xxxl)
                 .clickable(enabled = enabled, onClick = onClick)
-                .then(if (testTag == null) Modifier else Modifier.testTag(testTag))
                 .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -98,13 +96,11 @@ internal fun SettingsActionRow(
 
 @Composable
 internal fun SettingsSwitchRow(
-    supporting: String,
-    checked: Boolean,
-    onCheckedChange: () -> Unit,
-    contentDescription: String,
-    errorText: String? = null,
+    model: SettingsSwitchRowModel,
+    onCheckedChange: (Boolean) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val switchDescription = model.description ?: model.label
     Row(
         modifier =
             Modifier
@@ -114,13 +110,13 @@ internal fun SettingsSwitchRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = tokens.spacing.s)) {
-            Text(text = contentDescription, style = MaterialTheme.typography.bodyLarge)
+            Text(text = model.label, style = MaterialTheme.typography.bodyLarge)
             Text(
-                text = supporting,
+                text = model.supporting,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            errorText?.let { message ->
+            model.errorText?.let { message ->
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodySmall,
@@ -129,20 +125,25 @@ internal fun SettingsSwitchRow(
             }
         }
         Switch(
-            checked = checked,
-            onCheckedChange = { onCheckedChange() },
+            checked = model.checked,
+            onCheckedChange = onCheckedChange,
             modifier =
                 Modifier
-                    .testTag(contentDescription)
-                    .semantics { this.contentDescription = contentDescription },
+                    .semantics { this.contentDescription = switchDescription },
         )
     }
 }
 
+internal data class SettingsSwitchRowModel(
+    val label: String,
+    val supporting: String,
+    val checked: Boolean,
+    val description: String? = null,
+    val errorText: String? = null,
+)
+
 private val SETTINGS_SECTION_HEADER_HEIGHT = 28.dp
 
 private val SETTINGS_ROW_HEIGHT = 56.dp
-
-private val SETTINGS_ACTION_ROW_HEIGHT = 48.dp
 
 private const val SETTINGS_DISABLED_CONTENT_ALPHA = 0.38f
