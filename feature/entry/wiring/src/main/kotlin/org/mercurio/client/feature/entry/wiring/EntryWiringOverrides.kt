@@ -19,4 +19,6 @@ data class EntryWiringOverrides(
     val installedBuildProvider: InstalledBuildProvider? = null,
     val errorReporter: ErrorReporter? = null,
     val sentryBackend: SentryBackend? = null,
+    val errorReportingConsentStore: ErrorReportingConsentStore? = null,
+    val sentryDsn: String? = null,
 )

@@ -6,8 +6,10 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.LoadEntryState
+import org.mercurio.client.feature.entry.application.NoOpErrorReporter
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.UNKNOWN_CLIENT_VERSION
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
@@ -134,14 +136,27 @@ private fun buildErrorReporting(
     overrides: EntryWiringOverrides,
     clientVersion: String,
 ): ErrorReporting {
-    val config = sentryReportingConfig(clientVersion)
+    val consentStore =
+        overrides.errorReportingConsentStore ?: SharedPreferencesErrorReportingConsentStore(context)
+    val config =
+        sentryReportingConfig(
+            clientVersion = clientVersion,
+            consent = consentStore.read(),
+            dsn = overrides.sentryDsn,
+        )
     val backend = overrides.sentryBackend ?: defaultSentryBackend
     return ErrorReporting(
-        reporter = overrides.errorReporter ?: backend.start(context, config),
+        reporter = overrides.errorReporter ?: reporterFor(context, config, backend),
         release = config.release,
         environment = config.environment,
     )
 }
+
+private fun reporterFor(
+    context: Context,
+    config: SentryReportingConfig,
+    backend: SentryBackend,
+): ErrorReporter = if (config.isEnabled) backend.start(context, config) else NoOpErrorReporter
 
 private fun buildVerifyGatewayConnection(
     repository: GatewayConnectionRepository,

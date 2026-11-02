@@ -51,7 +51,15 @@ internal fun SentryAndroidOptions.applyReporting(
     release = config.release
     environment = config.environment
     tracesSampleRate = config.tracesSampleRate
+    isEnableAutoActivityLifecycleTracing = false
+    isEnableUserInteractionTracing = false
+    isEnableTimeToFullDisplayTracing = false
     isEnableAutoSessionTracking = config.sessionTrackingEnabled
+    isAnrEnabled = true
+    isAttachAnrThreadDump = false
+    isAttachScreenshot = false
+    isAttachViewHierarchy = false
+    isSendDefaultPii = false
     setIgnoredErrors(config.ignoredErrors)
     isAttachStacktrace = true
     beforeSend =

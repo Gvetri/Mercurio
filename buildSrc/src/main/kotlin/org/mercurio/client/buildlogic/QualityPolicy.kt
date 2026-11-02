@@ -65,6 +65,7 @@ object QualityPolicy {
         BoundaryDoubleRequirement("RunSubmissionUncertaintyStorage", "datasource"),
         BoundaryDoubleRequirement("SessionDraftStore", "repository"),
         BoundaryDoubleRequirement("InstalledBuildProvider", "datasource"),
+        BoundaryDoubleRequirement("ErrorReportingConsentStore", "repository"),
     )
 
     /**
