@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.EntryState
+import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
 import org.mercurio.client.feature.entry.domain.SessionPage
 import java.util.concurrent.TimeUnit
 
@@ -107,5 +108,55 @@ class EntryStateHolderSettingsTest {
         } finally {
             holder.close()
         }
+    }
+
+    @Test
+    fun auto_load_defaults_on_when_no_decision_is_stored() {
+        val holder =
+            EntryStateHolder(
+                initialState = EntryState(),
+                dependencies =
+                    EntryStateHolderDependencies(
+                        imageLoadingSettingsStore = FakeImageLoadingSettingsStore(),
+                    ),
+            )
+
+        try {
+            assertTrue(holder.uiState.value.autoLoadImages)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun the_auto_load_switch_persists_and_updates_the_surface() {
+        val store = FakeImageLoadingSettingsStore(enabled = false)
+        val holder =
+            EntryStateHolder(
+                initialState = EntryState(),
+                dependencies = EntryStateHolderDependencies(imageLoadingSettingsStore = store),
+            )
+
+        try {
+            assertFalse(holder.uiState.value.autoLoadImages)
+            holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            assertTrue(holder.uiState.value.autoLoadImages)
+            assertTrue(store.loadEnabled())
+            holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            assertFalse(holder.uiState.value.autoLoadImages)
+            assertFalse(store.loadEnabled())
+        } finally {
+            holder.close()
+        }
+    }
+}
+
+private class FakeImageLoadingSettingsStore(
+    private var enabled: Boolean = true,
+) : ImageLoadingSettingsStore {
+    override fun loadEnabled(): Boolean = enabled
+
+    override fun saveEnabled(enabled: Boolean) {
+        this.enabled = enabled
     }
 }

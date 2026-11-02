@@ -25,8 +25,12 @@ name: settings-cache-clear
     timeout: 30000
 - tapOn: "Settings"
 - extendedWaitUntil:
-    visible: ".*App version.*"
+    visible: "CONNECTION"
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Clear cached conversations"
+    direction: DOWN
 - assertVisible: "Clearing removes cached conversations from this device only. Remote Sessions and Runs are not deleted, and diagnostic files you already exported are not removed."
 - takeScreenshot: settings-cache-clear-explanation
 - tapOn: "Clear cached conversations"
@@ -34,18 +38,22 @@ name: settings-cache-clear
 - assertVisible: "Remove the cached conversations stored on this device. Remote Sessions and Runs are not deleted or changed. Diagnostic files you already exported are not removed."
 - takeScreenshot: settings-cache-clear-confirmation
 - tapOn: "Cancel"
-- assertVisible: ".*App version.*"
+- assertVisible: "CONNECTION"
 - extendedWaitUntil:
     notVisible: 'Clear cached conversations\?'
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Clear cached conversations"
+    direction: DOWN
 - tapOn: "Clear cached conversations"
 - tapOn: '^Clear$'
-- assertVisible: ".*App version.*"
+- assertVisible: "CONNECTION"
 - extendedWaitUntil:
     notVisible: 'Clear cached conversations\?'
     timeout: 30000
 - takeScreenshot: settings-cache-clear-confirmed
-- tapOn: "Back to Sessions"
+- back
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000

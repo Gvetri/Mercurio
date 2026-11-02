@@ -57,7 +57,7 @@ Press **Verify Gateway Connection**. The client verifies authentication and the 
 manifest first. While it works, it shows **Verifying Gateway connection…**. The credential is
 saved securely on this device after verification: it is encrypted with an AndroidKeyStore key and
 stored in application-private storage that is excluded from Android backup, so you can reopen the
-connection without retyping the credential, and **Change Gateway credential** in **Settings**
+connection without retyping the credential, and **Change credential** in **Settings**
 replaces it. The client shows
 **Gateway verified.** / **Saving credential securely…** while the secure save finishes and then
 reports **Connected** / **Gateway connected**. If the secure save fails, it keeps your inputs,
@@ -66,14 +66,21 @@ which verifies and saves the connection again. The credential is never stored in
 
 ## Settings
 
-The **Settings** button in the Session list header opens the Settings surface. It holds the
-installed app version, the **Run status notifications** opt-in, **Local diagnostics**,
-**Change Gateway credential**, and **Remove Gateway Connection**. Opening Settings keeps the
-Session list in memory: returning with **Back to Sessions** restores your search query and the
-loaded Sessions.
+The **Settings** button in the Session list header opens the Settings surface. It is a list of
+sections: **Connection**, **Notifications**, **Media**, **Diagnostics**, and **About**. A section
+whose capability has not shipped is absent. Opening Settings keeps the
+Session list in memory: the back gesture restores your search query and the loaded Sessions.
 
-**Remove Gateway Connection** removes the saved endpoint and credential from this device. It is a
-local removal only: the client does not delete or cancel remote Sessions and Runs.
+The **Connection** row states the saved connection. The **::** control in the top app bar opens the
+only menu on the screen: **Change credential** and **Remove connection**. **Remove connection**
+removes the saved endpoint and credential from this device. It is a local removal only: the client
+does not delete or cancel remote Sessions and Runs.
+
+**Media** holds **Load pictures automatically**, on by default. When it is off, an image waits for
+a tap instead of loading automatically.
+
+**Diagnostics** holds **Local diagnostics** and **Clear cached conversations**. **About** holds the
+installed version, build, and install source.
 
 ## What the client does not do
 
@@ -106,7 +113,7 @@ submission preserves your draft so you can **Try again**.
 action you take; the client never retries silently, and it refuses a response that reuses a failed
 Run identity (**Retry response reused the failed Run identity.**).
 
-**Notifications (optional).** In **Settings**, **Run status notifications** report terminal Run
+**Notifications (optional).** In **Settings**, **Notifications** report terminal Run
 status only. If
 Android has blocked them, the client states that notifications are blocked and points you to the
 Android settings.
@@ -119,7 +126,7 @@ Android settings.
 - A Run status notification carries terminal status only; it does not carry conversation content.
 - A verified credential is authenticated-encrypted with an AndroidKeyStore key in
   application-private, backup-excluded storage. It is never written in plain text, and
-  **Remove Gateway Connection** deletes the saved endpoint and credential from this device.
+  **Remove connection** deletes the saved endpoint and credential from this device.
 - A Message can reference an HTTPS image. The client fetches that image directly from its host, so
   the host can see the device's network address. The image stays in memory only: it is never written
   to disk, and a process restart fetches it again. Non-HTTPS destinations and private, loopback, and
@@ -155,7 +162,7 @@ verification, a Session-list load, or a Run submission succeeded, failed, or was
 | --- | --- | --- |
 | **Invalid Gateway address. Enter one HTTPS Gateway endpoint.** | The endpoint is not a single valid HTTPS address. | Correct the endpoint. Only an `https://` address is accepted. |
 | **Secure connection failed. Check the Gateway certificate and hostname.** | The TLS connection could not be trusted, or the hostname does not match the certificate. | Use the certificate the Gateway actually serves, and check that the endpoint host matches it. |
-| **Authentication failed. Check the Gateway credential.** | The Gateway rejected the bearer credential. | Retype the credential carefully; if it was saved, use **Change Gateway credential** to replace it. |
+| **Authentication failed. Check the Gateway credential.** | The Gateway rejected the bearer credential. | Retype the credential carefully; if it was saved, use **Change credential** to replace it. |
 | **Required feature unavailable. This Gateway does not support the client contract.** | The Gateway does not expose the capability manifest the client requires. | Connect to a compatible Gateway. This client cannot add a Gateway feature. |
 | **Gateway request failed. Try again.** | A request failed after the connection was established. | Retry the action. Use **Refresh** to reload the Session list, and verify the Gateway if it persists. |
 

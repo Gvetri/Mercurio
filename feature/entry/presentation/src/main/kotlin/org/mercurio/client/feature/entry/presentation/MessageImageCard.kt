@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,10 +44,14 @@ import org.mercurio.client.feature.entry.domain.MessageImageFetch
 @Composable
 fun MessageImageProvider(
     loadImage: suspend (String) -> MessageImageFetch,
+    autoLoad: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val services = remember(loadImage, context) { MessageImageServices(loadImage, CoilMessageImageDecoder(context)) }
+    val services =
+        remember(loadImage, context, autoLoad) {
+            MessageImageServices(loadImage, CoilMessageImageDecoder(context), autoLoad)
+        }
     CompositionLocalProvider(LocalMessageImageServices provides services, content = content)
 }
 
@@ -59,6 +64,17 @@ internal fun MessageImageCard(
 ) {
     val services = LocalMessageImageServices.current ?: return
     var attempt by remember(destination) { mutableIntStateOf(0) }
+    var requested by remember(destination) { mutableStateOf(false) }
+    if (!services.autoLoad && !requested) {
+        MessageImageStage(
+            alt = alt,
+            note = stringResource(R.string.chat_image_not_loaded),
+            isError = false,
+            actionLabel = stringResource(R.string.chat_image_load),
+            onAction = { requested = true },
+        )
+        return
+    }
     val state by
         produceState<MessageImageState>(MessageImageState.Loading, destination, attempt, services) {
             value = MessageImageState.Loading
@@ -72,7 +88,8 @@ internal fun MessageImageCard(
                 alt = alt,
                 note = stringResource(current.failure.messageRes),
                 isError = true,
-                onRetry = { attempt++ },
+                actionLabel = stringResource(R.string.chat_try_again_label),
+                onAction = { attempt++ },
             )
         is MessageImageState.Loaded -> LoadedMessageImage(image = current.image, alt = alt)
     }
@@ -102,7 +119,8 @@ private fun MessageImageStage(
     alt: String,
     note: String,
     isError: Boolean,
-    onRetry: (() -> Unit)? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
 ) {
     val spacing = LocalHermesDesignTokens.current.spacing
     MessageImageFrame {
@@ -132,9 +150,9 @@ private fun MessageImageStage(
                     },
                 textAlign = TextAlign.Center,
             )
-            if (onRetry != null) {
-                TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(text = stringResource(R.string.chat_try_again_label))
+            if (onAction != null) {
+                TextButton(onClick = onAction, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(text = actionLabel ?: stringResource(R.string.chat_try_again_label))
                 }
             }
         }

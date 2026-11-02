@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import kotlinx.coroutines.awaitCancellation
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -174,10 +175,36 @@ class MessageImageCardTest {
         composeTestRule.onNodeWithText("![chart](charts/chart.png)").assertIsDisplayed()
     }
 
+    @Test
+    fun auto_load_off_waits_for_a_tap_and_then_loads_the_image() {
+        val port = CountingPort()
+        composeTestRule.setContent {
+            HermesTheme {
+                CompositionLocalProvider(
+                    LocalMessageImageServices provides services(port, FixedCardDecoder(), autoLoad = false),
+                ) {
+                    MessageImageCard(destination = "https://cdn.example.com/chart.png", alt = ALT)
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText("Image not loaded.").assertIsDisplayed()
+        assertEquals(0, port.calls)
+
+        composeTestRule.onNodeWithText("Load image").performClick()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule.onAllNodesWithContentDescription(ALT).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule.onNodeWithContentDescription(ALT).assertIsDisplayed()
+        assertEquals(1, port.calls)
+    }
+
     private fun services(
         port: MessageImagePort,
         decoder: MessageImageDecoder,
-    ): MessageImageServices = MessageImageServices(port::fetch, decoder)
+        autoLoad: Boolean = true,
+    ): MessageImageServices = MessageImageServices(port::fetch, decoder, autoLoad)
 
     private fun fetched(): MessageImageFetch.Fetched = MessageImageFetch.Fetched(byteArrayOf(1, 2, 3), "image/png")
 
@@ -194,6 +221,15 @@ private class FixedCardPort(
     private val result: MessageImageFetch,
 ) : MessageImagePort {
     override suspend fun fetch(destination: String): MessageImageFetch = result
+}
+
+private class CountingPort : MessageImagePort {
+    @Volatile var calls = 0
+
+    override suspend fun fetch(destination: String): MessageImageFetch {
+        calls++
+        return MessageImageFetch.Fetched(byteArrayOf(1, 2, 3), "image/png")
+    }
 }
 
 private class CancellationTrackingPort : MessageImagePort {

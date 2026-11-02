@@ -14,6 +14,8 @@ import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
+import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
+import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsExporter
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsStore
@@ -71,6 +73,8 @@ sealed interface EntryUiEvent {
     data object CancelRemoveGatewayConnectionClicked : Connection
 
     data object RunStatusNotificationsToggleClicked : Connection
+
+    data object AutoLoadImagesToggleClicked : Connection
 
     data class RunStatusNotificationPermissionResult(
         val granted: Boolean,
@@ -266,8 +270,11 @@ data class EntryUiState(
     val isClearHistoryCacheConfirmationOpen: Boolean = false,
     val isSettingsOpen: Boolean = false,
     val clientVersion: String = "unknown",
+    val buildNumber: Long = 0L,
+    val installSource: InstallSource = InstallSource.OTHER_SOURCE,
     val sessionList: SessionListUiState? = null,
     val runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
+    val autoLoadImages: Boolean = true,
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
 )
@@ -342,6 +349,7 @@ data class EntryStateHolderDependencies(
     val onRunSubmissionSettled: (() -> Unit)? = null,
     val requestRunStatusNotificationPermission: (() -> Unit)? = null,
     val runStatusNotificationSettingsStore: RunStatusNotificationSettingsStore? = null,
+    val imageLoadingSettingsStore: ImageLoadingSettingsStore? = null,
     val runStatusNotificationPermission: RunStatusNotificationPermission? = null,
     val runStatusNotifier: RunStatusNotifier? = null,
     val localDiagnostics: LocalDiagnosticsPorts? = null,
@@ -370,6 +378,7 @@ class EntryStateHolder(
     internal val onRunSubmissionSettled = dependencies.onRunSubmissionSettled
     internal val requestRunStatusNotificationPermission = dependencies.requestRunStatusNotificationPermission
     internal val runStatusNotificationSettingsStore = dependencies.runStatusNotificationSettingsStore
+    internal val imageLoadingSettingsStore = dependencies.imageLoadingSettingsStore
     internal val runStatusNotificationPermission = dependencies.runStatusNotificationPermission
     internal val runStatusNotifier = dependencies.runStatusNotifier
     internal val localDiagnostics = dependencies.localDiagnostics
@@ -382,7 +391,10 @@ class EntryStateHolder(
 
     internal val mutableUiState =
         MutableStateFlow(
-            initialState.toUiState().copy(runStatusNotifications = restoredRunStatusNotificationState()),
+            initialState.toUiState().copy(
+                runStatusNotifications = restoredRunStatusNotificationState(),
+                autoLoadImages = imageLoadingSettingsStore?.loadEnabled() ?: true,
+            ),
         )
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
 
@@ -472,6 +484,7 @@ class EntryStateHolder(
             is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
             is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
             is EntryUiEvent.RunStatusNotificationsToggleClicked -> toggleRunStatusNotifications()
+            is EntryUiEvent.AutoLoadImagesToggleClicked -> toggleAutoLoadImages()
             is EntryUiEvent.RunStatusNotificationPermissionResult ->
                 applyRunStatusNotificationPermissionResult(event.granted)
         }
@@ -821,6 +834,8 @@ internal fun EntryState.toUiState(): EntryUiState =
             bearerCredential = configuredCredential.orEmpty(),
             isGatewayConnectionConfigured = true,
             clientVersion = clientVersion,
+            buildNumber = buildNumber,
+            installSource = installSource,
         )
     } else {
         EntryUiState(
@@ -828,5 +843,7 @@ internal fun EntryState.toUiState(): EntryUiState =
             supportingText = UiText.Resource(R.string.entry_supporting_connect),
             actionLabel = UiText.Resource(R.string.entry_action_add_connection),
             clientVersion = clientVersion,
+            buildNumber = buildNumber,
+            installSource = installSource,
         )
     }

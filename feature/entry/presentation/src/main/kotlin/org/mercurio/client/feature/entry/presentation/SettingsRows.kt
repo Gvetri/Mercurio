@@ -1,0 +1,148 @@
+package org.mercurio.client.feature.entry.presentation
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+
+@Composable
+internal fun SettingsSectionHeader(label: String) {
+    val tokens = LocalHermesDesignTokens.current
+    Text(
+        text = label.uppercase(),
+        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.16.em),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = SETTINGS_SECTION_HEADER_HEIGHT)
+                .padding(top = tokens.spacing.s)
+                .semantics { heading() },
+    )
+}
+
+@Composable
+internal fun SettingsValueRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = SETTINGS_ROW_HEIGHT)
+                .padding(vertical = LocalHermesDesignTokens.current.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun SettingsActionRow(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    testTag: String? = null,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    val contentColor =
+        if (enabled) {
+            tokens.colorScheme.primary
+        } else {
+            tokens.colorScheme.onSurface.copy(alpha = SETTINGS_DISABLED_CONTENT_ALPHA)
+        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = SETTINGS_ACTION_ROW_HEIGHT)
+                .clickable(enabled = enabled, onClick = onClick)
+                .then(if (testTag == null) Modifier else Modifier.testTag(testTag))
+                .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = contentColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+internal fun SettingsSwitchRow(
+    supporting: String,
+    checked: Boolean,
+    onCheckedChange: () -> Unit,
+    contentDescription: String,
+    errorText: String? = null,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = SETTINGS_ROW_HEIGHT)
+                .padding(vertical = tokens.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = tokens.spacing.s)) {
+            Text(text = contentDescription, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = supporting,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            errorText?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = { onCheckedChange() },
+            modifier =
+                Modifier
+                    .testTag(contentDescription)
+                    .semantics { this.contentDescription = contentDescription },
+        )
+    }
+}
+
+private val SETTINGS_SECTION_HEADER_HEIGHT = 28.dp
+
+private val SETTINGS_ROW_HEIGHT = 56.dp
+
+private val SETTINGS_ACTION_ROW_HEIGHT = 48.dp
+
+private const val SETTINGS_DISABLED_CONTENT_ALPHA = 0.38f

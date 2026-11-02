@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
             }
             val state by entryStateHolder.uiState.collectAsState()
             HermesTheme {
-                MessageImageProvider(loadImage = messageImagePort::fetch) {
+                MessageImageProvider(loadImage = messageImagePort::fetch, autoLoad = state.autoLoadImages) {
                     EntryScreen(
                         state = state,
                         onEvent = entryStateHolder::onEvent,

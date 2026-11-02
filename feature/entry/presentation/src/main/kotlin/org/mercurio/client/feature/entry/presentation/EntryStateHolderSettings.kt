@@ -12,3 +12,9 @@ internal fun EntryStateHolder.openSettings() {
 internal fun EntryStateHolder.closeSettings() {
     mutableUiState.update { current -> current.copy(isSettingsOpen = false) }
 }
+
+internal fun EntryStateHolder.toggleAutoLoadImages() {
+    val enabled = !mutableUiState.value.autoLoadImages
+    imageLoadingSettingsStore?.saveEnabled(enabled)
+    mutableUiState.update { current -> current.copy(autoLoadImages = enabled) }
+}
