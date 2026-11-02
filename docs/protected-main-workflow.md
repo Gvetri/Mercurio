@@ -20,8 +20,8 @@ what each verifies.
 | Bypass actors | None, so no account or role can skip a rule |
 
 A merged pull request deletes its branch. Auto-merge may be enabled on a ready pull request, and the
-merge then happens only once the required status is green for the exact current head. GitHub refuses
-to merge a draft pull request at all.
+merge then happens only once both required statuses are green for the exact current head. GitHub
+refuses to merge a draft pull request at all.
 
 ## Branch names
 
@@ -41,12 +41,12 @@ owner to request the review.
 `ready_for_review`, and `labeled`: each listed activity except a non-`run-maestro` label starts a run
 that re-evaluates the head as it is at that moment, so a result from an earlier state of a pull
 request never stands for the current one, and adding the `run-maestro` label starts the labeled
-emulator suites on an open pull request. A title edit and a draft transition change no code, so they
-start no `quality-gate` run; the body check has its own `edited` trigger, so an edit of the title or
-the body re-runs `pr-template` alone. Adding any other label starts only a no-op run whose validation
-jobs report `skipped` while its aggregate re-reports the decision of the newest completed
-`quality-gate` check run on that same head, so the last completed gate stays authoritative and a
-label can neither clear a failed gate nor block a green one.
+emulator suites on an open pull request. A title edit and converting a pull request to a draft change
+no code, so they start no `quality-gate` run; the body check has its own `edited` trigger, so an edit
+of the title or the body re-runs `pr-template` alone. Adding any other label starts only a no-op run
+whose validation jobs report `skipped` while its aggregate re-reports the decision of the newest
+completed `quality-gate` check run on that same head, so the last completed gate stays authoritative
+and a label can neither clear a failed gate nor block a green one.
 
 With `cancel-in-progress: true`, pull-request runs group per pull-request number and push runs group
 per ref: a newer run supersedes the obsolete run of the same pull request or ref. Scheduled runs
@@ -125,7 +125,7 @@ validation on `main`. Only that exact successful validation permits signing and 
 and on a ready pull request it adds a fast formatting and lint result beside the complete gate. The
 aggregate also requires that a pull request targets `main`, so a pull request against another branch
 fails even when its checks pass. For an external-fork pull request the aggregate fails closed: the
-head never ran the complete gate, so it must never hold a passing required status.
+head never ran the complete gate, so it must never hold a passing `quality-gate` status.
 
 ## Merging
 
@@ -133,10 +133,10 @@ A pull request may be merged or auto-merged only when all of the following hold:
 
 - it is ready for review, not a draft;
 - it targets `main`;
-- its exact current head passed the required `quality-gate` status, and the branch is up to date
+- its exact current head passed both required statuses, and the branch is up to date
   with `main`;
-- it comes from the repository itself, because an external-fork head never holds a passing required
-  status;
+- it comes from the repository itself, because an external-fork head never holds a passing
+  `quality-gate` status;
 - it is merged with a squash merge, which is the only enabled strategy.
 
 The squash merge writes the pull-request title onto `main`, so the title and every commit the pull
@@ -154,8 +154,8 @@ An external-fork pull request is untrusted input, so it never runs the complete 
 - the repository requires maintainer approval before a run from an external contributor starts, so no
   external change consumes runner time on its own;
 - only `fork-guard` executes, and it reports which handling applies;
-- the aggregate fails closed, so an external head never holds a passing required status and neither
-  an automatic nor a manual merge of the fork head is possible;
+- the aggregate fails closed, so an external head never holds a passing `quality-gate` status, and
+  neither an automatic nor a manual merge of the fork head is possible;
 - external-fork artifacts are not release or compatibility inputs;
 - a maintainer validates the change by carrying it onto an in-repository branch, where the complete
   gate runs against a commit-verified head, and merges that pull request explicitly. That explicit
@@ -185,7 +185,7 @@ GITHUB_REPOSITORY=Gvetri/Mercurio GITHUB_TOKEN="$(gh auth token)" \
 ```
 
 Without `--owner` the check verifies everything a read-only credential can read: the enforced rules
-and the rulesets' bypass actors, the required status, the required-check declaration, the declared
+and the rulesets' bypass actors, the required statuses, the required-check declaration, the declared
 read-only token scope, and the absence of secrets.
 
 ## The contracts are themselves tested

@@ -126,8 +126,8 @@ frame is the reference for it. The pull request states which captures are in tha
 leaving the row empty.
 
 The pull request's design evidence section is reviewer material: no check reads it, and the body
-check requires only its four headings
-([what a pull request must satisfy](agents/pull-request-checks.md)).
+check requires only the four headings
+([What a pull request must satisfy](agents/pull-request-checks.md)).
 
 ## The stop rule
 
