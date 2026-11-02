@@ -89,8 +89,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(firstHolder, " $endpoint ", hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
-                firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Persist this run"))
-                firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
+                sendFromComposer(firstHolder, gateway, "Persist this run")
                 awaitState(firstHolder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
                 assertTrue(gateway.observationStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 awaitRecoveryEntries(storage, setOf(RunRecoveryEntry(gateway.session.id, gateway.activeRun.id)))
@@ -135,8 +134,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(firstHolder, endpoint, hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
-                firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Persist before reconnect"))
-                firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
+                sendFromComposer(firstHolder, gateway, "Persist before reconnect")
                 awaitState(firstHolder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
                 awaitRecoveryEntries(storage, setOf(RunRecoveryEntry(gateway.session.id, gateway.activeRun.id)))
             } finally {
@@ -187,8 +185,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(firstHolder, endpoint, hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
-                firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Keep recovery"))
-                firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
+                sendFromComposer(firstHolder, gateway, "Keep recovery")
                 awaitState(firstHolder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
                 awaitRecoveryEntries(storage, setOf(RunRecoveryEntry(gateway.session.id, gateway.activeRun.id)))
             } finally {
@@ -228,8 +225,7 @@ class EntryWiringRestartIntegrationTest {
         try {
             connect(holder, endpoint, hasSavedEndpoint = false)
             openSession(holder, gateway.session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Close immediately"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            sendFromComposer(holder, gateway, "Close immediately")
             awaitState(holder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
 
             holder.close()
@@ -259,8 +255,7 @@ class EntryWiringRestartIntegrationTest {
                 connect(firstHolder, endpoint, hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
                 gateway.failCreateAfterAcceptance = true
-                firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Response may be lost"))
-                firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
+                sendFromComposer(firstHolder, gateway, "Response may be lost")
                 awaitState(firstHolder) {
                     it.sessionList?.openedSession?.hasUnresolvedSubmission == true &&
                         it.sessionList?.openedSession?.isSending == false
@@ -306,8 +301,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(firstHolder, endpoint, hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
-                firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Keep one request"))
-                firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
+                sendFromComposer(firstHolder, gateway, "Keep one request")
                 assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 assertTrue(SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey))
 
@@ -397,8 +391,7 @@ class EntryWiringRestartIntegrationTest {
                 connect(firstHolder, endpoint, hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
                 gateway.blockCreate = true
-                firstHolder.onEvent(EntryUiEvent.ComposerTextChanged("Do not lose recovery"))
-                firstHolder.onEvent(EntryUiEvent.SendMessageClicked)
+                sendFromComposer(firstHolder, gateway, "Do not lose recovery")
                 assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 firstHolder.close()
@@ -453,6 +446,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(holder, endpoint, hasSavedEndpoint = false)
                 openSession(holder, gateway.session.id)
+                awaitComposerReady(holder)
                 dispatcher.paused = true
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Cancel before create"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
@@ -483,8 +477,7 @@ class EntryWiringRestartIntegrationTest {
         try {
             connect(holder, "https://gateway.example/profile", hasSavedEndpoint = false)
             openSession(holder, gateway.session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("A loaded Runner answers slowly"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            sendFromComposer(holder, gateway, "A loaded Runner answers slowly")
             assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
         } finally {
             gateway.releaseCreate.countDown()
@@ -505,8 +498,7 @@ class EntryWiringRestartIntegrationTest {
         try {
             connect(holder, "https://gateway.example/profile", hasSavedEndpoint = false)
             openSession(holder, gateway.session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Send after the clear"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            sendFromComposer(holder, gateway, "Send after the clear")
             awaitState(holder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
             assertEquals(1, gateway.runRequests.size)
         } finally {
@@ -560,6 +552,35 @@ class EntryWiringRestartIntegrationTest {
     ) {
         holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
         awaitState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
+    }
+
+    private fun awaitComposerReady(holder: EntryStateHolder) {
+        awaitState(holder) { state ->
+            state.sessionList?.let { list ->
+                val opened = list.openedSession
+                opened != null &&
+                    !list.hasPendingMutation &&
+                    !opened.isRefreshing &&
+                    !opened.isReconciliationInProgress &&
+                    !opened.hasUnresolvedSubmission &&
+                    !opened.isSending
+            } == true
+        }
+    }
+
+    private fun sendFromComposer(
+        holder: EntryStateHolder,
+        gateway: RestartGateway,
+        text: String,
+    ) {
+        awaitComposerReady(holder)
+        holder.onEvent(EntryUiEvent.ComposerTextChanged(text))
+        holder.onEvent(EntryUiEvent.SendMessageClicked)
+        val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
+        assertTrue(
+            "The submission was dropped before it reached the Gateway.",
+            opened.isSending || gateway.runRequests.isNotEmpty(),
+        )
     }
 
     private fun awaitState(
