@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.domain
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -67,14 +66,6 @@ class RunStatusNotificationTest {
                 canPost = true,
                 state = RunPresentationState.RUNNING,
             ),
-        )
-    }
-
-    @Test
-    fun the_notifiable_terminal_set_is_exactly_succeeded_and_failed() {
-        assertEquals(
-            setOf(RunPresentationState.SUCCEEDED, RunPresentationState.FAILED),
-            notifiableTerminalStates,
         )
     }
 

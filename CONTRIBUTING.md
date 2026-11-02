@@ -175,9 +175,9 @@ phone single-pane window and on a two-pane window.
 ### Markdown contract matrix
 
 `SelectedMarkdownVisualRegressionTest` pins the supported rendering of untrusted
-Gateway content: a fenced code block in its horizontally scrollable region and a
-long multi-block message, each on the phone viewport in the light and the dark
-token set.
+Gateway content: a fenced code block in its horizontally scrollable region, a
+long multi-block message, and a message with inline, display and refused math, each
+on the phone viewport in the light and the dark token set.
 
 | State | Window | Reason for inclusion |
 | --- | --- | --- |
@@ -185,6 +185,8 @@ token set.
 | `markdown_code_block_dark` | `w411dp-h891dp-night` | The same state on the dark token set |
 | `markdown_long_content_light` | `w411dp-h891dp-notnight` | Long multi-block response that scrolls natively instead of truncating |
 | `markdown_long_content_dark` | `w411dp-h891dp-night` | The same state on the dark token set |
+| `markdown_math_light` | `w411dp-h891dp-notnight` | Inline formula in its line, a centred display formula in its own surface, and a refused expression kept as its exact source |
+| `markdown_math_dark` | `w411dp-h891dp-night` | The same state on the dark token set |
 
 The Session list has no creation dialog: `+ new session` creates the Session and keeps
 the list in place, and the new row carries the pending-title preview until the Gateway
