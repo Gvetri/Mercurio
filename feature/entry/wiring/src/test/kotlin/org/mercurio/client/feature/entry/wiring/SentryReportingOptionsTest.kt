@@ -22,7 +22,7 @@ class SentryReportingOptionsTest {
         assertEquals(config.dsn, options.dsn)
         assertEquals(config.release, options.release)
         assertEquals(config.environment, options.environment)
-        assertEquals(config.tracesSampleRate, options.tracesSampleRate ?: 0.0, 0.0)
+        assertEquals(config.tracesSampleRate, options.tracesSampleRate)
         assertEquals(config.sessionTrackingEnabled, options.isEnableAutoSessionTracking)
         assertEquals(
             config.ignoredErrors,
@@ -36,7 +36,7 @@ class SentryReportingOptionsTest {
         val config = reportingConfig()
 
         assertFalse(config.sessionTrackingEnabled)
-        assertEquals(0.0, config.tracesSampleRate, 0.0)
+        assertNull(config.tracesSampleRate)
     }
 
     @Test
@@ -46,7 +46,11 @@ class SentryReportingOptionsTest {
         options.applyReporting(reportingConfig(), ReportScrubber())
 
         assertFalse(options.isEnableAutoSessionTracking)
-        assertEquals(0.0, options.tracesSampleRate ?: 0.0, 0.0)
+        assertNull(options.tracesSampleRate)
+        assertFalse(options.isTracingEnabled)
+        assertFalse(options.isEnableAutoActivityLifecycleTracing)
+        assertFalse(options.isEnableUserInteractionTracing)
+        assertFalse(options.isEnableTimeToFullDisplayTracing)
         assertFalse(options.isProfilingEnabled)
         assertFalse(options.isSendDefaultPii)
         assertFalse(options.isAttachScreenshot)

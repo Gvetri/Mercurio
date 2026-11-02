@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.wiring
 
-/** Reads and writes the one stored error-reporting decision. */
 interface ErrorReportingConsentStore {
     /**
      * Returns the stored decision. The composition root reads it once, before the reporting backend
@@ -9,9 +8,5 @@ interface ErrorReportingConsentStore {
      */
     fun read(): ErrorReportingConsent
 
-    /**
-     * Stores [consent] so every later process reads it, or clears the record when it is
-     * [ErrorReportingConsent.Undecided].
-     */
     fun write(consent: ErrorReportingConsent)
 }

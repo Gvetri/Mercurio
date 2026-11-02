@@ -30,7 +30,7 @@ class SentryBackendTest {
         assertTrue(reporter is SentryErrorReporter)
         assertTrue(config.isEnabled)
         assertFalse(config.sessionTrackingEnabled)
-        assertEquals(0.0, config.tracesSampleRate, 0.0)
+        assertNull(config.tracesSampleRate)
         assertEquals(
             listOf(
                 "java.util.concurrent.CancellationException",

@@ -8,10 +8,8 @@ enum class ErrorReportingConsent {
     /** The user declined: the answer is stored, so a later run does not read it as missing. */
     Declined,
 
-    /** The user granted reporting: crash, error, and not-responding events may leave the device. */
     Granted,
     ;
 
-    /** True only for [Granted], so an [Undecided] or [Declined] decision always reports nothing. */
     val isGranted: Boolean get() = this == Granted
 }

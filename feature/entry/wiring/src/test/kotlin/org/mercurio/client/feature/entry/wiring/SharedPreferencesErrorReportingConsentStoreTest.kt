@@ -33,7 +33,7 @@ class SharedPreferencesErrorReportingConsentStoreTest {
     }
 
     @Test
-    fun clearing_the_decision_returns_the_store_to_the_fresh_install_state() {
+    fun an_undecided_decision_reads_back_as_no_decision() {
         val store = newStore()
         store.write(ErrorReportingConsent.Granted)
         store.write(ErrorReportingConsent.Undecided)

@@ -142,7 +142,7 @@ private fun buildErrorReporting(
         sentryReportingConfig(
             clientVersion = clientVersion,
             consent = consentStore.read(),
-            dsn = overrides.sentryDsn ?: BuildConfig.SENTRY_DSN,
+            dsn = overrides.sentryDsn,
         )
     val backend = overrides.sentryBackend ?: defaultSentryBackend
     return ErrorReporting(
