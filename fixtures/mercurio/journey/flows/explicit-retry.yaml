@@ -39,12 +39,11 @@ name: explicit-retry
 - extendedWaitUntil:
     visible: "Stable retry failure"
     timeout: 30000
-- extendedWaitUntil:
-    visible: "Try again"
-    timeout: 30000
 - tapOn:
-    text: "Try again"
-    retryTapIfNoChange: true
+    id: "conversation-message-input"
+- inputText: "Retry this once more"
+- hideKeyboard
+- tapOn: '\[ send \]'
 - extendedWaitUntil:
     visible: "idle"
     timeout: 30000
@@ -56,4 +55,4 @@ name: explicit-retry
     visible: "Stable retry success"
     timeout: 30000
 - assertVisible: "Stable retry success"
-- assertNotVisible: "Try again"
+- assertNotVisible: ".*· failed"

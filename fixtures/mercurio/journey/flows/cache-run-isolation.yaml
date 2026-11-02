@@ -27,7 +27,7 @@ name: cache-run-isolation
 - hideKeyboard
 - tapOn: '\[ send \]'
 - extendedWaitUntil:
-    visible: ".*Refresh history to resolve.*"
+    visible: "Message was not sent. Your draft is preserved. Try again."
     timeout: 30000
 - assertVisible: "Recover this offline draft"
 - assertNotVisible: "The displayed Session history is cached on this device. It is not live."

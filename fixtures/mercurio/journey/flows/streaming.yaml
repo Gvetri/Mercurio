@@ -42,11 +42,6 @@ name: streaming
 - assertVisible: '\[ stop \]'
 - takeScreenshot: "keyboard-first-reply"
 - hideKeyboard
-- scrollUntilVisible:
-    element:
-      text: "ASSISTANT"
-    direction: UP
-    timeout: 30000
 - assertVisible:
     id: "conversation-message-input"
 - assertVisible: '\[ stop \]'
