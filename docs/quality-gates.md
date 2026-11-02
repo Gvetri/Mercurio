@@ -14,6 +14,11 @@ Run the whole gate locally:
 To run the same checks for a single module, see
 [Local quality gate for one module](agents/local-quality-gate.md).
 
+Neither Gradle cache is enabled for the root build, and both stay scoped to the standalone `buildSrc`
+build: the verification tasks read the project and the task graph at execution time, and the evidence
+contracts reject a report older than the newest compiled class, so a cache-restored class file would
+trip the check before it measured anything (issue #238).
+
 ## Required checks
 
 `quality-gate` is the single required GitHub status. It fails unless every declared check below
@@ -23,7 +28,7 @@ must report `skipped`, and any other outcome fails the aggregate; see
 
 | GitHub status | Gradle entry point | Fails when |
 | --- | --- | --- |
-| `formatting` | `formatCheck` | A Kotlin file is not formatted |
+| `formatting` | `formatCheck commentPolicyVerify` | A Kotlin file is not formatted, or a hand-maintained file carries a line or block comment where KDoc is the only allowed comment form |
 | `static-analysis` | `:app:lintDebug` | Android lint reports an error |
 | `detekt` | `detekt detektVerify` | detekt reports a finding, a baseline file could absorb it, or the analysis tasks did not execute |
 | `unit-tests` | `verifyRequiredUnitTests` | A declared unit-test scope is missing, empty, has zero executed tests, or contains a skipped test |
@@ -234,6 +239,26 @@ The detekt contracts are self-tested as well: `QualityGateConfigurationTest` pin
 the declaration, and the configuration, and `QualityVerificationFailClosedTest` runs the real tasks
 against a deliberate violation of each of the four rules, a clean tree, a committed baseline file,
 and a skipped detekt verification.
+
+### Comments
+
+`./gradlew commentPolicyVerify` runs `.github/scripts/verify-comments.py` over every tracked file.
+Each file gets a language-aware reading — a Kotlin lexer that separates KDoc from block and line
+comments, a YAML reader that treats a block-scalar body as content and reads a `run` or `script`
+scalar as shell, a heredoc-aware shell reader, and a quote-aware Python reader — so a marker inside a
+string, a URL, a heredoc, or a block scalar is not a comment. KDoc is the only allowed comment form; a
+tool directive that starts the comment (`# noqa`, `# shellcheck`, `# syntax=`), a license header above
+the first code, and the generated or vendored files the class table excludes pass.
+
+A violation reports the file, the line, the comment kind, and the remedy: delete the comment, or move
+its constraint into a test, a check, or `docs/` first. The verifier fails closed on its own scope too:
+a tracked file whose class it does not know fails instead of passing, so a new file class is decided in
+[Coding guidelines](coding-guidelines.md#scope) in the same change that adds it, and a scope that
+resolves to no in-scope file fails rather than reporting a clean tree.
+
+`QualityGateConfigurationTest` pins the wiring, and `.github/scripts/tests/test_verify_comments.py`
+pins the tricky readings: comment markers inside strings, URLs, YAML block scalars, heredocs,
+shebangs, license headers, and the generated files.
 
 ## Design evidence
 

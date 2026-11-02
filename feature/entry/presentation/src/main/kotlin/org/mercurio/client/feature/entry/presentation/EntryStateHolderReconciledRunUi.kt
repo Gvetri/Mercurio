@@ -79,8 +79,6 @@ internal fun EntryStateHolder.showRunReconciliationFailure(
             return@synchronized
         }
         val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
-        // The Run stream already settled this Run with a terminal event. A failed
-        // second-opinion status call must not downgrade a known result to Uncertain.
         if (observationStateFor(sessionId, runId)?.state?.isTerminal() == true) {
             return@synchronized
         }

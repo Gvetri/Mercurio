@@ -160,6 +160,25 @@ var mutationVerified = false
 var detektVerified = false
 var mocksVerified = false
 var boundaryDoublesVerified = false
+var commentsVerified = false
+
+tasks.register("commentPolicyVerify") {
+    group = "verification"
+    description =
+        "Fails when a hand-maintained file carries a line or block comment where KDoc is the only allowed form."
+    doLast {
+        val process =
+            ProcessBuilder("python3", ".github/scripts/verify-comments.py")
+                .directory(projectDir)
+                .redirectErrorStream(true)
+                .start()
+        val output = process.inputStream.bufferedReader().use { reader -> reader.readText() }
+        val result = process.waitFor()
+        output.lineSequence().filter { line -> line.isNotBlank() }.forEach { line -> logger.lifecycle(line) }
+        check(result == 0) { "Comment policy verification failed with exit code $result." }
+        commentsVerified = true
+    }
+}
 
 tasks.register("verifyNoMocks") {
     group = "verification"
@@ -469,6 +488,7 @@ tasks.register("qualityGate") {
         "architectureRuleTests",
         "verifyNoMocks",
         "verifyDeterministicFakes",
+        "commentPolicyVerify",
         "coverageVerify",
         "mutationVerify",
         "detekt",
@@ -498,6 +518,9 @@ tasks.register("qualityGate") {
         }
         check(boundaryDoublesVerified) {
             "qualityGate requires verifyDeterministicFakes to execute in this invocation."
+        }
+        check(commentsVerified) {
+            "qualityGate requires commentPolicyVerify to execute in this invocation."
         }
         check(architectureRuleTestsExecuted) {
             "qualityGate requires architectureRuleTests to execute in this invocation."
