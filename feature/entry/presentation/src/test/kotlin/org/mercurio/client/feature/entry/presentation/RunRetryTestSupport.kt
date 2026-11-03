@@ -183,8 +183,8 @@ internal class RetryUncertaintyStorage : RunSubmissionUncertaintyStorage {
 
 internal class RetryFakeGateway(
     val sessions: List<Session>,
-    private val histories: Map<SessionId, SessionHistory> = emptyMap(),
-    private val runStatuses: Map<RunId, Run> = emptyMap(),
+    histories: Map<SessionId, SessionHistory> = emptyMap(),
+    runStatuses: Map<RunId, Run> = emptyMap(),
 ) : SessionGatewayPort, RunGatewayPort {
     private val mutableHistories = histories.toMutableMap()
     private val mutableRunStatuses = runStatuses.toMutableMap()

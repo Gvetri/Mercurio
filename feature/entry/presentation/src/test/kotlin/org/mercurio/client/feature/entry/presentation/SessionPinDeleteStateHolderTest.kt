@@ -377,7 +377,7 @@ class SessionPinDeleteStateHolderTest {
     }
 
     private class ScriptedPinGateway(
-        private val listedSession: Session,
+        listedSession: Session,
     ) : SessionGatewayPort {
         private var currentSession = listedSession
         var pinCalls = 0

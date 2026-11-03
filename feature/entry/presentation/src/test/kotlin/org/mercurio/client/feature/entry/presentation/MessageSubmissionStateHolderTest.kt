@@ -523,7 +523,7 @@ class MessageSubmissionStateHolderTest {
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitState(holder) {
                     it.sessionList?.openedSession?.latestRun == run &&
-                        it.sessionList?.openedSession?.composerText == ""
+                        it.sessionList.openedSession.composerText == ""
                 }
 
                 val retried = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)

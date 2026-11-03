@@ -1,4 +1,4 @@
-import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import dev.detekt.gradle.extensions.DetektExtension
 import org.mercurio.client.buildlogic.BoundaryDoubleVerifier
 import org.mercurio.client.buildlogic.CoverageEvidenceVerifier
 import org.mercurio.client.buildlogic.FixtureDescriptorValidator
@@ -23,7 +23,7 @@ plugins {
 }
 
 subprojects {
-    plugins.withId("io.gitlab.arturbosch.detekt") {
+    plugins.withId("dev.detekt") {
         extensions.configure(DetektExtension::class.java) {
             buildUponDefaultConfig = true
             config.setFrom(rootProject.file("config/detekt/detekt.yml"))

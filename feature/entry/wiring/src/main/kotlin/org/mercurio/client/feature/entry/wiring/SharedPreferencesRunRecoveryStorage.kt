@@ -10,6 +10,7 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isValid
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Locale
 
 /** Android-only persistence bridge; registry behavior remains in the JVM data module. */
 class SharedPreferencesRunRecoveryStorage(
@@ -76,7 +77,7 @@ class SharedPreferencesRunRecoveryStorage(
         return MessageDigest
             .getInstance("SHA-256")
             .digest(canonicalValue.toByteArray(StandardCharsets.UTF_8))
-            .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+            .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
     }
 
     private companion object {

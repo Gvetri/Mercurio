@@ -221,7 +221,7 @@ internal suspend fun openReconciledSession(
     awaitReconciliationState(holder) {
         it.sessionList?.openingSessionId == null &&
             it.sessionList?.openedSession?.session?.id == gateway.session.id &&
-            !it.sessionList!!.openedSession!!.isReconciliationInProgress
+            !it.sessionList.openedSession.isReconciliationInProgress
     }
 }
 
