@@ -129,7 +129,11 @@ Android settings.
 
 ## Privacy boundary
 
-- There is no network analytics, no product telemetry, and no third-party crash reporting.
+- There is no network analytics, no product telemetry, no session replay, and no profiling. The
+  client sends crash, error, and not-responding (ANR) reports to Sentry, the project's
+  error-reporting service, and only after you accept on the first screen.
+- Nothing is sent until you answer, and nothing is sent after you say no. **Settings › Diagnostics**
+  carries the same answer as a switch; a change there applies from the next process start.
 - Conversation content is not persisted on the device as an offline history. The open Session's
   content is held for display and re-read from the Gateway.
 - A Run status notification carries terminal status only; it does not carry conversation content.
@@ -152,8 +156,8 @@ verification, a Session-list load, or a Run submission succeeded, failed, or was
   snapshot is produced.
 - **Clear diagnostics** discards the retained records after an explicit confirmation. Exported
   copies are not affected.
-- Nothing is uploaded automatically. There is no automatic upload, no background transfer, and no
-  remote diagnostics endpoint.
+- Nothing in this buffer is uploaded automatically. There is no automatic upload, no background
+  transfer, and no remote diagnostics endpoint.
 
 ## Nightly and Stable Public Beta releases
 

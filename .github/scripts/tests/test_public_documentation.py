@@ -106,6 +106,22 @@ class PublishedDocumentationTest(unittest.TestCase):
         self.replace_once(USER_GUIDE, "arm64-v8a", "arm64")
         self.assert_rejected(run_check(self.root), "must state: arm64-v8a")
 
+    def test_the_old_blanket_crash_reporting_claim_is_rejected(self):
+        self.replace_once(
+            USER_GUIDE,
+            "no network analytics, no product telemetry, no session replay, and no profiling",
+            "no network analytics, no product telemetry, and no third-party crash reporting",
+        )
+        self.assert_rejected(run_check(self.root), "must state: no network analytics")
+
+    def test_the_declined_behaviour_must_be_stated(self):
+        self.replace_once(
+            USER_GUIDE,
+            "Nothing is sent until you answer, and nothing is sent after you say no.",
+            "Nothing is sent after you decline.",
+        )
+        self.assert_rejected(run_check(self.root), "must state: Nothing is sent until you answer")
+
     def test_a_feature_outside_the_release_scope_is_not_required_in_the_guide(self):
         text = self.document(USER_GUIDE).read_text(encoding="utf-8")
         for statement in ("Local diagnostics", "Export diagnostics", "Clear diagnostics"):

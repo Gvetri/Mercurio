@@ -35,10 +35,21 @@ decline stores `Declined` on the device; a stored answer means the question neve
 Settings › Diagnostics (issue #456) draws the same answer as a switch row and is where the answer
 changes.
 
-The composition root reads the stored answer once, before the reporting backend is built, and the
-Sentry SDK installs at most once per process. An answer given while the app runs therefore applies
-from the next process start; the declined sentence on the question states the consequence, because
-that screen shows once.
+The backend is inert until consent: without a stored `Granted` answer the Sentry SDK is not
+installed, no backend is initialised, and no report call is made. A user who declines sends
+nothing for as long as that answer stands, and a supplied DSN does not override it. The composition
+root reads the stored answer once, before the backend is built, so an answer changed while the app
+runs applies from the next process start.
+
+### Checking the gate in the field
+
+1. On a device whose stored answer is `Declined`, raise a report through the debug probe described
+   below. No event arrives in Sentry, because the backend is not installed.
+2. Change the answer to `Granted` in Settings › Diagnostics, restart the app, and raise the same
+   report. Exactly one event arrives, carrying no session, transaction, span, breadcrumb, user
+   identity, or request data.
+3. A report that arrives after a declined answer is a consent-read defect, not a network question:
+   check the stored answer the composition root reads before you inspect the DSN.
 
 ### Release builds
 
@@ -88,6 +99,9 @@ reported as written, and `contexts` is left intact for device and OS detail. Gen
 messages must therefore stay free of endpoints and of Session content — the reporting port's own
 contract already carries nothing but release and environment.
 
+A not-responding (ANR) event carries the app's thread stacks and no message content, and the same
+scrubbing callback runs before it leaves the device, so the rules above apply to it unchanged.
+
 ## Watching consumption
 
 The free Developer plan allows 5,000 errors and 5,000,000 spans per month with 30-day retention.
@@ -129,14 +143,14 @@ Until then the free plan is the intended operating point.
 
 ## Changing the backend
 
-Moving to an existing GlitchTip instance is a DSN change plus one toggle:
+Moving to an existing GlitchTip instance is a DSN change:
 
 1. Set the build to the GlitchTip DSN with `-Pmercurio.sentryDsn=<glitchtip DSN>`. A released build
    reads `MERCURIO_SENTRY_DSN`, so the variable changes and the next Nightly carries it.
 2. Disable the Sentry client key once a Nightly carrying the GlitchTip DSN is published. Every build
    already shipped still holds the old key, so leaving it enabled keeps accepting events that nobody
    reads.
-3. Turn session tracking off, because GlitchTip does not implement it.
+3. Keep session tracking off. It is already off, and GlitchTip does not implement it.
 4. Rebuild the alert rules by hand; they do not migrate.
 5. Accept that historical events do not move — the free plan retains 30 days and nothing is
    dual-shipped.
