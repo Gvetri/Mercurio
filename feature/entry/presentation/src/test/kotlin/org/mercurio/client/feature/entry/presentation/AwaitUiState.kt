@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlin.time.Duration.Companion.milliseconds
 
 internal suspend fun EntryStateHolder.awaitUiState(
     description: String,
@@ -11,7 +12,7 @@ internal suspend fun EntryStateHolder.awaitUiState(
 ): EntryUiState {
     var matched: EntryUiState? = null
     try {
-        uiState.test {
+        uiState.test(timeout = ASYNC_TEST_TIMEOUT_MILLIS.milliseconds) {
             var candidate = awaitItem()
             while (!predicate(candidate)) {
                 candidate = awaitItem()
