@@ -86,6 +86,40 @@ class HistoryCacheOfflineReadTest {
         }
 
     @Test
+    fun an_offline_open_composes_the_same_transcript_rows_as_the_live_history() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            val cache = RecordingHistoryCacheStore()
+            cache.writeSessionList(endpoint, listOf(entrySession(sessionId.value, "Cached title")))
+            cache.write(
+                HistoryCacheKey(endpoint, sessionId),
+                listOf(
+                    GatewayHistoryMessage("message-user", "user", "Cached question"),
+                    GatewayHistoryMessage("message-tool", "tool", "Cached tool output"),
+                    GatewayHistoryMessage("message-function", "function", "Cached legacy output"),
+                    GatewayHistoryMessage("message-assistant", "assistant", "Cached answer"),
+                ),
+            )
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "Cached title")), null))
+            gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
+            val holder = connectedCacheHolder(gateway, cache)
+
+            verify(holder)
+            awaitSessions(holder, sessionId.value)
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+            awaitState(holder, "cached transcript served") { it.sessionList?.openedSession != null }
+
+            val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
+            val rows =
+                chatTranscriptItems(opened.messages)
+                    .filterIsInstance<ChatTranscriptItem.Message>()
+                    .map { item -> item.row.id }
+            assertEquals(listOf("message-user", "message-assistant"), rows)
+            holder.close()
+        }
+
+    @Test
     fun an_open_failure_without_cached_content_behaves_exactly_as_before_the_cache() =
         runTest {
             val sessionId = SessionId("session-one")
