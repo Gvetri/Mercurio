@@ -99,11 +99,10 @@ menu. Deleting a Session asks for confirmation and states that remote deletion c
 this client.
 
 **Message and Run.** Open a Session to read its Gateway history, type into the **Message** composer,
-and press **Send**. The transcript draws the user and assistant Messages of that history and leaves
-the Gateway's tool and function rows out, so the live history and the cached history show the same
-rows. Sending creates a Hermes Run on the Gateway. **Send** is disabled while a submission or an
-active Run is in progress, and drafts stay in memory for the open Session. A failed submission
-preserves your draft so you can **Try again**.
+and press **Send**. The transcript leaves the Gateway's tool and function rows out, so the live
+history and the cached history show the same rows. Sending creates a Hermes Run on the Gateway.
+**Send** is disabled while a submission or an active Run is in progress, and drafts stay in memory
+for the open Session. A failed submission preserves your draft so you can **Try again**.
 
 **Links.** The client accepts two external links: `mercurio://session/<id>` opens that Session, and
 `mercurio://compose` focuses the open Session's composer without sending. A link that names an

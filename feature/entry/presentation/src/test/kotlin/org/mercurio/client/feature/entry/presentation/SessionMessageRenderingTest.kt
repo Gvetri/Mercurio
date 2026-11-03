@@ -227,7 +227,7 @@ class SessionMessageRenderingTest {
                     listOf(
                         SessionMessageUiState("message-a", "user", "First body"),
                         SessionMessageUiState("message-b", "assistant", "Second body"),
-                        SessionMessageUiState("message-c", "tool", "Third body"),
+                        SessionMessageUiState("message-c", "developer", "Third body"),
                     ).forEach { message ->
                         ChatMessageRow(row = chatRow(message), callbacks = inertCallbacks())
                     }
