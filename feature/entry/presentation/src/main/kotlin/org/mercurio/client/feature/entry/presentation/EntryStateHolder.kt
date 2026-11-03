@@ -219,6 +219,12 @@ sealed interface EntryUiEvent {
     data object ErrorReportingConsentGranted : EntryUiEvent
 
     data object ErrorReportingConsentDeclined : EntryUiEvent
+
+    sealed interface AppLifecycle : EntryUiEvent
+
+    data object AppEnteredForeground : AppLifecycle
+
+    data object AppEnteredBackground : AppLifecycle
 }
 
 enum class EntryErrorCategory(
@@ -447,6 +453,7 @@ class EntryStateHolder(
     internal var nextRecoveryClaimId = 0L
     internal var nextComposerFocusRequestId = 0L
     internal var inboundLinkListRequestInterrupted = false
+    internal var isForeground = false
     internal val recoveryClaims = mutableMapOf<RecoveryEntryKey, RecoveryClaim>()
     internal val recoveryHandledEntries = mutableSetOf<RecoveryEntryKey>()
     internal var recoveryLoadPending = false
@@ -492,6 +499,7 @@ class EntryStateHolder(
                 recordErrorReportingConsent(ErrorReportingConsent.Granted)
             is EntryUiEvent.ErrorReportingConsentDeclined ->
                 recordErrorReportingConsent(ErrorReportingConsent.Declined)
+            is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
         }
     }
 

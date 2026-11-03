@@ -12,6 +12,10 @@ import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
+import org.mercurio.client.feature.entry.domain.Run
+import org.mercurio.client.feature.entry.domain.RunEventObservation
+import org.mercurio.client.feature.entry.domain.RunGatewayPort
+import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionHistory
@@ -58,6 +62,7 @@ internal fun scriptedHolder(
     gateway: SessionGatewayPort,
     dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
+    runGateway: RunGatewayPort? = null,
 ): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
@@ -69,6 +74,10 @@ internal fun scriptedHolder(
             },
         scope = CoroutineScope(SupervisorJob() + dispatcher),
         sessionGatewayFactory = { _, _ -> gateway },
+        runGatewayFactory =
+            runGateway?.let { runGatewayPort ->
+                { _, _ -> runGatewayPort }
+            },
         dependencies = dependencies,
     )
 
@@ -186,6 +195,25 @@ internal class FakeSessionGateway : SessionGatewayPort {
     override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
     override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+}
+
+internal class FakeRunGateway : RunGatewayPort {
+    val statusRequests = mutableListOf<RunId>()
+    val statuses = ArrayDeque<Run>()
+    var statusFailure: GatewayException? = null
+
+    override fun createRun(
+        sessionId: SessionId,
+        input: String,
+    ): Run = error("not used")
+
+    override fun getRunStatus(runId: RunId): Run {
+        statusRequests += runId
+        statusFailure?.let { failure -> throw failure }
+        return statuses.removeFirst()
+    }
+
+    override fun observeRun(runId: RunId): RunEventObservation = ReconciliationScriptedObservation(emptyList())
 }
 
 internal class ScriptedCreateGateway(
