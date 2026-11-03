@@ -1,6 +1,6 @@
 # Triage Labels
 
-The skills use five canonical triage roles. This table maps each role to its label in this repo's GitHub issue tracker, together with the two labels that carry their own rules.
+The skills use five canonical triage roles. This table maps each role to its label in this repo's GitHub issue tracker.
 
 | Canonical role | GitHub label | Current status | GitHub description |
 |---|---|---|---|
@@ -9,10 +9,17 @@ The skills use five canonical triage roles. This table maps each role to its lab
 | `ready-for-agent` | `ready-for-agent` | Present | Ready for an agent to implement |
 | `ready-for-human` | `ready-for-human` | Present | Recurring PR error patterns — human decision needed |
 | `wontfix` | `wontfix` | Present | This will not be worked on |
-| `design` | `design` | Present | Design issue: authorizes a design change |
-| `run-maestro` | `run-maestro` | Present | Run the API 24 and Maestro emulator suites on this ready pull request |
 
-When a skill mentions a triage role, use its corresponding label from this table. These seven labels are the complete label set for this repository: add a row here before you create any other label. If one is missing or renamed, recreate it with the name and description above rather than inventing a new label.
+## Other repository labels
+
+Two labels are not triage roles but carry their own rules.
+
+| Label | Current status | GitHub description |
+|---|---|---|
+| `design` | Present | Design issue: authorizes a design change |
+| `run-maestro` | Present | Run the API 24 and Maestro emulator suites on this ready pull request |
+
+When a skill mentions a triage role, use its corresponding label from the tables above. These seven labels are the complete label set for this repository: add a row here before you create any other label. If one is missing or renamed, recreate it with the name and description above rather than inventing a new label.
 
 ## The design label
 
