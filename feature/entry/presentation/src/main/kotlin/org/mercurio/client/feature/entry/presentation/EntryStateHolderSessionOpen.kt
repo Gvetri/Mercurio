@@ -94,10 +94,6 @@ internal suspend fun EntryStateHolder.openSessionJob(
                 applyOpenedSessionResult(current, openedSession, sessionId)
             }
         if (applied) {
-            synchronized(sessionRequestLock) {
-                mutableUiState.value =
-                    mutableUiState.value.copy(isSharedTextSessionPickerActive = false)
-            }
             applyOpenedSessionOutcome(
                 gateway = gateway,
                 request = request,

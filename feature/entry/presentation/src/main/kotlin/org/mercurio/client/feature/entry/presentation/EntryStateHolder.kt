@@ -304,7 +304,6 @@ data class EntryUiState(
     val autoLoadImages: Boolean = true,
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
-    val isSharedTextSessionPickerActive: Boolean = false,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
     val isErrorReportingConsentRequired: Boolean = false,
 )

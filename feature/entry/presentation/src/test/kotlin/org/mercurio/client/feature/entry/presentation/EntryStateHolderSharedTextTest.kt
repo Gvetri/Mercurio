@@ -31,7 +31,6 @@ class EntryStateHolderSharedTextTest {
 
         val state = holder.uiState.value
         assertEquals(InboundLinkNoticeCategory.SHARE_NEEDS_CONNECTION, state.inboundLinkNotice)
-        assertFalse(state.isSharedTextSessionPickerActive)
         assertNull(state.sessionList)
         assertTrue(gateway.operations.isEmpty())
         holder.close()
@@ -56,7 +55,6 @@ class EntryStateHolderSharedTextTest {
 
             val state = holder.uiState.value
             assertEquals(InboundLinkNoticeCategory.SHARE_UNSUPPORTED, state.inboundLinkNotice)
-            assertFalse(state.isSharedTextSessionPickerActive)
             assertTrue(gateway.operations.isEmpty())
             holder.close()
         }
@@ -81,7 +79,6 @@ class EntryStateHolderSharedTextTest {
                 InboundLinkNoticeCategory.SHARE_UNSUPPORTED,
                 holder.uiState.value.inboundLinkNotice,
             )
-            assertFalse(holder.uiState.value.isSharedTextSessionPickerActive)
             holder.close()
         }
 
@@ -105,7 +102,6 @@ class EntryStateHolderSharedTextTest {
                 InboundLinkNoticeCategory.SHARE_UNSUPPORTED,
                 holder.uiState.value.inboundLinkNotice,
             )
-            assertFalse(holder.uiState.value.isSharedTextSessionPickerActive)
             holder.close()
         }
 
@@ -136,7 +132,6 @@ class EntryStateHolderSharedTextTest {
 
             val pickerState = holder.uiState.value
             assertEquals(InboundLinkNoticeCategory.SHARE_PICK_SESSION, pickerState.inboundLinkNotice)
-            assertTrue(pickerState.isSharedTextSessionPickerActive)
             assertNull(pickerState.sessionList?.openedSession)
             assertTrue(gateway.operations.isEmpty())
             assertNull(
@@ -149,7 +144,6 @@ class EntryStateHolderSharedTextTest {
             val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
             assertEquals("Shared words", opened.composerText)
             assertFalse(opened.isSending)
-            assertFalse(holder.uiState.value.isSharedTextSessionPickerActive)
             assertEquals(
                 "Shared words",
                 draftStore.read(SessionDraftKey(holder.uiState.value.endpoint, sessionId)),
@@ -180,8 +174,72 @@ class EntryStateHolderSharedTextTest {
 
             val state = holder.uiState.value
             assertNull(state.sessionList?.openedSession)
-            assertTrue(state.isSharedTextSessionPickerActive)
             assertEquals(InboundLinkNoticeCategory.SHARE_PICK_SESSION, state.inboundLinkNotice)
+            holder.close()
+        }
+
+    @Test
+    fun shared_text_appends_below_an_existing_unsent_draft() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value)), null))
+            gateway.openedSession = entrySession(sessionId.value)
+            gateway.openedHistory = SessionHistory(sessionId, emptyList())
+            val draftStore = InMemorySessionDraftStore()
+            val holder =
+                holder(
+                    repository = FakeGatewayConnectionRepository(),
+                    verifier = { _, _ -> clientManifestCapabilities() },
+                    gateway = gateway,
+                    dependencies =
+                        EntryStateHolderDependencies(
+                            sessionDraftStore = draftStore,
+                        ),
+                )
+            verify(holder)
+            awaitSessions(holder, sessionId.value)
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+            awaitState(holder, "the opened Session") { it.sessionList?.openedSession != null }
+            holder.onEvent(EntryUiEvent.ComposerTextChanged("Typed but unsent"))
+            holder.onEvent(EntryUiEvent.SharedText("text/plain", "Shared words", false, false))
+
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+
+            awaitState(holder, "the reopened Session") { it.sessionList?.openedSession != null }
+            val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
+            assertEquals("Typed but unsent\n\nShared words", opened.composerText)
+            assertEquals(
+                "Typed but unsent\n\nShared words",
+                draftStore.read(SessionDraftKey(holder.uiState.value.endpoint, sessionId)),
+            )
+            holder.close()
+        }
+
+    @Test
+    fun a_pending_share_expires_when_the_app_goes_to_the_background() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value)), null))
+            gateway.openedSession = entrySession(sessionId.value)
+            gateway.openedHistory = SessionHistory(sessionId, emptyList())
+            val holder =
+                holder(
+                    repository = FakeGatewayConnectionRepository(),
+                    verifier = { _, _ -> clientManifestCapabilities() },
+                    gateway = gateway,
+                )
+            verify(holder)
+            awaitSessions(holder, sessionId.value)
+
+            holder.onEvent(EntryUiEvent.SharedText("text/plain", "Shared words", false, false))
+            holder.onEvent(EntryUiEvent.AppEnteredBackground)
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+
+            awaitState(holder, "the opened Session") { it.sessionList?.openedSession != null }
+            val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
+            assertEquals("", opened.composerText)
             holder.close()
         }
 
@@ -209,7 +267,6 @@ class EntryStateHolderSharedTextTest {
             awaitState(holder, "the opened Session") { it.sessionList?.openedSession != null }
             val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
             assertEquals("", opened.composerText)
-            assertFalse(holder.uiState.value.isSharedTextSessionPickerActive)
             holder.close()
         }
 }

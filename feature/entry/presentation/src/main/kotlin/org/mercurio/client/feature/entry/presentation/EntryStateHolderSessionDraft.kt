@@ -3,6 +3,8 @@ package org.mercurio.client.feature.entry.presentation
 import org.mercurio.client.feature.entry.domain.SessionDraftKey
 import org.mercurio.client.feature.entry.domain.SessionId
 
+internal const val SHARED_TEXT_SEPARATOR = "\n\n"
+
 internal fun EntryStateHolder.sessionDraftKey(
     sessionId: SessionId,
     endpoint: String = mutableUiState.value.endpoint,
@@ -28,9 +30,11 @@ internal fun EntryStateHolder.restoredSessionDraft(sessionId: SessionId): String
 
 /**
  * The composer draft for a successfully opened Session. A pending shared text
- * becomes the draft of the first Session that opens: it is written through the
- * existing draft store and consumed exactly once, so it never sends and never
- * lands in any other storage. Without a pending share this is the restored
+ * becomes part of the draft of the first Session that opens: it is written
+ * through the existing draft store and consumed exactly once, so it never sends
+ * and never lands in any other storage. A Session that already holds an unsent
+ * draft keeps it; the shared text is appended below it, so picking a Session
+ * never destroys typed text. Without a pending share this is the restored
  * draft. Callers hold [EntryStateHolder.sessionRequestLock] (or re-enter it).
  */
 internal fun EntryStateHolder.sessionDraftForOpenedSession(sessionId: SessionId): String =
@@ -40,11 +44,13 @@ internal fun EntryStateHolder.sessionDraftForOpenedSession(sessionId: SessionId)
             restoredSessionDraft(sessionId)
         } else {
             pendingSharedText = null
-            sessionDrafts[sessionId] = shared
+            val existing = restoredSessionDraft(sessionId)
+            val merged = if (existing.isEmpty()) shared else existing + SHARED_TEXT_SEPARATOR + shared
+            sessionDrafts[sessionId] = merged
             sessionDraftRevisions[sessionId] =
                 sessionDraftRevisions[sessionId]?.plus(1) ?: 1L
-            sessionDraftStore.write(sessionDraftKey(sessionId), shared)
-            shared
+            sessionDraftStore.write(sessionDraftKey(sessionId), merged)
+            merged
         }
     }
 

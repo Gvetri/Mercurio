@@ -30,7 +30,6 @@ class SharedTextPickerScreenTest {
                             actionLabel = UiText.Resource(R.string.entry_action_connected),
                             isConnected = true,
                             inboundLinkNotice = InboundLinkNoticeCategory.SHARE_PICK_SESSION,
-                            isSharedTextSessionPickerActive = true,
                             sessionList =
                                 SessionListUiState(
                                     sessions =

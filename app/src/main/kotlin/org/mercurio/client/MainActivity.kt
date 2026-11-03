@@ -88,9 +88,7 @@ class MainActivity : ComponentActivity() {
         val share = inbound ?: return
         val action = share.action
         if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
-        val text =
-            share.getStringExtra(Intent.EXTRA_TEXT)
-                ?: share.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        val text = (share.extras?.get(Intent.EXTRA_TEXT) as? CharSequence)?.toString()
         entryStateHolder.onEvent(
             EntryUiEvent.SharedText(
                 mimeType = share.type,

@@ -50,7 +50,6 @@ class SharedTextVisualRegressionTest {
             actionLabel = UiText.Value(""),
             isConnected = true,
             inboundLinkNotice = InboundLinkNoticeCategory.SHARE_PICK_SESSION,
-            isSharedTextSessionPickerActive = true,
             sessionList =
                 SessionListUiState(
                     sessions =

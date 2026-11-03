@@ -22,25 +22,19 @@ internal fun EntryStateHolder.handleSharedText(event: EntryUiEvent.SharedText) {
         rejectSharedText(InboundLinkNoticeCategory.SHARE_UNSUPPORTED)
         return
     }
-    val state = mutableUiState.value
-    if (!state.isConnected || state.sessionList == null) {
-        rejectSharedText(InboundLinkNoticeCategory.SHARE_NEEDS_CONNECTION)
-        return
-    }
     synchronized(sessionRequestLock) {
+        val state = mutableUiState.value
+        if (!state.isConnected || state.sessionList == null) {
+            rejectSharedText(InboundLinkNoticeCategory.SHARE_NEEDS_CONNECTION)
+            return
+        }
         pendingSharedText = sharedText
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                isSharedTextSessionPickerActive = true,
-                inboundLinkNotice = InboundLinkNoticeCategory.SHARE_PICK_SESSION,
-            )
     }
     dismissInboundLinkSurfaces()
     returnToSessionList()
     synchronized(sessionRequestLock) {
         mutableUiState.value =
             mutableUiState.value.copy(
-                isSharedTextSessionPickerActive = true,
                 inboundLinkNotice = InboundLinkNoticeCategory.SHARE_PICK_SESSION,
             )
     }
@@ -52,7 +46,6 @@ internal fun EntryStateHolder.discardSharedText() {
         val current = mutableUiState.value
         mutableUiState.value =
             current.copy(
-                isSharedTextSessionPickerActive = false,
                 inboundLinkNotice =
                     current.inboundLinkNotice
                         ?.takeUnless { it == InboundLinkNoticeCategory.SHARE_PICK_SESSION },
@@ -65,7 +58,6 @@ private fun EntryStateHolder.rejectSharedText(notice: InboundLinkNoticeCategory)
         pendingSharedText = null
         mutableUiState.value =
             mutableUiState.value.copy(
-                isSharedTextSessionPickerActive = false,
                 inboundLinkNotice = notice,
             )
     }
