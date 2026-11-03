@@ -57,6 +57,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        entryStateHolder.onEvent(EntryUiEvent.AppEnteredForeground)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        entryStateHolder.onEvent(EntryUiEvent.AppEnteredBackground)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
