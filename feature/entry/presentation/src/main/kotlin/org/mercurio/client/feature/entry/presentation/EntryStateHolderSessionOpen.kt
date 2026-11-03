@@ -94,6 +94,10 @@ internal suspend fun EntryStateHolder.openSessionJob(
                 applyOpenedSessionResult(current, openedSession, sessionId)
             }
         if (applied) {
+            synchronized(sessionRequestLock) {
+                mutableUiState.value =
+                    mutableUiState.value.copy(isSharedTextSessionPickerActive = false)
+            }
             applyOpenedSessionOutcome(
                 gateway = gateway,
                 request = request,
@@ -148,7 +152,7 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
             openedSession.toOpenSessionUiState(
                 OpenSessionOverlay(
                     messages = toMessageUiStates(openedSession.history),
-                    composerText = restoredSessionDraft(sessionId),
+                    composerText = sessionDraftForOpenedSession(sessionId),
                     sendErrorCategory = sendErrorCategoryFor(sessionId),
                     hasUnresolvedSubmission =
                         hasUnresolvedSubmission(sessionId) || recoveryLoadBlocksSession,
@@ -192,7 +196,7 @@ internal fun EntryStateHolder.applyOpenedSessionMetadata(
             sessionWithoutHistory.toOpenSessionUiState(
                 OpenSessionOverlay(
                     messages = emptyList(),
-                    composerText = restoredSessionDraft(sessionId),
+                    composerText = sessionDraftForOpenedSession(sessionId),
                     sendErrorCategory = sendErrorCategoryFor(sessionId),
                     hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId) || recoveryLoadBlocksSession,
                     isSending = runJobs.containsKey(sessionId),

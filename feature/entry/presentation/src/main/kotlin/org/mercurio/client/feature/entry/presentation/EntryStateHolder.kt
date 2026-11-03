@@ -48,9 +48,20 @@ import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface EntryUiEvent {
+    sealed interface Intake : EntryUiEvent
+
     data class InboundUri(
         val rawUri: String?,
-    ) : EntryUiEvent
+    ) : Intake
+
+    data class SharedText(
+        val mimeType: String?,
+        val text: String?,
+        val hasStream: Boolean,
+        val isMultiple: Boolean,
+    ) : Intake
+
+    data object SharedTextDismissed : Intake
 
     sealed interface Connection : EntryUiEvent
 
@@ -293,6 +304,7 @@ data class EntryUiState(
     val autoLoadImages: Boolean = true,
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
+    val isSharedTextSessionPickerActive: Boolean = false,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
     val isErrorReportingConsentRequired: Boolean = false,
 )
@@ -442,6 +454,7 @@ class EntryStateHolder(
     internal val mutationOwners = mutableMapOf<SessionId, SessionMutationRequest>()
     internal val runJobs = mutableMapOf<SessionId, Job>()
     internal val sessionDrafts = mutableMapOf<SessionId, String>()
+    internal var pendingSharedText: String? = null
     internal val sessionDraftRevisions = mutableMapOf<SessionId, Long>()
     internal val sessionSendErrors = mutableMapOf<SessionId, MessageSendErrorCategory>()
     internal val pendingRunDrafts = mutableMapOf<SessionId, PendingDraft>()
@@ -486,7 +499,7 @@ class EntryStateHolder(
 
     fun onEvent(event: EntryUiEvent) {
         when (event) {
-            is EntryUiEvent.InboundUri -> handleInboundUri(event.rawUri)
+            is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
             is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
             is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
             is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)

@@ -26,6 +26,28 @@ internal fun EntryStateHolder.restoredSessionDraft(sessionId: SessionId): String
             }
     }.orEmpty()
 
+/**
+ * The composer draft for a successfully opened Session. A pending shared text
+ * becomes the draft of the first Session that opens: it is written through the
+ * existing draft store and consumed exactly once, so it never sends and never
+ * lands in any other storage. Without a pending share this is the restored
+ * draft. Callers hold [EntryStateHolder.sessionRequestLock] (or re-enter it).
+ */
+internal fun EntryStateHolder.sessionDraftForOpenedSession(sessionId: SessionId): String =
+    synchronized(sessionRequestLock) {
+        val shared = pendingSharedText
+        if (shared == null) {
+            restoredSessionDraft(sessionId)
+        } else {
+            pendingSharedText = null
+            sessionDrafts[sessionId] = shared
+            sessionDraftRevisions[sessionId] =
+                sessionDraftRevisions[sessionId]?.plus(1) ?: 1L
+            sessionDraftStore.write(sessionDraftKey(sessionId), shared)
+            shared
+        }
+    }
+
 internal fun EntryStateHolder.updateComposerText(value: String) {
     synchronized(sessionRequestLock) {
         val current = mutableUiState.value.sessionList ?: return

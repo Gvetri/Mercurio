@@ -14,6 +14,7 @@ internal fun EntryStateHolder.clearRecoveryState() {
 
 internal fun EntryStateHolder.clearSessionDraftAndRunState() {
     sessionDrafts.clear()
+    pendingSharedText = null
     sessionDraftRevisions.clear()
     sessionSendErrors.clear()
     pendingRunDrafts.clear()

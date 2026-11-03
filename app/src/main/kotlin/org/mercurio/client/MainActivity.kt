@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
             )
         messageImagePort = EntryWiring.createMessageImagePort()
         applyInboundLink(intent)
+        applySharedText(intent)
         setContent {
             val notificationPermissionLauncher =
                 rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -71,6 +72,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         applyInboundLink(intent)
+        applySharedText(intent)
     }
 
     override fun onDestroy() {
@@ -80,5 +82,22 @@ class MainActivity : ComponentActivity() {
 
     private fun applyInboundLink(inbound: Intent?) {
         entryStateHolder.onEvent(EntryUiEvent.InboundUri(inbound?.data?.toString()))
+    }
+
+    private fun applySharedText(inbound: Intent?) {
+        val share = inbound ?: return
+        val action = share.action
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+        val text =
+            share.getStringExtra(Intent.EXTRA_TEXT)
+                ?: share.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        entryStateHolder.onEvent(
+            EntryUiEvent.SharedText(
+                mimeType = share.type,
+                text = text,
+                hasStream = share.hasExtra(Intent.EXTRA_STREAM),
+                isMultiple = action == Intent.ACTION_SEND_MULTIPLE,
+            ),
+        )
     }
 }
