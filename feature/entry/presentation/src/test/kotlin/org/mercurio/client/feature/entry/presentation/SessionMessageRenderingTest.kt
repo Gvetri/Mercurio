@@ -55,7 +55,8 @@ class SessionMessageRenderingTest {
         composeTestRule.setContent {
             HermesTheme {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    listOf("user", "assistant", "tool", "gateway-special", null, "").forEachIndexed { index, role ->
+                    val roles = listOf("user", "assistant", "developer", "gateway-special", null, "")
+                    roles.forEachIndexed { index, role ->
                         ChatMessageRow(
                             row = chatRow(SessionMessageUiState("message-$index", role, "Message body $index")),
                             callbacks = inertCallbacks(),
@@ -66,7 +67,7 @@ class SessionMessageRenderingTest {
         }
         composeTestRule.onNodeWithText("USER").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("ASSISTANT").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("TOOL").performScrollTo().assertExists()
+        composeTestRule.onNodeWithText("DEVELOPER").performScrollTo().assertExists()
         composeTestRule.onNodeWithText("GATEWAY-SPECIAL").performScrollTo().assertExists()
         composeTestRule.onAllNodesWithText("SYSTEM").assertCountEquals(2)
         composeTestRule.onAllNodesWithText("Role:", substring = true).assertCountEquals(0)

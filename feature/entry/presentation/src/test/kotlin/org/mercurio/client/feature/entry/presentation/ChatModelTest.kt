@@ -57,6 +57,42 @@ class ChatModelTest {
     }
 
     @Test
+    fun tool_and_function_rows_compose_no_transcript_card() {
+        val items =
+            chatTranscriptItems(
+                messages =
+                    listOf(
+                        message("message-1", "user", "Run the tests", Instant.parse("2026-11-01T08:12:00Z")),
+                        message("message-2", "tool", "exit code 0", Instant.parse("2026-11-01T08:12:01Z")),
+                        message("message-3", "function", "legacy tool result", Instant.parse("2026-11-01T08:12:02Z")),
+                        message("message-4", "assistant", "All green", Instant.parse("2026-11-01T08:12:03Z")),
+                    ),
+                zone = zone,
+            )
+
+        val rows = items.filterIsInstance<ChatTranscriptItem.Message>().map { item -> item.row }
+        assertEquals(listOf("message-1", "message-4"), rows.map { row -> row.id })
+        assertEquals(listOf("SUN 01 NOV"), items.filterIsInstance<ChatTranscriptItem.Day>().map { day -> day.label })
+    }
+
+    @Test
+    fun a_day_that_holds_only_tool_rows_prints_no_separator() {
+        val items =
+            chatTranscriptItems(
+                messages =
+                    listOf(
+                        message("message-1", "assistant", "First day", Instant.parse("2026-11-01T08:12:00Z")),
+                        message("message-2", "tool", "Second day output", Instant.parse("2026-11-02T08:12:00Z")),
+                        message("message-3", "function", "Second day legacy", Instant.parse("2026-11-02T08:12:01Z")),
+                    ),
+                zone = zone,
+            )
+
+        assertEquals(listOf("SUN 01 NOV"), items.filterIsInstance<ChatTranscriptItem.Day>().map { day -> day.label })
+        assertEquals(1, items.filterIsInstance<ChatTranscriptItem.Message>().size)
+    }
+
+    @Test
     fun a_failed_turn_is_its_own_row_with_the_safe_message() {
         val row =
             chatRow(
@@ -79,10 +115,10 @@ class ChatModelTest {
 
     @Test
     fun an_unknown_role_stays_a_system_row_with_its_own_label() {
-        val row = chatRow(SessionMessageUiState("message", "tool", "Tool output"), zone)
+        val row = chatRow(SessionMessageUiState("message", "developer", "Debug output"), zone)
 
         assertEquals(ChatRowKind.System, row.kind)
-        assertEquals(UiText.Value("Tool"), row.label)
+        assertEquals(UiText.Value("Developer"), row.label)
     }
 
     @Test
