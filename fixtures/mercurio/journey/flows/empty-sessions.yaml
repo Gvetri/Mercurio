@@ -29,7 +29,7 @@ name: empty-sessions
 - extendedWaitUntil:
     visible: "Generating title…"
     timeout: 30000
-- assertVisible: "New session"
+- assertVisible: "Untitled session"
 - takeScreenshot: empty-sessions-02-created-row
 - tapOn: "Settings"
 - scrollUntilVisible:
@@ -48,5 +48,5 @@ name: empty-sessions
 - assertNotVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
 - takeScreenshot: empty-sessions-04-removal-cancelled-on-settings
 - back
-- assertVisible: "New session"
+- assertVisible: "Untitled session"
 - takeScreenshot: empty-sessions-05-created-row-kept

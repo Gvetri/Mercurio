@@ -32,6 +32,10 @@ internal fun EntryStateHolder.showCreateSession() {
                             createSession = SessionCreationUiState(isSubmitting = true),
                             creationErrorCategory = null,
                             errorCategory = null,
+                            isLoading = false,
+                            isRefreshing = false,
+                            isSearching = false,
+                            isLoadingMore = false,
                         ),
                 )
             createSessionJob(gateway, request)

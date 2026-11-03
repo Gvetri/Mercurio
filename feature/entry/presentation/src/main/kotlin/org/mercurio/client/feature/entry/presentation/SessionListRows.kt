@@ -53,7 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * One 54 dp Session row: the 44 dp last-active column, the title, one preview
+ * One 56 dp Session row: the 44 dp last-active column, the title, one preview
  * line, and the trailing affordances. A hold opens the anchored context menu; an
  * inline rename replaces the title cell with the filled check/cross pair.
  */
@@ -86,7 +86,7 @@ internal fun SessionRow(
         SessionRowMutationFeedback(
             session = row.session,
             mutation = row.mutation,
-            enabled = row.enabled,
+            enabled = row.mutationEnabled,
             onEvent = onEvent,
         )
     }
@@ -162,7 +162,7 @@ private fun RowScope.SessionRowMiddle(
             RenameSessionField(
                 session = row.session,
                 state = rename,
-                enabled = row.enabled,
+                enabled = row.mutationEnabled,
                 onEvent = onEvent,
             )
         } else {
@@ -174,7 +174,7 @@ private fun RowScope.SessionRowMiddle(
         InlineRenameActions(
             session = row.session,
             state = rename,
-            enabled = row.enabled,
+            enabled = row.mutationEnabled,
             onEvent = onEvent,
         )
     }
@@ -410,7 +410,7 @@ internal fun SessionMutationAction.pendingLabelRes(): Int =
         SessionMutationAction.DELETE -> R.string.sessions_deleting
     }
 
-private val SESSION_ROW_MIN_HEIGHT = 54.dp
+private val SESSION_ROW_MIN_HEIGHT = 56.dp
 private val SESSION_TIME_COLUMN = 44.dp
 private val RENAME_ACTION_SIZE = 32.dp
 private const val HELD_LAYER_ALPHA = 0.12f

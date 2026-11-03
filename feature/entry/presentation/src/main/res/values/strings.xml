@@ -234,7 +234,7 @@
     <string name="sessions_cached">cached</string>
     <string name="sessions_connected">connected</string>
     <string name="sessions_new">new session</string>
-    <string name="sessions_pending_title">New session</string>
+    <string name="sessions_pending_title">Untitled session</string>
     <string name="sessions_pending_title_preview">Generating title…</string>
     <string name="sessions_unknown_last_active">—</string>
     <string name="sessions_last_active_now">now</string>

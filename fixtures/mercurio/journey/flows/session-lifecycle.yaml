@@ -27,7 +27,7 @@ name: session-lifecycle
     timeout: 30000
 - takeScreenshot: session-lifecycle-01-pending-row
 - longPressOn:
-    text: "New session"
+    text: "Untitled session"
     index: 0
 - tapOn: "Rename"
 - tapOn:

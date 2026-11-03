@@ -25,13 +25,10 @@ internal fun SessionListUiState.blocksLoadingMore(): Boolean =
         sessionMutations.isNotEmpty()
 
 internal fun SessionListUiState.blocksCreateSession(): Boolean =
-    isLoading ||
-        isRefreshing ||
-        isLoadingMore ||
-        openingSessionId != null ||
+    openingSessionId != null ||
         isUnavailable ||
         createSession != null ||
-        sessionMutations.isNotEmpty()
+        hasPendingMutation
 
 private fun SessionListUiState.blocksSessionTransition(): Boolean =
     hasPendingMutation ||
@@ -39,11 +36,7 @@ private fun SessionListUiState.blocksSessionTransition(): Boolean =
         createSession != null
 
 internal fun SessionListUiState.blocksSessionOpen(): Boolean =
-    isLoading ||
-        isRefreshing ||
-        isSearching ||
-        isUnavailable ||
-        isLoadingMore ||
+    isUnavailable ||
         blocksSessionTransition()
 
 /**
