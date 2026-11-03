@@ -15,19 +15,24 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
@@ -442,7 +447,7 @@ class SessionShellTest {
         composeTestRule
             .onNodeWithText("new session")
             .assertHasClickAction()
-            .assertHeightIsAtLeast(38.dp)
+            .assertHeightIsAtLeast(48.dp)
         composeTestRule
             .onNodeWithText("First Session")
             .assertHasClickAction()
@@ -561,22 +566,78 @@ class SessionShellTest {
 
     @Test
     @Config(qualifiers = "w1000dp-h800dp")
-    fun list_pane_rows_are_disabled_while_the_open_conversation_reconciles() {
-        setShellContent(
-            sessionList =
-                SessionListUiState(
-                    sessions = listOf(session("first", "First Session")),
-                    nextOffset = 1,
-                    openedSession =
-                        OpenSessionUiState(
-                            session = session("first", "First Session"),
-                            messages = listOf(message("message-1", "user", "Conversation message")),
-                            isReconciliationInProgress = true,
+    fun list_pane_rows_open_while_the_open_conversation_reconciles() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        entryState(
+                            SessionListUiState(
+                                sessions =
+                                    listOf(
+                                        session("first", "First Session"),
+                                        session("second", "Second Session"),
+                                    ),
+                                openedSession =
+                                    OpenSessionUiState(
+                                        session = session("first", "First Session"),
+                                        messages = listOf(message("message-1", "user", "Conversation message")),
+                                        isReconciliationInProgress = true,
+                                    ),
+                            ),
                         ),
-                ),
-        )
+                    onEvent = events::add,
+                )
+            }
+        }
 
-        composeTestRule.onNode(hasText("First Session") and hasClickAction()).assertIsNotEnabled()
+        composeTestRule
+            .onNode(hasText("Second Session") and hasClickAction())
+            .assertIsEnabled()
+            .performClick()
+        assertEquals(listOf(EntryUiEvent.SessionClicked(SessionId("second"))), events)
+    }
+
+    @Test
+    @Config(qualifiers = "w891dp-h288dp")
+    fun very_short_list_pane_keeps_the_create_action_reachable() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                HermesTheme {
+                    EntryScreen(
+                        state =
+                            entryState(
+                                SessionListUiState(
+                                    sessions = listOf(session("first", "First Session")),
+                                ),
+                            ),
+                        onEvent = {},
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasTestTag("new-session-row"))
+        composeTestRule.onNodeWithTag("new-session-row").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = "w891dp-h288dp")
+    fun very_short_list_pane_keeps_the_create_action_while_loading() {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
+                HermesTheme {
+                    EntryScreen(
+                        state = entryState(SessionListUiState(isLoading = true)),
+                        onEvent = {},
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session-list").performScrollToNode(hasTestTag("new-session-row"))
+        composeTestRule.onNodeWithTag("new-session-row").assertIsDisplayed()
     }
 
     private fun phoneConfiguration(): Configuration =

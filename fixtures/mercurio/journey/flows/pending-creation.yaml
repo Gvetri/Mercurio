@@ -29,7 +29,7 @@ name: pending-creation
 - extendedWaitUntil:
     visible: "Generating title…"
     timeout: 30000
-- assertVisible: "New session"
+- assertVisible: "Untitled session"
 - takeScreenshot: pending-creation-02-created-row
 - extendedWaitUntil:
     visible: "1 session · connected"

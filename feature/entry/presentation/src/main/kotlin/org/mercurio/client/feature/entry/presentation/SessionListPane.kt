@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,11 +79,28 @@ private fun SessionListBody(
     LaunchedEffect(state.searchQuery) {
         if (state.searchQuery.isEmpty()) listState.scrollToItem(0)
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().testTag("session-list"),
-    ) {
-        sessionListContent(state = state, onEvent = onEvent, selectedSessionId = selectedSessionId)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val pinsActionRow = maxHeight >= PINNED_ACTION_ROW_MIN_ISLAND_HEIGHT
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth().testTag("session-list"),
+            ) {
+                sessionListContent(
+                    state = state,
+                    onEvent = onEvent,
+                    selectedSessionId = selectedSessionId,
+                    showActionRowInList = !pinsActionRow,
+                )
+            }
+            if (pinsActionRow) {
+                NewSessionRow(
+                    enabled = state.createSessionActionEnabled(),
+                    onEvent = onEvent,
+                    modifier = Modifier.testTag(NEW_SESSION_ROW_TAG),
+                )
+            }
+        }
     }
 }
 
@@ -90,6 +108,7 @@ private fun LazyListScope.sessionListContent(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
     selectedSessionId: SessionId?,
+    showActionRowInList: Boolean,
 ) {
     val mutationOnly =
         state.sessions.filter { session ->
@@ -101,10 +120,17 @@ private fun LazyListScope.sessionListContent(
             item(key = "loading-footer") {
                 SessionListFooter(label = stringResource(R.string.sessions_loading))
             }
+            if (showActionRowInList) {
+                newSessionListItem(state = state, onEvent = onEvent)
+            }
         }
         state.visibleSessions.isEmpty() -> {
             item(key = "empty") {
-                SessionListEmptyItem(state = state, onEvent = onEvent)
+                SessionListEmptyItem(
+                    state = state,
+                    onEvent = onEvent,
+                    showActionRow = showActionRowInList,
+                )
             }
         }
         else -> {
@@ -113,6 +139,7 @@ private fun LazyListScope.sessionListContent(
                 state = state,
                 selectedSessionId = selectedSessionId,
                 onEvent = onEvent,
+                showActionRowInList = showActionRowInList,
             )
         }
     }
@@ -122,17 +149,18 @@ private fun LazyListScope.sessionListContent(
 private fun LazyItemScope.SessionListEmptyItem(
     state: SessionListUiState,
     onEvent: (EntryUiEvent) -> Unit,
+    showActionRow: Boolean,
 ) {
     Column(modifier = Modifier.fillParentMaxSize()) {
         Box(modifier = Modifier.weight(1f)) {
             SessionListEmptyContent(state = state, onEvent = onEvent)
         }
-        if (state.showsNewSessionRowInEmptyState()) {
+        if (showActionRow) {
             NewSessionRow(
                 enabled = state.createSessionActionEnabled(),
                 onEvent = onEvent,
+                modifier = Modifier.testTag(NEW_SESSION_ROW_TAG),
             )
-            SessionCreationErrorBanner(state = state)
         }
     }
 }
@@ -142,6 +170,7 @@ private fun LazyListScope.sessionRows(
     state: SessionListUiState,
     selectedSessionId: SessionId?,
     onEvent: (EntryUiEvent) -> Unit,
+    showActionRowInList: Boolean,
 ) {
     val pinned = sessions.filter { it.pinned }
     val unpinned = sessions.filterNot { it.pinned }
@@ -165,14 +194,24 @@ private fun LazyListScope.sessionRows(
             onEvent = onEvent,
         )
     }
+    if (showActionRowInList) {
+        newSessionListItem(state = state, onEvent = onEvent)
+    }
+    item(key = "creation-error") { SessionCreationErrorBanner(state = state) }
+    item(key = "footer") { SessionListFooterTrigger(state = state, onEvent = onEvent) }
+}
+
+private fun LazyListScope.newSessionListItem(
+    state: SessionListUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
     item(key = "new-session") {
         NewSessionRow(
             enabled = state.createSessionActionEnabled(),
             onEvent = onEvent,
+            modifier = Modifier.testTag(NEW_SESSION_ROW_TAG),
         )
     }
-    item(key = "creation-error") { SessionCreationErrorBanner(state = state) }
-    item(key = "footer") { SessionListFooterTrigger(state = state, onEvent = onEvent) }
 }
 
 private fun sessionRowState(
@@ -185,7 +224,8 @@ private fun sessionRowState(
         session = session,
         mutation = state.sessionMutations[session.id],
         selected = session.id == selectedSessionId,
-        enabled = state.allowsSessionMutation(),
+        enabled = state.allowsSessionOpen(session.id, linked = false),
+        mutationEnabled = state.allowsSessionMutation(),
         onClick = { onEvent(EntryUiEvent.SessionClicked(session.id)) },
     )
 
@@ -210,5 +250,6 @@ private fun SessionListFooterTrigger(
 }
 
 private val ISLAND_GUTTER = 6.dp
+private val PINNED_ACTION_ROW_MIN_ISLAND_HEIGHT = 97.dp
 
 internal fun paneTailMaxHeight(available: Dp): Dp = (available - 120.dp).coerceAtLeast(minOf(48.dp, available))

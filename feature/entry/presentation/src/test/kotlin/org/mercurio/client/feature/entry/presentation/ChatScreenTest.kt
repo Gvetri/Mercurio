@@ -118,7 +118,7 @@ class ChatScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("New session").assertExists()
+        composeTestRule.onNodeWithText("Untitled session").assertExists()
     }
 
     @Test

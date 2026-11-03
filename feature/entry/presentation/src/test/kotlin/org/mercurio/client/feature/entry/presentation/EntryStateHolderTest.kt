@@ -455,9 +455,17 @@ class EntryStateHolderTest {
         }
 
     @Test
-    fun opening_during_refresh_is_rejected_so_the_refresh_state_can_complete() =
+    fun opening_during_a_refresh_opens_the_session_and_drops_the_refresh() =
         runTest {
-            val gateway = ScriptedSessionGateway(SessionPage(listOf(entrySession("target")), null))
+            val target = SessionId("target")
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(target.value, "Target")), null))
+            gateway.openedSession = entrySession(target.value, "Authoritative title")
+            gateway.openedHistory =
+                SessionHistory(
+                    target,
+                    listOf(GatewayHistoryMessage("message-one", "user", "Opened during refresh")),
+                )
             val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
             verifyScripted(holder)
             advanceUntilIdle()
@@ -465,16 +473,18 @@ class EntryStateHolderTest {
             holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
             assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
 
-            holder.onEvent(EntryUiEvent.SessionClicked(SessionId("target")))
-            gateway.enqueuePage(SessionPage(listOf(entrySession("refreshed")), null))
+            holder.onEvent(EntryUiEvent.SessionClicked(target))
             advanceUntilIdle()
-            awaitSessions(holder, "refreshed")
 
             val state = requireNotNull(holder.uiState.value.sessionList)
+            assertEquals(target, state.openedSession?.session?.id)
+            assertEquals(
+                listOf("Opened during refresh"),
+                state.openedSession?.messages?.map { message -> message.content },
+            )
             assertFalse(state.isRefreshing)
             assertFalse(state.isSearching)
             assertFalse(state.isLoading)
-            assertNull(state.openedSession)
             holder.close()
         }
 

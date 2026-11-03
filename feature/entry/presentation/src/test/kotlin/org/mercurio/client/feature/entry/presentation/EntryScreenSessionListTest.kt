@@ -4,10 +4,14 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -52,6 +56,7 @@ class EntryScreenSessionListTest {
         composeTestRule.onNodeWithText("Pinned title").assertIsDisplayed()
         composeTestRule.onNodeWithText("1h").assertIsDisplayed()
         composeTestRule.onNodeWithText("Generating title…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Untitled session").assertIsDisplayed()
         composeTestRule.onNodeWithText("new session").assertIsDisplayed()
         composeTestRule.onNodeWithText("3 sessions · connected").assertIsDisplayed()
         composeTestRule.onNodeWithText("gateway :: ready").assertIsDisplayed()
@@ -320,6 +325,94 @@ class EntryScreenSessionListTest {
         assertEquals(listOf(EntryUiEvent.CreateSessionClicked), events)
     }
 
+    @Test
+    fun the_create_row_is_pinned_outside_the_scroll_owner_in_every_state() {
+        val states =
+            listOf(
+                connectedState(sessions = listOf(item("plain", "Plain title", "Plain preview"))),
+                connectedState(sessions = emptyList()),
+                connectedState(sessions = emptyList(), isLoading = true),
+                connectedState(
+                    sessions = listOf(item("cached", "Cached Session", null)),
+                    isStale = true,
+                    isUnavailable = true,
+                    isCached = true,
+                ),
+                connectedState(
+                    sessions = listOf(item("plain", "Plain title", null)),
+                    searchQuery = "missing",
+                ),
+                connectedState(sessions = listOf(item("untitled", "", null, pending = true))),
+            )
+        val current = androidx.compose.runtime.mutableStateOf(states.first())
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = current.value, onEvent = {})
+            }
+        }
+
+        states.forEach { state ->
+            composeTestRule.runOnIdle { current.value = state }
+            composeTestRule.onNodeWithTag("new-session-row").assertIsDisplayed()
+            composeTestRule
+                .onAllNodes(hasTestTag("new-session-row") and hasAnyAncestor(hasTestTag("session-list")))
+                .assertCountEquals(0)
+        }
+    }
+
+    @LooperMode(LooperMode.Mode.LEGACY)
+    @Test
+    fun the_row_menu_stays_disabled_while_a_list_refresh_is_in_flight() {
+        val state =
+            connectedState(
+                sessions = listOf(item("held", "Held Session", "Held preview")),
+                isRefreshing = true,
+            )
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = state, onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("Held Session").assertIsEnabled()
+        composeTestRule.onNodeWithText("Held Session").performTouchInput { longClick() }
+
+        composeTestRule.onNodeWithText("Pin").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Rename").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Delete").assertIsNotEnabled()
+    }
+
+    @Test
+    fun the_creation_error_banner_renders_once_in_every_empty_state() {
+        val error = SessionCreationErrorCategory.GATEWAY_REQUEST_FAILED
+        val states =
+            listOf(
+                connectedState(sessions = emptyList(), creationErrorCategory = error),
+                connectedState(
+                    sessions = emptyList(),
+                    searchQuery = "missing",
+                    creationErrorCategory = error,
+                ),
+                connectedState(
+                    sessions = emptyList(),
+                    isStale = true,
+                    isUnavailable = true,
+                    creationErrorCategory = error,
+                ),
+            )
+        val current = androidx.compose.runtime.mutableStateOf(states.first())
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = current.value, onEvent = {})
+            }
+        }
+
+        states.forEach { state ->
+            composeTestRule.runOnIdle { current.value = state }
+            composeTestRule.onAllNodesWithText(copy(error.messageRes)).assertCountEquals(1)
+        }
+    }
+
     private fun setConnectedListScreen(events: MutableList<EntryUiEvent>) {
         composeTestRule.setContent {
             HermesTheme {
@@ -333,12 +426,14 @@ class EntryScreenSessionListTest {
         sessions: List<SessionItemUiState>,
         searchQuery: String = "",
         isLoading: Boolean = false,
+        isRefreshing: Boolean = false,
         isStale: Boolean = false,
         isUnavailable: Boolean = false,
         isCached: Boolean = false,
         isLoadingMore: Boolean = false,
         nextOffset: Int? = null,
         sessionMutations: Map<SessionId, SessionMutationUiState> = emptyMap(),
+        creationErrorCategory: SessionCreationErrorCategory? = null,
     ): EntryUiState =
         EntryUiState(
             title = UiText.Resource(R.string.entry_title_connected),
@@ -350,12 +445,14 @@ class EntryScreenSessionListTest {
                     sessions = sessions,
                     searchQuery = searchQuery,
                     isLoading = isLoading,
+                    isRefreshing = isRefreshing,
                     isStale = isStale,
                     isUnavailable = isUnavailable,
                     isCached = isCached,
                     isLoadingMore = isLoadingMore,
                     nextOffset = nextOffset,
                     sessionMutations = sessionMutations,
+                    creationErrorCategory = creationErrorCategory,
                 ),
         )
 

@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
- * The 40 dp wordmark bar and the 34 dp search row, the two elements of the top
+ * The 48 dp wordmark bar and the 34 dp search row, the two elements of the top
  * island in the approved Session list design.
  */
 @Composable
@@ -201,7 +201,7 @@ private fun SearchClearButton(onEvent: (EntryUiEvent) -> Unit) {
     }
 }
 
-private val SESSION_BAR_HEIGHT = 40.dp
+private val SESSION_BAR_HEIGHT = 48.dp
 private val SESSION_BAR_CONTROL_WIDTH = 44.dp
 private val SESSION_BAR_CONTROL_HEIGHT = 32.dp
 private val SESSION_SEARCH_HEIGHT = 34.dp

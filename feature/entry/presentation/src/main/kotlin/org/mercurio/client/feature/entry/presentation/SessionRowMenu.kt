@@ -35,7 +35,7 @@ internal fun SessionRowMenu(
                 stringResource(
                     if (row.session.pinned) R.string.sessions_unpin_short else R.string.sessions_pin_short,
                 ),
-            enabled = row.enabled && mutation?.pendingAction == null,
+            enabled = row.mutationEnabled && mutation?.pendingAction == null,
         ) {
             onDismiss()
             onEvent(
@@ -48,7 +48,7 @@ internal fun SessionRowMenu(
         }
         SessionMenuItem(
             label = stringResource(R.string.sessions_rename_short),
-            enabled = row.enabled && mutation?.pendingAction == null,
+            enabled = row.mutationEnabled && mutation?.pendingAction == null,
         ) {
             onDismiss()
             onEvent(EntryUiEvent.RenameSessionClicked(row.session.id))
@@ -56,7 +56,7 @@ internal fun SessionRowMenu(
         HorizontalDivider(color = tokens.colorScheme.outlineVariant)
         SessionMenuItem(
             label = stringResource(R.string.sessions_delete_short),
-            enabled = row.enabled && mutation?.pendingAction == null,
+            enabled = row.mutationEnabled && mutation?.pendingAction == null,
             destructive = true,
         ) {
             onDismiss()

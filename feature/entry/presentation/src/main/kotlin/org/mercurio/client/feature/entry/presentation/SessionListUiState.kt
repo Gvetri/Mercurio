@@ -214,18 +214,12 @@ internal fun SessionListUiState.allowsSessionMutation(): Boolean =
         openedSession?.isRefreshing != true &&
         openedSession?.isReconciliationInProgress != true
 
-internal fun SessionListUiState.showsNewSessionRowInEmptyState(): Boolean {
-    return searchQuery.isBlank() && !isUnavailable && !isStale
-}
-
 internal fun SessionListUiState.createSessionActionEnabled(): Boolean =
     !isLoading &&
-        !isRefreshing &&
-        !isLoadingMore &&
         !isUnavailable &&
         openingSessionId == null &&
         createSession == null &&
-        sessionMutations.isEmpty()
+        !hasPendingMutation
 
 internal fun Session.toSessionItemUiState(now: Instant = Instant.now()): SessionItemUiState {
     val normalizedTitle = title?.trim().orEmpty()
@@ -356,5 +350,6 @@ internal data class SessionRowUiState(
     val mutation: SessionMutationUiState?,
     val selected: Boolean,
     val enabled: Boolean,
+    val mutationEnabled: Boolean,
     val onClick: () -> Unit,
 )

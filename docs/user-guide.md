@@ -93,8 +93,9 @@ installed version, build, and install source.
 
 **Sessions.** After connecting, the client shows the Gateway-derived Session list. You can search the
 loaded titles and previews, load further pages by scrolling to the list end, and create, rename,
-pin, unpin, and delete Sessions. Creating a Session sends no title: the new row reads **New
-session** with **Generating title…** until the Gateway titles it. Hold a row to open its context
+pin, unpin, and delete Sessions. Creating a Session sends no title: the new row reads
+**Untitled session** with **Generating title…** until the Gateway titles it. A row opens on one tap,
+including while the list loads or refreshes. Hold a row to open its context
 menu. Deleting a Session asks for confirmation and states that remote deletion cannot be undone by
 this client.
 

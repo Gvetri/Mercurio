@@ -168,9 +168,10 @@ internal fun SessionCreationErrorBanner(state: SessionListUiState) {
 internal fun NewSessionRow(
     enabled: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = LocalHermesDesignTokens.current
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         HorizontalDivider(color = tokens.colorScheme.outlineVariant)
         Row(
             modifier =
@@ -180,7 +181,7 @@ internal fun NewSessionRow(
                     .clickable(enabled = enabled, role = Role.Button) { onEvent(EntryUiEvent.CreateSessionClicked) }
                     .padding(horizontal = tokens.spacing.m),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(tokens.spacing.s),
+            horizontalArrangement = Arrangement.spacedBy(tokens.spacing.s, Alignment.End),
         ) {
             Text(
                 text = "+",
@@ -262,7 +263,7 @@ private fun SessionSkeletonRow() {
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 54.dp)
+                    .heightIn(min = 56.dp)
                     .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.s),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -298,8 +299,10 @@ private fun SessionSkeletonRow() {
     }
 }
 
+internal const val NEW_SESSION_ROW_TAG = "new-session-row"
+
 private val STATUS_STRIP_HEIGHT = 24.dp
-private val NEW_SESSION_ROW_HEIGHT = 38.dp
+private val NEW_SESSION_ROW_HEIGHT = 48.dp
 private const val SKELETON_ROW_COUNT = 6
 private const val SKELETON_TITLE_WIDTH = 0.62f
 private const val SKELETON_PREVIEW_WIDTH = 0.84f
