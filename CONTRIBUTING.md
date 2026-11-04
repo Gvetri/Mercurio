@@ -284,10 +284,9 @@ checks, the evidence checklist, the stop rule, and the Impeccable gates. The iss
 `.github/ISSUE_TEMPLATE`.
 
 The `design` label marks a design issue and is the only label that authorizes a design change. A
-feature spec and a code issue carry `enhancement`, and `ready-for-agent` marks the code issue whose
-design issue has closed. The design source is private and is not part of this repository; a public
-issue carries the design name `mercurio/<screen>`, never a design path, a design link, or a host
-name.
+code issue carries `ready-for-agent` only after its design issue has closed. The design source is
+private and is not part of this repository; a public issue carries the design name
+`mercurio/<screen>`, never a design path, a design link, or a host name.
 
 A pull request that touches a designed surface fills the design evidence section from the
 pull-request template in addition to the required sections.
