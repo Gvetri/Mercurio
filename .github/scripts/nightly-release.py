@@ -21,6 +21,7 @@ require = POLICY["require"]
 ReleaseError = POLICY["ReleaseError"]
 REPOSITORY = POLICY["REPOSITORY"]
 TAG = re.compile(r"nightly-([1-9][0-9]*)-([0-9a-f]{40})")
+REUSABLE_EVENTS = ("schedule", "workflow_dispatch")
 
 
 def dispatch_validation():
@@ -40,11 +41,43 @@ def dispatch_validation():
         raise ReleaseError("Validation dispatch failed; no Nightly was published") from error
 
 
+def reusable_validation(sha, deadline, clock=time):
+    """Return the newest completed full gate that already passed on this exact tip."""
+    query = urllib.parse.urlencode({"branch": "main", "head_sha": sha})
+    runs = pages(f"actions/workflows/quality-gate.yml/runs?{query}", "workflow_runs", deadline, clock)
+    eligible = [run for run in runs if type(run.get("id")) is int and run["id"] > 0
+                and run.get("event") in REUSABLE_EVENTS]
+    ordered = sorted(eligible, key=lambda run: (run.get("created_at", ""), run["id"]), reverse=True)
+    for run in ordered:
+        run_id = run["id"]
+        try:
+            verify_reusable_identity(api_get(f"actions/runs/{run_id}"), run_id, sha)
+            return POLICY["verify_validation_run"](run_id)
+        except ReleaseError:
+            continue
+    return None
+
+
+def verify_reusable_identity(run, run_id, sha):
+    require(run.get("id") == run_id and run.get("head_sha") == sha
+            and run.get("head_branch") == "main"
+            and run.get("event") in REUSABLE_EVENTS
+            and run.get("status") == "completed" and run.get("conclusion") == "success",
+            "Reusable validation identity is inconsistent")
+
+
 def validate_tip(sha, clock=time):
     timeout = POLICY["positive_integer"](os.environ.get("NIGHTLY_VALIDATION_TIMEOUT_SECONDS", "10800"))
     interval = POLICY["positive_integer"](os.environ.get("NIGHTLY_VALIDATION_POLL_SECONDS", "15"))
     require(timeout <= 10800 and interval <= timeout, "Invalid validation wait bound")
     deadline = clock.monotonic() + timeout
+    reusable = reusable_validation(sha, min(deadline, clock.monotonic() + 300), clock)
+    if reusable is not None:
+        run_id, attempt = reusable["validation_run_id"], reusable["validation_run_attempt"]
+        print(f"Reusing full green gate on main tip {sha}: run {run_id}, attempt {attempt}", flush=True)
+        os.environ.update(RELEASE_SOURCE_SHA=sha, RELEASE_VALIDATION_RUN_ID=str(run_id),
+                          RELEASE_VALIDATION_RUN_ATTEMPT=str(attempt))
+        return POLICY["verify_source"]()
     discovery_deadline = min(deadline, clock.monotonic() + 300)
     started = datetime.fromtimestamp(clock.time(), timezone.utc).replace(microsecond=0)
     query = urllib.parse.urlencode({
