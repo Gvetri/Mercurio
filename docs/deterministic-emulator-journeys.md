@@ -175,6 +175,26 @@ in order. The pinned Maestro archive is restored from the GitHub Actions
 cache; the pinned download runs only on a cache miss, so the layer adds no
 steady-state public-network dependency beyond CI itself.
 
+### One journey against a supplied APK
+
+`.github/scripts/journey-run.sh --flow <journey> --apk <path>` runs exactly one
+pinned journey against a caller-supplied APK, for example:
+
+```text
+GITHUB_WORKSPACE="$(pwd)" MAESTRO_CLI_VERSION=2.10.0 \
+  .github/scripts/journey-run.sh --flow terminal-success --apk \
+  app/build/outputs/apk/release/app-release.apk
+```
+
+The runner reads `GITHUB_WORKSPACE` and the pinned `MAESTRO_CLI_VERSION`
+(`2.10.0`) exactly as the CI job does. `--flow` alone runs one journey on the
+debug APK; `--apk` alone runs the full pinned list against the supplied APK.
+Either way the run keeps the same fake Gateway, TLS fixture, evidence
+directory, and per-journey verification as the full lane. An unknown flow name,
+an empty value, or a missing APK fails before any device work, with a message
+that names the bad value. Without these options the runner keeps its pinned
+list and its `<shard> <total>` invocation unchanged.
+
 ## Runner platform notes
 
 The runner installs the exact candidate APK with `adb install --no-streaming`:
