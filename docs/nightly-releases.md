@@ -96,6 +96,29 @@ conclusion outside GitHub's closed conclusion enum, fail reporting closed rather
 than inventing results. Discovery failures or expired waits without a completed identified run
 leave the Nightly red without fabricating a validation issue.
 
+## Signed-APK smoke before publication
+
+A Nightly does not publish until one product flow passes on the exact signed artifact. The
+`smoke` job runs after `sign` and before `publish` in the same run attempt:
+
+1. It downloads the signed artifact by the signing job's artifact ID and binds it to the
+   prepared source, validation run, version, and pinned certificate. The check also requires a
+   release variant, so a debug build or a re-signed foreign APK cannot satisfy the job.
+2. It installs that APK on an ARM-translation emulator and starts the existing fixture Gateway.
+   The image is `google_apis` API 30 `x86_64`: Android 11 translates the ARM64 release build on
+   an x86_64 host, and its trust store is still the live `/system/etc/security/cacerts` path that
+   the journey recipe writes. It is the lowest API level that both translates the ARM64 ABI and
+   exposes that live system store. The job uses the same test CA, fixture Gateway, flow, verifier,
+   and evidence as the scheduled journey lane.
+3. It runs the existing `terminal-success` product flow unchanged. The flow connects to the
+   fixture Gateway, opens a Session, and asserts the conversation surface. It never asserts
+   generated prose, and it uses no synthetic harness beyond the pinned journey layer.
+
+The job has a **15-minute** bound and fails closed. A failed or timed-out smoke publishes
+nothing, and the standard release-failure reporter files one `ready-for-agent` issue naming the
+failed `smoke` stage, the run, and the attempt. Journey logs and screenshots are redacted and
+retained as the `nightly-smoke-evidence-<run>-<attempt>` artifact.
+
 ## Versions and ARM64 APK
 
 The workflow generates these values without editing a product version:
@@ -150,7 +173,9 @@ It refuses an existing tag, a published release for the source, and every source
 other than one well-formed retained draft. That one draft is discarded only after the
 new artifact is verified, then recreated; the section below gives the exact rule.
 
-Publication proceeds in this order:
+Publication requires a successful signed-APK smoke in the same run attempt. A failed,
+cancelled, or missing smoke stops publication, and the publisher re-reads the smoke job before it
+writes. Publication then proceeds in this order:
 
 1. Create a **draft prerelease** bound to the exact source SHA, with generated notes.
 2. Read the draft back by the exact release ID returned by creation. Do not
@@ -175,7 +200,7 @@ publication succeeded but its read-back failed, inspect and verify that existing
 release instead of publishing again. This bounded discard is the only automatic
 release-state change; it never hides a failure.
 
-A failed signing or publication stage files or updates one `ready-for-agent` issue
+A failed smoke, signing, or publication stage files or updates one `ready-for-agent` issue
 per Nightly run. The reporter reads the exact run attempt and failed jobs, lists
 only available same-attempt artifacts, and verifies the issue after writing it.
 It has `actions: read`, `issues: write`, and `contents: read` for checkout, never
@@ -306,7 +331,8 @@ validation, and cannot write repository contents or releases.
 ## Download verification
 
 The release notes include the source SHA, embedded version code and name, APK
-SHA-256, pinned signer certificate SHA-256, and validation run/attempt. The metadata
+SHA-256, pinned signer certificate SHA-256, and validation run/attempt, and the
+signed-APK smoke run/attempt. The metadata
 file also binds the signing run/attempt and actual native ABI list. These are public
 identifiers; signing material and credentials are never release assets.
 
