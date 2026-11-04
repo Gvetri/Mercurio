@@ -22,6 +22,10 @@ def require(condition, message):
         raise ReleaseError(message)
 
 
+SMOKE_NOTE = (
+    f"- Signed-APK smoke: https://github.com/{REPOSITORY}/actions/runs/"
+    "{smoke_run_id} (attempt {smoke_run_attempt})\n"
+)
 NIGHTLY_NOTES = (
     "Development snapshot for testing. It may contain regressions and is not a stable-support promise.\n\n"
     "This is a **Nightly** prerelease, not a Stable Public Beta release.\n\n"
@@ -31,6 +35,7 @@ NIGHTLY_NOTES = (
     "- Signing certificate SHA-256: `{certificate_sha256}`\n"
     f"- Deterministic validation: https://github.com/{REPOSITORY}/actions/runs/"
     "{validation_run_id} (attempt {validation_run_attempt})\n"
+    + SMOKE_NOTE
 )
 SIGNING_METADATA_FIELDS = {
     "source_sha", "validation_run_id", "validation_run_attempt", "signing_run_id",
@@ -50,8 +55,13 @@ def parse_nightly_notes(body):
         "validation_run_id": r"[1-9][0-9]*", "validation_run_attempt": r"[1-9][0-9]*",
     }
     pattern = re.escape(NIGHTLY_NOTES)
+    escaped_smoke = re.escape(SMOKE_NOTE)
+    require(escaped_smoke in pattern, "Publisher notes layout is inconsistent")
+    pattern = pattern.replace(escaped_smoke, "(?:" + escaped_smoke + ")?")
     for name, value in fields.items():
         pattern = pattern.replace(re.escape("{" + name + "}"), f"(?P<{name}>{value})")
+    for name in ("smoke_run_id", "smoke_run_attempt"):
+        pattern = pattern.replace(re.escape("{" + name + "}"), r"[1-9][0-9]*")
     match = re.fullmatch(pattern, body if isinstance(body, str) else "")
     require(match is not None, "Publisher notes are missing or malformed")
     values = match.groupdict()

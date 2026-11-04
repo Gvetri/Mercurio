@@ -195,6 +195,34 @@ an empty value, or a missing APK fails before any device work, with a message
 that names the bad value. Without these options the runner keeps its pinned
 list and its `<shard> <total>` invocation unchanged.
 
+## Nightly signed-APK smoke
+
+The Nightly runs one journey against the exact signed release artifact before it
+publishes. The invocation reuses this runner rather than a second harness:
+
+```text
+.github/scripts/journey-run.sh --apk signed/mercurio.apk --flow terminal-success --arm-translation
+```
+
+The supplied APK is the signed `arm64-v8a` release build. It runs on the
+`google_apis` API 30 `x86_64` image with `-writable-system`: Android 11 translates
+the ARM64 application ABI on an x86_64 host, and the fixture CA still goes to the
+live `/system/etc/security/cacerts` system store, so the release build trusts the
+loopback Gateway without a debug-only network security config. API 30 is the
+lowest level that both translates the ARM64 ABI and exposes that live system
+store. The smoke passes `--arm-translation`, which enables the no-reboot
+trust-store fallback below; without that option the runner keeps its strict
+remount-and-push failure, so the scheduled and pull-request journey lanes are
+unchanged. The emulator must expose a root adbd; the runner's `adb root` and
+`require_root_adb` sequence already fail closed when it does not.
+
+The flow is `terminal-success`, unchanged: it connects, opens a Session, sends one
+synthetic message, and asserts the conversation surface and the terminal label. The
+Nightly job bounds the whole smoke at 15 minutes and fails closed, including
+emulator or Gateway startup failures. A failed smoke publishes nothing and files
+the release-failure issue; redacted logs and screenshots are retained in the
+`nightly-smoke-evidence-<run>-<attempt>` artifact.
+
 ## Runner platform notes
 
 The runner installs the exact candidate APK with `adb install --no-streaming`:
@@ -212,10 +240,14 @@ only once `adb shell id -u` reports `0`. The emulator action reports the
 device as booted before adbd accepts connections on a cold boot, so an
 unguarded first `adb root` fails with `adb: unable to connect for root:
 closed`. The sequence then remounts `/system`, pushes the CA, and verifies the
-file on the live system partition. It does not restart the guest: the app is
-installed after this step, so its first process reads the live trust store,
-and a restart with the writable-system overlay active can leave the emulator
-unreachable. A device that never reaches a root shell fails the job with the
+file on the live system partition. When the image refuses the runtime remount
+(Android 11 and newer write an overlay that needs a restart), the runner instead
+stages a writable copy of the system CA directory and bind-mounts it over the
+live store in init's mount namespace. That fallback needs no guest restart,
+which matters because a restart with the writable-system overlay active can
+leave the emulator unreachable. It does not restart the guest: the app is
+installed after this step, so its first process reads the live trust store.
+A device that never reaches a root shell fails the job with the
 current `adb devices` state instead of waiting out the job timeout.
 
 Before any flow starts, the runner probes `/health` directly — it is not a

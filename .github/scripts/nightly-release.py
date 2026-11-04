@@ -248,6 +248,11 @@ SIGNER = runpy.run_path(str(Path(__file__).with_name("sign-release-apk.py")))
 ASSETS = ("mercurio.apk", "SHA256SUMS", "signing-metadata.json")
 
 
+def android_tools():
+    return (Path(os.environ["ANDROID_HOME"]) / "build-tools/35.0.0",
+            {name: os.environ[name] for name in ("PATH", "JAVA_HOME")})
+
+
 def verify_artifact(directory, certificate, evidence, code, signing_run_id=None, signing_run_attempt=None):
     """Bind the actual signed APK and its small metadata allowlist to the current run."""
     require({path.name for path in directory.iterdir()} == set(ASSETS), "Unexpected release asset set")
@@ -258,8 +263,7 @@ def verify_artifact(directory, certificate, evidence, code, signing_run_id=None,
         require(metadata.get(key) == value, "APK validation evidence does not match the selected source")
     require(metadata["signing_run_id"] == (signing_run_id if signing_run_id is not None else POLICY["positive_integer"](os.environ.get("GITHUB_RUN_ID"))), "APK belongs to another signing run")
     require(metadata["signing_run_attempt"] == (signing_run_attempt if signing_run_attempt is not None else POLICY["positive_integer"](os.environ.get("GITHUB_RUN_ATTEMPT"))), "APK belongs to an earlier signing attempt")
-    tools = Path(os.environ["ANDROID_HOME"]) / "build-tools/35.0.0"
-    environment = {name: os.environ[name] for name in ("PATH", "JAVA_HOME")}
+    tools, environment = android_tools()
     apk = directory / "mercurio.apk"
     actual = SIGNER["apk_metadata"](apk, tools, environment)
     require(actual["version_code"] == code and actual["version_name"] == f"nightly-{code}-{evidence['source_sha'][:12]}", "APK version does not match the Nightly")
@@ -274,6 +278,31 @@ def verify_artifact(directory, certificate, evidence, code, signing_run_id=None,
     require(metadata["apk_sha256"] == checksum, "Nightly APK checksum changed")
     require((directory / "SHA256SUMS").read_text() == f"{checksum}  mercurio.apk\n", "Nightly checksum file is inconsistent")
     return metadata
+
+
+def require_smoke_job_success():
+    """Require this run attempt's successful signed-APK smoke job."""
+    run_id = POLICY["positive_integer"](os.environ.get("GITHUB_RUN_ID"))
+    attempt = POLICY["positive_integer"](os.environ.get("GITHUB_RUN_ATTEMPT"))
+    jobs = pages(f"actions/runs/{run_id}/attempts/{attempt}/jobs", "jobs")
+    matching = [job for job in jobs if job.get("name") == "smoke"]
+    require(len(matching) == 1, "Missing or duplicate signed-APK smoke job")
+    job = matching[0]
+    require(job.get("head_sha") == os.environ.get("GITHUB_SHA") and job.get("status") == "completed"
+            and job.get("conclusion") == "success",
+            "The signed-APK smoke has not passed")
+    return {"smoke_run_id": run_id, "smoke_run_attempt": attempt}
+
+
+def require_smoke_artifact(directory, certificate):
+    """Bind the downloaded signed artifact to this Nightly before the smoke installs it."""
+    evidence = POLICY["verify_source"]()
+    code = POLICY["generation_code"]()
+    metadata = verify_artifact(directory, certificate, evidence, code)
+    tools, environment = android_tools()
+    badging = SIGNER["run_tool"]([str(tools / "aapt2"), "dump", "badging", str(directory / "mercurio.apk")], environment)
+    require("application-debuggable" not in badging, "Smoke must install the release variant, not a debug build")
+    print(f"Signed-APK smoke artifact verified: {metadata['apk_sha256']}", flush=True)
 
 
 def gh_command(arguments, payload=None):
@@ -308,6 +337,7 @@ def publish(directory, certificate, failure_context=None):
     POLICY["verify_nightly_authorization"]()
     code = POLICY["generation_code"]()
     metadata = verify_artifact(directory, certificate, evidence, code)
+    smoke = require_smoke_job_success()
     sha = evidence["source_sha"]
     tag = f"nightly-{code}-{sha}"
     require(api_get(f"git/matching-refs/tags/{tag}") == [], "Nightly tag already exists; operator recovery is required")
@@ -319,7 +349,7 @@ def publish(directory, certificate, failure_context=None):
         discard_retained_draft(retained[0], sha)
         history = release_history()
     require(not any(source == sha for _, source, _ in history), "This source already has a Nightly or a draft")
-    body = POLICY["nightly_notes"](metadata)
+    body = POLICY["nightly_notes"]({**metadata, **smoke})
 
     def read_release(draft, expected_id):
         require(type(expected_id) is int and expected_id > 0, "Missing release identity")
@@ -426,6 +456,8 @@ def main(clock=time):
             print("Nightly source prepared." if result["publish"] == "true" else "Source already has a Nightly; nothing to publish.")
         elif sys.argv[1:] == ["report-validation"]:
             report_validation()
+        elif len(sys.argv) == 4 and sys.argv[1] == "verify-smoke":
+            require_smoke_artifact(Path(sys.argv[2]), Path(sys.argv[3]))
         elif len(sys.argv) == 4 and sys.argv[1] == "publish":
             publish(Path(sys.argv[2]), Path(sys.argv[3]), failure_context)
         else:
