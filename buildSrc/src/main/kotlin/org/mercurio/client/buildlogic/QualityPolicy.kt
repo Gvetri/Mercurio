@@ -66,6 +66,8 @@ object QualityPolicy {
         BoundaryDoubleRequirement("SessionDraftStore", "repository"),
         BoundaryDoubleRequirement("InstalledBuildProvider", "datasource"),
         BoundaryDoubleRequirement("ErrorReportingConsentStore", "repository"),
+        BoundaryDoubleRequirement("AppLockSettingsStore", "repository"),
+        BoundaryDoubleRequirement("AppLockEnrolment", "datasource"),
     )
 
     /**

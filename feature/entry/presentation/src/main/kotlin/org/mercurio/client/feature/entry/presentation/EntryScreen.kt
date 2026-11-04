@@ -51,47 +51,59 @@ fun EntryScreen(
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
         ) {
-            val sessionList = state.sessionList
-            if (state.isSettingsOpen) {
-                SettingsBackHandling(state, onEvent)
-            }
-            if (state.isErrorReportingConsentRequired) {
-                ErrorReportingConsentContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
-            } else if (state.localDiagnostics.isOpen) {
-                LocalDiagnosticsContent(
-                    state = state.localDiagnostics,
-                    onEvent = onEvent,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else if (state.isSettingsOpen && !state.isChangingCredential) {
-                SettingsContent(
-                    state = state,
-                    onEvent = onEvent,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else if (sessionList != null && !state.isChangingCredential) {
-                SessionShell(
-                    state = sessionList,
-                    onEvent = onEvent,
-                    modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.s),
-                    notice = state.inboundLinkNotice,
-                )
+            if (state.appLock.isUnlockRequired) {
+                AppLockContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
             } else {
-                ConnectionContent(state = state, onEvent = onEvent)
-            }
-            if (state.isRemoveConfirmationOpen) {
-                RemoveGatewayConnectionConfirmation(onEvent = onEvent)
-            }
-            if (state.isClearHistoryCacheConfirmationOpen) {
-                ClearHistoryCacheConfirmation(onEvent = onEvent)
-            }
-            if (sessionList?.openedSession?.isDiscardUnresolvedSendConfirmationOpen == true) {
-                UnresolvedSendDiscardConfirmation(onEvent = onEvent)
-            }
-            sessionList?.pendingSessionDelete()?.let { pending ->
-                DeleteSessionConfirmation(pending = pending, onEvent = onEvent)
+                EntryContent(state = state, onEvent = onEvent)
             }
         }
+    }
+}
+
+@Composable
+private fun EntryContent(
+    state: EntryUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val sessionList = state.sessionList
+    if (state.isSettingsOpen) {
+        SettingsBackHandling(state, onEvent)
+    }
+    if (state.isErrorReportingConsentRequired) {
+        ErrorReportingConsentContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
+    } else if (state.localDiagnostics.isOpen) {
+        LocalDiagnosticsContent(
+            state = state.localDiagnostics,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxSize(),
+        )
+    } else if (state.isSettingsOpen && !state.isChangingCredential) {
+        SettingsContent(
+            state = state,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxSize(),
+        )
+    } else if (sessionList != null && !state.isChangingCredential) {
+        SessionShell(
+            state = sessionList,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.s),
+            notice = state.inboundLinkNotice,
+        )
+    } else {
+        ConnectionContent(state = state, onEvent = onEvent)
+    }
+    if (state.isRemoveConfirmationOpen) {
+        RemoveGatewayConnectionConfirmation(onEvent = onEvent)
+    }
+    if (state.isClearHistoryCacheConfirmationOpen) {
+        ClearHistoryCacheConfirmation(onEvent = onEvent)
+    }
+    if (sessionList?.openedSession?.isDiscardUnresolvedSendConfirmationOpen == true) {
+        UnresolvedSendDiscardConfirmation(onEvent = onEvent)
+    }
+    sessionList?.pendingSessionDelete()?.let { pending ->
+        DeleteSessionConfirmation(pending = pending, onEvent = onEvent)
     }
 }
 

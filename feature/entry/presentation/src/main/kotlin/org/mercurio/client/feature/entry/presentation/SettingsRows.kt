@@ -122,6 +122,7 @@ internal fun SettingsSwitchRow(
         Switch(
             checked = model.checked,
             onCheckedChange = onCheckedChange,
+            enabled = model.enabled,
             modifier =
                 Modifier
                     .semantics { this.contentDescription = switchDescription },
@@ -134,6 +135,7 @@ internal data class SettingsSwitchRowModel(
     val supporting: String,
     val checked: Boolean,
     val description: String,
+    val enabled: Boolean = true,
     val errorText: String? = null,
 )
 

@@ -100,6 +100,7 @@
     <string name="settings_clear_history_cache">Clear cached conversations</string>
     <string name="settings_clear_history_cache_summary">Clearing removes cached conversations from this device only. Remote Sessions and Runs are not deleted, and diagnostic files you already exported are not removed.</string>
     <string name="settings_section_connection">CONNECTION</string>
+    <string name="settings_section_security">SECURITY</string>
     <string name="settings_section_notifications">NOTIFICATIONS</string>
     <string name="settings_notifications_row">Notifications</string>
     <string name="settings_section_media">MEDIA</string>
@@ -117,6 +118,12 @@
     <string name="settings_action_remove_connection">Remove connection</string>
     <string name="settings_notifications_supporting_off">Tells you when a run finishes, even when closed.</string>
     <string name="settings_notifications_supporting_on">Run-finished notices are on.</string>
+    <string name="settings_app_lock_row">App lock</string>
+    <string name="settings_app_lock_supporting">Unlocks Mercurio with your device screen lock.</string>
+    <string name="settings_app_lock_unavailable">Set a screen lock on this device to use app lock.</string>
+    <string name="app_lock_title">Mercurio is locked</string>
+    <string name="app_lock_body">Unlock with your device screen lock to see your Sessions.</string>
+    <string name="app_lock_action">Unlock</string>
     <string name="settings_media_auto_load">Load pictures automatically</string>
     <string name="settings_media_auto_load_on">Images load without a tap. Data charges may apply.</string>
     <string name="settings_media_auto_load_off">Images load only when you tap them.</string>

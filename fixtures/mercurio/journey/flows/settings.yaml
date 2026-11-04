@@ -29,6 +29,12 @@ name: settings
     visible: "CONNECTION"
     timeout: 30000
 - takeScreenshot: settings-surface
+- assertVisible: "SECURITY"
+- assertVisible: "App lock"
+- scrollUntilVisible:
+    element:
+      text: "Notifications"
+    direction: DOWN
 - assertVisible: "Notifications"
 - scrollUntilVisible:
     element:

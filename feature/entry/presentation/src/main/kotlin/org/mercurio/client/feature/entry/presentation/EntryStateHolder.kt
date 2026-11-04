@@ -13,6 +13,8 @@ import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
+import org.mercurio.client.feature.entry.domain.AppLockEnrolment
+import org.mercurio.client.feature.entry.domain.AppLockSettingsStore
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
@@ -201,6 +203,16 @@ sealed interface EntryUiEvent {
         val favorite: Boolean,
     ) : ModelPicker
 
+    sealed interface AppLock : EntryUiEvent
+
+    data object AppLockToggleClicked : AppLock
+
+    data object AppUnlockRequested : AppLock
+
+    data class AppLockAuthenticationResult(
+        val authenticated: Boolean,
+    ) : AppLock
+
     sealed interface Settings : EntryUiEvent
 
     data object OpenSettingsClicked : Settings
@@ -306,6 +318,7 @@ data class EntryUiState(
     val isGatewayConnectionConfigured: Boolean = false,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
     val isErrorReportingConsentRequired: Boolean = false,
+    val appLock: AppLockUiState = AppLockUiState(),
 )
 
 /**
@@ -330,6 +343,16 @@ data class LocalDiagnosticsUiState(
 }
 
 /**
+ * The device-bound parts of the app-lock gate: its persisted switch, the device's enrolment, and
+ * the request that shows the system prompt.
+ */
+data class AppLockPorts(
+    val settingsStore: AppLockSettingsStore,
+    val enrolment: AppLockEnrolment,
+    val requestUnlock: () -> Unit,
+)
+
+/**
  * The ports the Local diagnostics surface needs, grouped so one buffer collection
  * serves all of them: the recorder appends approved events, the store reports and
  * clears them, and the exporter shares a snapshot of what the buffer holds.
@@ -351,6 +374,19 @@ data class RunStatusNotificationsUiState(
     val enabled: Boolean = false,
     val explanation: RunStatusNotificationExplanation? = null,
 )
+
+/**
+ * The app-lock gate: the persisted switch, whether this device can prove the user's identity at
+ * all, and whether the current foreground visit still waits for that proof.
+ */
+data class AppLockUiState(
+    val isEnabled: Boolean = false,
+    val isAvailable: Boolean = false,
+    val isLocked: Boolean = false,
+) {
+    val isUnlockRequired: Boolean
+        get() = isEnabled && isLocked
+}
 
 enum class RunStatusNotificationExplanation(
     val messageRes: Int,
@@ -384,6 +420,7 @@ data class EntryStateHolderDependencies(
     val localDiagnostics: LocalDiagnosticsPorts? = null,
     val errorReporting: ErrorReporting? = null,
     val errorReportingConsentStore: ErrorReportingConsentStore? = null,
+    val appLock: AppLockPorts? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -414,6 +451,7 @@ class EntryStateHolder(
     internal val localDiagnostics = dependencies.localDiagnostics
     internal val errorReporting = dependencies.errorReporting
     internal val errorReportingConsentStore = dependencies.errorReportingConsentStore
+    internal val appLock = dependencies.appLock
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
 
     init {
@@ -428,6 +466,7 @@ class EntryStateHolder(
                     runStatusNotifications = restoredRunStatusNotificationState(),
                     autoLoadImages = imageLoadingSettingsStore?.loadEnabled() ?: true,
                     isErrorReportingConsentRequired = restoredErrorReportingConsentRequired(),
+                    appLock = restoredAppLockState(),
                 ),
         )
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
@@ -466,6 +505,7 @@ class EntryStateHolder(
     internal var nextComposerFocusRequestId = 0L
     internal var inboundLinkListRequestInterrupted = false
     internal var isForeground = false
+    internal var isUnlockPromptPending = false
     internal val recoveryClaims = mutableMapOf<RecoveryEntryKey, RecoveryClaim>()
     internal val recoveryHandledEntries = mutableSetOf<RecoveryEntryKey>()
     internal var recoveryLoadPending = false
@@ -505,6 +545,7 @@ class EntryStateHolder(
             is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
             is EntryUiEvent.Run -> dispatchRunEvent(event)
             is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
+            is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
             is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
             is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
             is EntryUiEvent.ErrorReportingConsentGranted ->

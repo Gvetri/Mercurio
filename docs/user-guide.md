@@ -67,14 +67,21 @@ which verifies and saves the connection again. The credential is never stored in
 ## Settings
 
 The **Settings** button in the Session list header opens the Settings surface. It is a list of
-sections: **Connection**, **Notifications**, **Media**, **Diagnostics**, and **About**. A section
-whose capability has not shipped is absent. Opening Settings keeps the
+sections: **Connection**, **Security**, **Notifications**, **Media**, **Diagnostics**, and **About**.
+A section whose capability has not shipped is absent. Opening Settings keeps the
 Session list in memory: the back gesture restores your search query and the loaded Sessions.
 
 The **Connection** row states the saved connection. The **::** control in the top app bar opens the
 only menu on the screen: **Change credential** and **Remove connection**. **Remove connection**
 removes the saved endpoint and credential from this device. It is a local removal only: the client
 does not delete or cancel remote Sessions and Runs.
+
+**Security** holds **App lock**, off by default. When it is on, the client asks for your device
+screen lock — a biometric or your PIN, pattern, or password — before it shows anything, including a
+Session opened from a link. It asks again each time you come back to the app: after an app switch,
+the home button, or the screen turning off. The switch stays off with the reason stated when this
+device has no screen lock set. When the screen lock is removed later, the client turns the switch off
+rather than locking you out.
 
 **Media** holds **Load pictures automatically**, on by default. When it is off, an image waits for
 a tap instead of loading automatically.

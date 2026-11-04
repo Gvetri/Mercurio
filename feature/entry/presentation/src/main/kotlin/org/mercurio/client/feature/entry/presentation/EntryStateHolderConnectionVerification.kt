@@ -187,6 +187,7 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
                         installSource = current.installSource,
                         autoLoadImages = current.autoLoadImages,
                         runStatusNotifications = current.runStatusNotifications,
+                        appLock = current.appLock,
                     )
             releasedState
         }
