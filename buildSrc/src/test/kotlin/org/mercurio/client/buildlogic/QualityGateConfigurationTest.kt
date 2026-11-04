@@ -1359,7 +1359,7 @@ class QualityGateConfigurationTest {
                 "compose_test",
             )
         val shardKeys = (1..3).map { shard -> "maestro_shard_$shard" }
-        val laneNeeds = "    needs: [api24_instrumentation, ${lanes.joinToString(", ")}]"
+        val laneNeeds = "    needs: [${lanes.joinToString(", ")}]"
         val aggregateNeeds = "    needs: [api24_instrumentation, ${(lanes + shardKeys).joinToString(", ")}]"
         val laneGuard = lanes.joinToString(" && ") { lane -> "needs.$lane.result != 'failure'" }
 
@@ -1374,6 +1374,10 @@ class QualityGateConfigurationTest {
             "Every journey shard must wait for the lanes that conclude before it starts, and for nothing else.",
             shardKeys.map { laneNeeds },
             maestroShards.lineSequence().filter { line -> line.startsWith("    needs: ") }.toList(),
+        )
+        assertTrue(
+            "Every journey shard must start in parallel with the device check instead of waiting for it.",
+            !maestroShards.contains("api24_instrumentation"),
         )
         assertTrue(
             "The shard aggregate must keep the label, API 24, schedule, manual, and ready-pull-request gate the shards use.",

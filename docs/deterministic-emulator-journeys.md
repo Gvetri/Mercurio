@@ -18,9 +18,10 @@ public-network dependency, real provider credentials, or live model execution.
 | CI lane | `maestro_journeys` in `.github/workflows/quality-gate.yml` | GitHub-hosted emulator execution of every journey against the exact candidate APK |
 
 The lane runs on the nightly schedule and on manual dispatch. A ready in-repository pull request
-runs it only when the head carries the `run-maestro` label: the job then waits for a passing
-`api24-instrumentation` run, so a build or device-suite failure never reaches the journey lane. A
-changed UI path starts `api24-instrumentation` on its own and never the journey lane.
+runs it only when the head carries the `run-maestro` label: its three shards then start in parallel
+with `api24-instrumentation` instead of waiting for it, and the shard aggregate still requires a
+passing device check, so a build or device-suite failure still fails the lane. A changed UI path
+starts `api24-instrumentation` on its own and never the journey lane.
 
 ## Requesting the journey lane
 
@@ -43,7 +44,9 @@ areas, add the label: the nightly schedule runs the whole suite against `main` e
 
 The lane runs as three parallel shard jobs. Each shard invokes
 `.github/scripts/journey-run.sh <shard> 3` and runs only the journeys whose pinned position
-belongs to it, so a failing journey stops its own shard and no other shard sees it.
+belongs to it, so a failing journey stops its own shard and no other shard sees it. The shards
+start in parallel with `api24-instrumentation`; the aggregate still requires the device check to
+pass, and a failed device check therefore fails the lane after the shards finish.
 
 Before each journey the runner probes `GET /v1/capabilities` and sends the credential the
 scenario declares in `require_bearer_credential`, or no authorization header when the scenario
