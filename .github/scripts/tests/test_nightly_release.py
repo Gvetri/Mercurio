@@ -1,7 +1,9 @@
 """Provider-free Nightly policy and workflow regression tests."""
+from datetime import datetime, timezone
 from pathlib import Path
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import tempfile
@@ -177,6 +179,120 @@ class NightlyPreparationTest(unittest.TestCase):
         )
         values = dict(line.split("=", 1) for line in output.read_text().splitlines()) if output.exists() else {}
         return result, values
+
+    def add_reusable_run(self, run_id=124, jobs=None, **overrides):
+        run = {
+            **self.selected_run, "id": run_id, "event": "schedule",
+            "created_at": "2026-01-01T00:00:00Z", **overrides,
+        }
+        self.runs.append(run)
+        prefix = f"/repos/{self.repository}"
+        attempt = run["run_attempt"]
+        selected_jobs = self.jobs if jobs is None else jobs
+        self.routes[f"{prefix}/actions/runs/{run_id}"] = run
+        self.routes[f"{prefix}/actions/runs/{run_id}/attempts/{attempt}"] = run
+        self.routes[f"{prefix}/actions/runs/{run_id}/attempts/{attempt}/jobs"] = {
+            "total_count": len(selected_jobs), "jobs": selected_jobs,
+        }
+        return run
+
+    def test_reuses_the_newest_full_gate_already_green_on_the_exact_tip(self):
+        self.add_reusable_run(124)
+        self.add_reusable_run(125, event="workflow_dispatch", created_at="2026-01-01T01:00:00Z")
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("true", values["publish"])
+        self.assertEqual("125", values["validation_run_id"])
+        self.assertEqual("1", values["validation_run_attempt"])
+        self.assertEqual(self.selected, values["source_sha"])
+        self.assertEqual([], self.api.posts)
+        self.assertIn("Reusing full green gate", result.stdout)
+
+    def test_a_qualifying_manual_dispatch_gate_is_reused_without_a_new_dispatch(self):
+        self.add_reusable_run(124, event="workflow_dispatch")
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("124", values["validation_run_id"])
+        self.assertEqual([], self.api.posts)
+
+    def test_nonqualifying_runs_fall_back_to_the_dispatch(self):
+        cases = {
+            "another tip": {"head_sha": self.old},
+            "pull request": {"event": "pull_request"},
+            "push only": {"event": "push"},
+            "incomplete": {"status": "in_progress", "conclusion": None},
+        }
+        for name, overrides in cases.items():
+            with self.subTest(case=name):
+                self.runs.clear()
+                self.api.posts.clear()
+                self.add_reusable_run(124, **overrides)
+                result, values = self.prepare()
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("123", values["validation_run_id"])
+                self.assertEqual(1, len(self.api.posts))
+
+    def test_a_run_missing_one_required_stage_falls_back_to_the_dispatch(self):
+        self.add_reusable_run(124, jobs=[job for job in self.jobs if job["name"] != "formatting"])
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual(1, len(self.api.posts))
+
+    def test_a_failed_aggregate_falls_back_to_the_dispatch(self):
+        jobs = [{**job, "conclusion": "failure"} if job["name"] == "quality-gate" else job
+                for job in self.jobs]
+        self.add_reusable_run(124, jobs=jobs)
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual(1, len(self.api.posts))
+
+    def test_an_unavailable_reuse_lookup_refuses_without_dispatching(self):
+        self.routes[f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"] = (
+            500, {"message": "unavailable"},
+        )
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Required GitHub evidence is unavailable", result.stderr)
+        self.assertEqual({}, values)
+        self.assertEqual([], self.api.posts)
+
+    def test_an_existing_nightly_outranks_a_qualifying_gate(self):
+        self.add_reusable_run(124)
+        self.releases.append({
+            "id": 1, "tag_name": f"nightly-6001-{self.selected}", "name": "Nightly",
+            "prerelease": True, "draft": False, "target_commitish": self.selected,
+        })
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("false", values["publish"])
+        self.assertEqual([], self.api.posts)
+
+    def test_the_version_code_sequence_outranks_a_qualifying_gate(self):
+        self.add_reusable_run(124)
+        self.releases.append({"id": 1, "tag_name": f"nightly-8001-{self.old}"})
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("not newer", result.stderr)
+        self.assertEqual({}, values)
+        self.assertEqual([], self.api.posts)
+
+    def test_reused_gate_identity_reaches_signing_metadata_and_release_body(self):
+        self.add_reusable_run(124, run_attempt=2)
+        self.signed_publication_fixture(validation_run_id="124", validation_run_attempt="2")
+        result = self.publish()
+        self.assertEqual(0, result.returncode, result.stderr)
+        metadata = json.loads((self.signed / "signing-metadata.json").read_text())
+        self.assertEqual(124, metadata["validation_run_id"])
+        self.assertEqual(2, metadata["validation_run_attempt"])
+        self.assertEqual({
+            "source_sha", "validation_run_id", "validation_run_attempt", "signing_run_id",
+            "signing_run_attempt", "version_code", "version_name", "native_abis", "apk_sha256",
+            "certificate_sha256",
+        }, set(metadata))
+        body = json.loads(self.release_file.read_text())["body"]
+        self.assertIn("/actions/runs/124 (attempt 2)", body)
 
     def test_unknown_terminal_conclusion_is_not_printed_or_accepted(self):
         self.selected_run["conclusion"] = "untrusted-api-value-must-not-appear"
@@ -506,7 +622,14 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertFalse(any("/commits/" in path for path in self.api.requests))
         queries = [parse_qs(urlsplit(path).query) for path in self.api.requests if "quality-gate.yml/runs?" in path]
         self.assertTrue(queries)
-        for query in queries:
+        reuse = [query for query in queries if "created" not in query]
+        self.assertTrue(reuse)
+        for query in reuse:
+            self.assertEqual(["main"], query["branch"])
+            self.assertEqual([self.selected], query["head_sha"])
+        dispatched = [query for query in queries if "created" in query]
+        self.assertTrue(dispatched)
+        for query in dispatched:
             self.assertEqual(["workflow_dispatch"], query["event"])
             self.assertEqual(["main"], query["branch"])
             self.assertEqual([self.selected], query["head_sha"])
@@ -669,19 +792,25 @@ class NightlyPreparationTest(unittest.TestCase):
 
     def test_waits_for_delayed_discovery(self):
         endpoint = f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"
-        responses = [[], [], [self.selected_run]]
+        responses = [[], [], [], [self.selected_run]]
         self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0) if len(responses) > 1 else responses[0]}
         result, values = self.prepare()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("123", values["validation_run_id"])
 
-    def test_historical_runs_are_not_substitutes_for_the_dispatch(self):
+    def test_a_qualifying_historical_run_is_reused_but_a_nonqualifying_one_is_not(self):
         historical = {**self.selected_run, "created_at": "2026-01-01T00:00:00Z"}
         self.runs.append(historical)
         result, values = self.prepare()
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("did not appear", result.stderr)
-        self.assertEqual({}, values)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual([], self.api.posts)
+        self.runs[:] = [{**historical, "id": 124, "event": "push"}]
+        self.api.posts.clear()
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual(1, len(self.api.posts))
 
     def twin_dispatch(self, twin):
         prefix = f"/repos/{self.repository}"
@@ -730,16 +859,20 @@ class NightlyPreparationTest(unittest.TestCase):
             "failed_validation_run_attempt": "1", "failed_validation_sha": self.selected,
         }, values)
 
-    def test_old_creation_time_or_moved_dispatch_source_cannot_match(self):
+    def test_reuse_ignores_creation_time_but_a_moved_source_does_not_qualify(self):
+        self.runs.append({**self.selected_run, "event": "schedule", "created_at": "2025-12-31T23:59:59Z"})
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual([], self.api.posts)
+        self.runs.clear()
         endpoint = f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"
-        for changed in ({"created_at": "2025-12-31T23:59:59Z"}, {"head_sha": self.old}):
-            with self.subTest(changed=changed):
-                responses = [[], [{**self.selected_run, "created_at": "2026-01-01T00:00:00Z", **changed}]]
-                self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0) if len(responses) > 1 else responses[0]}
-                result, values = self.prepare()
-                self.assertNotEqual(0, result.returncode)
-                self.assertIn("did not appear", result.stderr)
-                self.assertEqual({}, values)
+        responses = [[], [{**self.selected_run, "created_at": "2026-01-01T00:00:00Z", "head_sha": self.old}]]
+        self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0) if len(responses) > 1 else responses[0]}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("did not appear", result.stderr)
+        self.assertEqual({}, values)
 
     def test_a_newer_main_tip_during_validation_does_not_change_the_release_source(self):
         def dispatch(payload):
@@ -786,14 +919,14 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual([], self.api.patches)
         self.assertEqual([], self.api.deletes)
 
-    def signed_publication_fixture(self):
+    def signed_publication_fixture(self, validation_run_id="123", validation_run_attempt="1"):
         root = Path(self.directory.name)
         fixture = make_signing_fixture(root / "signing", 7002, "nightly-7002-bbbbbbbbbbbb")
         signing_environment = {
             **fixture.environment, **self.environment, "HOME": str(root),
             "RELEASE_SOURCE_SHA": self.selected, "RELEASE_VERSION_CODE": "7002",
-            "RELEASE_GENERATION_ATTEMPT": "2", "RELEASE_VALIDATION_RUN_ID": "123",
-            "RELEASE_VALIDATION_RUN_ATTEMPT": "1",
+            "RELEASE_GENERATION_ATTEMPT": "2", "RELEASE_VALIDATION_RUN_ID": validation_run_id,
+            "RELEASE_VALIDATION_RUN_ATTEMPT": validation_run_attempt,
         }
         self.signed = root / "signed"
         result = subprocess.run([
@@ -1255,6 +1388,55 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertIn("Tag exists: `yes`", body)
         self.assertIn("Orphan tag: `unknown`", body)
         self.assertFalse((self.provider / "operations").exists())
+
+
+class NightlyReuseWindowTest(unittest.TestCase):
+    def test_a_slow_reuse_sweep_keeps_the_dispatch_discovery_window(self):
+        module = runpy.run_path(str(ROOT / ".github/scripts/nightly-release.py"))
+        sha = "b" * 40
+
+        class Clock:
+            elapsed = 0
+
+            def time(self):
+                return datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp() + self.elapsed
+
+            def monotonic(self):
+                return self.elapsed
+
+            def sleep(self, seconds):
+                self.elapsed += seconds
+
+        clock = Clock()
+        calls = []
+
+        def pages(path, key=None, deadline=None, clock_value=None):
+            assert isinstance(deadline, (int, float)) and clock.elapsed <= deadline
+            calls.append(path)
+            if len(calls) == 1:
+                clock.elapsed += 301
+                return []
+            if len(calls) == 2:
+                return []
+            return [{"id": 123, "event": "workflow_dispatch", "head_branch": "main",
+                     "head_sha": sha, "run_attempt": 1, "status": "completed",
+                     "conclusion": "success", "created_at": "2026-01-01T00:10:00Z"}]
+
+        run = {"id": 123, "run_attempt": 1, "head_sha": sha, "head_branch": "main",
+               "event": "workflow_dispatch", "status": "completed", "conclusion": "success",
+               "created_at": "2026-01-01T00:10:00Z"}
+        policy = dict(module["POLICY"])
+        policy["verify_source"] = lambda: {"source_sha": sha, "validation_run_id": 123,
+                                           "validation_run_attempt": 1}
+        namespace = module["validate_tip"].__globals__
+        namespace.update(pages=pages, api_get=lambda path: run, dispatch_validation=lambda: None,
+                         POLICY=policy)
+        for name in ("RELEASE_SOURCE_SHA", "RELEASE_VALIDATION_RUN_ID", "RELEASE_VALIDATION_RUN_ATTEMPT"):
+            self.addCleanup(os.environ.pop, name, None)
+        evidence = module["validate_tip"](sha, clock)
+        self.assertEqual({"source_sha": sha, "validation_run_id": 123,
+                          "validation_run_attempt": 1}, evidence)
+        self.assertGreaterEqual(len(calls), 3)
 
 
 class NightlyGenerationTest(unittest.TestCase):
