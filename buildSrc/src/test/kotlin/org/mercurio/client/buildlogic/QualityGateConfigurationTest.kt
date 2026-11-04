@@ -5,6 +5,7 @@ import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -1317,7 +1318,7 @@ class QualityGateConfigurationTest {
         }
         val immutableReference = Regex("[0-9a-fA-F]{40}")
 
-        assertEquals("The workflow must keep all twenty-one checkout steps explicit.", 21, checkoutStepIndices.size)
+        assertEquals("The workflow must keep all twenty-three checkout steps explicit.", 23, checkoutStepIndices.size)
         checkoutStepIndices.forEach { index ->
             val reference = lines[index].trim().substringAfter("actions/checkout@")
             assertTrue(
@@ -1711,10 +1712,19 @@ class QualityGateConfigurationTest {
     }
 
     @Test
-    fun gradle_caching_is_declared_and_the_architecture_self_tests_stay_consolidated_and_fresh() {
+    fun gradle_caching_is_declared_and_the_buildsrc_self_tests_stay_sharded_and_fresh() {
         val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
         val architectureJob = workflow.substringAfter("  architecture_check:").substringBefore("  buildsrc_contracts:")
-        val buildSrcContractsJob = workflow.substringAfter("  buildsrc_contracts:").substringBefore("  coverage_mutation:")
+        val umbrella = workflow.substringAfter("  buildsrc_contracts:").substringBefore("  buildsrc_contracts_shard_1:")
+        val shardJobs =
+            (1..3).map { shard ->
+                val next = if (shard == 3) "  coverage_mutation:" else "  buildsrc_contracts_shard_${shard + 1}:"
+                workflow.substringAfter("  buildsrc_contracts_shard_$shard:").substringBefore(next)
+            }
+        fun jobValue(
+            block: String,
+            key: String,
+        ): String? = Regex("(?m)^    $key: (.+)$").find(block)?.groupValues?.get(1)
         val rootProperties = repositoryRoot.resolve("gradle.properties").readText()
         val buildSrcProperties = repositoryRoot.resolve("buildSrc/gradle.properties").readText()
         val buildSrcScript = repositoryRoot.resolve("buildSrc/build.gradle.kts").readText()
@@ -1740,28 +1750,30 @@ class QualityGateConfigurationTest {
                 buildSrcScript.contains("outputs.cacheIf { false }"),
         )
         assertEquals(
-            "The buildsrc-contracts job must consolidate the buildSrc self-tests into one Gradle invocation.",
-            1,
-            Regex("./gradlew -p buildSrc test").findAll(buildSrcContractsJob).count(),
+            "The buildsrc-contracts umbrella must keep its key and name.",
+            "buildsrc-contracts",
+            jobValue(umbrella, "name"),
         )
         assertEquals(
-            "The architecture job must not run the buildSrc self-tests.",
+            "The umbrella must wait for the three shards and the changed-file decision.",
+            "[ui_paths, buildsrc_contracts_shard_1, buildsrc_contracts_shard_2, buildsrc_contracts_shard_3]",
+            jobValue(umbrella, "needs"),
+        )
+        assertEquals(
+            "The umbrella must stay a short aggregator and must not run the self-tests itself.",
             0,
-            Regex("./gradlew -p buildSrc test").findAll(architectureJob).count(),
+            Regex("./gradlew -p buildSrc test").findAll(umbrella).count(),
+        )
+        assertEquals(
+            "The umbrella must keep a short timeout because it only reads shard results.",
+            "5",
+            jobValue(umbrella, "timeout-minutes"),
         )
         assertTrue(
-            "The buildsrc-contracts job must run on schedule and dispatch, and on a main push or ready in-repository pull request that changes CI or build logic.",
-            buildSrcContractsJob.contains("    name: buildsrc-contracts\n") &&
-                buildSrcContractsJob.contains("    needs: [ui_paths]\n") &&
-                buildSrcContractsJob.contains("github.event_name == 'schedule'") &&
-                buildSrcContractsJob.contains("github.event_name == 'workflow_dispatch'") &&
-                buildSrcContractsJob.contains(
-                    "(github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))",
-                ) &&
-                buildSrcContractsJob.contains("!github.event.pull_request.draft") &&
-                buildSrcContractsJob.contains("!github.event.pull_request.head.repo.fork") &&
-                buildSrcContractsJob.contains("needs.ui_paths.outputs.ci_files_changed == 'true'") &&
-                buildSrcContractsJob.contains("needs.ui_paths.outputs.build_logic_changed == 'true'"),
+            "The umbrella must read every shard result and fail closed.",
+            umbrella.contains("SHARD_RESULTS: \${{ needs.buildsrc_contracts_shard_1.result }}") &&
+                umbrella.contains("\${{ needs.buildsrc_contracts_shard_2.result }}") &&
+                umbrella.contains("\${{ needs.buildsrc_contracts_shard_3.result }}"),
         )
         assertTrue(
             "The changed-file detector must gain a push mode that reads the pushed range and fails closed to the contracts check.",
@@ -1785,32 +1797,95 @@ class QualityGateConfigurationTest {
                 document.contains("app-only push"),
             )
         }
-        assertTrue(
-            "The buildsrc-contracts job must keep a timeout above the self-test suite, " +
-                "so a green suite is not cancelled at the ceiling.",
-            buildSrcContractsJob.contains("    timeout-minutes: 45\n"),
+        assertEquals(
+            "The architecture job must not run the buildSrc self-tests.",
+            0,
+            Regex("./gradlew -p buildSrc test").findAll(architectureJob).count(),
         )
         assertTrue(
-            "The aggregate gate must receive the buildsrc-contracts result.",
-            workflow.contains("      - buildsrc_contracts\n") &&
-                workflow.contains("BUILDSRC_CONTRACTS_RESULT: \${{ needs.buildsrc_contracts.result }}"),
+            "The architecture job must keep the CI --no-daemon shape.",
+            architectureJob.contains("--no-daemon"),
         )
-        assertTrue(
-            "The consolidated buildSrc invocation must keep the CI --no-daemon shape.",
-            architectureJob.contains("--no-daemon") && buildSrcContractsJob.contains("--no-daemon"),
-        )
+        shardJobs.forEachIndexed { index, shardJob ->
+            val shard = index + 1
+            assertEquals("Shard $shard must keep its display name.", "buildsrc-contracts-shard-$shard-of-3", jobValue(shardJob, "name"))
+            assertEquals("Shard $shard must route on the changed-file decision.", "[ui_paths]", jobValue(shardJob, "needs"))
+            assertEquals(
+                "Shard $shard must run on exactly the events where the umbrella runs.",
+                jobValue(umbrella, "if"),
+                jobValue(shardJob, "if"),
+            )
+            assertEquals(
+                "Shard $shard must run one Gradle self-test invocation.",
+                1,
+                Regex("./gradlew -p buildSrc test").findAll(shardJob).count(),
+            )
+            assertTrue("Shard $shard must keep the CI --no-daemon shape.", shardJob.contains("--no-daemon"))
+            assertEquals("Shard $shard must keep a timeout above the 12-minute target.", "20", jobValue(shardJob, "timeout-minutes"))
+        }
+        val selections =
+            shardJobs.flatMap { shardJob ->
+                Regex("--tests org\\.mercurio\\.client\\.buildlogic\\.([A-Za-z0-9]+)(?:\\.([A-Za-z0-9_]+))?")
+                    .findAll(shardJob)
+                    .map { match -> match.groupValues[1] to match.groupValues[2] }
+                    .toList()
+            }
+        val classSelections = selections.filter { it.second.isEmpty() }.map { it.first }
         listOf(
-            "QualityGateConfigurationTest",
-            "QualityVerificationFailClosedTest",
             "CoverageEvidenceTest",
             "MutationEvidenceTest",
             "BoundaryDoubleVerifierTest",
             "ReportEvidenceTest",
         ).forEach { testClass ->
-            assertTrue(
-                "The consolidated invocation must select $testClass.",
-                buildSrcContractsJob.contains("--tests org.mercurio.client.buildlogic.$testClass"),
+            assertEquals("$testClass must be selected exactly once across the shards.", 1, classSelections.count { it == testClass })
+        }
+        listOf("QualityGateConfigurationTest", "QualityVerificationFailClosedTest").forEach { splitClass ->
+            assertTrue("$splitClass must be split by test group, not selected as one class.", splitClass !in classSelections)
+            val source =
+                repositoryRoot
+                    .resolve("buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/$splitClass.kt")
+                    .readText()
+            val declared = Regex("@Test\\s*\\n\\s*fun ([A-Za-z0-9_]+)\\(").findAll(source).map { it.groupValues[1] }.toList()
+            val selected = selections.filter { it.first == splitClass }.map { it.second }
+            assertTrue("$splitClass must declare its tests.", declared.isNotEmpty())
+            assertEquals(
+                "Every $splitClass test must be selected exactly once across the shards.",
+                declared.sorted(),
+                selected.sorted(),
             )
         }
+        val shardVerifier =
+            umbrella
+                .substringAfter("        run: |\n")
+                .lineSequence()
+                .takeWhile { it.isBlank() || it.startsWith("          ") }
+                .map { it.removePrefix("          ") }
+                .joinToString("\n")
+        assertEquals(
+            "A complete set of green shards must pass the umbrella.",
+            0,
+            runWorkflowShell(shardVerifier, repositoryRoot, mapOf("SHARD_RESULTS" to "success success success")).exitCode,
+        )
+        val failingShard = runWorkflowShell(shardVerifier, repositoryRoot, mapOf("SHARD_RESULTS" to "success failure success"))
+        assertNotEquals("A deliberately failing shard must fail the umbrella.", 0, failingShard.exitCode)
+        assertTrue(
+            "The umbrella must name the failing shard.",
+            failingShard.output.contains("Required buildSrc self-test shard 2 result: failure"),
+        )
+        assertNotEquals(
+            "A missing shard result must fail the umbrella.",
+            0,
+            runWorkflowShell(shardVerifier, repositoryRoot, mapOf("SHARD_RESULTS" to "success success")).exitCode,
+        )
+        assertTrue(
+            "The aggregate gate must receive the umbrella's result.",
+            workflow.contains("      - buildsrc_contracts\n") &&
+                workflow.contains("BUILDSRC_CONTRACTS_RESULT: \${{ needs.buildsrc_contracts.result }}"),
+        )
+        val documentation = repositoryRoot.resolve("docs/quality-gates.md").readText()
+        assertTrue(
+            "The gate documentation must describe the three parallel shards and the 12-minute target.",
+            documentation.contains("three parallel shards") && documentation.contains("12 minutes"),
+        )
     }
 }

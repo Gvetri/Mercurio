@@ -68,7 +68,7 @@ never more permissive than the gate it mirrors.
 | Ready in-repository pull request whose every changed file is a build or dependency file (`gradle/**`, any `*.gradle.kts`, `gradle.properties`, `gradle/libs.versions.toml`) | `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `coverage-mutation`, `buildsrc-contracts`, and both emulator suites, unless the pull request carries the `run-maestro` label, which starts the emulator suites but never `coverage-mutation` or `buildsrc-contracts` on a dependency-only head |
 | Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard`, `ui-paths` | Every other check |
 | External-fork pull request | `fork-guard`, `ui-paths` | Every other check |
-| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `ui-paths` classifies the pushed range; `buildsrc-contracts` runs the buildSrc self-test contracts when the pushed range changes a `.github/**` or `buildSrc/**` file, and an app-only push skips it; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
+| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `ui-paths` classifies the pushed range; `buildsrc-contracts` aggregates three parallel buildSrc self-test shards when the pushed range changes a `.github/**` or `buildSrc/**` file, and an app-only push skips it; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
 | Nightly validation, manual validation | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | `draft-validation`, `commit-message`, `fork-guard` |
 
 The emulator suites are opt-in on pull requests, and the journey suite is opt-in by label alone. A
@@ -196,6 +196,8 @@ read-only token scope, and the absence of secrets.
 `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/QualityGateConfigurationTest.kt` pins
 the workflow contracts, and `.github/scripts/tests/test_protected_main.py` and
 `.github/scripts/tests/test_test_jobs.py` pin the routing, the aggregate gate, the commit-message
-check, and the conformance check. The workflow-contract suite runs in the `buildsrc-contracts` job,
-so a change to the workflow that contradicts a documented rule fails the gate. See
-[Quality gates](quality-gates.md) for the declared checks and thresholds.
+check, and the conformance check. The workflow-contract suite runs as three parallel shards
+behind the `buildsrc-contracts` umbrella job, so a change to the workflow that contradicts a
+documented rule fails the gate; the umbrella fails when any shard fails, and the critical-path
+target is 12 minutes or less. See [Quality gates](quality-gates.md) for the declared checks and
+thresholds.

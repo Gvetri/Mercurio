@@ -133,9 +133,55 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             job_key(contracts, "if"),
             "the contracts job must run on the nightly and dispatched validation, on a main push or a ready in-repository pull request that changes CI or build logic, and stay skipped for an app-only push",
         )
-        self.assertEqual("[ui_paths]", job_key(contracts, "needs"))
-        self.assertIn("./gradlew -p buildSrc test", contracts)
-        self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", contracts)
+        self.assertEqual(
+            "[ui_paths, buildsrc_contracts_shard_1, buildsrc_contracts_shard_2, buildsrc_contracts_shard_3]",
+            job_key(contracts, "needs"),
+        )
+        self.assertNotIn("./gradlew -p buildSrc test", contracts)
+        self.assertIn("SHARD_RESULTS: ${{ needs.buildsrc_contracts_shard_1.result }}", contracts)
+        shards = [job_block(self.workflow, f"buildsrc_contracts_shard_{shard}") for shard in range(1, 4)]
+        selections = []
+        for shard, shard_job in enumerate(shards, start=1):
+            self.assertEqual(f"buildsrc-contracts-shard-{shard}-of-3", job_key(shard_job, "name"))
+            self.assertEqual("[ui_paths]", job_key(shard_job, "needs"))
+            self.assertEqual(
+                job_key(contracts, "if"),
+                job_key(shard_job, "if"),
+                f"shard {shard} must run on exactly the events where the umbrella runs",
+            )
+            self.assertIn("./gradlew -p buildSrc test", shard_job)
+            self.assertIn("--no-daemon", shard_job)
+            selections.extend(
+                re.findall(
+                    r"--tests org\.mercurio\.client\.buildlogic\.([A-Za-z0-9]+)(?:\.([A-Za-z0-9_]+))?",
+                    shard_job,
+                )
+            )
+        class_selections = [test_class for test_class, method in selections if not method]
+        for test_class in (
+            "CoverageEvidenceTest",
+            "MutationEvidenceTest",
+            "BoundaryDoubleVerifierTest",
+            "ReportEvidenceTest",
+        ):
+            self.assertEqual(1, class_selections.count(test_class), f"{test_class} must run exactly once across the shards")
+        for split_class in ("QualityGateConfigurationTest", "QualityVerificationFailClosedTest"):
+            self.assertNotIn(
+                split_class,
+                class_selections,
+                f"{split_class} must be split by test group instead of selected as one class",
+            )
+            source = (
+                ROOT / f"buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/{split_class}.kt"
+            ).read_text()
+            declared_tests = re.findall(r"@Test\s*\n\s*fun ([A-Za-z0-9_]+)\(", source)
+            selected_tests = [method for test_class, method in selections if test_class == split_class]
+            self.assertTrue(declared_tests, f"{split_class} must declare its tests")
+            self.assertEqual(
+                sorted(declared_tests),
+                sorted(selected_tests),
+                f"every {split_class} test must be selected exactly once across the shards",
+            )
         architecture = job_block(self.workflow, "architecture_check")
         self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
         self.assertNotIn("./gradlew -p buildSrc test", architecture)
@@ -177,6 +223,8 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         routing = (ROOT / "docs/protected-main-workflow.md").read_text()
         self.assertIn("app-only push", routing)
         self.assertIn("an unreadable changed-file answer runs it", routing)
+        self.assertIn("three parallel shards", routing)
+        self.assertIn("12 minutes", (ROOT / "docs/quality-gates.md").read_text())
 
     def test_the_aggregate_gate_is_the_single_required_status(self):
         jobs = jobs_of(self.workflow)
@@ -717,11 +765,11 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         jobs = jobs_of(self.workflow)
         with_checkout = [job for job in jobs if "actions/checkout@" in job_block(self.workflow, job)]
         self.assertEqual(
-            sorted(set(jobs) - {"fork_guard", "maestro_journeys"}),
+            sorted(set(jobs) - {"fork_guard", "maestro_journeys", "buildsrc_contracts"}),
             sorted(with_checkout),
-            "the fork guard and the shard aggregate may lack checkout: they never touch the repository",
+            "the fork guard and the two shard aggregates may lack checkout: they never touch the repository",
         )
-        self.assertEqual(len(DECLARED_CHECKS) + 6, len(jobs))
+        self.assertEqual(len(DECLARED_CHECKS) + 9, len(jobs))
         self.assertIn("quality-gate", with_checkout)
         for job, block in ((job, job_block(self.workflow, job)) for job in jobs):
             keys = [line.strip().split(":", 1)[0] for line in block.splitlines() if re.match(r"^    [a-z0-9_\\-]+: ", line)]

@@ -89,7 +89,16 @@ documentation check is covered by
 `.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. The six
 workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
 `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`, and
-`ReportEvidenceTest`) run in the `buildsrc-contracts` job, and the architecture rules in
+`ReportEvidenceTest`) run as three parallel shards behind the `buildsrc-contracts` umbrella job.
+Shard 1 runs the four most expensive `QualityGateConfigurationTest` suites; shard 2 runs the
+remaining `QualityGateConfigurationTest` tests and the mutation, coverage, and committed-baseline
+tests of `QualityVerificationFailClosedTest`; shard 3 runs the remaining fail-closed test groups
+plus the four verification classes. Every test is selected exactly once, no
+assertion is removed, and the shards run on exactly the events where the umbrella runs. The
+umbrella keeps the `buildsrc-contracts` key and name, remains the only result the aggregate reads,
+and fails when any shard fails. A cold measurement before the split took 25 minutes for the six
+classes in one invocation (29m51s for the CI step); the delivering pull request records the shard
+timings, and the critical-path target is 12 minutes or less. The architecture rules in
 `ArchitectureCheckTest` run in the `architecture-check` job, so a rule only exists if a check
 enforces it and CI executes that check.
 
