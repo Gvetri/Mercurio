@@ -62,6 +62,7 @@ def journey_attempts(journey, *, retried=JOURNEY_RETRY_TARGET, max_attempts=JOUR
 def fake_adb_script(root_failures=0, root_works=True):
     root_outcome = 'touch "$ADB_ROOT_MARKER"' if root_works else "exit 1"
     return f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "${{ADB_CALLS_FILE:-/dev/null}}"
 if [[ "$*" == *"shell id -u"* ]]; then
     if [[ -n "${{ADB_ROOT_MARKER:-}}" && ! -f "$ADB_ROOT_MARKER" ]]; then
         printf '1\\n'
@@ -89,6 +90,20 @@ fi
 exit 0
 """
 
+
+
+def write_default_apk(workspace):
+    default_apk = workspace / "app/build/outputs/apk/debug/app-debug.apk"
+    default_apk.parent.mkdir(parents=True, exist_ok=True)
+    default_apk.write_text("fixture-debug-apk")
+
+
+def installed_apk_paths(workspace):
+    adb_log = workspace / "adb.calls"
+    if not adb_log.is_file():
+        return []
+    calls = adb_log.read_text().splitlines()
+    return [call.rsplit(" ", 1)[-1] for call in calls if call.startswith("install")]
 
 
 class TestJobs(unittest.TestCase):
@@ -401,6 +416,7 @@ class TestJobs(unittest.TestCase):
             classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
             classpath_file.parent.mkdir(parents=True)
             classpath_file.write_text("fixture-classpath")
+            write_default_apk(workspace)
             for relative in (
                 ".github/scripts/verify-journey-capabilities.py",
                 "fixtures/mercurio/contracts/capabilities/success.json",
@@ -512,6 +528,11 @@ class TestJobs(unittest.TestCase):
         classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
         classpath_file.parent.mkdir(parents=True)
         classpath_file.write_text("fixture-classpath")
+        write_default_apk(workspace)
+        shutil.copytree(
+            ROOT / "fixtures/mercurio/journey/flows",
+            workspace / "fixtures/mercurio/journey/flows",
+        )
         for relative in (
             ".github/scripts/verify-journey-capabilities.py",
             "fixtures/mercurio/contracts/capabilities/success.json",
@@ -611,6 +632,7 @@ class TestJobs(unittest.TestCase):
             "MAESTRO_FAIL_TIMES": str(fail_times),
             "ADB_ROOT_COUNT": str(workspace / "adb-root.count"),
             "ADB_ROOT_MARKER": str(workspace / "adb-root.marker"),
+            "ADB_CALLS_FILE": str(workspace / "adb.calls"),
         }
         return environment, count_dir
 
@@ -807,6 +829,191 @@ class TestJobs(unittest.TestCase):
             pinned = len(parse_journeys((ROOT / ".github/scripts/journey-run.sh").read_text()))
             self.assertIn(f"{pinned} pinned journeys", result.stdout)
             self.assertNotIn("Journey:", result.stdout)
+
+    def test_journey_runner_runs_one_selected_flow_against_a_supplied_apk(self):
+        selected = "session-list-first"
+        self.assertIn(selected, parse_journeys(JOURNEY_RUNNER.read_text()))
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            supplied_apk = workspace / "artifacts/signed/app-release.apk"
+            supplied_apk.parent.mkdir(parents=True)
+            supplied_apk.write_text("fixture-signed-apk")
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(ROOT / ".github/scripts/journey-run.sh"),
+                    "--flow",
+                    selected,
+                    "--apk",
+                    str(supplied_apk),
+                ],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn(f"Running the single journey {selected} against {supplied_apk}.", result.stdout)
+            self.assertEqual(
+                [f"Journey: {selected}"],
+                [line for line in result.stdout.splitlines() if line.startswith("Journey: ")],
+            )
+            self.assertEqual([selected], sorted(path.name for path in count_dir.iterdir()))
+            installed = installed_apk_paths(workspace)
+            self.assertIn(str(supplied_apk), installed)
+            self.assertNotIn(str(workspace / "app/build/outputs/apk/debug/app-debug.apk"), installed)
+            curl_calls = (workspace / "curl.calls").read_text().splitlines()
+            self.assertEqual(1, len([call for call in curl_calls if "/health" in call]))
+            self.assertEqual(1, len([call for call in curl_calls if "/v1/capabilities" in call]))
+            evidence_dir = workspace / "artifacts/journey-evidence"
+            self.assertTrue((evidence_dir / f"{selected}-maestro.log").is_file())
+            self.assertTrue((evidence_dir / f"{selected}-gateway.log").is_file())
+            self.assertIn(f"Single journey passed: {selected}.", result.stdout)
+            self.assertNotIn("All deterministic journeys passed.", result.stdout)
+
+    def test_journey_runner_keeps_the_full_lane_on_the_default_debug_apk(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh")],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(
+                [f"Journey: {journey}" for journey in journeys],
+                [line for line in result.stdout.splitlines() if line.startswith("Journey: ")],
+            )
+            adb_calls = installed_apk_paths(workspace)
+            self.assertIn(str(workspace / "app/build/outputs/apk/debug/app-debug.apk"), adb_calls)
+            self.assertEqual(sorted(journeys), sorted(path.name for path in count_dir.iterdir()))
+
+    def test_journey_runner_rejects_an_unknown_flow_before_device_work(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), "--flow", "not-a-journey"],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("Unknown journey flow: not-a-journey.", result.stdout)
+            self.assertIn("Choose one pinned journey", result.stdout)
+            self.assertNotIn("Installing the journey test CA", result.stdout)
+            self.assertFalse((workspace / "adb.calls").exists())
+            self.assertEqual([], sorted(path.name for path in count_dir.iterdir()))
+
+    def test_journey_runner_rejects_a_missing_apk_before_device_work(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            missing_apk = workspace / "missing/app-release.apk"
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), "--apk", str(missing_apk)],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(f"The APK to install is missing: {missing_apk}.", result.stdout)
+            self.assertNotIn("Installing the journey test CA", result.stdout)
+            self.assertFalse((workspace / "adb.calls").exists())
+
+    def test_journey_runner_runs_one_named_flow_on_the_default_debug_apk(self):
+        selected = "session-list-first"
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), "--flow", selected],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual([selected], sorted(path.name for path in count_dir.iterdir()))
+            self.assertIn(str(workspace / "app/build/outputs/apk/debug/app-debug.apk"), installed_apk_paths(workspace))
+            self.assertIn(f"Single journey passed: {selected}.", result.stdout)
+
+    def test_journey_runner_accepts_a_supplied_apk_for_the_full_lane(self):
+        journeys = parse_journeys(JOURNEY_RUNNER.read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            supplied_apk = workspace / "artifacts/signed/app-release.apk"
+            supplied_apk.parent.mkdir(parents=True)
+            supplied_apk.write_text("fixture-signed-apk")
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), "--apk", str(supplied_apk)],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(
+                [f"Journey: {journey}" for journey in journeys],
+                [line for line in result.stdout.splitlines() if line.startswith("Journey: ")],
+            )
+            self.assertIn(str(supplied_apk), installed_apk_paths(workspace))
+            self.assertEqual(sorted(journeys), sorted(path.name for path in count_dir.iterdir()))
+            self.assertIn("All deterministic journeys passed.", result.stdout)
+
+    def test_journey_runner_rejects_empty_option_values_before_device_work(self):
+        cases = (
+            (("--flow", ""), "--flow requires a non-empty journey name."),
+            (("--apk", ""), "--apk requires a non-empty APK path."),
+        )
+        for arguments, message in cases:
+            with self.subTest(arguments=arguments):
+                with tempfile.TemporaryDirectory() as directory:
+                    workspace = Path(directory)
+                    environment, count_dir = self._prepare_journey_runner_fixture(workspace, "none", 0)
+                    result = subprocess.run(
+                        ["bash", str(ROOT / ".github/scripts/journey-run.sh"), *arguments],
+                        cwd=workspace,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn(message, result.stdout)
+                    self.assertNotIn("Installing the journey test CA", result.stdout)
+                    self.assertFalse((workspace / "adb.calls").exists())
+                    self.assertEqual([], sorted(path.name for path in count_dir.iterdir()))
+
+    def test_journey_runner_rejects_a_flow_selection_combined_with_a_shard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(workspace, "none", 0)
+            result = subprocess.run(
+                ["bash", str(ROOT / ".github/scripts/journey-run.sh"), "--flow", "connection", "1", "3"],
+                cwd=workspace,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("A single flow selection cannot be combined with a shard selection.", result.stdout)
+            self.assertFalse((workspace / "adb.calls").exists())
 
     def test_journey_retry_evidence_uploads_for_recovered_runs(self):
         workflow = WORKFLOW.read_text()
