@@ -8,42 +8,43 @@ name: connection
 - takeScreenshot: error-reporting-consent
 - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- assertNotVisible: "Remove Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- assertVisible: "Add gateway"
+- assertNotVisible: "Remove connection"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "wrong-token"
 - assertNotVisible: "wrong-token"
 - tapOn: "Show credential"
 - assertVisible: "wrong-token"
 - tapOn: "Hide credential"
 - assertNotVisible: "wrong-token"
-- assertVisible: "The credential is saved securely on this device after verification."
+- assertVisible: "Ask your agent for a credential. It is sent only to your Gateway."
 - assertNotVisible: "Save securely on this device"
-- assertVisible: "Verify Gateway Connection"
+- assertVisible: "Connect"
 - takeScreenshot: connection-form-filled
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
-    visible: "Authentication failed. Check the Gateway credential."
+    visible: ".*rejected this credential.*"
     timeout: 30000
 - tapOn: "•+"
 - eraseText
 - inputText: "synthetic-token"
 - assertNotVisible: "synthetic-token"
-- assertVisible: "Verify Gateway Connection"
-- tapOn: "Verify Gateway Connection"
+- assertVisible: "Connect"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000
 - assertVisible: "Alpha Session"
 - launchApp
-- assertVisible: "Verify your Hermes Gateway"
-- assertVisible: "https://10.0.2.2:18443"
+- assertVisible: "Add gateway"
+- assertVisible: "10.0.2.2:18443"
 - assertNotVisible: "synthetic-token"
 - takeScreenshot: connection-restart-prefill
 - hideKeyboard
-- assertVisible: "Verify Gateway Connection"
-- tapOn: "Verify Gateway Connection"
+- assertVisible: "Connect"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000
@@ -51,8 +52,8 @@ name: connection
 - tapOn: "Settings"
 - tapOn: "::"
 - tapOn: "Remove connection"
-- assertVisible: "Remove Gateway Connection?"
-- assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- assertVisible: "Remove connection?"
+- assertVisible: "This deletes the saved credential and the Gateway address. Your sessions stay on the Gateway."
 - takeScreenshot: connection-remove-confirm
 - tapOn: "Cancel"
 - assertVisible: "CONNECTION"

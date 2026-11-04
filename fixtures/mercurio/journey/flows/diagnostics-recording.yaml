@@ -9,12 +9,12 @@ name: diagnostics-recording
     commands:
       - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
-- assertVisible: "Verify Gateway Connection"
-- tapOn: "Verify Gateway Connection"
+- assertVisible: "Connect"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000

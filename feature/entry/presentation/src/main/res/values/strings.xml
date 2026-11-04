@@ -10,8 +10,6 @@
     <string name="action_try_again">Try again</string>
     <string name="action_cancel_rename">Cancel Rename</string>
     <string name="action_confirm_rename">Confirm Rename Session</string>
-    <string name="action_change_credential">Change Gateway credential</string>
-    <string name="action_remove_connection">Remove Gateway Connection</string>
     <string name="action_back_to_sessions">Back to Sessions</string>
 
     <string name="error_invalid_address">Invalid Gateway address. Enter one HTTPS Gateway endpoint.</string>
@@ -41,7 +39,7 @@
 
     <string name="entry_title_verify_saved">Verify your Hermes Gateway</string>
     <string name="entry_supporting_verify_saved">Verify the saved HTTPS endpoint before opening Sessions.</string>
-    <string name="entry_action_verify">Verify Gateway Connection</string>
+    <string name="entry_action_verify">Verify Gateway</string>
     <string name="entry_title_connect">Connect to a Hermes Gateway</string>
     <string name="entry_supporting_connect">Use an existing compatible gateway. This app does not run Hermes on your device.</string>
     <string name="entry_action_add_connection">Add Gateway Connection</string>
@@ -53,7 +51,6 @@
     <string name="entry_title_connected">Gateway connected</string>
     <string name="entry_supporting_connected">The Gateway contract was verified successfully.</string>
     <string name="entry_action_connected">Connected</string>
-    <string name="entry_connected_to_gateway">Connected to Gateway</string>
 
     <string name="consent_question">Send crash and error reports?</string>
     <string name="consent_explanation">When Mercurio crashes or hangs, it can send a report to Sentry. The report says what broke, which is how most bugs get found.</string>
@@ -70,26 +67,58 @@
     <string name="shared_text_pick_session">Choose a Session to add the shared text.</string>
     <string name="shared_text_discard">Discard shared text</string>
 
-    <string name="connection_replacement_note">The current connection stays in place until the replacement is verified and saved securely.</string>
-    <string name="connection_save_note">The credential is saved securely on this device after verification.</string>
-    <string name="connection_endpoint_label">Gateway HTTPS endpoint</string>
-    <string name="connection_endpoint_example">Example: https://gateway.example</string>
-    <string name="connection_credential_label">Bearer credential</string>
     <string name="connection_credential_hide">Hide credential</string>
     <string name="connection_credential_show">Show credential</string>
-    <string name="connection_hide">Hide</string>
-    <string name="connection_show">Show</string>
-    <string name="connection_previous_unchanged">The previous connection is unchanged.</string>
-    <string name="connection_setup_incomplete">Setup is not complete.</string>
-    <string name="connection_verified_saving">Gateway verified.\nSaving credential securely…</string>
-    <string name="connection_verifying">Verifying Gateway connection…</string>
-    <string name="connection_verifying_description">Verifying Gateway connection</string>
-    <string name="connection_verified">Gateway verified.</string>
+
+    <string name="gateway_bar_add">Add gateway</string>
+    <string name="gateway_bar_title">Gateway</string>
+    <string name="gateway_back">Back</string>
+    <string name="gateway_actions">Connection actions</string>
+    <string name="gateway_actions_mark" translatable="false">::</string>
+    <string name="gateway_form_title">Connect to your Gateway</string>
+    <string name="gateway_form_lede">Your sessions live on a Gateway. Enter its address and a credential.</string>
+    <string name="gateway_address_label">Gateway address</string>
+    <string name="gateway_address_prefix" translatable="false">https://</string>
+    <string name="gateway_address_placeholder">gateway.example.com</string>
+    <string name="gateway_address_support">Address only. https:// is already added.</string>
+    <string name="gateway_credential_label">Gateway credential</string>
+    <string name="gateway_credential_placeholder">paste your credential</string>
+    <string name="gateway_credential_placeholder_new">paste the new credential</string>
+    <string name="gateway_credential_support">Ask your agent for a credential. It is sent only to your Gateway.</string>
+    <string name="gateway_action_connect">Connect</string>
+    <string name="gateway_action_verify_and_save">Verify and save</string>
+    <string name="gateway_action_saving">Saving…</string>
+    <string name="gateway_bracket_show">[ show ]</string>
+    <string name="gateway_bracket_hide">[ hide ]</string>
+    <string name="gateway_bracket_try_again">[ try again ]</string>
+    <string name="gateway_bracket_change_address">[ change address ]</string>
+    <string name="gateway_bracket_manage">[ manage ]</string>
+    <string name="gateway_manage_description">Manage connection</string>
+    <string name="gateway_change_address">Change address</string>
+    <string name="gateway_verify_checking">Checking the Gateway</string>
+    <string name="gateway_verify_in_progress">in progress</string>
+    <string name="gateway_verify_waiting">Waiting for an answer…</string>
+    <string name="gateway_verify_verified">Verified</string>
+    <string name="gateway_verify_not_verified">Not verified</string>
+    <string name="gateway_error_network">No answer from the Gateway. Check the address and your connection, then try again.</string>
+    <string name="gateway_error_certificate">No answer after three tries. This phone does not trust the Gateway certificate. Ask your agent to renew it, or try a network that does not inspect https.</string>
+    <string name="gateway_error_capability">This address answered, but it is not a Mercurio Gateway. Mercurio needs one that serves sessions.</string>
+    <string name="gateway_error_storage">The phone would not save the credential. It is not connected yet.</string>
+    <string name="gateway_error_credential">The Gateway rejected this credential. Check for a copy error, or get a new one.</string>
+    <string name="gateway_saved_title">Your Gateway</string>
+    <string name="gateway_saved_lede">Your sessions load from this Gateway.</string>
+    <string name="gateway_saved_lede_change">Change the credential. The address stays; the old connection keeps working until the new one is saved.</string>
+    <string name="gateway_saved_lede_reconnect_failed">Mercurio could not reconnect when it started.</string>
+    <string name="gateway_error_reconnect_saved">No answer from the Gateway. Your connection is saved; Mercurio retries on its own next time it starts.</string>
+    <string name="gateway_facts_verified">Verified %1$s · supports sessions, streaming and models</string>
+    <string name="gateway_facts_reconnected">Reconnected %1$s</string>
+    <string name="gateway_facts_last_connected">Last connected %1$s</string>
+    <string name="gateway_facts_saved">Saved connection</string>
 
     <string name="dialog_clear_history_cache_title">Clear cached conversations?</string>
     <string name="dialog_clear_history_cache_body">Remove the cached conversations stored on this device. Remote Sessions and Runs are not deleted or changed. Diagnostic files you already exported are not removed.</string>
-    <string name="dialog_remove_connection_title">Remove Gateway Connection?</string>
-    <string name="dialog_remove_connection_body">Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled.</string>
+    <string name="dialog_remove_connection_title">Remove connection?</string>
+    <string name="dialog_remove_connection_body">This deletes the saved credential and the Gateway address. Your sessions stay on the Gateway.</string>
     <string name="dialog_discard_unsent_title">Discard the unsent message record?</string>
     <string name="dialog_discard_unsent_body">Discarding clears this client\'s record of the failed send. The Gateway may still have received the message, so sending the draft again could create a duplicate. Your draft stays in the composer.</string>
     <string name="dialog_delete_session_title">Delete “%1$s”?</string>

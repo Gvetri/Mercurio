@@ -9,13 +9,13 @@ name: offline-cache-read
     commands:
       - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
@@ -39,10 +39,10 @@ name: offline-cache-read
 - launchApp:
     clearState: false
 - extendedWaitUntil:
-    visible: "Verify your Hermes Gateway"
+    visible: "Add gateway"
     timeout: 30000
 - hideKeyboard
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "1 session · cached"
     timeout: 30000

@@ -12,7 +12,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
@@ -48,7 +47,7 @@ class GatewayConnectionInputTest {
                 EntryScreen(state = setupState(), onEvent = {})
             }
         }
-        composeTestRule.onNodeWithText("Bearer credential").performClick()
+        composeTestRule.onNodeWithText("Gateway credential", substring = true).performClick()
         composeTestRule.waitForIdle()
 
         val info = currentEditorInfo()
@@ -78,17 +77,17 @@ class GatewayConnectionInputTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Bearer credential")
+        composeTestRule.onNodeWithText("Gateway credential", substring = true)
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
         composeTestRule.onNodeWithContentDescription("Show credential").performClick()
-        composeTestRule.onNodeWithText("Bearer credential")
+        composeTestRule.onNodeWithText("Gateway credential", substring = true)
             .assertTextContains("synthetic-token")
             .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Password))
             .performClick()
         val info = currentEditorInfo()
         assertEquals(InputType.TYPE_TEXT_VARIATION_PASSWORD, info.inputType and InputType.TYPE_MASK_VARIATION)
         composeTestRule.onNodeWithContentDescription("Hide credential").performClick()
-        composeTestRule.onNodeWithText("Bearer credential")
+        composeTestRule.onNodeWithText("Gateway credential", substring = true)
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
         assertTrue(events.isEmpty())
     }
@@ -101,7 +100,8 @@ class GatewayConnectionInputTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Remove Gateway Connection").assertDoesNotExist()
+        composeTestRule.onNodeWithText("[ manage ]").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Connection actions").assertDoesNotExist()
     }
 
     @Test
@@ -117,26 +117,27 @@ class GatewayConnectionInputTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Remove Gateway Connection").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithContentDescription("Connection actions").performClick()
+        composeTestRule.onNodeWithText("Remove connection").performClick()
         assertEquals(listOf(EntryUiEvent.RemoveGatewayConnectionClicked), events)
         holder.close()
     }
 
     @Test
-    fun setup_has_one_task_heading_and_an_https_address_example() {
+    fun setup_has_a_bar_heading_a_form_heading_and_an_https_address_example() {
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(state = setupState().copy(endpoint = ""), onEvent = {})
             }
         }
 
-        composeTestRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertCountEquals(1)
-        composeTestRule.onNodeWithText("Example: https://gateway.example").assertIsDisplayed()
+        composeTestRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertCountEquals(2)
+        composeTestRule.onNodeWithText("Address only. https:// is already added.").assertIsDisplayed()
     }
 
     @Test
     @Config(qualifiers = "w411dp-h480dp")
-    fun verification_and_recovery_scroll_above_the_keyboard_at_large_font_scale() {
+    fun verification_and_recovery_scroll_into_view_at_large_font_scale() {
         val state = mutableStateOf(setupState())
         composeTestRule.setContent {
             val density = LocalDensity.current
@@ -146,7 +147,7 @@ class GatewayConnectionInputTest {
                 }
             }
         }
-        composeTestRule.onNodeWithText("Bearer credential").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Gateway credential", substring = true).performScrollTo().performClick()
         val windowHeight = composeTestRule.activity.window.decorView.height
         val imeInset = windowHeight / 2
         composeTestRule.runOnUiThread {
@@ -165,12 +166,12 @@ class GatewayConnectionInputTest {
             assertTrue("$text must be above the keyboard (bottom=$bottom)", bottom <= windowHeight - imeInset + 1f)
         }
 
-        assertAboveKeyboard("Verify Gateway Connection")
+        assertAboveKeyboard("Connect")
         composeTestRule.runOnIdle {
-            state.value = state.value.copy(errorCategory = EntryErrorCategory.AUTHENTICATION_FAILED)
+            state.value = state.value.copy(errorCategory = EntryErrorCategory.GATEWAY_REQUEST_FAILED)
         }
-        assertAboveKeyboard("Try again")
-        assertAboveKeyboard(copy(EntryErrorCategory.AUTHENTICATION_FAILED.messageRes))
+        assertAboveKeyboard("[ try again ]")
+        assertAboveKeyboard(copy(R.string.gateway_error_network))
     }
 
     @Test
@@ -181,15 +182,15 @@ class GatewayConnectionInputTest {
                 EntryScreen(state = setupState(), onEvent = events::add)
             }
         }
-        composeTestRule.onNodeWithText("Gateway HTTPS endpoint").performClick()
+        composeTestRule.onNodeWithText("Gateway address", substring = true).performClick()
         val addressInfo = currentEditorInfo()
         assertEquals(InputType.TYPE_TEXT_VARIATION_URI, addressInfo.inputType and InputType.TYPE_MASK_VARIATION)
         assertEquals(EditorInfo.IME_ACTION_NEXT, addressInfo.imeOptions and EditorInfo.IME_MASK_ACTION)
-        composeTestRule.onNodeWithText("Gateway HTTPS endpoint").performImeAction()
-        composeTestRule.onNodeWithText("Bearer credential").assertIsFocused()
+        composeTestRule.onNodeWithText("Gateway address", substring = true).performImeAction()
+        composeTestRule.onNodeWithText("Gateway credential", substring = true).assertIsFocused()
         val credentialInfo = currentEditorInfo()
         assertEquals(EditorInfo.IME_ACTION_DONE, credentialInfo.imeOptions and EditorInfo.IME_MASK_ACTION)
-        composeTestRule.onNodeWithText("Bearer credential").performImeAction()
+        composeTestRule.onNodeWithText("Gateway credential", substring = true).performImeAction()
         assertTrue(events.isEmpty())
     }
 

@@ -73,6 +73,8 @@ sealed interface EntryUiEvent {
 
     data object CancelGatewayCredentialChangeClicked : Connection
 
+    data object CloseGatewayConnectionSetupClicked : Connection
+
     data class EndpointChanged(
         val value: String,
     ) : Connection
@@ -316,6 +318,7 @@ data class EntryUiState(
     val autoLoadImages: Boolean = true,
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
+    val gatewayFacts: UiText? = null,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
     val isErrorReportingConsentRequired: Boolean = false,
     val appLock: AppLockUiState = AppLockUiState(),
@@ -473,6 +476,7 @@ class EntryStateHolder(
 
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
+    internal var credentialBeforeRotation: String? = null
 
     @Volatile
     internal var pendingRemovalJob: Job? = null
@@ -561,10 +565,12 @@ class EntryStateHolder(
             is EntryUiEvent.AddGatewayConnectionClicked -> showConnectionSetup()
             is EntryUiEvent.ChangeGatewayCredentialClicked -> showCredentialRotation()
             is EntryUiEvent.CancelGatewayCredentialChangeClicked -> cancelCredentialRotation()
+            is EntryUiEvent.CloseGatewayConnectionSetupClicked -> closeGatewayConnectionSetup()
             is EntryUiEvent.EndpointChanged -> updateEndpoint(event.value)
             is EntryUiEvent.BearerCredentialChanged -> updateBearerCredential(event.value)
-            is EntryUiEvent.VerifyGatewayConnectionClicked -> verifyConnection()
-            is EntryUiEvent.TryAgainClicked -> verifyConnection()
+            is EntryUiEvent.VerifyGatewayConnectionClicked,
+            is EntryUiEvent.TryAgainClicked,
+            -> verifyConnection()
             is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
             is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
             is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
@@ -919,6 +925,7 @@ internal fun EntryState.toUiState(): EntryUiState =
             endpoint = configuredEndpoint.orEmpty(),
             bearerCredential = configuredCredential.orEmpty(),
             isGatewayConnectionConfigured = true,
+            gatewayFacts = UiText.Resource(R.string.gateway_facts_saved),
             clientVersion = clientVersion,
             buildNumber = buildNumber,
             installSource = installSource,
