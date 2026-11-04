@@ -135,10 +135,21 @@ class TestJobs(unittest.TestCase):
             self.assertIn("redact-test-reports.py", block)
         self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", workflow)
         self.assertIn("      - buildsrc_contracts", aggregate)
-        contracts_job = workflow.split("  buildsrc_contracts:\n", 1)[1].split("\n  coverage_mutation:", 1)[0]
+        contracts_job = workflow.split("  buildsrc_contracts:\n", 1)[1].split("\n  buildsrc_contracts_shard_1:", 1)[0]
         self.assertIn("    name: buildsrc-contracts", contracts_job)
-        self.assertIn("    needs: [ui_paths]", contracts_job)
-        self.assertIn("./gradlew -p buildSrc test", contracts_job)
+        self.assertIn(
+            "    needs: [ui_paths, buildsrc_contracts_shard_1, buildsrc_contracts_shard_2, buildsrc_contracts_shard_3]",
+            contracts_job,
+        )
+        self.assertIn("SHARD_RESULTS: ${{ needs.buildsrc_contracts_shard_1.result }}", contracts_job)
+        self.assertNotIn("./gradlew -p buildSrc test", contracts_job)
+        for shard in range(1, 4):
+            shard_job = workflow.split(f"  buildsrc_contracts_shard_{shard}:\n", 1)[1]
+            next_job = f"\n  buildsrc_contracts_shard_{shard + 1}:" if shard < 3 else "\n  coverage_mutation:"
+            shard_job = shard_job.split(next_job, 1)[0]
+            self.assertIn(f"    name: buildsrc-contracts-shard-{shard}-of-3", shard_job)
+            self.assertIn("    needs: [ui_paths]", shard_job)
+            self.assertIn("./gradlew -p buildSrc test", shard_job)
         architecture = workflow.split("  architecture_check:\n", 1)[1].split("\n  buildsrc_contracts:", 1)[0]
         self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
         self.assertNotIn("./gradlew -p buildSrc test", architecture)
