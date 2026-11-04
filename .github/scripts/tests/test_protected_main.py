@@ -362,15 +362,23 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "a failed required lane must skip the shard aggregate on pull requests while nightly validations run to completion, and a changed UI path must never start the journey lane",
         )
         for shard in ("maestro_shard_1", "maestro_shard_2", "maestro_shard_3"):
+            shard_block = job_block(self.workflow, shard)
             self.assertEqual(
-                "${{ always() && needs.api24_instrumentation.result == 'success' && "
+                "${{ always() && "
                 + label_guard
                 + " && ("
                 + journey_gate
                 + ") && (github.event_name != 'pull_request' "
                 "|| !contains(needs.*.result, 'failure')) }}",
-                job_key(job_block(self.workflow, shard), "if"),
-                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion, and a changed UI path must never start a journey shard",
+                job_key(shard_block, "if"),
+                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion, a changed UI path must never start a journey shard, and a shard must start in parallel with the device check",
+            )
+            self.assertEqual(
+                "[ui_paths, formatting, static_analysis, detekt, unit_tests, "
+                "fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, "
+                "coverage_mutation, compose_test]",
+                job_key(shard_block, "needs"),
+                "a journey shard must wait for the lanes that conclude before it starts, and for nothing else",
             )
         self.assertEqual(
             "[ui_paths]",

@@ -18,10 +18,22 @@ JOURNEY_RETRY_TARGET = "session-lifecycle"
 JOURNEY_MAX_ATTEMPTS = 2
 MAESTRO_SHARD_TOTAL = 3
 MAESTRO_SHARD_KEYS = tuple(f"maestro_shard_{shard}" for shard in range(1, MAESTRO_SHARD_TOTAL + 1))
-MAESTRO_LANE_NEEDS = (
-    "needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, "
-    "unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, "
-    "coverage_mutation, compose_test]"
+MAESTRO_LANE_KEYS = (
+    "ui_paths",
+    "formatting",
+    "static_analysis",
+    "detekt",
+    "unit_tests",
+    "fixture_descriptor",
+    "fixture_lifecycle",
+    "fixture_contract",
+    "android_build",
+    "coverage_mutation",
+    "compose_test",
+)
+MAESTRO_LANE_NEEDS = "needs: [" + ", ".join(MAESTRO_LANE_KEYS) + "]"
+MAESTRO_UMBRELLA_NEEDS = (
+    "needs: [api24_instrumentation, " + ", ".join(MAESTRO_LANE_KEYS + MAESTRO_SHARD_KEYS) + "]"
 )
 
 
@@ -168,10 +180,10 @@ class TestJobs(unittest.TestCase):
                 job,
                 "the emulator tail must wait for every lane that concludes before it starts",
             )
-            self.assertIn(
-                "needs.api24_instrumentation.result == 'success'",
+            self.assertNotIn(
+                "api24_instrumentation",
                 job,
-                "the emulator tail must still wait for a passing API 24 suite",
+                "a journey shard must start in parallel with the device check instead of waiting for it",
             )
             self.assertIn(
                 "(github.event_name != 'pull_request' || !contains(needs.*.result, 'failure'))",
@@ -180,9 +192,9 @@ class TestJobs(unittest.TestCase):
             )
         umbrella = maestro_umbrella_block(workflow)
         self.assertIn(
-            MAESTRO_LANE_NEEDS.replace("compose_test]", "compose_test, " + ", ".join(MAESTRO_SHARD_KEYS) + "]"),
+            MAESTRO_UMBRELLA_NEEDS,
             umbrella,
-            "the shard aggregate must wait for every lane and every shard",
+            "the shard aggregate must wait for every lane, the device check, and every shard",
         )
         self.assertIn(
             "needs.api24_instrumentation.result == 'success'",
@@ -1734,8 +1746,12 @@ redact_file "$runner_output" || status=$?
                       for shard in range(1, MAESTRO_SHARD_TOTAL + 1))
         for name, block in blocks:
             with self.subTest(job=name):
-                self.assertIn("needs.api24_instrumentation.result == 'success'", block,
-                              "the journey lane must stay behind a passing API 24 suite")
+                if name == "umbrella":
+                    self.assertIn("needs.api24_instrumentation.result == 'success'", block,
+                                  "the journey aggregate must stay behind a passing API 24 suite")
+                else:
+                    self.assertNotIn("needs.api24_instrumentation.result == 'success'", block,
+                                     "a journey shard must start in parallel with the device check")
                 self.assertIn("github.event_name == 'schedule'", block)
                 self.assertIn("github.event_name == 'workflow_dispatch'", block)
                 self.assertIn("contains(github.event.pull_request.labels.*.name, 'run-maestro')", block,
