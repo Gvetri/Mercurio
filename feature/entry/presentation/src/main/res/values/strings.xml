@@ -65,6 +65,10 @@
     <string name="inbound_link_compose_needs_connection">Connect to a Gateway to use the composer. This link was discarded.</string>
     <string name="inbound_link_session_unknown">This Session link could not be opened.</string>
     <string name="inbound_link_compose_needs_session">Open a Session to use the composer.</string>
+    <string name="shared_text_needs_connection">Connect to a Gateway to use shared text. This share was discarded.</string>
+    <string name="shared_text_unsupported">Only plain text can be shared into Mercurio. This share was discarded.</string>
+    <string name="shared_text_pick_session">Choose a Session to add the shared text.</string>
+    <string name="shared_text_discard">Discard shared text</string>
 
     <string name="connection_replacement_note">The current connection stays in place until the replacement is verified and saved securely.</string>
     <string name="connection_save_note">The credential is saved securely on this device after verification.</string>

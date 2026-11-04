@@ -24,4 +24,5 @@ internal fun EntryStateHolder.enterForeground() {
 internal fun EntryStateHolder.leaveForeground() {
     isForeground = false
     lockAppOnBackground()
+    discardSharedText()
 }
