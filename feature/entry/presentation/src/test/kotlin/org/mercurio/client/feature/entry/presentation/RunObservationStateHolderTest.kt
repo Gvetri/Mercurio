@@ -367,7 +367,7 @@ class RunObservationStateHolderTest {
                 gateway.failOpenFor = null
                 holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
                 awaitObservationState(holder) {
-                    it.sessionList?.isStale == false && it.sessionList?.isUnavailable == false
+                    it.sessionList?.isStale == false && it.sessionList.isUnavailable == false
                 }
                 holder.onEvent(EntryUiEvent.SessionClicked(second.id))
                 awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == second.id }

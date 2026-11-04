@@ -301,7 +301,7 @@ class SessionHistoryRetryScreenTest {
             sessionList =
                 state.sessionList?.copy(
                     openedSession =
-                        state.sessionList!!.openedSession?.copy(
+                        state.sessionList.openedSession?.copy(
                             messages =
                                 listOf(
                                     SessionMessageUiState(

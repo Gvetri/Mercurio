@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.data
 
 import org.mercurio.client.feature.entry.domain.HistoryCacheKey
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 
 /**
  * The storage-key derivation of the bounded history cache: transcript records address a
@@ -20,7 +21,7 @@ internal class HistoryCacheRecordKeys(
 
     private fun encodeSessionId(value: String): String =
         value.toByteArray(StandardCharsets.UTF_8)
-            .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+            .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
 
     private companion object {
         const val BYTE_MASK = 0xFF

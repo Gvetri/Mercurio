@@ -220,7 +220,7 @@ class RunReconciliationSubmissionTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        !it.sessionList!!.openedSession!!.isRefreshing
+                        !it.sessionList.openedSession.isRefreshing
                 }
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
@@ -504,18 +504,18 @@ class RunReconciliationSubmissionTest {
     private fun reopenedAfterTimeoutState(otherRun: Run): (EntryUiState) -> Boolean =
         { state ->
             state.sessionList?.openedSession?.isRefreshing == false &&
-                state.sessionList?.openedSession?.latestRun?.id == otherRun.id &&
-                state.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                state.sessionList?.openedSession?.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
-                state.sessionList?.openedSession?.hasUnresolvedSubmission == true &&
-                state.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                state.sessionList?.openedSession?.composerText == "Edited after timeout"
+                state.sessionList.openedSession.latestRun?.id == otherRun.id &&
+                state.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED &&
+                state.sessionList.openedSession.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
+                state.sessionList.openedSession.hasUnresolvedSubmission == true &&
+                state.sessionList.openedSession.isReconciliationInProgress == false &&
+                state.sessionList.openedSession.composerText == "Edited after timeout"
         }
 
     private fun sendAfterTimeoutState(): (EntryUiState) -> Boolean =
         { state ->
             state.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                state.sessionList?.openedSession?.hasUnresolvedSubmission == true
+                state.sessionList.openedSession.hasUnresolvedSubmission == true
         }
 
     private fun assertTimedOutSendKeptDraft(

@@ -119,8 +119,8 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
-                        it.sessionList?.openedSession?.activeResponse?.content == "Partial"
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.UNCERTAIN &&
+                        it.sessionList.openedSession.activeResponse?.content == "Partial"
                 }
             } finally {
                 observation.release.countDown()
@@ -208,8 +208,8 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        it.sessionList?.openedSession?.activeResponse == null
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED &&
+                        it.sessionList.openedSession.activeResponse == null
                 }
                 assertEquals(listOf(terminalRun.id), gateway.statusRequests)
                 assertEquals(2, gateway.historyRequests)
@@ -305,10 +305,10 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isSending == false &&
-                        it.sessionList?.openedSession?.latestRun == null &&
-                        it.sessionList?.openedSession?.latestRunState == null &&
-                        it.sessionList?.openedSession?.hasUnresolvedSubmission == true &&
-                        it.sessionList?.openedSession?.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN
+                        it.sessionList.openedSession.latestRun == null &&
+                        it.sessionList.openedSession.latestRunState == null &&
+                        it.sessionList.openedSession.hasUnresolvedSubmission == true &&
+                        it.sessionList.openedSession.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN
                 }
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
@@ -403,8 +403,8 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
-                        it.sessionList?.openedSession?.activeResponse?.content == "Partial"
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.UNCERTAIN &&
+                        it.sessionList.openedSession.activeResponse?.content == "Partial"
                 }
 
                 assertEquals(listOf(run.id), gateway.observedRunIds)
@@ -462,7 +462,7 @@ class RunReconciliationObservationTest {
                 assertTrue(firstObservation.closed.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.isReconciliationInProgress == false
+                        it.sessionList.openedSession.isReconciliationInProgress == false
                 }
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))

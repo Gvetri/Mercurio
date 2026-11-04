@@ -11,6 +11,7 @@ import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintySnapshot
 import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintyStore
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Locale
 
 /** Persists response-loss markers without storing prompts, responses, or transcript data. */
 class SharedPreferencesRunSubmissionUncertaintyStore(
@@ -109,7 +110,7 @@ private class SharedPreferencesRunSubmissionUncertaintyStorage(
         return MessageDigest
             .getInstance("SHA-256")
             .digest(canonicalEndpoint.toByteArray(StandardCharsets.UTF_8))
-            .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+            .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
     }
 
     private companion object {
