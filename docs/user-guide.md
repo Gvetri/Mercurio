@@ -48,21 +48,23 @@ signed APK attached to the release; a locally built unsigned APK is not a distri
 
 The connection form asks for exactly two values:
 
-- **Gateway HTTPS endpoint** — the profile-specific HTTPS endpoint of your Gateway. The field shows
-  `https://gateway.example` as an illustration only; it is not a working address. The client rejects
-  a value that is not a single HTTPS address.
-- **Bearer credential** — the bearer Gateway Credential you were given for that endpoint.
+- **Gateway address** — the profile-specific address of your Gateway. The `https://` prefix is fixed and
+  the field takes the host alone; `gateway.example.com` is an illustration only, not a working address.
+  The client refuses a value it cannot parse and keeps **Connect** disabled until both fields hold a value.
+- **Gateway credential** — the credential you were given for that endpoint. The `[ show ]` action
+  reveals it and `[ hide ]` masks it again.
 
-Press **Verify Gateway Connection**. The client verifies authentication and the required capability
-manifest first. While it works, it shows **Verifying Gateway connection…**. The credential is
-saved securely on this device after verification: it is encrypted with an AndroidKeyStore key and
-stored in application-private storage that is excluded from Android backup, so you can reopen the
-connection without retyping the credential, and **Change credential** in **Settings**
-replaces it. The client shows
-**Gateway verified.** / **Saving credential securely…** while the secure save finishes and then
-reports **Connected** / **Gateway connected**. If the secure save fails, it keeps your inputs,
-reports **Could not save the Gateway credential securely. Try again.** and offers **Try again**,
-which verifies and saves the connection again. The credential is never stored in plain text.
+Press **Connect**. The client verifies the addressed Gateway and its capability manifest first. While it
+works, the verification row reads **Checking the Gateway** with **in progress**, and both fields are
+disabled. The credential is saved securely on this device after verification: it is encrypted with an
+AndroidKeyStore key and stored in application-private storage that is excluded from Android backup, so
+you can reopen the connection without retyping the credential, and **Change credential** in the
+connection menu replaces it. The row reaches **Verified** while the secure save finishes, and the saved
+connection then shows its address and facts. If a check fails, the row reads **Not verified** and either
+the field or the banner states the reason and the one next action. If the secure save fails, the client
+keeps your inputs and reports **The phone would not save the credential. It is not connected yet.** with
+**[ try again ]**, which verifies and saves the connection again. The credential is never stored in
+plain text.
 
 ## Settings
 

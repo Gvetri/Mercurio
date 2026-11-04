@@ -22,7 +22,6 @@ from livesmoke.errors import LiveSmokeError
 
 APP_ID = "org.mercurio.client"
 
-CONNECTED_MARKER = "Connected to Gateway"
 SESSIONS_MARKER = "Create Session"
 EMPTY_SESSION_MARKER = "No messages in this Session."
 STREAMING_MARKER = "Streaming response\u2026"
@@ -42,13 +41,13 @@ def build_connect_flow() -> str:
             "- launchApp:",
             "    clearState: true",
             '- tapOn: "Add Gateway Connection"',
-            '- tapOn: "Gateway HTTPS endpoint"',
+            '- tapOn: "Gateway address"',
             "- inputText: ${LIVE_SMOKE_ENDPOINT}",
             "- hideKeyboard",
-            '- tapOn: "Bearer credential"',
+            '- tapOn: "Gateway credential"',
             "- inputText: ${LIVE_SMOKE_TOKEN}",
             "- hideKeyboard",
-            '- tapOn: "Verify Gateway Connection"',
+            '- tapOn: "Connect"',
             "- extendedWaitUntil:",
             '    visible: "%s"' % SESSIONS_MARKER,
             "    timeout: 60000",

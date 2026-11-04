@@ -150,7 +150,7 @@ class JourneyScenarioTest {
         val correctedCredential = "synthetic-token"
         assertTrue(flow.contains(correctedCredential))
         val recoverySteps = flow.substringAfter(correctedCredential)
-        assertTrue(recoverySteps.contains("Verify Gateway Connection"))
+        assertTrue(recoverySteps.contains("Connect"))
         assertFalse(recoverySteps.contains("Try again"))
     }
 

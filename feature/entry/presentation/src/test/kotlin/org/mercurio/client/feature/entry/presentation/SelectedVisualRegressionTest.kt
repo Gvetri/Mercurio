@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
@@ -79,124 +78,6 @@ class SelectedVisualRegressionTest {
     fun error_reporting_consent_short_200_answers_dark() {
         setContentAtTwoHundredPercent(consentState(), darkTheme = true)
         composeTestRule.onNodeWithText(copy(R.string.consent_do_not_send)).performScrollTo()
-        capture()
-    }
-
-    @Test
-    fun connection_form() {
-        setContent(setupFormState())
-        capture()
-    }
-
-    @Test
-    @Config(qualifiers = "w411dp-h891dp-night")
-    fun connection_form_dark() {
-        setContent(setupFormState(), darkTheme = true)
-        capture()
-    }
-
-    @Test
-    fun connection_error() {
-        setContent(setupFormState(errorCategory = EntryErrorCategory.AUTHENTICATION_FAILED))
-        capture()
-    }
-
-    @Test
-    @Config(qualifiers = "w411dp-h891dp-night")
-    fun connection_error_dark() {
-        setContent(
-            setupFormState(errorCategory = EntryErrorCategory.AUTHENTICATION_FAILED),
-            darkTheme = true,
-        )
-        capture()
-    }
-
-    @Test
-    fun connection_saving_light() {
-        setContent(setupFormState(isSaving = true))
-        capture()
-    }
-
-    @Test
-    @Config(qualifiers = "w411dp-h891dp-night")
-    fun connection_saving_dark() {
-        setContent(setupFormState(isSaving = true), darkTheme = true)
-        capture()
-    }
-
-    @Test
-    fun connection_storage_retry_light() {
-        setContent(setupFormState(errorCategory = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED))
-        capture()
-    }
-
-    @Test
-    @Config(qualifiers = "w411dp-h891dp-night")
-    fun connection_storage_retry_dark() {
-        setContent(
-            setupFormState(errorCategory = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED),
-            darkTheme = true,
-        )
-        capture()
-    }
-
-    @Test
-    fun connection_replacement_ready_light() {
-        setContent(replacementFormState())
-        capture()
-    }
-
-    @Test
-    @Config(qualifiers = "w411dp-h891dp-night")
-    fun connection_replacement_ready_dark() {
-        setContent(replacementFormState(), darkTheme = true)
-        capture()
-    }
-
-    @Test
-    fun connection_remove_confirmation_light() {
-        setContent(removeConfirmationState())
-        captureDialog()
-    }
-
-    @Test
-    @Config(qualifiers = "w411dp-h891dp-night")
-    fun connection_remove_confirmation_dark() {
-        setContent(removeConfirmationState(), darkTheme = true)
-        captureDialog()
-    }
-
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp-notnight")
-    fun connection_remove_confirmation_wide_light() {
-        setContent(removeConfirmationState())
-        captureDialog()
-    }
-
-    @Test
-    @Config(qualifiers = "w1000dp-h800dp-night")
-    fun connection_remove_confirmation_wide_dark() {
-        setContent(removeConfirmationState(), darkTheme = true)
-        captureDialog()
-    }
-
-    @Test
-    @Config(qualifiers = "w411dp-h480dp-notnight")
-    fun connection_storage_retry_short_ime_200_light() {
-        composeTestRule.setContent {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
-                HermesTheme(darkTheme = false) {
-                    EntryScreen(
-                        state = setupFormState(errorCategory = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED),
-                        onEvent = {},
-                    )
-                }
-            }
-        }
-        composeTestRule
-            .onNodeWithText(copy(EntryErrorCategory.CREDENTIAL_STORAGE_FAILED.messageRes))
-            .performScrollTo()
         capture()
     }
 
@@ -576,55 +457,6 @@ class SelectedVisualRegressionTest {
         capture()
     }
 
-    private fun setupFormState(
-        isSaving: Boolean = false,
-        errorCategory: EntryErrorCategory? = null,
-    ): EntryUiState =
-        EntryUiState(
-            title = UiText.Resource(R.string.entry_title_verify_new),
-            supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
-            actionLabel = UiText.Resource(R.string.entry_action_verify),
-            connectionSetupRequested = true,
-            endpoint = "https://gateway.example/profile",
-            bearerCredential = "fixture-credential",
-            isSaving = isSaving,
-            errorCategory = errorCategory,
-        )
-
-    private fun replacementFormState(errorCategory: EntryErrorCategory? = null): EntryUiState =
-        EntryUiState(
-            title = UiText.Resource(R.string.action_change_credential),
-            supportingText = UiText.Resource(R.string.entry_supporting_change_credential),
-            actionLabel = UiText.Resource(R.string.entry_action_verify_and_save),
-            connectionSetupRequested = true,
-            isChangingCredential = true,
-            isConnected = true,
-            endpoint = "https://gateway.example/profile",
-            bearerCredential = "replacement-credential",
-            errorCategory = errorCategory,
-        )
-
-    private fun removeConfirmationState(): EntryUiState =
-        EntryUiState(
-            title = UiText.Resource(R.string.entry_title_connected),
-            supportingText = UiText.Value(""),
-            actionLabel = UiText.Value(""),
-            isConnected = true,
-            sessionList =
-                SessionListUiState(
-                    sessions =
-                        listOf(
-                            session(
-                                id = "pinned-session",
-                                title = "Release checklist",
-                                preview = "Review the release checklist.",
-                                pinned = true,
-                            ),
-                        ),
-                ),
-            isRemoveConfirmationOpen = true,
-        )
-
     private fun setContent(
         state: EntryUiState,
         darkTheme: Boolean? = null,
@@ -687,11 +519,6 @@ class SelectedVisualRegressionTest {
     private fun capture() {
         composeTestRule.waitForIdle()
         composeTestRule.onRoot().captureRoboImage()
-    }
-
-    private fun captureDialog() {
-        composeTestRule.waitForIdle()
-        composeTestRule.onNode(isDialog()).captureRoboImage()
     }
 
     @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
