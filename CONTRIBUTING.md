@@ -114,8 +114,9 @@ that belong to the matrix. Each entry maps to one test method in
 `SelectedVisualRegressionTest`, in `SelectedShellVisualRegressionTest` for the
 shell window contracts, in `SelectedMarkdownVisualRegressionTest` for the
 Markdown rendering contracts, in `ChatDesignStatesTest` for the chat states, in
-`HistoryCacheVisualRegressionTest` for the cache states, or in
-`SettingsDesignStatesTest` for the approved `mercurio/settings` states.
+`HistoryCacheVisualRegressionTest` for the cache states, in `SettingsDesignStatesTest`
+for the approved `mercurio/settings` states, or in `AppLockGateVisualRegressionTest`
+for the app-lock gate.
 
 | State | Compose surface | Reason for inclusion |
 | --- | --- | --- |
@@ -134,6 +135,8 @@ Markdown rendering contracts, in `ChatDesignStatesTest` for the chat states, in
 | `connection_remove_confirmation_wide_light` | Gateway connection | The confirmation centered on the wide two-pane window |
 | `connection_remove_confirmation_wide_dark` | Gateway connection | The same wide confirmation on the dark token set |
 | `connection_storage_retry_short_ime_200_light` | Gateway connection | Short-window storage retry at 200% font scale, scrolled to the retained failure message |
+| `app_lock_gate_light` | App lock gate | The whole-app gate with nothing but the approved empty state and its unlock action |
+| `app_lock_gate_dark` | App lock gate | The same gate on the dark token set |
 | `session_list_populated_light` | Session list | Pinned and unpinned server metadata in the approved composition |
 | `session_list_populated_dark` | Session list | The same list on the dark token set |
 | `session_list_selected_row_light` | Session list | The selected-row component tint on the light token set |
@@ -208,6 +211,12 @@ is absent from the capture, so the matrix grows with the code issues that add th
 | `settings_02_connected_dark` | `w360dp-h800dp-night` | The same list on the dark token set |
 | `settings_03_connection_menu_light` | `w360dp-h800dp-notnight` | The only menu: change credential and remove connection |
 | `settings_03_connection_menu_dark` | `w360dp-h800dp-night` | The same menu on the dark token set |
+| `settings_06_security_no_enrolment_light` | `w360dp-h800dp-notnight` | App lock with no screen lock set: the row names the precondition and the switch is disabled |
+| `settings_06_security_no_enrolment_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_07_security_off_light` | `w360dp-h800dp-notnight` | App lock enrolled and off |
+| `settings_07_security_off_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_08_security_on_light` | `w360dp-h800dp-notnight` | App lock enrolled and on |
+| `settings_08_security_on_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_10_notifications_on_light` | `w360dp-h800dp-notnight` | Notification opt-in on with its current-behaviour line |
 | `settings_10_notifications_on_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_12_media_off_light` | `w360dp-h800dp-notnight` | Automatic picture loading off |

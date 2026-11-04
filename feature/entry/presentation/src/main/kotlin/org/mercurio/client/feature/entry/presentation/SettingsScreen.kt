@@ -59,6 +59,7 @@ internal fun SettingsContent(
                     .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.s),
         ) {
             SettingsConnectionSection(state = state)
+            SettingsSecuritySection(state = state, onEvent = onEvent)
             SettingsNotificationSection(state = state, onEvent = onEvent)
             SettingsMediaSection(state = state, onEvent = onEvent)
             SettingsDiagnosticsSection(state = state, onEvent = onEvent)
@@ -138,6 +139,33 @@ private fun SettingsConnectionSection(state: EntryUiState) {
                 state.isGatewayConnectionConfigured -> stringResource(R.string.settings_connection_saved)
                 else -> stringResource(R.string.settings_connection_none)
             },
+    )
+}
+
+@Composable
+private fun SettingsSecuritySection(
+    state: EntryUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val lock = state.appLock
+    SettingsSectionHeader(stringResource(R.string.settings_section_security))
+    SettingsSwitchRow(
+        model =
+            SettingsSwitchRowModel(
+                label = stringResource(R.string.settings_app_lock_row),
+                supporting =
+                    stringResource(
+                        if (lock.isAvailable) {
+                            R.string.settings_app_lock_supporting
+                        } else {
+                            R.string.settings_app_lock_unavailable
+                        },
+                    ),
+                checked = lock.isEnabled,
+                description = stringResource(R.string.settings_app_lock_row),
+                enabled = lock.isAvailable,
+            ),
+        onCheckedChange = { onEvent(EntryUiEvent.AppLockToggleClicked) },
     )
 }
 
