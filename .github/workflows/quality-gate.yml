@@ -222,7 +222,7 @@ jobs:
   buildsrc_contracts:
     name: buildsrc-contracts
     needs: [ui_paths]
-    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -346,7 +346,7 @@ jobs:
 
   ui_paths:
     name: ui-paths
-    if: ${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}
+    if: ${{ always() && (github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -359,8 +359,15 @@ jobs:
       ci_files_changed: ${{ steps.lane_decisions.outputs.ci_files }}
       build_logic_changed: ${{ steps.lane_decisions.outputs.build_logic }}
     steps:
+      - name: Check out the pushed history
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - name: Detect modified UI paths
         id: ui_paths
+        if: ${{ github.event_name == 'pull_request' }}
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
           filters: |
@@ -371,14 +378,28 @@ jobs:
               - 'fixtures/mercurio/journey/**'
       - name: Detect the changed files of the pull request
         id: changed_files
+        if: ${{ github.event_name == 'pull_request' }}
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
           list-files: json
           filters: |
             all:
               - '**'
+      - name: Detect the changed files of the push
+        id: push_changed_files
+        if: ${{ github.event_name == 'push' }}
+        continue-on-error: true
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
+        with:
+          base: ${{ github.event.before }}
+          ref: ${{ github.sha }}
+          list-files: json
+          filters: |
+            all:
+              - '**'
       - name: Classify the docs-only decision
         id: docs_only
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
         run: |
@@ -405,19 +426,30 @@ jobs:
       - name: Classify the lane-routing decisions
         id: lane_decisions
         env:
-          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
+          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files || steps.push_changed_files.outputs.all_files }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           decisions="$(python3 -c '
           import json, os, sys
+          event = os.environ.get("EVENT_NAME", "")
+          def fail_closed(message):
+              print(message, file=sys.stderr)
+              if event == "push":
+                  print("failing closed to running the buildSrc contracts check.", file=sys.stderr)
+                  print("ci_files=true")
+                  print("build_logic=true")
+                  sys.exit(0)
+              print("failing closed to the full gate.", file=sys.stderr)
+              sys.exit(1)
           try:
               changed_files = json.loads(os.environ["CHANGED_FILES"])
           except (KeyError, ValueError, TypeError) as error:
-              print("The changed-file answer is unreadable (%s); failing closed to the full gate." % error, file=sys.stderr)
-              sys.exit(1)
+              fail_closed("The changed-file answer is unreadable (%s)." % error)
           if not isinstance(changed_files, list) or not all(isinstance(path, str) for path in changed_files):
-              print("The changed-file answer is not a list of file paths; failing closed to the full gate.", file=sys.stderr)
-              sys.exit(1)
+              fail_closed("The changed-file answer is not a list of file paths.")
+          if not changed_files and event == "push":
+              fail_closed("The changed-file answer lists no changed file.")
           def is_control_plane(path):
               return "/.github/" in "/" + path
           def is_build_logic(path):
@@ -1082,6 +1114,15 @@ jobs:
               exit 1
             fi
           }
+          require_decision() {
+            case "$2" in
+              true|false) ;;
+              *)
+                printf '%s must report true or false for this run, but reported %s.\n' "$1" "${2:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
+          }
           if [ "$EVENT_NAME" = pull_request ]; then
             if [ "$EVENT_BASE_REF" != main ]; then
               printf 'The protected-main workflow accepts pull requests that target main, but this one targets %s.\n' "$EVENT_BASE_REF" >&2
@@ -1090,45 +1131,15 @@ jobs:
             require fork_guard "$FORK_GUARD_RESULT"
             require ui_paths "$UI_PATHS_RESULT"
             ui_paths_decision="$UI_PATHS_CHANGED"
-            case "$ui_paths_decision" in
-              true|false) ;;
-              *)
-                printf 'UI path detection must report true or false for this run, but reported %s.\n' "${ui_paths_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'UI path detection' "$ui_paths_decision"
             docs_only_decision="$DOCS_ONLY_CHANGED"
-            case "$docs_only_decision" in
-              true|false) ;;
-              *)
-                printf 'Docs-only detection must report true or false for this run, but reported %s.\n' "${docs_only_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'Docs-only detection' "$docs_only_decision"
             dependency_only_decision="$DEPENDENCY_ONLY_CHANGED"
-            case "$dependency_only_decision" in
-              true|false) ;;
-              *)
-                printf 'Dependency-file detection must report true or false for this run, but reported %s.\n' "${dependency_only_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'Dependency-file detection' "$dependency_only_decision"
             ci_files_decision="$CI_FILES_CHANGED"
-            case "$ci_files_decision" in
-              true|false) ;;
-              *)
-                printf 'CI-file detection must report true or false for this run, but reported %s.\n' "${ci_files_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'CI-file detection' "$ci_files_decision"
             build_logic_decision="$BUILD_LOGIC_CHANGED"
-            case "$build_logic_decision" in
-              true|false) ;;
-              *)
-                printf 'Build-logic detection must report true or false for this run, but reported %s.\n' "${build_logic_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'Build-logic detection' "$build_logic_decision"
             if [ "$EVENT_FORK" = true ]; then
               expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
@@ -1205,13 +1216,23 @@ jobs:
             expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
             expect fork_guard "$FORK_GUARD_RESULT" skipped
             expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
-            expect ui_paths "$UI_PATHS_RESULT" skipped
             expect coverage_mutation "$COVERAGE_MUTATION_RESULT" success
-            test "$BUILDSRC_CONTRACTS_RESULT" = success
             if [ "$EVENT_NAME" = push ]; then
+              require ui_paths "$UI_PATHS_RESULT"
+              ci_files_decision="$CI_FILES_CHANGED"
+              require_decision 'CI-file detection' "$ci_files_decision"
+              build_logic_decision="$BUILD_LOGIC_CHANGED"
+              require_decision 'Build-logic detection' "$build_logic_decision"
+              if [ "$ci_files_decision" = true ] || [ "$build_logic_decision" = true ]; then
+                test "$BUILDSRC_CONTRACTS_RESULT" = success
+              else
+                test "$BUILDSRC_CONTRACTS_RESULT" = skipped
+              fi
               test "$API24_INSTRUMENTATION_RESULT" = skipped
               test "$MAESTRO_JOURNEYS_RESULT" = skipped
             else
+              expect ui_paths "$UI_PATHS_RESULT" skipped
+              test "$BUILDSRC_CONTRACTS_RESULT" = success
               test "$API24_INSTRUMENTATION_RESULT" = success
               test "$MAESTRO_JOURNEYS_RESULT" = success
             fi

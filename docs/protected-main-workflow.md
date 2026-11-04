@@ -68,7 +68,7 @@ never more permissive than the gate it mirrors.
 | Ready in-repository pull request whose every changed file is a build or dependency file (`gradle/**`, any `*.gradle.kts`, `gradle.properties`, `gradle/libs.versions.toml`) | `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `coverage-mutation`, `buildsrc-contracts`, and both emulator suites, unless the pull request carries the `run-maestro` label, which starts the emulator suites but never `coverage-mutation` or `buildsrc-contracts` on a dependency-only head |
 | Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard`, `ui-paths` | Every other check |
 | External-fork pull request | `fork-guard`, `ui-paths` | Every other check |
-| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `buildsrc-contracts` runs the buildSrc self-test contracts; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
+| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `ui-paths` classifies the pushed range; `buildsrc-contracts` runs the buildSrc self-test contracts when the pushed range changes a `.github/**` or `buildSrc/**` file, and an app-only push skips it; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
 | Nightly validation, manual validation | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | `draft-validation`, `commit-message`, `fork-guard` |
 
 The emulator suites are opt-in on pull requests, and the journey suite is opt-in by label alone. A
@@ -95,10 +95,13 @@ changed-file answer shows that every changed file of the head is a Markdown file
 or a file under `docs/**`, the heavy lanes report `skipped` and the aggregate requires exactly that
 routing; the `run-maestro` label keeps precedence and starts the heavy and emulator lanes on a
 documentation-only head too. `coverage-mutation` reports `skipped` on every pull request regardless. The classification is deliberately conservative — code, resources,
-build files, and especially `.github/**` route the full gate — and a push, a nightly schedule, and a
+build files, and especially `.github/**` route the full gate. A push consults the decision only for
+the `buildsrc-contracts` lane: a push that changes a `.github/**` or `buildSrc/**` file runs the
+buildSrc self-test, and an app-only push skips it. A nightly schedule and a
 manual dispatch never consult the decision, so the Nightly signing chain always validates the exact
-`main` tip with the complete gate. An unreadable changed-file answer fails closed: the detector job
-fails, the heavy lanes run, and the aggregate reports the failure.
+`main` tip with the complete gate. An unreadable changed-file answer fails closed: on a pull request
+the detector job fails, the heavy lanes run, and the aggregate reports the failure; on a push,
+an unreadable changed-file answer runs it, so the self-test still observes the pushed range.
 
 On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`,
 `maestro-journeys`, or `coverage-mutation` does not succeed, the `create-nightly-failure-issue` job

@@ -46,7 +46,7 @@ outcome fails the aggregate; see
 | `commit-message` | `.github/scripts/verify-conventional-commits.py` | The squash-merge title or a commit of the pull request is not a Conventional Commit, or the commit list of the pull request is unavailable, empty, or truncated |
 | `draft-validation` | `formatCheck :app:lintDebug` | The head of a draft pull request is unformatted or fails Android lint |
 | `fork-guard` | `.github/workflows/quality-gate.yml` | Never on its own: it reports the handling of an external-fork pull request, and the aggregate requires it for every pull request, then fails closed for an external fork |
-| `ui-paths` | `dorny/paths-filter` (pinned revision) in `.github/workflows/quality-gate.yml` | The changed-file answer for the pull request is unavailable or the detector reports an unreadable decision: the emulator-lane routing fails closed. The detector declares the UI surface as `app/src/main/**`, `feature/entry/presentation/**`, `feature/entry/wiring/src/main/res/**`, and `fixtures/mercurio/journey/**`. The same job classifies a documentation-only head against the declared documentation surface, and an unreadable changed-file answer fails closed to the full gate |
+| `ui-paths` | `dorny/paths-filter` (pinned revision) in `.github/workflows/quality-gate.yml` | The changed-file answer for the pull request is unavailable or the detector reports an unreadable decision: the emulator-lane routing fails closed. On a main push an unreadable changed-file answer instead runs `buildsrc-contracts`, so the pushed range is still checked. The detector declares the UI surface as `app/src/main/**`, `feature/entry/presentation/**`, `feature/entry/wiring/src/main/res/**`, and `fixtures/mercurio/journey/**`. The same job classifies a documentation-only head against the declared documentation surface, and an unreadable pull-request changed-file answer fails closed to the full gate |
 | `api24-instrumentation` | `:app:verifyConnectedAndroidTests` | Instrumentation produced no tests, skipped a test, or reported a failure. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label or modifies a declared UI path; skipped on main pushes, drafts, external forks, and pull requests that carry neither |
 | `maestro-journeys` | `.github/scripts/journey-run.sh`, one partition per shard | A deterministic emulator journey fails against the controlled fake Gateway. The lane runs as three parallel shard jobs, each invoking `journey-run.sh <shard> 3` on its own partition of the pinned journeys, and a shard aggregate fails the lane when any shard fails; failure evidence is uploaded per shard. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label, after a passing `api24-instrumentation`; skipped on main pushes, drafts, external forks, and every pull request without the label, including one that modifies a declared UI path. [The journey suite](deterministic-emulator-journeys.md#requesting-the-journey-lane) lists the key areas that need the label |
 
@@ -66,12 +66,14 @@ and `buildsrc-contracts` while every core lane still runs, and the `run-maestro`
 precedence over the emulator lanes there too. On every pull request the aggregate also expects
 `coverage-mutation` to report `skipped`: the lane is a main-line and nightly signal, and the label
 does not revive it.
-Every classifier answer must be exactly `true` or `false`: an unreadable changed-file answer fails
-closed to the full gate, and the aggregate re-validates each decision guard before trusting the
-routing. The classification is deliberately conservative: code, resources, and especially
-`.github/**` route the full gate, and a push, a nightly schedule, and a manual dispatch never
-consult the decision, so the release chain always re-verifies the exact `main` tip with the
-complete gate.
+Every classifier answer must be exactly `true` or `false`: on a pull request, an unreadable
+changed-file answer fails closed to the full gate, and on a push, an unreadable changed-file answer
+runs the `buildsrc-contracts` check; the aggregate re-validates each decision guard before trusting
+the routing. The classification is deliberately conservative: code, resources, and especially
+`.github/**` route the full gate. A push consults the decision only for the `buildsrc-contracts`
+lane: a push that changes a `.github/**` or `buildSrc/**` file runs the buildSrc self-test, and an
+app-only push skips it. A nightly schedule and a manual dispatch never consult the decision, so the
+release chain always re-verifies the exact `main` tip with the complete gate.
 
 The aggregate job compares `.github/quality-gate/required-checks.txt` (plus the `buildsrc_contracts`
 support job) with its own `needs` list, so a check can neither be dropped from the declaration
