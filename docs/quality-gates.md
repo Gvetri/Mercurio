@@ -90,10 +90,11 @@ documentation check is covered by
 workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
 `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`, and
 `ReportEvidenceTest`) run as three parallel shards behind the `buildsrc-contracts` umbrella job.
-Shard 1 runs the four most expensive `QualityGateConfigurationTest` suites; shard 2 runs the
-remaining `QualityGateConfigurationTest` tests and the mutation, coverage, and committed-baseline
-tests of `QualityVerificationFailClosedTest`; shard 3 runs the remaining fail-closed test groups
-plus the four verification classes. Every test is selected exactly once, no
+Shard 1 runs the skipped-detekt fail-closed test alone, because it executes the expensive
+coverage and mutation verification before it reaches the detekt check. Shard 2 runs the mutation,
+coverage, and committed-baseline fail-closed tests and the remaining `QualityGateConfigurationTest`
+tests; shard 3 runs the four expensive `QualityGateConfigurationTest` suites, the remaining
+fail-closed test groups, and the four verification classes. Every test is selected exactly once, no
 assertion is removed, and the shards run on exactly the events where the umbrella runs. The
 umbrella keeps the `buildsrc-contracts` key and name, remains the only result the aggregate reads,
 and fails when any shard fails. A cold measurement before the split took 25 minutes for the six
