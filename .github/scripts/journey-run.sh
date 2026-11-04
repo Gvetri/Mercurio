@@ -68,6 +68,7 @@ journeys=(
 flow_selection=""
 shard_index=""
 shard_total=""
+allow_arm_translation=false
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -87,9 +88,13 @@ while [ "$#" -gt 0 ]; do
             flow_selection="$2"
             shift 2
             ;;
+        --arm-translation)
+            allow_arm_translation=true
+            shift
+            ;;
         *)
             if [[ "$1" == -* ]]; then
-                log "Unknown option: $1. Pass --apk <path>, --flow <journey>, or a shard index and total."
+                log "Unknown option: $1. Pass --apk <path>, --flow <journey>, --arm-translation, or a shard index and total."
                 exit 1
             fi
             if [ -z "$shard_index" ]; then
@@ -202,17 +207,29 @@ trap finish_gateway EXIT
 
 log "Installing the journey test CA into the emulator system trust store."
 require_root_adb "before installing the TLS CA"
-if ! timeout 120 adb remount >/dev/null; then
-    log "Emulator /system partition did not remount writable for the TLS CA. Device state:"
-    adb devices || true
-    exit 1
-fi
 ca_hash="$(openssl x509 -inform PEM -subject_hash_old -in "$ca_file" | head -1)"
 ca_device_path="/system/etc/security/cacerts/${ca_hash}.0"
-if ! timeout 120 adb push "$ca_file" "$ca_device_path" >/dev/null; then
-    log "Failed to push the journey test CA into the system trust store. Device state:"
-    adb devices || true
-    exit 1
+if ! timeout 120 adb remount >/dev/null 2>&1 ||
+    ! timeout 120 adb push "$ca_file" "$ca_device_path" >/dev/null 2>&1; then
+    if [ "$allow_arm_translation" != true ]; then
+        log "Emulator /system partition did not remount writable for the TLS CA. Device state:"
+        adb devices || true
+        exit 1
+    fi
+    ca_staging_dir="/data/local/tmp/journey-cacerts"
+    log "The system trust store is not directly writable; bind-mounting a writable copy (no reboot)."
+    if ! timeout 120 adb shell "rm -rf $ca_staging_dir && mkdir -p $ca_staging_dir && cp /system/etc/security/cacerts/* $ca_staging_dir/"; then
+        log "Failed to stage the system trust store for the journey test CA."
+        exit 1
+    fi
+    if ! timeout 120 adb push "$ca_file" "${ca_staging_dir}/${ca_hash}.0" >/dev/null; then
+        log "Failed to copy the journey test CA into the staged trust store."
+        exit 1
+    fi
+    if ! timeout 60 adb shell "nsenter --mount=/proc/1/ns/mnt -- mount --bind $ca_staging_dir /system/etc/security/cacerts"; then
+        log "Failed to bind the staged trust store over the system store."
+        exit 1
+    fi
 fi
 if ! timeout 30 adb shell chmod 644 "$ca_device_path"; then
     log "Failed to set the journey test CA permissions. Device state:"
@@ -220,7 +237,7 @@ if ! timeout 30 adb shell chmod 644 "$ca_device_path"; then
     exit 1
 fi
 if ! timeout 30 adb shell test -f "$ca_device_path"; then
-    log "The journey test CA is not present on the live system partition. Device state:"
+    log "The journey test CA is not present in the emulator trust store. Device state:"
     adb devices || true
     exit 1
 fi

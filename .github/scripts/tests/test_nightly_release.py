@@ -55,10 +55,11 @@ class NightlyWorkflowTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
         self.assertIn("\n  report_release_failure:\n", workflow)
         reporter = job_block(workflow, "report_release_failure")
-        self.assertIn("needs: [prepare, sign, publish]", reporter)
+        self.assertIn("needs: [prepare, sign, smoke, publish]", reporter)
         for name in ("source_sha", "version_code"):
             self.assertIn(f"RELEASE_{name.upper()}: ${{{{ needs.prepare.outputs.{name} }}}}", reporter)
-        for condition in ("always()", "needs.sign.result == 'failure'", "needs.publish.result == 'failure'"):
+        for condition in ("always()", "needs.sign.result == 'failure'", "needs.smoke.result == 'failure'",
+                          "needs.publish.result == 'failure'"):
             self.assertIn(condition, job_key(reporter, "if"))
         self.assertIn("contents: read", reporter)
         self.assertIn("actions: read", reporter)
@@ -103,7 +104,7 @@ class NightlyWorkflowTest(unittest.TestCase):
             self.assertIn(f"{name}:", signer)
         publisher = job_block(workflow, "publish")
         self.assertNotIn("secrets.", publisher)
-        self.assertIn("needs: [prepare, sign]", publisher)
+        self.assertIn("needs: [prepare, sign, smoke]", publisher)
         self.assertIn("contents: write", publisher)
         self.assertNotIn("environment:", publisher)
         self.assertNotIn("contents: write", workflow.split("  publish:", 1)[0])
@@ -114,6 +115,27 @@ class NightlyWorkflowTest(unittest.TestCase):
         signing_prepare = job_block(signing_workflow, "prepare")
         self.assertIn("RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}", signing_prepare)
         self.assertIn("RELEASE_VALIDATION_RUN_ATTEMPT: ${{ inputs.validation_run_attempt }}", signing_prepare)
+
+    def test_signed_apk_smoke_runs_after_signing_and_before_publishing(self):
+        workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
+        smoke = job_block(workflow, "smoke")
+        self.assertLess(workflow.index("\n  sign:\n"), workflow.index("\n  smoke:\n"))
+        self.assertLess(workflow.index("\n  smoke:\n"), workflow.index("\n  publish:\n"))
+        self.assertEqual("[prepare, sign]", job_key(smoke, "needs"))
+        self.assertIn("needs.prepare.outputs.publish == 'true'", job_key(smoke, "if") or "")
+        self.assertEqual("15", job_key(smoke, "timeout-minutes"))
+        self.assertIn("    permissions:\n      contents: read\n      actions: read\n", smoke)
+        self.assertNotIn("secrets.", smoke)
+        self.assertIn("artifact-ids: ${{ needs.sign.outputs.signed_artifact_id }}", smoke)
+        self.assertIn("python3 .github/scripts/nightly-release.py verify-smoke signed .github/release-certificate.sha256", smoke)
+        for value in ("api-level: 30", "target: google_apis", "arch: x86_64", "-writable-system"):
+            self.assertIn(value, smoke)
+        self.assertIn(".github/scripts/journey-run.sh --apk signed/mercurio.apk --flow terminal-success --arm-translation", smoke)
+        self.assertIn("continue-on-error: true", smoke)
+        self.assertIn("steps.smoke.outcome != 'success'", smoke)
+        self.assertIn("nightly-smoke-evidence-${{ github.run_id }}-${{ github.run_attempt }}", smoke)
+        publisher = job_block(workflow, "publish")
+        self.assertIn("needs.smoke.result == 'success'", job_key(publisher, "if") or "")
 
 
 class NightlyPreparationTest(unittest.TestCase):
@@ -293,6 +315,59 @@ class NightlyPreparationTest(unittest.TestCase):
         }, set(metadata))
         body = json.loads(self.release_file.read_text())["body"]
         self.assertIn("/actions/runs/124 (attempt 2)", body)
+        self.assertIn("- Signed-APK smoke: https://github.com/Gvetri/Mercurio/actions/runs/456 (attempt 2)", body)
+
+    def test_publish_refuses_when_the_signed_apk_smoke_has_not_passed(self):
+        self.add_reusable_run(124, run_attempt=2)
+        self.signed_publication_fixture(validation_run_id="124", validation_run_attempt="2")
+        route = f"/repos/{self.repository}/actions/runs/456/attempts/2/jobs"
+        job = next(entry for entry in self.routes[route]["jobs"] if entry["name"] == "smoke")
+        job["conclusion"] = "failure"
+        result = self.publish()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("signed-APK smoke has not passed", result.stderr)
+        self.assertFalse(self.release_file.exists())
+        self.assertEqual([], self.api.posts)
+
+    def test_publish_refuses_when_the_smoke_job_is_missing(self):
+        self.signed_publication_fixture()
+        route = f"/repos/{self.repository}/actions/runs/456/attempts/2/jobs"
+        route_jobs = [entry for entry in self.routes[route]["jobs"] if entry["name"] != "smoke"]
+        self.routes[route] = {"total_count": len(route_jobs), "jobs": route_jobs}
+        result = self.publish()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Missing or duplicate signed-APK smoke job", result.stderr)
+        self.assertFalse(self.release_file.exists())
+
+    def test_verify_smoke_accepts_the_release_variant_and_refuses_a_debuggable_apk(self):
+        self.signed_publication_fixture()
+        result = self.verify_smoke(self.signed, self.certificate)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("Signed-APK smoke artifact verified", result.stdout)
+        root = Path(self.directory.name)
+        debug = make_signing_fixture(root / "debuggable", 7002, "nightly-7002-bbbbbbbbbbbb", debuggable=True)
+        debug_environment = {
+            **self.environment, **debug.environment, "HOME": str(root),
+            "RELEASE_SOURCE_SHA": self.selected, "RELEASE_VERSION_CODE": "7002",
+            "RELEASE_VALIDATION_RUN_ID": "123", "RELEASE_VALIDATION_RUN_ATTEMPT": "1",
+            "GITHUB_RUN_ATTEMPT": "2",
+        }
+        signed = root / "signed-debuggable"
+        result = subprocess.run([
+            "python3", str(ROOT / ".github/scripts/sign-release-apk.py"), str(debug.apk),
+            str(signed), str(debug.certificate_file),
+        ], env=debug_environment, capture_output=True, text=True, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+        result = self.verify_smoke(signed, debug.certificate_file)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("release variant", result.stderr)
+
+    def verify_smoke(self, directory, certificate):
+        return subprocess.run([
+            "python3", str(ROOT / ".github/scripts/nightly-release.py"), "verify-smoke",
+            str(directory), str(certificate),
+        ], env={**self.environment, "JAVA_HOME": os.environ["JAVA_HOME"], "ANDROID_HOME": os.environ["ANDROID_HOME"]},
+            capture_output=True, text=True, check=False)
 
     def test_unknown_terminal_conclusion_is_not_printed_or_accepted(self):
         self.selected_run["conclusion"] = "untrusted-api-value-must-not-appear"
@@ -960,6 +1035,11 @@ class NightlyPreparationTest(unittest.TestCase):
             },
             f"{prefix}/environments/nightly/deployment-branch-policies": {"total_count": 1, "branch_policies": [{"name": "main", "type": "branch"}]},
             f"{prefix}/actions/runs/456/approvals": [],
+            f"{prefix}/actions/runs/456/attempts/2/jobs": {"total_count": 3, "jobs": [
+                {"id": 40, "name": "sign / prepare", "head_sha": self.new, "status": "completed", "conclusion": "success"},
+                {"id": 41, "name": "smoke", "head_sha": self.new, "status": "completed", "conclusion": "success"},
+                {"id": 42, "name": "publish", "head_sha": self.new, "status": "completed", "conclusion": "success"},
+            ]},
         })
 
     def publish(self):
@@ -984,7 +1064,8 @@ class NightlyPreparationTest(unittest.TestCase):
         }
         self.report_jobs = [
             {"id": 20, "name": "sign / prepare", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "sign" else "success"},
-            {"id": 21, "name": "publish", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "publish" else "skipped"},
+            {"id": 21, "name": "smoke", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "smoke" else "success"},
+            {"id": 22, "name": "publish", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "publish" else "skipped"},
         ]
         prefix = f"/repos/{self.repository}"
         self.report_run = {
@@ -1031,7 +1112,7 @@ class NightlyPreparationTest(unittest.TestCase):
 
     def test_known_terminal_release_stage_failures_file_exactly_one_issue(self):
         self.report_fixture(observation=False)
-        for name in ("publish", "sign / prepare"):
+        for name in ("publish", "sign / prepare", "smoke"):
             for conclusion in ("failure", "timed_out", "startup_failure", "action_required", "stale", "neutral"):
                 with self.subTest(stage=name, conclusion=conclusion):
                     for job in self.report_jobs:
@@ -1109,7 +1190,7 @@ class NightlyPreparationTest(unittest.TestCase):
             self.report_jobs[0]["conclusion"] = conclusion
             result = self.report()
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("No failed signing or publication", result.stderr)
+            self.assertIn("No failed smoke, signing, or publication", result.stderr)
             self.assertFalse((self.report_store / "issue.json").exists())
         self.report_jobs[0]["conclusion"] = "failure"
         self.report_run["path"] = ".github/workflows/quality-gate.yml"
@@ -1307,6 +1388,8 @@ class NightlyPreparationTest(unittest.TestCase):
         ], env=retry_environment, capture_output=True, text=True, check=False)
         self.assertEqual(0, result.returncode, result.stderr)
         self.environment = {key: value for key, value in retry_environment.items() if not key.startswith("ANDROID_RELEASE_KEYSTORE_")}
+        self.routes[f"/repos/{self.repository}/actions/runs/456/attempts/3/jobs"] = \
+            self.routes[f"/repos/{self.repository}/actions/runs/456/attempts/2/jobs"]
         self.certificate = retry.certificate_file
         retry_tag = f"nightly-7003-{self.selected}"
         self.routes[f"/repos/{self.repository}/git/matching-refs/tags/{retry_tag}"] = []

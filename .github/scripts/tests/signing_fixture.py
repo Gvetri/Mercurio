@@ -7,7 +7,7 @@ import subprocess
 from types import SimpleNamespace
 
 
-def make_signing_fixture(root, version_code=1, version_name="test"):
+def make_signing_fixture(root, version_code=1, version_name="test", debuggable=False):
     root.mkdir(parents=True, exist_ok=True)
     sdk = Path(os.environ["ANDROID_HOME"])
     tools = sdk / "build-tools/35.0.0"
@@ -41,11 +41,15 @@ def make_signing_fixture(root, version_code=1, version_name="test"):
     certificate_file.write_text(fingerprint + "\n")
     environment["ANDROID_RELEASE_KEYSTORE_BASE64"] = base64.b64encode(keystore.read_bytes()).decode()
     manifest = root / "AndroidManifest.xml"
+    application = '<application android:label="Signing test"'
+    if debuggable:
+        application += ' android:debuggable="true"'
+    application += "/>"
     manifest.write_text(
         '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
         f'package="org.mercurio.client" android:versionCode="{version_code}" android:versionName="{version_name}">'
         '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35"/>'
-        '<application android:label="Signing test"/></manifest>'
+        f"{application}</manifest>"
     )
     apk = root / "unsigned.apk"
     run([str(tools / "aapt2"), "link", "--manifest", str(manifest), "-I", str(sdk / "platforms/android-35/android.jar"), "-o", str(apk)])

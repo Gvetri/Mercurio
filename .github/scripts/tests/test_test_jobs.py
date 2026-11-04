@@ -59,8 +59,9 @@ def journey_attempts(journey, *, retried=JOURNEY_RETRY_TARGET, max_attempts=JOUR
     return max_attempts if journey == retried else 1
 
 
-def fake_adb_script(root_failures=0, root_works=True):
+def fake_adb_script(root_failures=0, root_works=True, system_store_writable=True):
     root_outcome = 'touch "$ADB_ROOT_MARKER"' if root_works else "exit 1"
+    writable = 1 if system_store_writable else 0
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "${{ADB_CALLS_FILE:-/dev/null}}"
 if [[ "$*" == *"shell id -u"* ]]; then
@@ -70,6 +71,10 @@ if [[ "$*" == *"shell id -u"* ]]; then
         printf '0\\n'
     fi
     exit 0
+fi
+if [[ "$*" == *"push"*"/system/etc/security/cacerts/"* && "{writable}" -eq 0 ]]; then
+    printf 'adb: error: failed to copy: Read-only file system\\n' >&2
+    exit 1
 fi
 if [[ "$*" == "root" ]]; then
     root_count=0
@@ -332,6 +337,42 @@ class TestJobs(unittest.TestCase):
         self.assertLess(chmod, ca_check)
         self.assertLess(ca_check, apk_install)
 
+    def test_journey_runner_bind_mounts_the_trust_store_when_the_system_partition_is_read_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(
+                workspace, "", 0, system_store_writable=False)
+            result = subprocess.run(
+                ["bash", str(JOURNEY_RUNNER), "--flow", "terminal-success", "--arm-translation"],
+                cwd=workspace, env=environment, capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertIn("bind-mounting a writable copy (no reboot).", result.stdout)
+            calls = (workspace / "adb.calls").read_text()
+            self.assertIn(
+                f"push {workspace}/fixtures/mercurio/journey-tls/journey-ca.pem /system/etc/security/cacerts/",
+                calls,
+            )
+            self.assertIn(
+                "shell nsenter --mount=/proc/1/ns/mnt -- mount --bind /data/local/tmp/journey-cacerts /system/etc/security/cacerts",
+                calls,
+            )
+            self.assertIn("Single journey passed: terminal-success.", result.stdout)
+
+    def test_journey_runner_keeps_the_trust_store_failure_strict_without_the_arm_translation_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            environment, _ = self._prepare_journey_runner_fixture(
+                workspace, "", 0, system_store_writable=False)
+            result = subprocess.run(
+                ["bash", str(JOURNEY_RUNNER), "--flow", "terminal-success"],
+                cwd=workspace, env=environment, capture_output=True, text=True, timeout=120,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("did not remount writable for the TLS CA", result.stdout)
+            self.assertNotIn("bind-mounting a writable copy", result.stdout)
+            self.assertNotIn("Single journey passed", result.stdout)
+
     def test_journey_runner_does_not_restart_the_guest_for_the_trust_store(self):
         runner = (ROOT / ".github/scripts/journey-run.sh").read_text()
         self.assertNotIn(
@@ -523,7 +564,7 @@ class TestJobs(unittest.TestCase):
                     except ProcessLookupError:
                         pass
 
-    def _prepare_journey_runner_fixture(self, workspace, fail_journey, fail_times, root_failures=0, root_works=True):
+    def _prepare_journey_runner_fixture(self, workspace, fail_journey, fail_times, root_failures=0, root_works=True, system_store_writable=True):
         gateway_pid_file = workspace / "gateway.pid"
         classpath_file = workspace / "fixtures/mercurio/runner/build/journey-classpath.txt"
         classpath_file.parent.mkdir(parents=True)
@@ -551,7 +592,8 @@ class TestJobs(unittest.TestCase):
             executable.chmod(0o755)
 
         add_executable("gradlew", "#!/usr/bin/env bash\nexit 0\n")
-        add_executable("adb", fake_adb_script(root_failures=root_failures, root_works=root_works))
+        add_executable("adb", fake_adb_script(root_failures=root_failures, root_works=root_works,
+                                              system_store_writable=system_store_writable))
         add_executable("openssl", "#!/usr/bin/env bash\nprintf 'fixture-hash\\n'\n")
         add_executable(
             "curl",

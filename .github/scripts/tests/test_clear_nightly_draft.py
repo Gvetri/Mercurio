@@ -30,6 +30,7 @@ class ClearNightlyDraftTest(unittest.TestCase):
                 f"- APK SHA-256: `{'b' * 64}`\n"
                 f"- Signing certificate SHA-256: `{(ROOT / '.github/release-certificate.sha256').read_text().strip()}`\n"
                 "- Deterministic validation: https://github.com/Gvetri/Mercurio/actions/runs/123 (attempt 1)\n"
+                "- Signed-APK smoke: https://github.com/Gvetri/Mercurio/actions/runs/456 (attempt 2)\n"
             ),
             "assets": [{"id": 10, "name": "mercurio.apk", "state": "uploaded",
                         "uploader": {"login": "github-actions[bot]", "id": 41898282},
@@ -107,11 +108,15 @@ class ClearNightlyDraftTest(unittest.TestCase):
         import runpy
         policy = runpy.run_path(str(ROOT / ".github/scripts/release-signing.py"))
         self.add_metadata()
-        body = policy["nightly_notes"](self.metadata)
+        body = policy["nightly_notes"]({**self.metadata, "smoke_run_id": 456, "smoke_run_attempt": 2})
         self.assertEqual(self.release["body"], body)
         expected = {key: value for key, value in self.metadata.items()
                     if key not in {"native_abis", "signing_run_id", "signing_run_attempt"}}
         self.assertEqual(expected, policy["parse_nightly_notes"](body))
+        legacy = body.replace(
+            "- Signed-APK smoke: https://github.com/Gvetri/Mercurio/actions/runs/456 (attempt 2)\n", "")
+        self.assertEqual(expected, policy["parse_nightly_notes"](legacy),
+                         "a retained draft written before the smoke link must still parse")
         for malformed in (None, body + "extra", body.replace("7002", "invalid")):
             with self.subTest(body=malformed):
                 with self.assertRaises(policy["ReleaseError"]):
