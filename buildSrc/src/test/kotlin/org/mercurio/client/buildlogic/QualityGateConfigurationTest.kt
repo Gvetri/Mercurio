@@ -1432,9 +1432,9 @@ class QualityGateConfigurationTest {
 
         assertTrue("The workflow must define a UI path detection job.", workflow.contains("  ui_paths:\n    name: ui-paths\n"))
         assertTrue(
-            "The UI path job must run on the same pull-request guard as the fork guard.",
+            "The UI path job must run on the pull-request guard and on a main push.",
             uiPathsJob.contains(
-                "    if: \${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}",
+                "    if: \${{ always() && (github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro'))) }}",
             ),
         )
         assertTrue(
@@ -1480,7 +1480,7 @@ class QualityGateConfigurationTest {
             workflow.contains(
                 "[ \"\$EVENT_DRAFT\" != true ] && [[ \"\${EVENT_LABELS:-}\" == *'\"run-maestro\"'* || \"\$ui_paths_decision\" == true ]]; then",
             ) &&
-                workflow.contains("UI path detection must report true or false for this run"),
+                workflow.contains("require_decision 'UI path detection' \"\$ui_paths_decision\""),
         )
     }
 
@@ -1499,7 +1499,7 @@ class QualityGateConfigurationTest {
             "The docs-only classification must enumerate every changed file with the pinned paths-filter revision.",
             Regex("uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad")
                 .findAll(uiPathsJob)
-                .count() == 2 &&
+                .count() == 3 &&
                 uiPathsJob.contains("          list-files: json\n") &&
                 uiPathsJob.contains("            all:\n              - '**'\n"),
         )
@@ -1547,7 +1547,7 @@ class QualityGateConfigurationTest {
         assertTrue(
             "The aggregate must read the docs-only decision and fail closed on an unreadable one.",
             aggregate.contains("DOCS_ONLY_CHANGED: \${{ needs.ui_paths.outputs.docs_only_changed }}") &&
-                aggregate.contains("Docs-only detection must report true or false for this run"),
+                aggregate.contains("require_decision 'Docs-only detection' \"\$docs_only_decision\""),
         )
         assertTrue(
             "The aggregate must expect the heavy lanes to skip exactly on an unlabeled docs-only head.",
@@ -1750,17 +1750,41 @@ class QualityGateConfigurationTest {
             Regex("./gradlew -p buildSrc test").findAll(architectureJob).count(),
         )
         assertTrue(
-            "The buildsrc-contracts job must run on schedule, dispatch, main pushes, and ready in-repository pull requests that change CI or build logic.",
+            "The buildsrc-contracts job must run on schedule and dispatch, and on a main push or ready in-repository pull request that changes CI or build logic.",
             buildSrcContractsJob.contains("    name: buildsrc-contracts\n") &&
                 buildSrcContractsJob.contains("    needs: [ui_paths]\n") &&
                 buildSrcContractsJob.contains("github.event_name == 'schedule'") &&
                 buildSrcContractsJob.contains("github.event_name == 'workflow_dispatch'") &&
-                buildSrcContractsJob.contains("github.event_name == 'push'") &&
+                buildSrcContractsJob.contains(
+                    "(github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))",
+                ) &&
                 buildSrcContractsJob.contains("!github.event.pull_request.draft") &&
                 buildSrcContractsJob.contains("!github.event.pull_request.head.repo.fork") &&
                 buildSrcContractsJob.contains("needs.ui_paths.outputs.ci_files_changed == 'true'") &&
                 buildSrcContractsJob.contains("needs.ui_paths.outputs.build_logic_changed == 'true'"),
         )
+        assertTrue(
+            "The changed-file detector must gain a push mode that reads the pushed range and fails closed to the contracts check.",
+            workflow.contains("      - name: Detect the changed files of the push\n") &&
+                workflow.contains("          base: \${{ github.event.before }}\n") &&
+                workflow.contains("          ref: \${{ github.sha }}\n") &&
+                workflow.contains("        continue-on-error: true\n") &&
+                workflow.contains("failing closed to running the buildSrc contracts check"),
+        )
+        assertTrue(
+            "The aggregate must route a main push's contracts lane on the two changed-file answers.",
+            workflow.contains("if [ \"\$EVENT_NAME\" = push ]; then") &&
+                workflow.contains("if [ \"\$ci_files_decision\" = true ] || [ \"\$build_logic_decision\" = true ]; then"),
+        )
+        listOf(
+            repositoryRoot.resolve("docs/quality-gates.md").readText(),
+            repositoryRoot.resolve("docs/protected-main-workflow.md").readText(),
+        ).forEach { document ->
+            assertTrue(
+                "The gate documentation must describe the push rule.",
+                document.contains("app-only push"),
+            )
+        }
         assertTrue(
             "The buildsrc-contracts job must keep a timeout above the self-test suite, " +
                 "so a green suite is not cancelled at the ceiling.",

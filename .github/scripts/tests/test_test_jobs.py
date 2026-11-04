@@ -127,7 +127,7 @@ class TestJobs(unittest.TestCase):
         self.assertIn("      - maestro_journeys", aggregate)
         for job in ("unit_tests", "compose_test"):
             block = workflow.split(f"  {job}:\n", 1)[1]
-            block = block.split("\n  fixture_descriptor:" if job == "unit_tests" else "\n  api24_instrumentation:", 1)[0]
+            block = block.split("\n  fixture_descriptor:" if job == "unit_tests" else "\n  conformance:", 1)[0]
             self.assertNotIn("continue-on-error", block)
             self.assertIn("actions/upload-artifact@", block)
             report_id = "redact_jvm_reports" if job == "unit_tests" else "redact_compose_reports"
@@ -1221,11 +1221,14 @@ redact_file "$runner_output" || status=$?
                 expected["BUILDSRC_CONTRACTS"] = "skipped"
                 expected["COVERAGE_MUTATION"] = "skipped"
             else:
-                for job in ("COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD", "UI_PATHS"):
+                for job in ("COMMIT_MESSAGE", "DRAFT_VALIDATION", "FORK_GUARD"):
                     expected[job] = "skipped"
                 if event == "push":
                     expected["API24_INSTRUMENTATION"] = "skipped"
                     expected["MAESTRO_JOURNEYS"] = "skipped"
+                    expected["BUILDSRC_CONTRACTS"] = "skipped"
+                else:
+                    expected["UI_PATHS"] = "skipped"
             env = {**os.environ, **{f"{job}_RESULT": outcome for job, outcome in expected.items()}}
             env["EVENT_NAME"] = event
             if event == "pull_request":
@@ -1233,6 +1236,7 @@ redact_file "$runner_output" || status=$?
                 env["EVENT_FORK"] = "false"
                 env["EVENT_DRAFT"] = "false"
                 env["EVENT_LABELS"] = "[]"
+            if event in ("pull_request", "push"):
                 env["UI_PATHS_CHANGED"] = "false"
                 env["DOCS_ONLY_CHANGED"] = "false"
                 env["DEPENDENCY_ONLY_CHANGED"] = "false"
@@ -1331,6 +1335,71 @@ redact_file "$runner_output" || status=$?
         ):
             with self.subTest(routing="unreadable decision", decision=decision, value=value):
                 self.assertNotEqual(0, run({**base, decision: value}).returncode)
+
+    def test_aggregate_routes_app_only_and_control_plane_main_pushes(self):
+        block = WORKFLOW.read_text().split(
+            "      - name: Verify declared checks and results", 1
+        )[1].split("        run: |\n", 1)[1]
+        script = textwrap.dedent(block)
+        core = [
+            "FORMATTING", "STATIC_ANALYSIS", "DETEKT", "UNIT_TESTS", "FIXTURE_DESCRIPTOR",
+            "FIXTURE_LIFECYCLE", "FIXTURE_CONTRACT", "ANDROID_BUILD",
+            "ARCHITECTURE_CHECK", "COMPOSE_TEST", "CONFORMANCE",
+        ]
+        base = {
+            **os.environ,
+            **{f"{job}_RESULT": "success" for job in core},
+            "EVENT_NAME": "push",
+            "COMMIT_MESSAGE_RESULT": "skipped",
+            "DRAFT_VALIDATION_RESULT": "skipped",
+            "FORK_GUARD_RESULT": "skipped",
+            "UI_PATHS_RESULT": "success",
+            "UI_PATHS_CHANGED": "false",
+            "DOCS_ONLY_CHANGED": "false",
+            "DEPENDENCY_ONLY_CHANGED": "false",
+            "COVERAGE_MUTATION_RESULT": "success",
+            "API24_INSTRUMENTATION_RESULT": "skipped",
+            "MAESTRO_JOURNEYS_RESULT": "skipped",
+        }
+        app_only = {
+            **base,
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "false",
+            "BUILDSRC_CONTRACTS_RESULT": "skipped",
+        }
+        control_plane = {
+            **base,
+            "CI_FILES_CHANGED": "true",
+            "BUILD_LOGIC_CHANGED": "false",
+            "BUILDSRC_CONTRACTS_RESULT": "success",
+        }
+        build_logic = {
+            **base,
+            "CI_FILES_CHANGED": "false",
+            "BUILD_LOGIC_CHANGED": "true",
+            "BUILDSRC_CONTRACTS_RESULT": "success",
+        }
+
+        def run(env):
+            return subprocess.run(["bash", "-c", script], cwd=ROOT, env=env,
+                                  capture_output=True, text=True, timeout=10)
+
+        for name, env in (("app-only", app_only), ("control-plane", control_plane), ("build-logic", build_logic)):
+            with self.subTest(push=name):
+                result = run(env)
+                self.assertEqual(0, result.returncode, result.stderr)
+        for name, env, drift in (
+            ("app-only", app_only, {"BUILDSRC_CONTRACTS_RESULT": "success"}),
+            ("app-only", app_only, {"CI_FILES_CHANGED": "true"}),
+            ("control-plane", control_plane, {"BUILDSRC_CONTRACTS_RESULT": "skipped"}),
+            ("build-logic", build_logic, {"BUILDSRC_CONTRACTS_RESULT": "skipped"}),
+            ("control-plane", control_plane, {"CI_FILES_CHANGED": "yes"}),
+            ("build-logic", build_logic, {"BUILD_LOGIC_CHANGED": ""}),
+            ("app-only", app_only, {"UI_PATHS_RESULT": "skipped"}),
+            ("app-only", app_only, {"API24_INSTRUMENTATION_RESULT": "success"}),
+        ):
+            with self.subTest(push=name, drift=drift):
+                self.assertNotEqual(0, run({**env, **drift}).returncode)
 
     def test_aggregate_routes_draft_ready_and_external_fork_pull_requests(self):
         block = WORKFLOW.read_text().split(
