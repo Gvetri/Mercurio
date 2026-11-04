@@ -71,7 +71,7 @@ class RunReconciliationRecoveryTest {
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.hasUnresolvedSubmission == true &&
-                        it.sessionList?.openedSession?.isSending == false
+                        it.sessionList.openedSession.isSending == false
                 }
                 assertEquals(1, gateway.runRequests.size)
             } finally {
@@ -119,10 +119,10 @@ class RunReconciliationRecoveryTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        it.sessionList?.openedSession?.sendErrorCategory ==
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED &&
+                        it.sessionList.openedSession.sendErrorCategory ==
                         MessageSendErrorCategory.GATEWAY_REQUEST_FAILED &&
-                        it.sessionList?.openedSession?.composerText == "Failed first attempt" &&
+                        it.sessionList.openedSession.composerText == "Failed first attempt" &&
                         gateway.statusRequests.isNotEmpty()
                 }
 
@@ -131,9 +131,9 @@ class RunReconciliationRecoveryTest {
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRun?.id == terminalRun.id &&
-                        it.sessionList?.openedSession?.sendErrorCategory ==
+                        it.sessionList.openedSession.sendErrorCategory ==
                         MessageSendErrorCategory.GATEWAY_REQUEST_FAILED &&
-                        it.sessionList?.openedSession?.composerText == "Failed first attempt"
+                        it.sessionList.openedSession.composerText == "Failed first attempt"
                 }
                 assertEquals(1, gateway.runRequests.size)
             } finally {

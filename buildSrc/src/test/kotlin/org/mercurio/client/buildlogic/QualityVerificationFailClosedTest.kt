@@ -203,7 +203,7 @@ class QualityVerificationFailClosedTest {
     }
 
     @Test
-    fun detekt_comment_over_private_function_fails_the_real_analysis() {
+    fun detekt_documentation_over_private_function_fails_the_real_analysis() {
         assertNewFixtureFails(
             relativePath = "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/DetektCommentFixture.kt",
             content =
@@ -214,12 +214,12 @@ class QualityVerificationFailClosedTest {
                     "private fun detektFixturePrivateHelper(input: Int): Int = input + 1\n\n" +
                     "internal fun detektFixtureUseHelper(): Int = detektFixturePrivateHelper(1)\n",
             tasks = listOf(":feature:entry:domain:detektMain"),
-            expected = "[CommentOverPrivateFunction]",
+            expected = "[DocumentationOverPrivateFunction]",
         )
     }
 
     @Test
-    fun detekt_comment_over_private_property_fails_the_real_analysis() {
+    fun detekt_documentation_over_private_property_fails_the_real_analysis() {
         assertNewFixtureFails(
             relativePath = "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/DetektFixtureCommentHolder.kt",
             content =
@@ -232,7 +232,7 @@ class QualityVerificationFailClosedTest {
                     "    fun read(): Int = detektFixturePrivateProperty\n" +
                     "}\n",
             tasks = listOf(":feature:entry:domain:detektMain"),
-            expected = "[CommentOverPrivateProperty]",
+            expected = "[DocumentationOverPrivateProperty]",
         )
     }
 

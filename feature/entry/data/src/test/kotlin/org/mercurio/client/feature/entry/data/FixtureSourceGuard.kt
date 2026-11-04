@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.data
 
 import java.io.File
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.TreeMap
 
 internal val SESSION_OPEN_ENVELOPE =
@@ -26,7 +27,10 @@ internal fun digests(
 ) = TreeMap(
     paths.associate { path ->
         path.relativeTo(repositoryRoot).path to
-            MessageDigest.getInstance("SHA-256").digest(path.readBytes()).joinToString("") { "%02x".format(it) }
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest(path.readBytes())
+                .joinToString("") { "%02x".format(Locale.ROOT, it) }
     },
 )
 

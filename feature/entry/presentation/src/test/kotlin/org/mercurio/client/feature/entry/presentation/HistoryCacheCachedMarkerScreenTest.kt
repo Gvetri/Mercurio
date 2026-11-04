@@ -9,6 +9,7 @@ import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -175,9 +176,9 @@ class HistoryCacheCachedMarkerScreenTest {
     private fun cachedRows(count: Int = 20): List<SessionItemUiState> =
         (1..count).map { index ->
             SessionItemUiState(
-                id = SessionId("row-%02d".format(index)),
-                title = "Row Session %02d".format(index),
-                preview = "Preview %02d".format(index),
+                id = SessionId("row-%02d".format(Locale.ROOT, index)),
+                title = "Row Session %02d".format(Locale.ROOT, index),
+                preview = "Preview %02d".format(Locale.ROOT, index),
                 pinned = false,
             )
         }

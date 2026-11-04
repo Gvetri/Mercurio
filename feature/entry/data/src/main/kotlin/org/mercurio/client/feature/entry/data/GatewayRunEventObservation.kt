@@ -55,24 +55,19 @@ internal class GatewayRunEventObservation(
         return object : Iterator<RunEvent> {
             override fun hasNext(): Boolean {
                 if (closed) return false
-                val available =
-                    try {
-                        events.hasNext()
-                    } catch (error: GatewayException) {
-                        close()
-                        throw error
-                    } catch (expectedError: Exception) {
-                        close()
-                        throw mapTransportFailure(expectedError)
-                    }
+                val available = guarded { events.hasNext() }
                 if (!available) close()
                 return available
             }
 
             override fun next(): RunEvent {
                 if (!hasNext()) throw NoSuchElementException()
-                return try {
-                    events.next()
+                return guarded { events.next() }
+            }
+
+            private fun <T> guarded(block: () -> T): T =
+                try {
+                    block()
                 } catch (error: GatewayException) {
                     close()
                     throw error
@@ -80,7 +75,6 @@ internal class GatewayRunEventObservation(
                     close()
                     throw mapTransportFailure(expectedError)
                 }
-            }
         }
     }
 

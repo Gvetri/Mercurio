@@ -205,10 +205,10 @@ deliberate-violation evidence of every rule.
 
 detekt is pinned in `gradle/libs.versions.toml` and every Kotlin module applies it. The root build
 script declares the strict policy once: `config/detekt/detekt.yml` is layered on detekt's default
-config (`buildUponDefaultConfig`), `build.maxIssues: 0` fails the analysis on any reported finding,
-and the rules the gate relies on are enabled explicitly, so a detekt upgrade cannot quietly turn one
-of them off — `ReturnCount`, `ElseCaseInsteadOfExhaustiveWhen`, `CommentOverPrivateFunction`, and
-`CommentOverPrivateProperty`. The configuration file carries no comments; its exemptions are
+config (`buildUponDefaultConfig`), the analysis fails on any reported finding, and the rules the gate
+relies on are enabled explicitly, so a detekt upgrade cannot quietly turn one of them off —
+`ReturnCount`, `ElseCaseInsteadOfExhaustiveWhen`, `DocumentationOverPrivateFunction`, and
+`DocumentationOverPrivateProperty`. The configuration file carries no comments; its exemptions are
 deliberate, each with its reason here:
 
 - `FunctionNaming` keeps `functionPattern: '[a-zA-Z][a-zA-Z0-9]*'`, because Compose functions are
@@ -236,7 +236,7 @@ per-module tasks exist but stay disabled, and the aggregate never runs them.
   source-set-specific `baseline-*.xml` files are gone, so a finding can never be absorbed silently
   again.
 
-A finding must be fixed, not baselined: there is no committed baseline, and `maxIssues: 0` fails the
+A finding must be fixed, not baselined: there is no committed baseline, and the analysis fails the
 build on every reported finding.
 
 The detekt contracts are self-tested as well: `QualityGateConfigurationTest` pins the workflow job,

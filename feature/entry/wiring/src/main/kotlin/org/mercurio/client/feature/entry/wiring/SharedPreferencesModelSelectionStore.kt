@@ -7,6 +7,7 @@ import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.mercurio.client.feature.entry.domain.ModelSelectionStore
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Persists the per-endpoint Run model override, favorite model IDs, and recently used
@@ -150,6 +151,6 @@ private object ModelSelectionKeys {
         return MessageDigest
             .getInstance("SHA-256")
             .digest(canonicalEndpoint.toByteArray(StandardCharsets.UTF_8))
-            .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+            .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
     }
 }
