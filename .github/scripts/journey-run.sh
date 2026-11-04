@@ -65,8 +65,51 @@ journeys=(
     model-catalog-row-mismatch
 )
 
-shard_index="${1:-}"
-shard_total="${2:-}"
+flow_selection=""
+shard_index=""
+shard_total=""
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --apk)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                log "--apk requires a non-empty APK path."
+                exit 1
+            fi
+            apk="$2"
+            shift 2
+            ;;
+        --flow)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                log "--flow requires a non-empty journey name."
+                exit 1
+            fi
+            flow_selection="$2"
+            shift 2
+            ;;
+        *)
+            if [[ "$1" == -* ]]; then
+                log "Unknown option: $1. Pass --apk <path>, --flow <journey>, or a shard index and total."
+                exit 1
+            fi
+            if [ -z "$shard_index" ]; then
+                shard_index="$1"
+            elif [ -z "$shard_total" ]; then
+                shard_total="$1"
+            else
+                log "Too many positional arguments: $*."
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -n "$flow_selection" && ( -n "$shard_index" || -n "$shard_total" ) ]]; then
+    log "A single flow selection cannot be combined with a shard selection."
+    exit 1
+fi
+
 if [[ -n "$shard_index" || -n "$shard_total" ]]; then
     if [[ -z "$shard_index" || -z "$shard_total" ]] \
         || ! [[ "$shard_index" =~ ^[1-9][0-9]*$ ]] \
@@ -77,6 +120,36 @@ if [[ -n "$shard_index" || -n "$shard_total" ]]; then
         exit 1
     fi
     log "Running deterministic journey shard ${shard_index} of ${shard_total}."
+fi
+
+if [[ -n "$flow_selection" ]]; then
+    flow_known=false
+    for journey in "${journeys[@]}"; do
+        if [ "$journey" = "$flow_selection" ]; then
+            flow_known=true
+        fi
+    done
+    if [ "$flow_known" != true ]; then
+        log "Unknown journey flow: $flow_selection. Choose one pinned journey: ${journeys[*]}."
+        exit 1
+    fi
+    if [ ! -f "$flow_dir/$flow_selection.yaml" ]; then
+        log "The journey flow file is missing: $flow_dir/$flow_selection.yaml."
+        exit 1
+    fi
+fi
+
+if [ ! -f "$apk" ]; then
+    log "The APK to install is missing: $apk."
+    exit 1
+fi
+if [ ! -r "$apk" ]; then
+    log "The APK to install is not readable: $apk."
+    exit 1
+fi
+
+if [[ -n "$flow_selection" ]]; then
+    log "Running the single journey $flow_selection against $apk."
 fi
 
 gateway_pid=""
@@ -179,6 +252,9 @@ classpath="$(cat "$classpath_file")"
 
 for journey_slot in "${!journeys[@]}"; do
     journey="${journeys[$journey_slot]}"
+    if [[ -n "$flow_selection" && "$journey" != "$flow_selection" ]]; then
+        continue
+    fi
     if [[ -n "$shard_total" ]] && [ $((journey_slot % shard_total)) -ne $((shard_index - 1)) ]; then
         continue
     fi
@@ -286,4 +362,8 @@ for journey_slot in "${!journeys[@]}"; do
     done
 done
 
-log "All deterministic journeys passed."
+if [[ -n "$flow_selection" ]]; then
+    log "Single journey passed: $flow_selection."
+else
+    log "All deterministic journeys passed."
+fi
