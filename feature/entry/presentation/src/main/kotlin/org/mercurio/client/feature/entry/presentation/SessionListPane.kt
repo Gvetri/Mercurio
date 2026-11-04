@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +50,14 @@ internal fun SessionListPane(
         SessionListPaneHeader(state = state, onEvent = onEvent)
         notice?.let { category ->
             InboundLinkNoticeText(notice = category)
+        }
+        if (notice == InboundLinkNoticeCategory.SHARE_PICK_SESSION) {
+            TextButton(
+                onClick = { onEvent(EntryUiEvent.SharedTextDismissed) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) {
+                Text(text = stringResource(R.string.shared_text_discard))
+            }
         }
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
