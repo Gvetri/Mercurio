@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":feature:entry:domain"))
     implementation(project(":feature:entry:presentation"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.sentry.android.core)
 

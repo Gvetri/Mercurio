@@ -35,26 +35,31 @@ class AndroidKeyStoreGatewayCredentialStore(
 
     override fun save(credential: String) {
         synchronized(storageLock) {
-            val encryptedRecord =
-                runCatching {
-                    AesGcmGatewayCredentialCipher(::loadOrCreateKey).encrypt(credential).encode()
-                }.getOrElse { error ->
-                    throw GatewayConnectionPersistenceException(error)
-                }
-            val stream =
-                try {
-                    atomicFile.startWrite()
-                } catch (error: IOException) {
-                    throw GatewayConnectionPersistenceException(error)
-                }
+            writeRecord(encryptedRecordOf(credential))
+        }
+    }
+
+    private fun encryptedRecordOf(credential: String): ByteArray =
+        runCatching {
+            AesGcmGatewayCredentialCipher(::loadOrCreateKey).encrypt(credential).encode()
+        }.getOrElse { error ->
+            throw GatewayConnectionPersistenceException(error)
+        }
+
+    private fun writeRecord(encryptedRecord: ByteArray) {
+        val stream =
             try {
-                stream.write(encryptedRecord)
-                stream.flush()
-                atomicFile.finishWrite(stream)
+                atomicFile.startWrite()
             } catch (error: IOException) {
-                runCatching { atomicFile.failWrite(stream) }
                 throw GatewayConnectionPersistenceException(error)
             }
+        try {
+            stream.write(encryptedRecord)
+            stream.flush()
+            atomicFile.finishWrite(stream)
+        } catch (error: IOException) {
+            runCatching { atomicFile.failWrite(stream) }
+            throw GatewayConnectionPersistenceException(error)
         }
     }
 

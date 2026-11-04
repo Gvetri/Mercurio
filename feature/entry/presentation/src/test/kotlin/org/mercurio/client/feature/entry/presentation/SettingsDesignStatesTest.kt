@@ -24,8 +24,9 @@ import org.robolectric.annotation.GraphicsMode
  * The approved Settings design's shipped states, captured at the design's review size. Each capture
  * is compared with the design page by the reviewer checklist, not by a pixel diff across renderers.
  *
- * Security, Appearance, App updates, and the error-reporting consent row wait on their own
- * capabilities, so their frames are absent here; #273 ships the sections whose capability exists.
+ * Appearance, App updates, and the error-reporting consent row wait on their own capabilities, so
+ * their frames are absent here. #273 ships the sections whose capability exists, and #268 adds the
+ * Security frames with the app-lock capability they draw.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-notnight")
@@ -51,6 +52,27 @@ class SettingsDesignStatesTest {
     @Test
     @Config(qualifiers = "w360dp-h800dp-night")
     fun settings_03_connection_menu_dark() = captureSettings(dark = true, beforeCapture = { openConnectionMenu() })
+
+    @Test
+    fun settings_06_security_no_enrolment_light() = captureSettings(dark = false, state = security(unavailable))
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_06_security_no_enrolment_dark() = captureSettings(dark = true, state = security(unavailable))
+
+    @Test
+    fun settings_07_security_off_light() = captureSettings(dark = false, state = security(gateOff))
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_07_security_off_dark() = captureSettings(dark = true, state = security(gateOff))
+
+    @Test
+    fun settings_08_security_on_light() = captureSettings(dark = false, state = security(gateOn))
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_08_security_on_dark() = captureSettings(dark = true, state = security(gateOn))
 
     @Test
     fun settings_10_notifications_on_light() = captureSettings(dark = false, state = notificationsOnState())
@@ -115,9 +137,18 @@ class SettingsDesignStatesTest {
 
     private fun notificationsOnState(): EntryUiState = settingsState(notificationsEnabled = true)
 
+    private val unavailable = AppLockUiState(isAvailable = false)
+
+    private val gateOff = AppLockUiState(isAvailable = true)
+
+    private val gateOn = AppLockUiState(isEnabled = true, isAvailable = true)
+
+    private fun security(appLock: AppLockUiState): EntryUiState = settingsState(appLock = appLock)
+
     private fun settingsState(
         notificationsEnabled: Boolean = false,
         autoLoadImages: Boolean = true,
+        appLock: AppLockUiState = AppLockUiState(isAvailable = true),
     ): EntryUiState =
         EntryUiState(
             title = UiText.Resource(R.string.entry_title_connected),
@@ -129,6 +160,7 @@ class SettingsDesignStatesTest {
             buildNumber = 412L,
             installSource = InstallSource.GOOGLE_PLAY,
             autoLoadImages = autoLoadImages,
+            appLock = appLock,
             runStatusNotifications = RunStatusNotificationsUiState(enabled = notificationsEnabled),
             sessionList =
                 SessionListUiState(

@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -51,47 +48,59 @@ fun EntryScreen(
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)),
         ) {
-            val sessionList = state.sessionList
-            if (state.isSettingsOpen) {
-                SettingsBackHandling(state, onEvent)
-            }
-            if (state.isErrorReportingConsentRequired) {
-                ErrorReportingConsentContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
-            } else if (state.localDiagnostics.isOpen) {
-                LocalDiagnosticsContent(
-                    state = state.localDiagnostics,
-                    onEvent = onEvent,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else if (state.isSettingsOpen && !state.isChangingCredential) {
-                SettingsContent(
-                    state = state,
-                    onEvent = onEvent,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else if (sessionList != null && !state.isChangingCredential) {
-                SessionShell(
-                    state = sessionList,
-                    onEvent = onEvent,
-                    modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.s),
-                    notice = state.inboundLinkNotice,
-                )
+            if (state.appLock.isUnlockRequired) {
+                AppLockContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
             } else {
-                ConnectionContent(state = state, onEvent = onEvent)
-            }
-            if (state.isRemoveConfirmationOpen) {
-                RemoveGatewayConnectionConfirmation(onEvent = onEvent)
-            }
-            if (state.isClearHistoryCacheConfirmationOpen) {
-                ClearHistoryCacheConfirmation(onEvent = onEvent)
-            }
-            if (sessionList?.openedSession?.isDiscardUnresolvedSendConfirmationOpen == true) {
-                UnresolvedSendDiscardConfirmation(onEvent = onEvent)
-            }
-            sessionList?.pendingSessionDelete()?.let { pending ->
-                DeleteSessionConfirmation(pending = pending, onEvent = onEvent)
+                EntryContent(state = state, onEvent = onEvent)
             }
         }
+    }
+}
+
+@Composable
+private fun EntryContent(
+    state: EntryUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val sessionList = state.sessionList
+    if (state.isSettingsOpen) {
+        SettingsBackHandling(state, onEvent)
+    }
+    if (state.isErrorReportingConsentRequired) {
+        ErrorReportingConsentContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
+    } else if (state.localDiagnostics.isOpen) {
+        LocalDiagnosticsContent(
+            state = state.localDiagnostics,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxSize(),
+        )
+    } else if (state.isSettingsOpen && !state.isChangingCredential) {
+        SettingsContent(
+            state = state,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxSize(),
+        )
+    } else if (sessionList != null && !state.isChangingCredential) {
+        SessionShell(
+            state = sessionList,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxSize().padding(LocalHermesDesignTokens.current.spacing.s),
+            notice = state.inboundLinkNotice,
+        )
+    } else {
+        ConnectionContent(state = state, onEvent = onEvent)
+    }
+    if (state.isRemoveConfirmationOpen) {
+        RemoveGatewayConnectionConfirmation(onEvent = onEvent)
+    }
+    if (state.isClearHistoryCacheConfirmationOpen) {
+        ClearHistoryCacheConfirmation(onEvent = onEvent)
+    }
+    if (sessionList?.openedSession?.isDiscardUnresolvedSendConfirmationOpen == true) {
+        UnresolvedSendDiscardConfirmation(onEvent = onEvent)
+    }
+    sessionList?.pendingSessionDelete()?.let { pending ->
+        DeleteSessionConfirmation(pending = pending, onEvent = onEvent)
     }
 }
 
@@ -100,31 +109,49 @@ private fun ConnectionContent(
     state: EntryUiState,
     onEvent: (EntryUiEvent) -> Unit,
 ) {
-    val showConnectionForm = state.isChangingCredential || (state.connectionSetupRequested && !state.isConnected)
+    val gatewayScreen =
+        state.isChangingCredential ||
+            state.connectionSetupRequested ||
+            state.isConnected ||
+            (state.isGatewayConnectionConfigured && state.errorCategory != null)
+    if (gatewayScreen) {
+        GatewayConnectionScreen(
+            state = state,
+            onEvent = onEvent,
+            modifier = Modifier.fillMaxSize().imePadding(),
+        )
+    } else {
+        ConnectionLanding(state = state, onEvent = onEvent)
+    }
+}
+
+@Composable
+private fun ConnectionLanding(
+    state: EntryUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val spacing = LocalHermesDesignTokens.current.spacing
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
-                .then(if (showConnectionForm) Modifier.imePadding() else Modifier)
                 .verticalScroll(rememberScrollState())
-                .padding(LocalHermesDesignTokens.current.spacing.xl),
-        verticalArrangement = if (showConnectionForm) Arrangement.Top else Arrangement.Center,
-        horizontalAlignment = if (showConnectionForm) Alignment.Start else Alignment.CenterHorizontally,
+                .padding(spacing.xl),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (!showConnectionForm) {
-            Text(
-                text = stringResource(R.string.brand_name),
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.semantics { heading() },
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-        }
+        Text(
+            text = stringResource(R.string.brand_name),
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { heading() },
+        )
+        Spacer(modifier = Modifier.height(24.dp))
         ConnectionInboundLinkNotice(notice = state.inboundLinkNotice)
         Text(
             text = state.title.resolve(),
             style = MaterialTheme.typography.headlineSmall,
-            textAlign = if (showConnectionForm) TextAlign.Start else TextAlign.Center,
+            textAlign = TextAlign.Center,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.height(12.dp))
@@ -132,55 +159,19 @@ private fun ConnectionContent(
             text = state.supportingText.resolve(),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = if (showConnectionForm) TextAlign.Start else TextAlign.Center,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(24.dp))
-        when {
-            state.isChangingCredential -> GatewayConnectionForm(state = state, onEvent = onEvent)
-            state.isConnected -> ConnectedGatewayContent(onEvent)
-            state.connectionSetupRequested ->
-                GatewayConnectionForm(
-                    state = state,
-                    onEvent = onEvent,
-                )
-            else ->
-                Button(
-                    onClick = { onEvent(EntryUiEvent.AddGatewayConnectionClicked) },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp),
-                ) {
-                    Text(text = state.actionLabel.resolve())
-                }
+        Button(
+            onClick = { onEvent(EntryUiEvent.AddGatewayConnectionClicked) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+        ) {
+            Text(text = state.actionLabel.resolve())
         }
-    }
-}
-
-@Composable
-private fun ConnectedGatewayContent(onEvent: (EntryUiEvent) -> Unit) {
-    Text(
-        text = stringResource(R.string.entry_connected_to_gateway),
-        style = MaterialTheme.typography.titleMedium,
-        modifier =
-            Modifier.semantics {
-                liveRegion = LiveRegionMode.Polite
-            },
-    )
-    Spacer(modifier = Modifier.height(16.dp))
-    OutlinedButton(
-        onClick = { onEvent(EntryUiEvent.ChangeGatewayCredentialClicked) },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-    ) {
-        Text(text = stringResource(R.string.action_change_credential))
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-    OutlinedButton(
-        onClick = { onEvent(EntryUiEvent.RemoveGatewayConnectionClicked) },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-    ) {
-        Text(text = stringResource(R.string.action_remove_connection))
     }
 }
 

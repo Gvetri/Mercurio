@@ -100,7 +100,7 @@ class RunReconciliationTerminalPollTest {
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                        it.sessionList?.openedSession?.session?.id == session.id
+                        it.sessionList.openedSession.session.id == session.id
                 }
                 awaitReconciliationCondition { gateway.statusRequests.size >= 2 }
 

@@ -13,6 +13,8 @@ import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
+import org.mercurio.client.feature.entry.domain.AppLockEnrolment
+import org.mercurio.client.feature.entry.domain.AppLockSettingsStore
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
@@ -48,9 +50,20 @@ import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface EntryUiEvent {
+    sealed interface Intake : EntryUiEvent
+
     data class InboundUri(
         val rawUri: String?,
-    ) : EntryUiEvent
+    ) : Intake
+
+    data class SharedText(
+        val mimeType: String?,
+        val text: String?,
+        val hasStream: Boolean,
+        val isMultiple: Boolean,
+    ) : Intake
+
+    data object SharedTextDismissed : Intake
 
     sealed interface Connection : EntryUiEvent
 
@@ -59,6 +72,8 @@ sealed interface EntryUiEvent {
     data object ChangeGatewayCredentialClicked : Connection
 
     data object CancelGatewayCredentialChangeClicked : Connection
+
+    data object CloseGatewayConnectionSetupClicked : Connection
 
     data class EndpointChanged(
         val value: String,
@@ -190,6 +205,16 @@ sealed interface EntryUiEvent {
         val favorite: Boolean,
     ) : ModelPicker
 
+    sealed interface AppLock : EntryUiEvent
+
+    data object AppLockToggleClicked : AppLock
+
+    data object AppUnlockRequested : AppLock
+
+    data class AppLockAuthenticationResult(
+        val authenticated: Boolean,
+    ) : AppLock
+
     sealed interface Settings : EntryUiEvent
 
     data object OpenSettingsClicked : Settings
@@ -293,8 +318,10 @@ data class EntryUiState(
     val autoLoadImages: Boolean = true,
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
+    val gatewayFacts: UiText? = null,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
     val isErrorReportingConsentRequired: Boolean = false,
+    val appLock: AppLockUiState = AppLockUiState(),
 )
 
 /**
@@ -319,6 +346,16 @@ data class LocalDiagnosticsUiState(
 }
 
 /**
+ * The device-bound parts of the app-lock gate: its persisted switch, the device's enrolment, and
+ * the request that shows the system prompt.
+ */
+data class AppLockPorts(
+    val settingsStore: AppLockSettingsStore,
+    val enrolment: AppLockEnrolment,
+    val requestUnlock: () -> Unit,
+)
+
+/**
  * The ports the Local diagnostics surface needs, grouped so one buffer collection
  * serves all of them: the recorder appends approved events, the store reports and
  * clears them, and the exporter shares a snapshot of what the buffer holds.
@@ -340,6 +377,19 @@ data class RunStatusNotificationsUiState(
     val enabled: Boolean = false,
     val explanation: RunStatusNotificationExplanation? = null,
 )
+
+/**
+ * The app-lock gate: the persisted switch, whether this device can prove the user's identity at
+ * all, and whether the current foreground visit still waits for that proof.
+ */
+data class AppLockUiState(
+    val isEnabled: Boolean = false,
+    val isAvailable: Boolean = false,
+    val isLocked: Boolean = false,
+) {
+    val isUnlockRequired: Boolean
+        get() = isEnabled && isLocked
+}
 
 enum class RunStatusNotificationExplanation(
     val messageRes: Int,
@@ -373,6 +423,7 @@ data class EntryStateHolderDependencies(
     val localDiagnostics: LocalDiagnosticsPorts? = null,
     val errorReporting: ErrorReporting? = null,
     val errorReportingConsentStore: ErrorReportingConsentStore? = null,
+    val appLock: AppLockPorts? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -403,6 +454,7 @@ class EntryStateHolder(
     internal val localDiagnostics = dependencies.localDiagnostics
     internal val errorReporting = dependencies.errorReporting
     internal val errorReportingConsentStore = dependencies.errorReportingConsentStore
+    internal val appLock = dependencies.appLock
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
 
     init {
@@ -417,12 +469,14 @@ class EntryStateHolder(
                     runStatusNotifications = restoredRunStatusNotificationState(),
                     autoLoadImages = imageLoadingSettingsStore?.loadEnabled() ?: true,
                     isErrorReportingConsentRequired = restoredErrorReportingConsentRequired(),
+                    appLock = restoredAppLockState(),
                 ),
         )
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
 
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
+    internal var credentialBeforeRotation: String? = null
 
     @Volatile
     internal var pendingRemovalJob: Job? = null
@@ -442,6 +496,7 @@ class EntryStateHolder(
     internal val mutationOwners = mutableMapOf<SessionId, SessionMutationRequest>()
     internal val runJobs = mutableMapOf<SessionId, Job>()
     internal val sessionDrafts = mutableMapOf<SessionId, String>()
+    internal var pendingSharedText: String? = null
     internal val sessionDraftRevisions = mutableMapOf<SessionId, Long>()
     internal val sessionSendErrors = mutableMapOf<SessionId, MessageSendErrorCategory>()
     internal val pendingRunDrafts = mutableMapOf<SessionId, PendingDraft>()
@@ -454,6 +509,7 @@ class EntryStateHolder(
     internal var nextComposerFocusRequestId = 0L
     internal var inboundLinkListRequestInterrupted = false
     internal var isForeground = false
+    internal var isUnlockPromptPending = false
     internal val recoveryClaims = mutableMapOf<RecoveryEntryKey, RecoveryClaim>()
     internal val recoveryHandledEntries = mutableSetOf<RecoveryEntryKey>()
     internal var recoveryLoadPending = false
@@ -486,13 +542,14 @@ class EntryStateHolder(
 
     fun onEvent(event: EntryUiEvent) {
         when (event) {
-            is EntryUiEvent.InboundUri -> handleInboundUri(event.rawUri)
+            is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
             is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
             is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
             is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
             is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
             is EntryUiEvent.Run -> dispatchRunEvent(event)
             is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
+            is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
             is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
             is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
             is EntryUiEvent.ErrorReportingConsentGranted ->
@@ -508,10 +565,12 @@ class EntryStateHolder(
             is EntryUiEvent.AddGatewayConnectionClicked -> showConnectionSetup()
             is EntryUiEvent.ChangeGatewayCredentialClicked -> showCredentialRotation()
             is EntryUiEvent.CancelGatewayCredentialChangeClicked -> cancelCredentialRotation()
+            is EntryUiEvent.CloseGatewayConnectionSetupClicked -> closeGatewayConnectionSetup()
             is EntryUiEvent.EndpointChanged -> updateEndpoint(event.value)
             is EntryUiEvent.BearerCredentialChanged -> updateBearerCredential(event.value)
-            is EntryUiEvent.VerifyGatewayConnectionClicked -> verifyConnection()
-            is EntryUiEvent.TryAgainClicked -> verifyConnection()
+            is EntryUiEvent.VerifyGatewayConnectionClicked,
+            is EntryUiEvent.TryAgainClicked,
+            -> verifyConnection()
             is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
             is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
             is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
@@ -866,6 +925,7 @@ internal fun EntryState.toUiState(): EntryUiState =
             endpoint = configuredEndpoint.orEmpty(),
             bearerCredential = configuredCredential.orEmpty(),
             isGatewayConnectionConfigured = true,
+            gatewayFacts = UiText.Resource(R.string.gateway_facts_saved),
             clientVersion = clientVersion,
             buildNumber = buildNumber,
             installSource = installSource,

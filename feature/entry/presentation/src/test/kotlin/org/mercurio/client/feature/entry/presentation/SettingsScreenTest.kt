@@ -69,11 +69,13 @@ class SettingsScreenTest {
 
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
         composeTestRule.onNodeWithText("CONNECTION").assertIsDisplayed()
+        composeTestRule.onNodeWithText("SECURITY").assertIsDisplayed()
         composeTestRule.onNodeWithText("NOTIFICATIONS").assertIsDisplayed()
         composeTestRule.onNodeWithText("MEDIA").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("DIAGNOSTICS").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("ABOUT").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Connected · gateway ready").assertIsDisplayed()
+        composeTestRule.onNodeWithText("App lock").assertIsDisplayed()
         composeTestRule.onNodeWithText("Notifications").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Load pictures automatically").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Local diagnostics").performScrollTo().assertIsDisplayed()
@@ -96,10 +98,62 @@ class SettingsScreenTest {
         }
 
         val tops =
-            listOf("CONNECTION", "NOTIFICATIONS", "MEDIA", "DIAGNOSTICS", "ABOUT").map { label ->
+            listOf("CONNECTION", "SECURITY", "NOTIFICATIONS", "MEDIA", "DIAGNOSTICS", "ABOUT").map { label ->
                 composeTestRule.onNodeWithText(label).fetchSemanticsNode().boundsInRoot.top
             }
         assertEquals(tops.sorted(), tops)
+    }
+
+    @Test
+    fun settings_security_section_offers_the_app_lock_switch() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).withAppLock(),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("App lock").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Unlocks Mercurio with your device screen lock.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("App lock").assertIsOff().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.AppLockToggleClicked), events)
+    }
+
+    @Test
+    fun settings_security_switch_is_on_when_the_gate_is_enabled() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).withAppLock(isEnabled = true),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("App lock").assertIsOn()
+    }
+
+    @Test
+    fun settings_security_row_names_the_precondition_and_stays_off_without_a_screen_lock() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).withAppLock(isAvailable = false),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Set a screen lock on this device to use app lock.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("App lock").assertIsNotEnabled().assertIsOff()
     }
 
     @Test
@@ -476,4 +530,12 @@ class SettingsScreenTest {
                     searchQuery = searchQuery,
                 ),
         )
+
+    private fun EntryUiState.withAppLock(
+        isEnabled: Boolean = false,
+        isAvailable: Boolean = true,
+    ): EntryUiState {
+        val lock = AppLockUiState(isEnabled = isEnabled, isAvailable = isAvailable)
+        return copy(appLock = lock)
+    }
 }

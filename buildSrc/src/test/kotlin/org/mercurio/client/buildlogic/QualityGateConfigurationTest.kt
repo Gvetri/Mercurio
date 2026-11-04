@@ -1186,20 +1186,18 @@ class QualityGateConfigurationTest {
         )
         assertTrue(
             "The catalog must pin the detekt plugin.",
-            catalog.contains("detekt = \"1.23.8\"") && catalog.contains("io.gitlab.arturbosch.detekt"),
+            catalog.contains("detekt = \"2.0.0-alpha.6\"") && catalog.contains("dev.detekt"),
         )
         Regex("include\\(\"([^\"]+)\"\\)").findAll(settings).map { match -> match.groupValues[1] }.toList().forEach { module ->
             val moduleScript = repositoryRoot.resolve("${module.removePrefix(":").replace(':', '/')}/build.gradle.kts").readText()
             assertTrue("Every Kotlin module must apply the pinned detekt plugin: $module", moduleScript.contains("libs.plugins.detekt"))
         }
         listOf(
-            "build:",
-            "maxIssues: 0",
             "ReturnCount:",
             "excludeGuardClauses: false",
             "ElseCaseInsteadOfExhaustiveWhen:",
-            "CommentOverPrivateFunction:",
-            "CommentOverPrivateProperty:",
+            "DocumentationOverPrivateFunction:",
+            "DocumentationOverPrivateProperty:",
         ).forEach { declaration ->
             assertTrue("The detekt configuration must declare $declaration.", configuration.contains(declaration))
         }

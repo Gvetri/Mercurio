@@ -377,7 +377,7 @@ class EntryStateHolderSessionActionsTest {
             holder.onEvent(EntryUiEvent.CreateSessionClicked)
             awaitState(holder, "the cached created Session") { state ->
                 state.sessionList?.isStale == true &&
-                    state.sessionList?.sessions?.any { session -> session.id == created.id } == true
+                    state.sessionList.sessions.any { session -> session.id == created.id } == true
             }
 
             val stale = requireNotNull(holder.uiState.value.sessionList)

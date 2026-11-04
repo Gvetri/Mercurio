@@ -9,13 +9,13 @@ name: settings
     commands:
       - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000
@@ -29,6 +29,12 @@ name: settings
     visible: "CONNECTION"
     timeout: 30000
 - takeScreenshot: settings-surface
+- assertVisible: "SECURITY"
+- assertVisible: "App lock"
+- scrollUntilVisible:
+    element:
+      text: "Notifications"
+    direction: DOWN
 - assertVisible: "Notifications"
 - scrollUntilVisible:
     element:
@@ -64,8 +70,8 @@ name: settings
 - assertVisible: "Change credential"
 - assertVisible: "Remove connection"
 - tapOn: "Change credential"
-- assertVisible: "Verify and save credential"
-- assertVisible: "The current connection stays in place until the replacement is verified and saved securely."
+- assertVisible: "Verify and save"
+- assertVisible: "Change the credential. The address stays; the old connection keeps working until the new one is saved."
 - takeScreenshot: settings-credential-rotation
 - tapOn: "Cancel"
 - assertVisible: "CONNECTION"
@@ -82,8 +88,8 @@ name: settings
 - assertVisible: "CONNECTION"
 - tapOn: "::"
 - tapOn: "Remove connection"
-- assertVisible: "Remove Gateway Connection?"
-- assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- assertVisible: "Remove connection?"
+- assertVisible: "This deletes the saved credential and the Gateway address. Your sessions stay on the Gateway."
 - takeScreenshot: settings-remove-confirmation
 - tapOn: "Cancel"
 - assertVisible: "CONNECTION"

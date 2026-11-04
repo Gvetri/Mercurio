@@ -157,7 +157,7 @@ class RunReconciliationStateHolderTest {
 
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.CANCELLED &&
-                        it.sessionList?.openedSession?.sendErrorCategory == null
+                        it.sessionList.openedSession.sendErrorCategory == null
                 }
                 assertEquals(1, gateway.runRequests.size)
             } finally {
@@ -206,7 +206,7 @@ class RunReconciliationStateHolderTest {
                 assertTrue(gateway.statusStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        it.sessionList?.openedSession?.isReconciliationInProgress == true
+                        it.sessionList.openedSession.isReconciliationInProgress == true
                 }
                 assertEquals(listOf(RunRecoveryEntry(session.id, run.id)), recoveryRegistry.load())
 
@@ -217,7 +217,7 @@ class RunReconciliationStateHolderTest {
                 gateway.releaseStatus.countDown()
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED
                 }
                 assertTrue(recoveryRegistry.load().isEmpty())
             } finally {
@@ -450,14 +450,14 @@ class RunReconciliationStateHolderTest {
                 assertTrue(gateway.statusStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isReconciliationInProgress == true &&
-                        it.sessionList?.openedSession?.activeResponse?.content == "Partial"
+                        it.sessionList.openedSession.activeResponse?.content == "Partial"
                 }
 
                 gateway.releaseStatus.countDown()
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                        it.sessionList?.openedSession?.activeResponse == null &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED
+                        it.sessionList.openedSession.activeResponse == null &&
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED
                 }
             } finally {
                 gateway.releaseStatus.countDown()

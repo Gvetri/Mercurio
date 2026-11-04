@@ -9,14 +9,14 @@ name: cache-run-isolation
     commands:
       - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
 - takeScreenshot: cache-run-isolation-form-filled
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000
@@ -40,10 +40,10 @@ name: cache-run-isolation
 - launchApp:
     clearState: false
 - extendedWaitUntil:
-    visible: "Verify your Hermes Gateway"
+    visible: "Add gateway"
     timeout: 30000
 - hideKeyboard
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000

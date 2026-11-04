@@ -82,7 +82,9 @@ internal fun EntryStateHolder.showConnectionSetup() {
 
 internal fun EntryStateHolder.showCredentialRotation() {
     val state = mutableUiState.value
-    if (!state.isConnected || state.isVerifying || state.isSaving) return
+    if (state.isChangingCredential || state.isVerifying || state.isSaving) return
+    if (!state.isConnected && !state.isGatewayConnectionConfigured) return
+    credentialBeforeRotation = state.bearerCredential
     mutableUiState.value =
         state.copy(
             title = UiText.Resource(R.string.entry_title_change_credential),
@@ -98,12 +100,31 @@ internal fun EntryStateHolder.showCredentialRotation() {
 internal fun EntryStateHolder.cancelCredentialRotation() {
     val state = mutableUiState.value
     if (!state.isChangingCredential || state.isVerifying || state.isSaving) return
+    val titleRes = if (state.isConnected) R.string.entry_title_connected else R.string.entry_title_verify_saved
+    val supportingRes =
+        if (state.isConnected) R.string.entry_supporting_connected else R.string.entry_supporting_verify_saved
+    val actionRes = if (state.isConnected) R.string.entry_action_connected else R.string.entry_action_verify
+    val credential = credentialBeforeRotation ?: state.bearerCredential
+    credentialBeforeRotation = null
     mutableUiState.value =
         state.copy(
-            title = UiText.Resource(R.string.entry_title_connected),
-            supportingText = UiText.Resource(R.string.entry_supporting_connected),
-            actionLabel = UiText.Resource(R.string.entry_action_connected),
+            title = UiText.Resource(titleRes),
+            supportingText = UiText.Resource(supportingRes),
+            actionLabel = UiText.Resource(actionRes),
             isChangingCredential = false,
+            bearerCredential = credential,
+            errorCategory = null,
+        )
+}
+
+internal fun EntryStateHolder.closeGatewayConnectionSetup() {
+    val state = mutableUiState.value
+    if (state.isVerifying || state.isSaving || state.isChangingCredential) return
+    mutableUiState.value =
+        state.copy(
+            connectionSetupRequested = false,
+            endpoint = if (state.isGatewayConnectionConfigured) state.endpoint else "",
+            bearerCredential = if (state.isGatewayConnectionConfigured) state.bearerCredential else "",
             errorCategory = null,
         )
 }

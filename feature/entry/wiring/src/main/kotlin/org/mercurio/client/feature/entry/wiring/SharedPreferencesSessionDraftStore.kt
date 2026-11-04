@@ -7,6 +7,7 @@ import org.mercurio.client.feature.entry.domain.SessionDraftKey
 import org.mercurio.client.feature.entry.domain.SessionDraftStore
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Persists the composer draft text for each Session so a failed submission or an app
@@ -58,7 +59,7 @@ class SharedPreferencesSessionDraftStore(
         return MessageDigest
             .getInstance("SHA-256")
             .digest(canonicalEndpoint.toByteArray(StandardCharsets.UTF_8))
-            .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+            .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
     }
 
     private companion object {

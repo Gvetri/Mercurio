@@ -99,7 +99,7 @@ class RunRetryStateHolderTest {
                     holder,
                 ) {
                     it.sessionList?.openedSession?.latestRun?.id == failedRunId &&
-                        !it.sessionList!!.openedSession!!.isSending
+                        !it.sessionList.openedSession.isSending
                 }
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Edited draft"))
