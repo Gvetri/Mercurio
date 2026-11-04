@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,7 +24,6 @@ import org.mercurio.client.feature.entry.presentation.EntryUiEvent
 import org.mercurio.client.feature.entry.presentation.HermesTheme
 import org.mercurio.client.feature.entry.presentation.MessageImageProvider
 import org.mercurio.client.feature.entry.wiring.EntryWiring
-import org.mercurio.client.feature.entry.wiring.appLockAuthenticators
 import org.mercurio.client.feature.entry.presentation.R as PresentationR
 
 class MainActivity : FragmentActivity() {
@@ -132,7 +132,10 @@ class MainActivity : FragmentActivity() {
             BiometricPrompt.PromptInfo.Builder()
                 .setTitle(getString(PresentationR.string.settings_app_lock_row))
                 .setSubtitle(getString(PresentationR.string.settings_app_lock_supporting))
-                .setAllowedAuthenticators(appLockAuthenticators)
+                .setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                        BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+                )
                 .build(),
         )
     }

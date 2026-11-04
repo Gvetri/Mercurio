@@ -16,7 +16,13 @@ class AndroidAppLockEnrolment(
     private val biometricManager = BiometricManager.from(context)
 
     override fun isEnrolled(): Boolean {
-        val status = biometricManager.canAuthenticate(appLockAuthenticators)
+        val status = biometricManager.canAuthenticate(ALLOWED_AUTHENTICATORS)
         return status == BiometricManager.BIOMETRIC_SUCCESS
+    }
+
+    private companion object {
+        val ALLOWED_AUTHENTICATORS =
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
     }
 }
