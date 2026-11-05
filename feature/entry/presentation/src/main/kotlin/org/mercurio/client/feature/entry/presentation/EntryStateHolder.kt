@@ -242,9 +242,24 @@ sealed interface EntryUiEvent {
 
     data object CancelClearDiagnosticsClicked : Diagnostics
 
-    data object ErrorReportingConsentGranted : EntryUiEvent
+    sealed interface ErrorReportingConsentEvent : EntryUiEvent {
+        val decision: ErrorReportingConsent
+    }
 
-    data object ErrorReportingConsentDeclined : EntryUiEvent
+    data object ErrorReportingConsentGranted : ErrorReportingConsentEvent {
+        override val decision: ErrorReportingConsent = ErrorReportingConsent.Granted
+    }
+
+    data object ErrorReportingConsentDeclined : ErrorReportingConsentEvent {
+        override val decision: ErrorReportingConsent = ErrorReportingConsent.Declined
+    }
+
+    data class ErrorReportingConsentToggleClicked(
+        val granted: Boolean,
+    ) : ErrorReportingConsentEvent {
+        override val decision: ErrorReportingConsent
+            get() = if (granted) ErrorReportingConsent.Granted else ErrorReportingConsent.Declined
+    }
 
     sealed interface AppLifecycle : EntryUiEvent
 
@@ -322,6 +337,8 @@ data class EntryUiState(
     val gatewayFacts: UiText? = null,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
     val isErrorReportingConsentRequired: Boolean = false,
+    val errorReportingConsent: ErrorReportingConsent = ErrorReportingConsent.Undecided,
+    val isErrorReportingConfigured: Boolean = false,
     val appLock: AppLockUiState = AppLockUiState(),
 )
 
@@ -424,6 +441,7 @@ data class EntryStateHolderDependencies(
     val localDiagnostics: LocalDiagnosticsPorts? = null,
     val errorReporting: ErrorReporting? = null,
     val errorReportingConsentStore: ErrorReportingConsentStore? = null,
+    val isErrorReportingConfigured: Boolean = false,
     val appLock: AppLockPorts? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
@@ -455,8 +473,11 @@ class EntryStateHolder(
     internal val localDiagnostics = dependencies.localDiagnostics
     internal val errorReporting = dependencies.errorReporting
     internal val errorReportingConsentStore = dependencies.errorReportingConsentStore
+    internal val isErrorReportingConfigured = dependencies.isErrorReportingConfigured
     internal val appLock = dependencies.appLock
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
+
+    private val storedErrorReportingConsent: ErrorReportingConsent? = errorReportingConsentStore?.read()
 
     init {
         require(sendTimeoutMillis > 0) { "sendTimeoutMillis must be positive." }
@@ -469,7 +490,9 @@ class EntryStateHolder(
                 .copy(
                     runStatusNotifications = restoredRunStatusNotificationState(),
                     autoLoadImages = imageLoadingSettingsStore?.loadEnabled() ?: true,
-                    isErrorReportingConsentRequired = restoredErrorReportingConsentRequired(),
+                    isErrorReportingConsentRequired = storedErrorReportingConsent == ErrorReportingConsent.Undecided,
+                    errorReportingConsent = storedErrorReportingConsent ?: ErrorReportingConsent.Undecided,
+                    isErrorReportingConfigured = isErrorReportingConfigured,
                     appLock = restoredAppLockState(),
                 ),
         )
@@ -553,10 +576,8 @@ class EntryStateHolder(
             is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
             is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
             is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
-            is EntryUiEvent.ErrorReportingConsentGranted ->
-                recordErrorReportingConsent(ErrorReportingConsent.Granted)
-            is EntryUiEvent.ErrorReportingConsentDeclined ->
-                recordErrorReportingConsent(ErrorReportingConsent.Declined)
+            is EntryUiEvent.ErrorReportingConsentEvent ->
+                recordErrorReportingConsent(event.decision)
             is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
         }
     }

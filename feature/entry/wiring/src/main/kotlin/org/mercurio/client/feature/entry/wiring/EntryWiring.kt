@@ -83,6 +83,7 @@ object EntryWiring {
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
                     errorReporting = buildErrorReporting(context, overrides, clientVersion, errorReportingConsentStore),
                     errorReportingConsentStore = errorReportingConsentStore,
+                    isErrorReportingConfigured = resolvedSentryDsn(overrides.sentryDsn).isNotBlank(),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
@@ -155,7 +156,7 @@ private fun buildErrorReporting(
         )
     val backend = overrides.sentryBackend ?: defaultSentryBackend
     return ErrorReporting(
-        reporter = overrides.errorReporter ?: reporterFor(context, config, backend),
+        reporter = overrides.errorReporter ?: reporterFor(context, config, backend, consentStore),
         release = config.release,
         environment = config.environment,
     )
@@ -165,7 +166,8 @@ private fun reporterFor(
     context: Context,
     config: SentryReportingConfig,
     backend: SentryBackend,
-): ErrorReporter = if (config.isEnabled) backend.start(context, config) else NoOpErrorReporter
+    consentStore: ErrorReportingConsentStore,
+): ErrorReporter = if (config.isEnabled) backend.start(context, config, consentStore::read) else NoOpErrorReporter
 
 private fun buildVerifyGatewayConnection(
     repository: GatewayConnectionRepository,

@@ -14,6 +14,7 @@ import org.mercurio.client.feature.entry.application.NoOpErrorReporter
 import org.mercurio.client.feature.entry.application.RecordingErrorReporter
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.NoOpHistoryCacheStore
+import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryUiEvent
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -50,7 +51,7 @@ class EntryWiringErrorReportingTest {
         val consult = mutableListOf<SentryReportingConfig>()
         val store = FakeErrorReportingConsentStore(ErrorReportingConsent.Granted)
         val backend =
-            SentryBackend { _, config ->
+            SentryBackend { _, config, _ ->
                 consult += config
                 NoOpErrorReporter
             }
@@ -86,7 +87,7 @@ class EntryWiringErrorReportingTest {
             val started = mutableListOf<SentryReportingConfig>()
             val store = FakeErrorReportingConsentStore(consent)
             val backend =
-                SentryBackend { _, config ->
+                SentryBackend { _, config, _ ->
                     started += config
                     NoOpErrorReporter
                 }
@@ -114,7 +115,7 @@ class EntryWiringErrorReportingTest {
         val consult = mutableListOf<SentryReportingConfig>()
         val store = FakeErrorReportingConsentStore(ErrorReportingConsent.Granted)
         val backend =
-            SentryBackend { _, config ->
+            SentryBackend { _, config, _ ->
                 consult += config
                 NoOpErrorReporter
             }
@@ -153,6 +154,20 @@ class EntryWiringErrorReportingTest {
     }
 
     @Test
+    fun the_settings_row_is_offered_only_when_the_build_carries_an_endpoint() {
+        val withEndpoint = stateHolder(sentryDsn = SYNTHETIC_DSN)
+        val withoutEndpoint = stateHolder(sentryDsn = "")
+
+        try {
+            assertTrue(withEndpoint.uiState.value.isErrorReportingConfigured)
+            assertFalse(withoutEndpoint.uiState.value.isErrorReportingConfigured)
+        } finally {
+            withEndpoint.close()
+            withoutEndpoint.close()
+        }
+    }
+
+    @Test
     fun a_fresh_install_asks_the_question_and_the_answer_survives_a_restart() {
         val first = EntryWiring.createEntryStateHolder(context = context)
         try {
@@ -174,6 +189,17 @@ class EntryWiringErrorReportingTest {
             restarted.close()
         }
     }
+
+    private fun stateHolder(sentryDsn: String): EntryStateHolder =
+        EntryWiring.createEntryStateHolder(
+            context = context,
+            overrides =
+                EntryWiringOverrides(
+                    coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+                    historyCacheStore = NoOpHistoryCacheStore,
+                    sentryDsn = sentryDsn,
+                ),
+        )
 }
 
 private const val SYNTHETIC_DSN = "https://synthetic-key@ingest.example.invalid/1"

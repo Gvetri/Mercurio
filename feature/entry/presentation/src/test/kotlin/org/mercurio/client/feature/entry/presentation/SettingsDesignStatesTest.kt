@@ -14,6 +14,7 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
@@ -24,9 +25,10 @@ import org.robolectric.annotation.GraphicsMode
  * The approved Settings design's shipped states, captured at the design's review size. Each capture
  * is compared with the design page by the reviewer checklist, not by a pixel diff across renderers.
  *
- * Appearance, App updates, and the error-reporting consent row wait on their own capabilities, so
- * their frames are absent here. #273 ships the sections whose capability exists, and #268 adds the
- * Security frames with the app-lock capability they draw.
+ * Appearance and App updates wait on their own capabilities, so their frames are absent here.
+ * #273 ships the sections whose capability exists, #268 adds the Security frames with the app-lock
+ * capability they draw, and the error-reporting consent row appears only with a reporting endpoint,
+ * so its absent state is captured as an extra witness.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-notnight")
@@ -104,6 +106,57 @@ class SettingsDesignStatesTest {
     @Config(qualifiers = "w360dp-h640dp-night")
     fun settings_27_font_scale_200_dark() = captureSettings(dark = true, fontScale = 2f)
 
+    @Test
+    fun settings_24_error_reporting_off_light() =
+        captureSettings(
+            dark = false,
+            state = errorReportingState(granted = false),
+            beforeCapture = { scrollToErrorReporting() },
+        )
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_24_error_reporting_off_dark() =
+        captureSettings(
+            dark = true,
+            state = errorReportingState(granted = false),
+            beforeCapture = { scrollToErrorReporting() },
+        )
+
+    @Test
+    fun settings_25_error_reporting_on_light() =
+        captureSettings(
+            dark = false,
+            state = errorReportingState(granted = true),
+            beforeCapture = { scrollToErrorReporting() },
+        )
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_25_error_reporting_on_dark() =
+        captureSettings(
+            dark = true,
+            state = errorReportingState(granted = true),
+            beforeCapture = { scrollToErrorReporting() },
+        )
+
+    @Test
+    fun settings_error_reporting_absent_light() =
+        captureSettings(
+            dark = false,
+            state = settingsState(),
+            beforeCapture = { scrollToDiagnostics() },
+        )
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_error_reporting_absent_dark() =
+        captureSettings(
+            dark = true,
+            state = settingsState(),
+            beforeCapture = { scrollToDiagnostics() },
+        )
+
     private fun captureSettings(
         dark: Boolean,
         state: EntryUiState = settingsState(),
@@ -134,6 +187,21 @@ class SettingsDesignStatesTest {
     private fun scrollToAbout() {
         composeTestRule.onNodeWithText("Google Play").performScrollTo()
     }
+
+    private fun scrollToErrorReporting() {
+        composeTestRule.onNodeWithText("Share crash and error reports").performScrollTo()
+    }
+
+    private fun scrollToDiagnostics() {
+        composeTestRule.onNodeWithText("DIAGNOSTICS").performScrollTo()
+    }
+
+    private fun errorReportingState(granted: Boolean): EntryUiState =
+        settingsState().copy(
+            isErrorReportingConfigured = true,
+            errorReportingConsent =
+                if (granted) ErrorReportingConsent.Granted else ErrorReportingConsent.Declined,
+        )
 
     private fun notificationsOnState(): EntryUiState = settingsState(notificationsEnabled = true)
 
