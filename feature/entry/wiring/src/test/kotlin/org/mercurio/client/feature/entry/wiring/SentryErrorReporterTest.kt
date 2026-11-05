@@ -11,7 +11,8 @@ class SentryErrorReporterTest {
     @Test
     fun reports_one_event_carrying_the_reports_release_and_environment() {
         val captured = mutableListOf<ErrorReport>()
-        val reporter = SentryErrorReporter(reportingConfig(), captured::add)
+        val config = reportingConfig()
+        val reporter = SentryErrorReporter(config, captured::add, consent = { config.consent })
 
         reporter.report(ErrorReport(release = "nightly-42-abc", environment = "debug"))
 
@@ -25,7 +26,7 @@ class SentryErrorReporterTest {
     fun a_blank_dsn_keeps_the_backend_disabled_and_reports_nothing() {
         val captured = mutableListOf<ErrorReport>()
         val config = reportingConfig().copy(dsn = " ")
-        val reporter = SentryErrorReporter(config, captured::add)
+        val reporter = SentryErrorReporter(config, captured::add, consent = { config.consent })
 
         reporter.report(ErrorReport(release = "0.1.0", environment = "release"))
 
@@ -37,12 +38,26 @@ class SentryErrorReporterTest {
     fun a_decision_that_grants_nothing_reports_nothing() {
         for (consent in listOf(ErrorReportingConsent.Undecided, ErrorReportingConsent.Declined)) {
             val captured = mutableListOf<ErrorReport>()
-            val reporter = SentryErrorReporter(reportingConfig().copy(consent = consent), captured::add)
+            val config = reportingConfig().copy(consent = consent)
+            val reporter = SentryErrorReporter(config, captured::add, consent = { config.consent })
 
             reporter.report(ErrorReport(release = "0.1.0", environment = "debug"))
 
             assertTrue("A $consent decision reported an event.", captured.isEmpty())
         }
+    }
+
+    @Test
+    fun a_revoked_answer_stops_the_next_report_without_a_restart() {
+        val captured = mutableListOf<ErrorReport>()
+        var consent = ErrorReportingConsent.Granted
+        val reporter = SentryErrorReporter(reportingConfig(), captured::add, consent = { consent })
+
+        reporter.report(ErrorReport(release = "0.1.0", environment = "debug"))
+        consent = ErrorReportingConsent.Declined
+        reporter.report(ErrorReport(release = "0.1.0", environment = "debug"))
+
+        assertEquals(1, captured.size)
     }
 
     private fun reportingConfig(): SentryReportingConfig =
