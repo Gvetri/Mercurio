@@ -24,7 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -250,7 +250,13 @@ private fun RenameSessionField(
     val tokens = LocalHermesDesignTokens.current
     val focusRequester = remember { FocusRequester() }
     val sessionTitleDescription = stringResource(R.string.sessions_title_field)
-    LaunchedEffect(session.id) { focusRequester.requestFocus() }
+    val focusRequest = remember(session.id) { RenameFocusRequest() }
+    SideEffect {
+        if (!focusRequest.requested) {
+            focusRequest.requested = true
+            focusRequester.requestFocus()
+        }
+    }
     Column(modifier = Modifier.fillMaxWidth()) {
         BasicTextField(
             value = state.titleDraft,
@@ -409,6 +415,10 @@ internal fun SessionMutationAction.pendingLabelRes(): Int =
         SessionMutationAction.UNPIN -> R.string.sessions_unpinning
         SessionMutationAction.DELETE -> R.string.sessions_deleting
     }
+
+private class RenameFocusRequest {
+    var requested: Boolean = false
+}
 
 private val SESSION_ROW_MIN_HEIGHT = 56.dp
 private val SESSION_TIME_COLUMN = 44.dp

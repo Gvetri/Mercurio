@@ -55,6 +55,12 @@ internal fun ChatTranscript(
                     is ChatTranscriptItem.Message -> item.row.id
                 }
             },
+            contentType = { item ->
+                when (item) {
+                    is ChatTranscriptItem.Day -> CHAT_DAY_CONTENT_TYPE
+                    is ChatTranscriptItem.Message -> CHAT_MESSAGE_CONTENT_TYPE
+                }
+            },
         ) { item ->
             key(sessionKey) {
                 when (item) {
@@ -66,6 +72,10 @@ internal fun ChatTranscript(
         }
     }
 }
+
+private const val CHAT_DAY_CONTENT_TYPE = "chat-day"
+
+private const val CHAT_MESSAGE_CONTENT_TYPE = "chat-message"
 
 /** The upper-case day label between two rules, one per day the transcript crosses. */
 @Composable
