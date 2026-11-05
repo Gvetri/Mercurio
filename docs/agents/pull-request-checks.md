@@ -16,7 +16,8 @@ human, so an edit that widens or drops the exemption fails the gate.
 
 `pr-template` runs on `opened`, `edited`, `reopened`, `ready_for_review`, and `synchronize`. An edit
 re-runs it alone: `quality-gate` has no `edited` trigger, so editing the body never re-runs the
-aggregate and never replaces its verdict on the head.
+aggregate and never replaces its verdict on the head. The body check declares no concurrency block, so
+a re-run never cancels the earlier one: every run ends with a verdict for the body it read.
 
 The four headings, verbatim:
 

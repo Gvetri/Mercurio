@@ -292,21 +292,38 @@ def verify_workflow_declaration():
     return violations
 
 
+def declares_concurrency(workflow):
+    """Return True when the workflow or one of its jobs declares a concurrency block."""
+    if re.search(r"^concurrency:", workflow, flags=re.MULTILINE):
+        return True
+    return any(
+        re.search(r"^[ \t]+concurrency:", block, flags=re.MULTILINE)
+        for block in job_blocks(workflow).values()
+    )
+
+
 def verify_pull_request_template():
     """Verify that the pr-template context keeps being produced and keeps exempting Dependabot.
 
     The ruleset requires the context on every pull request, and a skipped job does not satisfy a
     required check, so the job must stay unconditional. The exemption is proved by running the check
     itself in both directions: deleting the Dependabot branch fails here rather than passing a text
-    assertion.
+    assertion. A concurrency block would cancel a run whose verdict the required context still owes,
+    so the workflow must not declare one.
     """
     if not PR_TEMPLATE_WORKFLOW.is_file():
         return ["The pr-template workflow is missing"]
-    job = job_blocks(PR_TEMPLATE_WORKFLOW.read_text(encoding="utf-8")).get("pr_template")
+    workflow = PR_TEMPLATE_WORKFLOW.read_text(encoding="utf-8")
+    job = job_blocks(workflow).get("pr_template")
     if job is None:
         return ["The pr-template workflow must declare the pr_template job"]
 
     violations = []
+    if declares_concurrency(workflow):
+        violations.append(
+            "The pr-template workflow must not declare a concurrency block at the workflow or job "
+            "level, because a cancelled required check reports no verdict"
+        )
     if re.search(r"^    if:", job, flags=re.MULTILINE) or "continue-on-error" in job:
         violations.append(
             "The pr_template job must run unconditionally, because a skipped required check is not a pass"
