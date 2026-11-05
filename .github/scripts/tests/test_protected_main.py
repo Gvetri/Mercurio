@@ -1047,6 +1047,38 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.assertIn("Verified that the pr-template check runs unconditionally and exempts only Dependabot.", completed.stdout)
         self.assertIn("Repository conformance passed.", completed.stdout)
 
+    def test_restoring_the_pr_template_concurrency_block_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "\njobs:\n",
+            "\nconcurrency:\n"
+            "  group: pr-template-${{ github.event.pull_request.number }}\n"
+            "  cancel-in-progress: true\n"
+            "\njobs:\n",
+            1,
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn(
+            "The pr-template workflow must not declare a concurrency block",
+            completed.stderr,
+        )
+
+    def test_a_job_level_pr_template_concurrency_block_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "    runs-on: ubuntu-latest\n",
+            "    concurrency:\n"
+            "      group: pr-template-${{ github.event.pull_request.number }}\n"
+            "      cancel-in-progress: true\n"
+            "    runs-on: ubuntu-latest\n",
+            1,
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn(
+            "The pr-template workflow must not declare a concurrency block",
+            completed.stderr,
+        )
+
     def test_an_if_on_the_pr_template_job_fails_conformance(self):
         workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
             "    runs-on: ubuntu-latest\n",
