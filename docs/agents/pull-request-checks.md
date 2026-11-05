@@ -40,14 +40,16 @@ skipped job does not satisfy a required check.
 The tracker reads the body as well as the reviewer does. When the body contains a closing keyword
 directly followed by an issue number, GitHub closes that issue the moment the pull request merges.
 The keywords are `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, and
-`resolved`, case-insensitive, and several issues separate with commas or spaces (`Closes #399, fixes
-#401`).
+`resolved`, case-insensitive. Give each issue its own keyword, separated by commas or spaces
+(`Closes #399, fixes #401`).
 
-The match is literal and scans the whole body: it fires from ordinary prose, from a table cell, and
-from inside a code span, so `` `close #399` `` written in backticks still closes #399. Write a
-keyword beside a number only when the merge should close the issue; quoting the phrase to discuss it
-does not protect the issue. The same scan reads the commit that lands on `main`, and this repository
-merges by squash, so a keyword and a number in the pull-request title close the issue just the same.
+The match is literal and scans the whole body: it fires from ordinary prose and from a table cell,
+but not from inside a code span: `` `close #399` `` in backticks does not close #399 in the body, so
+quoting the phrase that way does protect the issue. Write a keyword beside a number in plain prose
+only when the merge should close the issue; a keyword in prose stays live even when negated or
+placed in a heading — the match does not read intent. The commit that lands on `main` is scanned as
+raw text, backticks and all, and this repository merges by squash with the pull-request title as the
+commit subject, so a keyword and a number in the title close the issue just the same.
 
 When the merge leaves one manual step behind, do not point a closing keyword at that issue. Name the
 step with a word that is not a keyword, such as `Refs #399`, and spell the step out in the issue
