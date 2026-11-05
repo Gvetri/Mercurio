@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
@@ -269,6 +270,7 @@ class EntryScreenSessionListTest {
         }
 
         composeTestRule.onNodeWithText("Renamed").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Session title").assertIsFocused()
         composeTestRule.onNodeWithContentDescription("Confirm rename").performClick()
         composeTestRule.onNodeWithContentDescription("Cancel rename").performClick()
 
