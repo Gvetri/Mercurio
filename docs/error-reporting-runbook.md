@@ -36,9 +36,11 @@ Settings › Diagnostics (issue #456) draws the same answer as a switch row and 
 changes.
 
 The composition root reads the stored answer once, before the reporting backend is built, and the
-Sentry SDK installs at most once per process. An answer given while the app runs therefore applies
-from the next process start; the declined sentence on the question states the consequence, because
-that screen shows once.
+Sentry SDK installs at most once per process. An answer that turns reporting on while the app runs
+applies from the next process start; the declined sentence on the question states the consequence,
+because that screen shows once. An answer that turns reporting off stops every event at the next
+send, including crash and not-responding events, because the before-send hook reads the stored
+answer too.
 
 ### Release builds
 

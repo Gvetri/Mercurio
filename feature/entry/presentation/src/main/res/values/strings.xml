@@ -134,6 +134,9 @@
     <string name="settings_notifications_row">Notifications</string>
     <string name="settings_section_media">MEDIA</string>
     <string name="settings_section_diagnostics">DIAGNOSTICS</string>
+    <string name="settings_error_reporting_row">Share crash and error reports</string>
+    <string name="settings_error_reporting_supporting_off">Crashes, errors, and not-responding reports. Off until you turn it on.</string>
+    <string name="settings_error_reporting_supporting_on">Crashes, errors, and not-responding reports. On until you turn it off.</string>
     <string name="settings_section_about">ABOUT</string>
     <string name="settings_connection_actions">Connection actions</string>
     <string name="shell_connection_actions_mark" translatable="false">::</string>
