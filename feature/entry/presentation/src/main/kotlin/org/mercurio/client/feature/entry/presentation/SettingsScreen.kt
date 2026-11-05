@@ -63,6 +63,7 @@ internal fun SettingsContent(
             SettingsNotificationSection(state = state, onEvent = onEvent)
             SettingsMediaSection(state = state, onEvent = onEvent)
             SettingsDiagnosticsSection(state = state, onEvent = onEvent)
+            SettingsAppUpdatesSection(state = state, onEvent = onEvent)
             SettingsAboutSection(state = state)
         }
     }

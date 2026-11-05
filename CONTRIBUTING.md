@@ -201,9 +201,10 @@ on the phone viewport in the light and the dark token set.
 ### Settings design-state matrix
 
 `SettingsDesignStatesTest` pins the shipped states of the approved `mercurio/settings` page: the
-connected list, the connection-actions menu, Notifications on, Media off, About, and the 200% font
-scale witness, each in the light and the dark token set. A section whose capability has not shipped
-is absent from the capture, so the matrix grows with the code issues that add those capabilities.
+connected list, the connection-actions menu, Notifications on, Media off, the App updates check
+states, About, and the 200% font scale witness, each in the light and the dark token set. A section
+whose capability has not shipped is absent from the capture, so the matrix grows with the code
+issues that add those capabilities.
 
 | State | Window | Reason for inclusion |
 | --- | --- | --- |
@@ -221,6 +222,16 @@ is absent from the capture, so the matrix grows with the code issues that add th
 | `settings_10_notifications_on_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_12_media_off_light` | `w360dp-h800dp-notnight` | Automatic picture loading off |
 | `settings_12_media_off_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_14_app_updates_idle_light` | `w360dp-h800dp-notnight` | App updates idle, no check yet |
+| `settings_14_app_updates_idle_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_15_app_updates_checking_light` | `w360dp-h800dp-notnight` | The indeterminate check in flight, with its waiting line |
+| `settings_15_app_updates_checking_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_16_app_updates_up_to_date_light` | `w360dp-h800dp-notnight` | Up to date with the check time in the row |
+| `settings_16_app_updates_up_to_date_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_17_app_updates_offered_light` | `w360dp-h800dp-notnight` | The offered build with its version name, short commit, publication time, and release tag |
+| `settings_17_app_updates_offered_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_19_app_updates_refused_light` | `w360dp-h800dp-notnight` | The refusal banner naming the release tag, with its retry |
+| `settings_19_app_updates_refused_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_23_about_light` | `w360dp-h640dp-notnight` | Version, build, and install-source rows in the shortened window, scrolled to the install-source value |
 | `settings_23_about_dark` | `w360dp-h640dp-night` | The same rows on the dark token set |
 | `settings_27_font_scale_200_light` | `w360dp-h640dp-notnight` | 200% type in the shortened window |

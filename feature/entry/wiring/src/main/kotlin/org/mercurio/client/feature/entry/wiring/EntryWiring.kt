@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.LoadEntryState
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicReference
 object EntryWiring {
     fun createMessageImagePort(): MessageImagePort = HttpMessageImagePort(defaultMessageImageHttpTransport())
 
+    @Suppress("LongMethod")
     fun createEntryStateHolder(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
@@ -43,7 +45,7 @@ object EntryWiring {
         val repository = DefaultGatewayConnectionRepository(dataSource, credentialStore)
         val recoveryEndpoint = AtomicReference(dataSource.loadEndpoint())
         val runRecoveryRegistry = buildRunRecoveryRegistry(context, recoveryEndpoint)
-        val initialState = LoadEntryState(repository, resolveInstalledBuildProvider(context, overrides)).execute()
+        val (installedBuildProvider, initialState) = loadEntryStartup(context, overrides, repository)
         val clientVersion = initialState.clientVersion
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
@@ -94,6 +96,7 @@ object EntryWiring {
                     runStatusNotifier = SystemRunStatusNotifier(context),
                     requestRunStatusNotificationPermission = requestRunStatusNotificationPermission,
                     appLock = appLockPorts(context, overrides, requestAppUnlock),
+                    checkForNightlyUpdate = buildCheckForNightlyUpdate(overrides, installedBuildProvider),
                 ),
         )
     }
@@ -118,6 +121,23 @@ object EntryWiring {
         coroutineScope: CoroutineScope?,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ): CoroutineScope = coroutineScope ?: CoroutineScope(SupervisorJob() + ioDispatcher)
+}
+
+private data class EntryStartup(
+    val installedBuildProvider: InstalledBuildProvider,
+    val entryState: EntryState,
+)
+
+private fun loadEntryStartup(
+    context: Context,
+    overrides: EntryWiringOverrides,
+    repository: GatewayConnectionRepository,
+): EntryStartup {
+    val installedBuildProvider = resolveInstalledBuildProvider(context, overrides)
+    return EntryStartup(
+        installedBuildProvider = installedBuildProvider,
+        entryState = LoadEntryState(repository, installedBuildProvider).execute(),
+    )
 }
 
 private fun resolveInstalledBuildProvider(

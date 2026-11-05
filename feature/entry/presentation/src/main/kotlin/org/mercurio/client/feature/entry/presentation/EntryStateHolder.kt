@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.mercurio.client.feature.entry.application.CheckForNightlyUpdate
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
@@ -220,6 +221,8 @@ sealed interface EntryUiEvent {
 
     data object OpenSettingsClicked : Settings
 
+    data object CheckForUpdatesClicked : Settings
+
     data object CloseSettingsClicked : Settings
 
     data object ClearHistoryCacheClicked : Settings
@@ -329,6 +332,7 @@ data class EntryUiState(
     val clientVersion: String = "unknown",
     val buildNumber: Long? = null,
     val installSource: InstallSource = InstallSource.OTHER_SOURCE,
+    val appUpdates: AppUpdatesUiState = AppUpdatesUiState(),
     val sessionList: SessionListUiState? = null,
     val runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
     val autoLoadImages: Boolean = true,
@@ -443,6 +447,7 @@ data class EntryStateHolderDependencies(
     val errorReportingConsentStore: ErrorReportingConsentStore? = null,
     val isErrorReportingConfigured: Boolean = false,
     val appLock: AppLockPorts? = null,
+    val checkForNightlyUpdate: CheckForNightlyUpdate? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -475,6 +480,7 @@ class EntryStateHolder(
     internal val errorReportingConsentStore = dependencies.errorReportingConsentStore
     internal val isErrorReportingConfigured = dependencies.isErrorReportingConfigured
     internal val appLock = dependencies.appLock
+    internal val checkForNightlyUpdate = dependencies.checkForNightlyUpdate
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
 
     private val storedErrorReportingConsent: ErrorReportingConsent? = errorReportingConsentStore?.read()
@@ -500,6 +506,8 @@ class EntryStateHolder(
 
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
+    internal var updateCheckJob: Job? = null
+    internal var updateCheckGeneration = 0L
     internal var credentialBeforeRotation: String? = null
 
     @Volatile
@@ -650,6 +658,7 @@ class EntryStateHolder(
     private fun dispatchSettingsEvent(event: EntryUiEvent.Settings) {
         when (event) {
             is EntryUiEvent.OpenSettingsClicked -> openSettings()
+            is EntryUiEvent.CheckForUpdatesClicked -> checkForUpdates()
             is EntryUiEvent.CloseSettingsClicked -> closeSettings()
             is EntryUiEvent.ClearHistoryCacheClicked -> requestClearHistoryCache()
             is EntryUiEvent.ConfirmClearHistoryCacheClicked -> confirmClearHistoryCache()
