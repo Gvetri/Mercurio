@@ -4,15 +4,19 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.ModelCatalog
 import org.mercurio.client.feature.entry.domain.ModelCatalogEntry
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelEffortOptions
 import java.io.File
 import java.net.URI
@@ -31,10 +35,10 @@ class GatewayModelCatalogOperationsTest {
     fun catalog_fetch_uses_the_pinned_request_and_parses_the_pinned_success_fixture() {
         val transport = RecordingTransport(responses = listOf(response("models/success.json")))
 
-        val catalog = client(transport).fetchModelCatalog()
+        val catalog = client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
 
         assertFixtureCatalogRequest(transport.requests.single())
-        assertEquals("hermes.api_server.run_models", catalog.discriminator)
+        assertEquals(ModelCatalogSurface.RUN_MODELS, catalog.surface)
         assertEquals("deepseek-v4-flash", catalog.defaultModel)
         assertEquals(listOf("deepseek-v4-flash", "hermes-agent"), catalog.entries.map { it.id })
         val first = catalog.entries.first()
@@ -52,7 +56,7 @@ class GatewayModelCatalogOperationsTest {
         val body = JsonObject(successBody() + ("default_model" to JsonNull)).toString()
         val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
 
-        val catalog = client(transport).fetchModelCatalog()
+        val catalog = client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
 
         assertEquals(2, catalog.entries.size)
         assertNull(catalog.defaultModel)
@@ -62,7 +66,7 @@ class GatewayModelCatalogOperationsTest {
     fun catalog_tolerates_unknown_additive_fields_at_every_level() {
         val transport = RecordingTransport(responses = listOf(response("models/unknown-additive.json")))
 
-        val catalog = client(transport).fetchModelCatalog()
+        val catalog = client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
 
         assertEquals(PINNED_CATALOG, catalog)
     }
@@ -71,7 +75,9 @@ class GatewayModelCatalogOperationsTest {
     fun a_catalog_missing_the_models_array_fails_closed_as_an_invalid_response() {
         val transport = RecordingTransport(responses = listOf(response("models/missing-required.json")))
 
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { client(transport).fetchModelCatalog() }
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
+        }
     }
 
     @Test
@@ -79,7 +85,9 @@ class GatewayModelCatalogOperationsTest {
         val body = JsonObject(successBody() + ("models" to JsonArray(emptyList()))).toString()
         val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
 
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { client(transport).fetchModelCatalog() }
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
+        }
     }
 
     @Test
@@ -87,7 +95,9 @@ class GatewayModelCatalogOperationsTest {
         val body = successBody().toString().replace(CATALOG_OBJECT_TOKEN, "\"object\":\"list\"")
         val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
 
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { client(transport).fetchModelCatalog() }
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
+        }
     }
 
     @Test
@@ -95,7 +105,9 @@ class GatewayModelCatalogOperationsTest {
         val body = successBody().toString().replace("\"default\":\"medium\"", "\"default\":\"turbo\"")
         val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
 
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { client(transport).fetchModelCatalog() }
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
+        }
     }
 
     @Test
@@ -103,7 +115,9 @@ class GatewayModelCatalogOperationsTest {
         val body = successBody().toString().replace("\"id\":\"deepseek-v4-flash\"", "\"id\":\" \"")
         val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
 
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { client(transport).fetchModelCatalog() }
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
+        }
     }
 
     @Test
@@ -113,9 +127,128 @@ class GatewayModelCatalogOperationsTest {
                 responses = listOf(GatewayHttpResponse(404, "{\"error\":{\"message\":\"no route\"}}")),
             )
 
-        val error = captureFailure { client(transport).fetchModelCatalog() }
+        val error = captureFailure { client(transport).fetchModelCatalog(ModelCatalogSurface.RUN_MODELS) }
 
         assertEquals(GatewayErrorCategory.GATEWAY_REQUEST_FAILED, error.category)
+    }
+
+    @Test
+    fun the_deployed_options_surface_calls_its_advertised_row_and_maps_the_captured_inventory() {
+        val transport = RecordingTransport(responses = listOf(response("models/options-success.json")))
+
+        val catalog = client(transport).fetchModelCatalog(ModelCatalogSurface.MODEL_OPTIONS)
+
+        val request = transport.requests.single()
+        assertEquals("GET", request.method)
+        assertEquals("/api/model/options", URI(request.url).path)
+        assertEquals("Bearer test-token", request.headers["Authorization"])
+        assertNull(request.body)
+        assertEquals(ModelCatalogSurface.MODEL_OPTIONS, catalog.surface)
+        assertEquals("step-5-preview", catalog.defaultModel)
+        assertEquals(DEPLOYED_ENTRY_IDS, catalog.entries.map { it.id })
+        val first = catalog.entries.first()
+        assertEquals("step-5-preview", first.displayName)
+        assertEquals("opencode-go", first.provider)
+        assertNull(first.effort)
+    }
+
+    @Test
+    fun an_unauthenticated_provider_never_contributes_selectable_entries() {
+        val body = deployedBody().toString().replaceFirst("\"authenticated\":true", "\"authenticated\":false")
+        val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
+
+        val catalog = client(transport).fetchModelCatalog(ModelCatalogSurface.MODEL_OPTIONS)
+
+        assertEquals(DEPLOYED_ENTRY_IDS.drop(4), catalog.entries.map { it.id })
+        assertTrue(catalog.entries.none { it.provider == "opencode-go" })
+    }
+
+    @Test
+    fun a_model_id_advertised_by_two_providers_appears_once_in_server_order() {
+        val body = deployedBody()
+        val providers =
+            JsonArray(
+                body.getValue("providers").jsonArray.map { element ->
+                    val provider = element.jsonObject
+                    if (provider.getValue("slug").jsonPrimitive.content != "nous") {
+                        element
+                    } else {
+                        JsonObject(
+                            provider +
+                                (
+                                    "models" to
+                                        JsonArray(
+                                            provider.getValue("models").jsonArray + JsonPrimitive("step-5-preview"),
+                                        )
+                                ),
+                        )
+                    }
+                },
+            )
+        val transport =
+            RecordingTransport(
+                responses = listOf(GatewayHttpResponse(200, JsonObject(body + ("providers" to providers)).toString())),
+            )
+
+        val catalog = client(transport).fetchModelCatalog(ModelCatalogSurface.MODEL_OPTIONS)
+
+        assertEquals(DEPLOYED_ENTRY_IDS, catalog.entries.map { it.id })
+        assertEquals(1, catalog.entries.count { it.id == "step-5-preview" })
+        assertEquals("opencode-go", catalog.entries.first().provider)
+    }
+
+    @Test
+    fun an_inventory_with_no_authenticated_model_fails_closed_as_an_invalid_response() {
+        val body = deployedBody().toString().replace("\"authenticated\":true", "\"authenticated\":false")
+        val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
+
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.MODEL_OPTIONS)
+        }
+    }
+
+    @Test
+    fun a_deployed_inventory_without_the_providers_array_fails_closed() {
+        val body = JsonObject(deployedBody() - "providers").toString()
+        val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
+
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.MODEL_OPTIONS)
+        }
+    }
+
+    @Test
+    fun a_malformed_deployed_provider_row_fails_closed() {
+        val body =
+            JsonObject(
+                deployedBody() + ("providers" to JsonArray(listOf(JsonPrimitive("not-a-provider")))),
+            ).toString()
+        val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, body)))
+
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.MODEL_OPTIONS)
+        }
+    }
+
+    @Test
+    fun a_blank_deployed_model_id_fails_closed() {
+        val body = deployedBody()
+        val providers =
+            JsonArray(
+                body.getValue("providers").jsonArray.mapIndexed { index, element ->
+                    if (index != 0) {
+                        element
+                    } else {
+                        JsonObject(element.jsonObject + ("models" to JsonArray(listOf(JsonPrimitive(" ")))))
+                    }
+                },
+            )
+        val mutated = JsonObject(body + ("providers" to providers)).toString()
+        val transport = RecordingTransport(responses = listOf(GatewayHttpResponse(200, mutated)))
+
+        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+            client(transport).fetchModelCatalog(ModelCatalogSurface.MODEL_OPTIONS)
+        }
     }
 
     private fun client(transport: RecordingTransport) =
@@ -128,6 +261,15 @@ class GatewayModelCatalogOperationsTest {
     private fun successBody(): JsonObject =
         Json
             .parseToJsonElement(contractsRoot.resolve("models/success.json").readText())
+            .jsonObject
+            .getValue("response")
+            .jsonObject
+            .getValue("body")
+            .jsonObject
+
+    private fun deployedBody(): JsonObject =
+        Json
+            .parseToJsonElement(contractsRoot.resolve("models/options-success.json").readText())
             .jsonObject
             .getValue("response")
             .jsonObject
@@ -171,9 +313,25 @@ class GatewayModelCatalogOperationsTest {
     private companion object {
         const val CATALOG_OBJECT_TOKEN = "\"object\":\"hermes.api_server.run_models\""
 
+        val DEPLOYED_ENTRY_IDS =
+            listOf(
+                "step-5-preview",
+                "qwen3.8-max",
+                "qwen3.8-flash",
+                "longcat-2.0",
+                "deepseek/deepseek-v4-pro",
+                "deepseek/deepseek-v4-flash",
+                "Qwen/Qwen3.7-Max",
+                "Qwen/Qwen3.6-Plus",
+                "anthropic/claude-fable-5.1",
+                "anthropic/claude-fable-5",
+                "anthropic/claude-opus-5.5",
+                "anthropic/claude-opus-5",
+            )
+
         val PINNED_CATALOG =
             ModelCatalog(
-                discriminator = "hermes.api_server.run_models",
+                surface = ModelCatalogSurface.RUN_MODELS,
                 defaultModel = "deepseek-v4-flash",
                 entries =
                     listOf(

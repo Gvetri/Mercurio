@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.ModelCatalog
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 
 /**
  * Fetches the model catalog once the picker becomes relevant on an advertised row:
@@ -16,10 +17,11 @@ internal fun EntryStateHolder.maybeFetchModelCatalog() {
         synchronized(sessionRequestLock) {
             val state = mutableUiState.value
             val picker = state.sessionList?.modelPicker
-            if (picker?.catalogFetchNeeded != true) {
+            val surface = picker?.catalogSurface
+            if (picker?.catalogFetchNeeded != true || surface == null) {
                 null
             } else {
-                claimModelCatalogFetch(state.endpoint)
+                claimModelCatalogFetch(state.endpoint, surface)
             }
         }
     if (request != null) {
@@ -27,20 +29,23 @@ internal fun EntryStateHolder.maybeFetchModelCatalog() {
     }
 }
 
-private fun EntryStateHolder.claimModelCatalogFetch(endpoint: String): ModelCatalogFetchRequest? {
+private fun EntryStateHolder.claimModelCatalogFetch(
+    endpoint: String,
+    surface: ModelCatalogSurface,
+): ModelCatalogFetchRequest? {
     val port = catalogGateway
     if (port == null) {
         updateModelPickerLocked { it.copy(catalogFetchFailed = true) }
         return null
     }
     updateModelPickerLocked { it.copy(isFetchingCatalog = true) }
-    return ModelCatalogFetchRequest(port, endpoint, connectionGeneration)
+    return ModelCatalogFetchRequest(port, endpoint, surface, connectionGeneration)
 }
 
 internal fun EntryStateHolder.runModelCatalogFetch(request: ModelCatalogFetchRequest) {
     val catalog =
         try {
-            request.port.fetchModelCatalog()
+            request.port.fetchModelCatalog(request.surface)
         } catch (error: CancellationException) {
             throw error
         } catch (_: GatewayException) {
@@ -61,7 +66,7 @@ internal fun EntryStateHolder.applyModelCatalogResult(
             updateModelPickerLocked {
                 ModelPickerUiState(
                     capabilityKnown = true,
-                    capabilityAdvertised = true,
+                    catalogSurface = request.surface,
                     catalog = catalog,
                     catalogFetchFailed = catalog == null,
                     selection = modelSelectionStore.read(request.endpoint),

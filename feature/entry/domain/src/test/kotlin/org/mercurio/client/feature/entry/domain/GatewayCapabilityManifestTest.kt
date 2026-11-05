@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -112,41 +113,72 @@ class GatewayCapabilityManifestTest {
     }
 
     @Test
-    fun model_catalog_detection_requires_the_exact_pinned_row_and_never_a_requirement() {
-        val manifest = PublicBetaGatewayCapabilityManifest.current
-        val row = PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint
-
-        assertEquals("run_models", row.endpoint)
-        assertEquals(GatewayEndpoint("GET", "/api/models"), GatewayEndpoint(row.method, row.path))
-        assertSame(GatewayContractOperation.MODEL_CATALOG, row.operation)
-        assertTrue(manifest.requirements.none { it.endpoint == row.endpoint })
-        assertFalse(manifest.requiredEndpoints.containsKey(row.endpoint))
+    fun model_catalog_detection_accepts_only_an_exact_advertised_surface() {
+        val surfaces = PublicBetaGatewayCapabilityManifest.modelCatalogSurfaces
+        assertEquals(
+            listOf(ModelCatalogSurface.RUN_MODELS, ModelCatalogSurface.MODEL_OPTIONS),
+            surfaces,
+        )
+        assertTrue(
+            surfaces.none { surface ->
+                PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.containsKey(surface.endpoint)
+            },
+        )
+        assertEquals(
+            listOf(
+                GatewayEndpoint("GET", "/api/models"),
+                GatewayEndpoint("GET", "/api/model/options"),
+            ),
+            surfaces.map { GatewayEndpoint(it.method, it.path) },
+        )
 
         listOf(
-            GatewayEndpoint("GET", "/api/models") to true,
-            GatewayEndpoint("get", "/api/models") to true,
-            GatewayEndpoint("POST", "/api/models") to false,
-            GatewayEndpoint("GET", "/v1/models") to false,
-            GatewayEndpoint("GET", "/api/models/") to false,
-        ).forEach { (advertised, expected) ->
-            assertEquals(
-                "row advertised as $advertised",
-                expected,
-                catalogCapabilities(advertised).supportsModelCatalog(),
-            )
+            ModelCatalogSurface.RUN_MODELS to
+                listOf(
+                    GatewayEndpoint("GET", "/api/models") to true,
+                    GatewayEndpoint("get", "/api/models") to true,
+                    GatewayEndpoint("POST", "/api/models") to false,
+                    GatewayEndpoint("GET", "/api/models/") to false,
+                ),
+            ModelCatalogSurface.MODEL_OPTIONS to
+                listOf(
+                    GatewayEndpoint("GET", "/api/model/options") to true,
+                    GatewayEndpoint("get", "/api/model/options") to true,
+                    GatewayEndpoint("POST", "/api/model/options") to false,
+                    GatewayEndpoint("GET", "/api/model/options/") to false,
+                ),
+        ).forEach { (surface, cases) ->
+            cases.forEach { (advertised, accepted) ->
+                assertEquals(
+                    "surface $surface advertised as $advertised",
+                    if (accepted) surface else null,
+                    capabilitiesWith(surface to advertised).modelCatalogSurface(),
+                )
+            }
         }
 
-        assertTrue(catalogCapabilities(GatewayEndpoint("GET", "/api/models")).satisfies(manifest))
-        assertFalse(GatewayCapabilities(emptyMap()).supportsModelCatalog())
-        assertFalse(
+        assertNull(GatewayCapabilities(emptyMap()).modelCatalogSurface())
+        assertNull(
             GatewayCapabilities(mapOf("models" to GatewayEndpoint("GET", "/api/models")))
-                .supportsModelCatalog(),
+                .modelCatalogSurface(),
         )
     }
 
-    private fun catalogCapabilities(catalogEndpoint: GatewayEndpoint): GatewayCapabilities =
+    @Test
+    fun a_gateway_that_advertises_both_catalog_surfaces_resolves_the_pinned_one_first() {
+        val capabilities =
+            capabilitiesWith(
+                ModelCatalogSurface.RUN_MODELS to GatewayEndpoint("GET", "/api/models"),
+                ModelCatalogSurface.MODEL_OPTIONS to GatewayEndpoint("GET", "/api/model/options"),
+            )
+
+        assertSame(ModelCatalogSurface.RUN_MODELS, capabilities.modelCatalogSurface())
+        assertTrue(capabilities.satisfies(PublicBetaGatewayCapabilityManifest.current))
+    }
+
+    private fun capabilitiesWith(vararg advertised: Pair<ModelCatalogSurface, GatewayEndpoint>): GatewayCapabilities =
         GatewayCapabilities(
             PublicBetaGatewayCapabilityManifest.current.requiredEndpoints +
-                (PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint.endpoint to catalogEndpoint),
+                advertised.map { (surface, endpoint) -> surface.endpoint to endpoint },
         )
 }

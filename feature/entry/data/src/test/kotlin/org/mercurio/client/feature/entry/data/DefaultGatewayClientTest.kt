@@ -13,15 +13,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.ReconcileRun
 import org.mercurio.client.feature.entry.domain.GatewayContractPort
+import org.mercurio.client.feature.entry.domain.GatewayEndpoint
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
+import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
 import org.mercurio.client.feature.entry.domain.RunCreateRequest
 import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunReconciliationDecision
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionListRequest
-import org.mercurio.client.feature.entry.domain.supportsModelCatalog
+import org.mercurio.client.feature.entry.domain.modelCatalogSurface
+import org.mercurio.client.feature.entry.domain.satisfies
 import java.io.File
 import java.io.IOException
 import java.net.URI
@@ -300,20 +304,33 @@ class DefaultGatewayClientTest {
     }
 
     @Test
-    fun an_advertised_run_models_row_detects_the_catalog_without_changing_verification() {
+    fun an_advertised_run_models_row_detects_the_pinned_catalog_without_changing_verification() {
         val success =
             clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json")).discoverCapabilities()
         assertEquals(11, success.endpoints.size)
-        assertTrue(success.supportsModelCatalog())
+        assertEquals(ModelCatalogSurface.RUN_MODELS, success.modelCatalogSurface())
 
         val additive =
             clientForBody(capabilitiesBodyWithRunModels("capabilities/unknown-additive.json"))
                 .discoverCapabilities()
         assertEquals(12, additive.endpoints.size)
-        assertTrue(additive.supportsModelCatalog())
+        assertEquals(ModelCatalogSurface.RUN_MODELS, additive.modelCatalogSurface())
 
         val noRow = clientForResponse("capabilities/success.json").discoverCapabilities()
-        assertFalse(noRow.supportsModelCatalog())
+        assertNull(noRow.modelCatalogSurface())
+    }
+
+    @Test
+    fun the_captured_live_capabilities_detect_the_deployed_surface_and_advertise_no_run_models_row() {
+        val capabilities = clientForResponse("capabilities/captured-live.json").discoverCapabilities()
+
+        assertNull(capabilities.endpoints["run_models"])
+        assertEquals(
+            GatewayEndpoint("GET", "/api/model/options"),
+            capabilities.endpoints["model_options"],
+        )
+        assertEquals(ModelCatalogSurface.MODEL_OPTIONS, capabilities.modelCatalogSurface())
+        assertTrue(capabilities.satisfies(PublicBetaGatewayCapabilityManifest.current))
     }
 
     @Test
@@ -321,12 +338,12 @@ class DefaultGatewayClientTest {
         val wrongMethod =
             clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", method = "POST"))
                 .discoverCapabilities()
-        assertFalse(wrongMethod.supportsModelCatalog())
+        assertNull(wrongMethod.modelCatalogSurface())
 
         val wrongPath =
             clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", path = "/api/model"))
                 .discoverCapabilities()
-        assertFalse(wrongPath.supportsModelCatalog())
+        assertNull(wrongPath.modelCatalogSurface())
 
         val advertisedButIncomplete =
             clientForBody(capabilitiesBodyWithRunModels("capabilities/missing-required.json"))
