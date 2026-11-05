@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.ModelCatalog
 import org.mercurio.client.feature.entry.domain.ModelCatalogEntry
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelEffortOptions
 import org.mercurio.client.feature.entry.domain.ModelSelection
 
@@ -95,33 +96,38 @@ class ModelPickerOrderingTest {
         val catalog = pickerCatalog()
         assertEquals(
             true,
-            ModelPickerUiState(capabilityAdvertised = true, catalog = catalog).showsSelectionControl,
-        )
-        assertEquals(
-            false,
-            ModelPickerUiState(capabilityAdvertised = true, catalog = null, isFetchingCatalog = true)
+            ModelPickerUiState(catalogSurface = ModelCatalogSurface.RUN_MODELS, catalog = catalog)
                 .showsSelectionControl,
         )
         assertEquals(
             false,
-            ModelPickerUiState(capabilityAdvertised = true, catalog = null, catalogFetchFailed = true)
-                .showsSelectionControl,
+            ModelPickerUiState(
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
+                isFetchingCatalog = true,
+            ).showsSelectionControl,
+        )
+        assertEquals(
+            false,
+            ModelPickerUiState(
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
+                catalogFetchFailed = true,
+            ).showsSelectionControl,
         )
         assertEquals(false, ModelPickerUiState().showsSelectionControl)
 
         assertEquals(
             true,
-            ModelPickerUiState(capabilityKnown = true, capabilityAdvertised = false).showsUnavailableCopy,
+            ModelPickerUiState(capabilityKnown = true, catalogSurface = null).showsUnavailableCopy,
         )
         assertEquals(
             false,
-            ModelPickerUiState(capabilityKnown = false, capabilityAdvertised = false).showsUnavailableCopy,
+            ModelPickerUiState(capabilityKnown = false, catalogSurface = null).showsUnavailableCopy,
         )
     }
 
     private fun pickerCatalog(): ModelCatalog =
         ModelCatalog(
-            discriminator = "hermes.api_server.run_models",
+            surface = ModelCatalogSurface.RUN_MODELS,
             defaultModel = "alpha",
             entries =
                 listOf(

@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.mercurio.client.feature.entry.domain.SessionId
 
@@ -15,7 +16,7 @@ class ModelPickerStateHolderTest {
             val session = retrySession(PICKER_SESSION_ID.value)
             val delegate = RetryFakeGateway(sessions = listOf(session))
             val catalog = PickerFakeGateway(delegate)
-            val holder = pickerHolder(catalog, capabilities = pickerCapabilities(withRunModelsRow = false))
+            val holder = pickerHolder(catalog, capabilities = pickerCapabilities(surface = null))
 
             try {
                 holder.connectAndOpenPickerSession(delegate)
@@ -118,6 +119,30 @@ class ModelPickerStateHolderTest {
         }
 
     @Test
+    fun the_state_holder_fetches_the_surface_the_gateway_advertised() =
+        runTest {
+            val session = retrySession(PICKER_SESSION_ID.value)
+            val delegate = RetryFakeGateway(sessions = listOf(session))
+            val catalog = PickerFakeGateway(delegate, catalogResult = Result.success(pickerCatalog()))
+            val holder =
+                pickerHolder(
+                    catalog,
+                    capabilities = pickerCapabilities(ModelCatalogSurface.MODEL_OPTIONS),
+                )
+
+            try {
+                holder.connectAndOpenPickerSession(delegate)
+                awaitPickerState(holder) { it.catalog != null }
+
+                val picker = requireNotNull(holder.uiState.value.sessionList).modelPicker
+                assertEquals(ModelCatalogSurface.MODEL_OPTIONS, picker.catalogSurface)
+                assertEquals(listOf(ModelCatalogSurface.MODEL_OPTIONS), catalog.fetchedSurfaces)
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
     fun a_connected_gateway_port_without_the_catalog_contract_fails_closed() =
         runTest {
             val session = retrySession(PICKER_SESSION_ID.value)
@@ -143,7 +168,10 @@ class ModelPickerStateHolderTest {
             val session = retrySession(PICKER_SESSION_ID.value)
             val delegate = RetryFakeGateway(sessions = listOf(session))
             val catalog = PickerFakeGateway(delegate, catalogResult = Result.success(pickerCatalog()))
-            val capabilities = java.util.concurrent.atomic.AtomicReference(pickerCapabilities(withRunModelsRow = true))
+            val capabilities =
+                java.util.concurrent.atomic.AtomicReference(
+                    pickerCapabilities(ModelCatalogSurface.RUN_MODELS),
+                )
             val holder = pickerHolder(catalog) { capabilities.get() }
 
             try {
@@ -154,7 +182,7 @@ class ModelPickerStateHolderTest {
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
                 awaitRetryState(holder) { !it.isConnected }
 
-                capabilities.set(pickerCapabilities(withRunModelsRow = false))
+                capabilities.set(pickerCapabilities(surface = null))
                 holder.connectAndOpenPickerSession(delegate)
 
                 val picker = requireNotNull(holder.uiState.value.sessionList).modelPicker

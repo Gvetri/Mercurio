@@ -24,14 +24,11 @@ data class GatewayCapabilities(
 }
 
 /**
- * Additive-optional detection of the Run model catalog.
- *
- * The catalog is available only when the discovered table advertises the pinned
- * `run_models` row with the exact method and path; absence or mismatch means the
- * catalog is unavailable, never that the connection fails.
+ * The advertised catalog surface: the first surface, in preference order, whose row the
+ * discovered table advertises with the exact method and path. A null result means the Gateway
+ * offers no model catalog, never that the connection fails.
  */
-fun GatewayCapabilities.supportsModelCatalog(): Boolean {
-    val required = PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint
-    return supports(required.endpoint) &&
-        endpoints[required.endpoint].matches(GatewayEndpoint(required.method, required.path))
-}
+fun GatewayCapabilities.modelCatalogSurface(): ModelCatalogSurface? =
+    PublicBetaGatewayCapabilityManifest.modelCatalogSurfaces.firstOrNull { surface ->
+        endpoints[surface.endpoint].matches(GatewayEndpoint(surface.method, surface.path))
+    }

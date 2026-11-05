@@ -23,6 +23,7 @@ import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsExporter
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsStore
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.mercurio.client.feature.entry.domain.ModelSelectionStore
@@ -812,6 +813,7 @@ internal data class RunSubmissionWork(
 internal data class ModelCatalogFetchRequest(
     val port: ModelGatewayPort,
     val endpoint: String,
+    val surface: ModelCatalogSurface,
     val connectionGeneration: Long,
 )
 

@@ -17,7 +17,7 @@ import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.RunEventObservation
 import org.mercurio.client.feature.entry.domain.RunGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
-import org.mercurio.client.feature.entry.domain.supportsModelCatalog
+import org.mercurio.client.feature.entry.domain.modelCatalogSurface
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -147,7 +147,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                                 modelPicker =
                                     ModelPickerUiState(
                                         capabilityKnown = true,
-                                        capabilityAdvertised = capabilities.supportsModelCatalog(),
+                                        catalogSurface = capabilities.modelCatalogSurface(),
                                     ),
                             )
                         },

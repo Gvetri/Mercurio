@@ -81,3 +81,41 @@ Verify the boundary with the documented fixture and unit gates, for example:
 ./gradlew fixtureContractTests
 ./gradlew :feature:entry:domain:test
 ```
+
+## Amendment: the deployed catalog surface (2026-11-05, issue #321)
+
+The forward-contract note in Consequences above is superseded by a measured finding. At Hermes
+0.22.5 a live `api_server` still serves no `GET /api/models` (404), so the pinned `run_models`
+row matches nothing and the picker stays hidden against every real Gateway. The same Gateway
+does publish `model_options` (`GET /api/model/options`) with a provider-grouped inventory, plus
+`models` (`GET /v1/models`) with a one-entry OpenAI-compatible list. The measurement ran against
+a live 0.22.5 listener (build `bf0203a7`); the pinned revision `d9833c56` advertises the same
+`model_options` row, so the captured payload validates against either revision.
+
+Decision: option B, the client adapter. The client accepts the deployed `model_options` row and
+maps its inventory into the catalog domain. The pinned `run_models` row stays accepted, first in
+preference order, so a Gateway that later serves the pinned schema needs no client change.
+
+`GET /v1/models` stays excluded. It means "the agent as a model", not a Run catalog: the
+measured response lists the single entry `hermes-agent`, which is not a selectable Run model and
+would render a selectable-but-dead control.
+
+The deployed mapping follows four rules:
+
+- The top-level `model` field is the configured Run model and maps to the catalog baseline.
+- One entry per model ID, in provider order then model order; the first occurrence of an ID wins,
+  because a Run names only the model.
+- Only a provider row with `authenticated: true` contributes entries. An unauthenticated provider
+  cannot run a model.
+- `displayName` is the model ID and `effort` is null: the deployed inventory publishes neither
+  display names nor an effort vocabulary, so the effort control stays hidden and Run creation
+  never sends the optional `effort` key.
+
+Consequences:
+
+- The fail-closed ladder keeps its shape: no accepted row, a mismatched row, or a failed fetch
+  hides the control and never blocks connection verification.
+- The drift is pinned, not inferred: `fixtures/mercurio/contracts/capabilities/captured-live.json`
+  is a captured live capabilities payload that advertises `model_options` and no `run_models`, and
+  a contract test asserts the client detects a catalog surface in it.
+- The deployed mapping is pinned by `fixtures/mercurio/contracts/models/options-success.json`.
