@@ -35,6 +35,26 @@ the exact `dependabot[bot]` identity and nothing else, so a body authored by any
 author the event does not name, must still carry every heading. The job always runs, because a
 skipped job does not satisfy a required check.
 
+## Closing keywords and issue hygiene
+
+The tracker reads the body as well as the reviewer does. When the body contains a closing keyword
+directly followed by an issue number, GitHub closes that issue the moment the pull request merges.
+The keywords are `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves`, and
+`resolved`, case-insensitive, and several issues separate with commas or spaces (`Closes #399, fixes
+#401`).
+
+The match is literal and scans the whole body: it fires from ordinary prose, from a table cell, and
+from inside a code span, so `` `close #399` `` written in backticks still closes #399. Write a
+keyword beside a number only when the merge should close the issue; quoting the phrase to discuss it
+does not protect the issue. The same scan reads the commit that lands on `main`, and this repository
+merges by squash, so a keyword and a number in the pull-request title close the issue just the same.
+
+When the merge leaves one manual step behind, do not point a closing keyword at that issue. Name the
+step with a word that is not a keyword, such as `Refs #399`, and spell the step out in the issue
+itself, so the issue stays open until the step is done. If an issue has already closed too early,
+reopen it with `gh issue reopen <number>`, then comment the merge commit SHA and the step that
+remains, so the record shows why it reopened.
+
 ## The design section is reviewer material
 
 The template's `## Design evidence` section is not one of the four headings, and no check reads it.
