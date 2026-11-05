@@ -5,10 +5,12 @@ object ContractFixtureCatalog {
         listOf(
             ContractFixtureDefinition("capabilities/request.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("capabilities/success.json", ContractFixtureFormat.JSON),
+            ContractFixtureDefinition("capabilities/captured-live.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("capabilities/missing-required.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("capabilities/unknown-additive.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("models/request.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("models/success.json", ContractFixtureFormat.JSON),
+            ContractFixtureDefinition("models/options-success.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("models/missing-required.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("models/unknown-additive.json", ContractFixtureFormat.JSON),
             ContractFixtureDefinition("connection/authenticated.json", ContractFixtureFormat.JSON),

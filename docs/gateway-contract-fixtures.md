@@ -40,7 +40,7 @@ adapters must use these shapes and must not infer additional routes or fields.
 | Run create | `POST /v1/runs` with `session_id` and `input`, plus the optional `model` and `effort` keys that are omitted when unset; the response carries the authoritative Run ID and status |
 | Run status | `GET /v1/runs/{run_id}` |
 | Run observation | `GET /v1/runs/{run_id}/events` as Server-Sent Events |
-| Model catalog | `GET /api/models`, additive-optional, never a client-required endpoint; the supported response shape is defined in [Run model catalog](#run-model-catalog) |
+| Model catalog | `GET /api/models` (pinned) or `GET /api/model/options` (deployed), additive-optional, never a client-required endpoint; the supported response shapes are defined in [Run model catalog](#run-model-catalog) |
 
 Session row responses (create, get, and patch) can omit the list-only `preview`
 field. Missing preview remains unavailable; it is not fabricated from history.
@@ -98,19 +98,28 @@ The Run model catalog is an additive-optional surface. The client never requires
 it and connection verification never depends on it: the manifest version stays
 `1` and the required endpoint table above is unchanged.
 
-The capability entry is the endpoint row
+Two endpoint rows can carry the catalog. The client accepts the first one the
+Gateway advertises, in this preference order:
 
-| Endpoint name | Method | Path |
-| --- | --- | --- |
-| `run_models` | `GET` | `/api/models` |
+| Preference | Endpoint name | Method | Path | Response shape |
+| --- | --- | --- | --- | --- |
+| 1 | `run_models` | `GET` | `/api/models` | pinned catalog |
+| 2 | `model_options` | `GET` | `/api/model/options` | deployed provider-grouped inventory |
 
 Detection uses the same case-insensitive exact method-and-path rule as required
-endpoints, applied to this optional row: the row is present with the exact
-pinned method and path, and the catalog is available; the row is absent or
-mismatched, and the catalog is unavailable without any failure. A bearer-
-authenticated `GET /api/models` (see the bare request in
+endpoints, applied to these optional rows: a row is present with the exact
+pinned method and path, and that surface is available; no row matches, and the
+catalog is unavailable without any failure. The client calls the row it
+accepted, so an accepted surface never resolves to a different route.
+
+`GET /v1/models` (the `models` row) is deliberately not a catalog surface. It
+means "the agent as a model", not a Run catalog: a live Hermes 0.22.5 Gateway
+answers it with the single entry `hermes-agent`, which is not a selectable Run
+model.
+
+A bearer-authenticated `GET /api/models` (see the bare request in
 [`fixtures/mercurio/contracts/models`](../fixtures/mercurio/contracts/models))
-returns HTTP 200 with:
+returns HTTP 200 with the pinned shape:
 
 - `object` — the fixed discriminator `hermes.api_server.run_models`;
 - `default_model` — string or null; the server's configured Run model, and the
@@ -125,21 +134,54 @@ returns HTTP 200 with:
   is a string or null that must be a member of `supported` when non-null. An
   entry without `effort` is selectable with no effort control.
 
-Unknown additive keys at any level of the catalog response are allowed and
-ignored, exactly as on the rest of the boundary. The catalog shape, the
-`run_models` row, and the two Run-create request shapes (unset and selected)
-are pinned by fixtures and contract tests, not inferred from a live Gateway.
+A bearer-authenticated `GET /api/model/options` returns HTTP 200 with the
+deployed shape (a captured sample is
+[`fixtures/mercurio/contracts/models/options-success.json`](../fixtures/mercurio/contracts/models/options-success.json)):
+
+- `providers[]` — a required array of provider rows. Each row carries `slug`
+  (a non-blank string, the informational provider label) and `authenticated`
+  (a boolean);
+- `providers[].models[]` — a required array of model ID strings;
+- `model` — string or null; the server's configured Run model, mapped to the
+  catalog baseline.
+
+The deployed mapping into the catalog domain follows four rules:
+
+1. Only a provider row with `authenticated: true` contributes entries. An
+   unauthenticated provider cannot run a model, so offering one would be a
+   selectable-but-dead row.
+2. Entries keep provider order, then model order. The first occurrence of a
+   model ID wins, because a Run names only the model.
+3. `display_name` is the model ID: the deployed inventory publishes no display
+   names.
+4. `effort` is null for every deployed entry: the deployed inventory publishes
+   no effort vocabulary, so the effort control stays hidden and Run creation
+   never sends the optional `effort` key.
+
+Unknown additive keys at any level of either response are allowed and ignored,
+exactly as on the rest of the boundary. Both catalog shapes, both rows, and the
+two Run-create request shapes (unset and selected) are pinned by fixtures and
+contract tests, not inferred from a live Gateway. The captured live
+capabilities payload pins the drift that motivated the second row: a real
+Gateway advertises `model_options` and no `run_models` at all.
 
 Absence is fail-closed in a fixed ladder:
 
-1. No `run_models` row in the discovered `endpoints` table — the catalog is
-   never fetched and model selection stays hidden.
-2. The row is advertised but `GET /api/models` returns a non-200 status or a
+1. No accepted row in the discovered `endpoints` table — the catalog is never
+   fetched and model selection stays hidden.
+2. The row is advertised but the catalog request returns a non-200 status or a
    transport error — selection stays hidden and connection verification is
    unaffected.
-3. A 200 response with an empty or malformed `models` array — the parser fails
-   closed to `INVALID_RESPONSE` internally, the catalog is unavailable,
-   selection stays hidden, and the connection stays healthy.
+3. A 200 response that is empty or malformed for its surface — for the pinned
+   surface a foreign `object` discriminator, a missing or empty `models` array,
+   a blank entry field, or an effort `default` outside `supported`; for the
+   deployed surface a missing `providers` array, a provider row that is not an
+   object, a blank `slug`, a non-boolean `authenticated`, a non-string or blank
+   model ID, or no authenticated model at all. A provider row with
+   `authenticated: false` is skipped, never invalid, and a provider may list no
+   models. The parser fails closed to `INVALID_RESPONSE` internally, the
+   catalog is unavailable, selection stays hidden, and the connection stays
+   healthy.
 4. A catalog entry without its optional `effort` object — that model is
    selectable with no effort control.
 

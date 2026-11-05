@@ -14,6 +14,7 @@ import org.mercurio.client.feature.entry.domain.GatewayContractPort
 import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.ModelCatalog
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunCreateRequest
@@ -412,20 +413,21 @@ internal class GatewayRunOperations(
 internal class GatewayModelCatalogOperations(
     private val calls: GatewayClientCalls,
 ) : ModelGatewayPort {
-    override fun fetchModelCatalog(): ModelCatalog {
+    override fun fetchModelCatalog(surface: ModelCatalogSurface): ModelCatalog {
         val response =
             calls.execute(
                 GatewayOperationRequest(
                     operation = "model catalog",
-                    method = "GET",
-                    path = "/api/models",
+                    method = surface.method,
+                    path = surface.path,
                     expectedStatus = HTTP_OK,
                 ),
             )
-        return GatewayJsonParser.parseModelCatalog(
-            operation = "model catalog",
-            root = GatewayJsonParser.parseObject("model catalog", response.body),
-        )
+        val root = GatewayJsonParser.parseObject("model catalog", response.body)
+        return when (surface) {
+            ModelCatalogSurface.RUN_MODELS -> GatewayJsonParser.parseModelCatalog("model catalog", root)
+            ModelCatalogSurface.MODEL_OPTIONS -> GatewayJsonParser.parseModelOptionsCatalog("model catalog", root)
+        }
     }
 }
 

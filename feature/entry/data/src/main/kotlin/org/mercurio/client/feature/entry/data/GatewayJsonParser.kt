@@ -12,6 +12,7 @@ import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.ModelCatalog
 import org.mercurio.client.feature.entry.domain.ModelCatalogEntry
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelEffortOptions
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEvent
@@ -157,7 +158,7 @@ internal object GatewayJsonParser {
     }
 
     /**
-     * Parses the additive-optional `GET /api/models` Run model catalog response.
+     * Parses the pinned `GET /api/models` Run model catalog response.
      *
      * The documented fail-closed ladder: a foreign `object` discriminator, a missing or
      * empty `models` array, a blank required entry field, or an effort `default` outside
@@ -176,8 +177,34 @@ internal object GatewayJsonParser {
             }
         if (entries.isEmpty()) invalid(operation, "field 'models' must not be empty")
         return ModelCatalog(
-            discriminator = MODEL_CATALOG_OBJECT,
+            surface = ModelCatalogSurface.RUN_MODELS,
             defaultModel = GatewayJsonFields.requiredNullableString(root, "default_model", operation),
+            entries = entries,
+        )
+    }
+
+    /**
+     * Parses the deployed provider-grouped inventory served by `GET /api/model/options`.
+     *
+     * Only a provider the Gateway reports as authenticated contributes entries: an
+     * unauthenticated provider cannot run a model, so offering one would be a
+     * selectable-but-dead row. The first entry per model id wins, because a Run names only the
+     * model. A malformed provider row, a blank model id, or a payload with no selectable entry
+     * rejects the whole response as INVALID_RESPONSE; unknown additive keys are ignored.
+     */
+    fun parseModelOptionsCatalog(
+        operation: String,
+        root: JsonObject,
+    ): ModelCatalog {
+        val entries =
+            GatewayJsonFields.requiredArray(root, "providers", operation)
+                .flatMapIndexed { index, value ->
+                    GatewayJsonElements.parseModelOptionsProvider(value, "$operation.providers[$index]")
+                }.distinctBy(ModelCatalogEntry::id)
+        if (entries.isEmpty()) invalid(operation, "field 'providers' must list at least one authenticated model")
+        return ModelCatalog(
+            surface = ModelCatalogSurface.MODEL_OPTIONS,
+            defaultModel = GatewayJsonFields.requiredNullableString(root, "model", operation),
             entries = entries,
         )
     }
@@ -278,6 +305,25 @@ private object GatewayJsonElements {
             provider = GatewayJsonFields.requiredNullableString(entry, "provider", operation),
             effort = parseModelEffort(entry, operation),
         )
+    }
+
+    fun parseModelOptionsProvider(
+        value: JsonElement,
+        operation: String,
+    ): List<ModelCatalogEntry> {
+        val provider = value as? JsonObject ?: invalid(operation, "provider must be a JSON object")
+        val providerSlug = GatewayJsonFields.requiredNonBlankString(provider, "slug", operation)
+        if (!GatewayJsonFields.requiredBoolean(provider, "authenticated", operation)) return emptyList()
+        return GatewayJsonFields.requiredArray(provider, "models", operation).mapIndexed { index, entry ->
+            val modelId = GatewayJsonFields.stringValue(entry, "models[$index]", operation)
+            if (modelId.isBlank()) invalid(operation, "field 'models[$index]' must not be blank")
+            ModelCatalogEntry(
+                id = modelId,
+                displayName = modelId,
+                provider = providerSlug,
+                effort = null,
+            )
+        }
     }
 
     private fun parseModelEffort(
