@@ -20,6 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
@@ -484,6 +485,89 @@ class SettingsScreenTest {
         composeTestRule.waitForIdle()
 
         assertEquals(listOf<EntryUiEvent>(EntryUiEvent.CancelRemoveGatewayConnectionClicked), events)
+    }
+
+    @Test
+    fun settings_error_reporting_row_starts_off_and_states_the_scope() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).copy(isErrorReportingConfigured = true),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Share crash and error reports").performScrollTo().assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Crashes, errors, and not-responding reports. Off until you turn it on.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("Share crash and error reports")
+            .performScrollTo()
+            .assertIsOff()
+    }
+
+    @Test
+    fun settings_error_reporting_row_reads_a_granted_answer() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        connectedListState(isSettingsOpen = true).copy(
+                            isErrorReportingConfigured = true,
+                            errorReportingConsent = ErrorReportingConsent.Granted,
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Crashes, errors, and not-responding reports. On until you turn it off.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("Share crash and error reports")
+            .performScrollTo()
+            .assertIsOn()
+    }
+
+    @Test
+    fun settings_error_reporting_row_is_absent_without_a_reporting_endpoint() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = connectedListState(isSettingsOpen = true), onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("DIAGNOSTICS").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Share crash and error reports").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Share crash and error reports").assertDoesNotExist()
+    }
+
+    @Test
+    fun settings_error_reporting_toggle_routes_the_stored_decision() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).copy(isErrorReportingConfigured = true),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Share crash and error reports")
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(
+            listOf<EntryUiEvent>(EntryUiEvent.ErrorReportingConsentToggleClicked(granted = true)),
+            events,
+        )
     }
 
     @Test

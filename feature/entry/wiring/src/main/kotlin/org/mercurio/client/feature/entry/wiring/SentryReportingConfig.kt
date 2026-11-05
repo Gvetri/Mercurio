@@ -12,8 +12,11 @@ data class SentryReportingConfig(
     val sessionTrackingEnabled: Boolean = SENTRY_SESSION_TRACKING_ENABLED,
     val ignoredErrors: List<String> = SENTRY_IGNORED_ERRORS,
 ) {
+    val isConfigured: Boolean
+        get() = dsn.isNotBlank()
+
     val isEnabled: Boolean
-        get() = dsn.isNotBlank() && consent.isGranted
+        get() = isConfigured && consent.isGranted
 }
 
 internal const val SENTRY_SESSION_TRACKING_ENABLED: Boolean = false
@@ -30,8 +33,11 @@ internal fun sentryReportingConfig(
     dsn: String? = null,
 ): SentryReportingConfig =
     SentryReportingConfig(
-        dsn = dsn ?: BuildConfig.SENTRY_DSN,
+        dsn = resolvedSentryDsn(dsn),
         release = clientVersion,
         environment = BuildConfig.BUILD_TYPE,
         consent = consent,
     )
+
+/** The endpoint this build reports to, resolved once so the gate and the Settings row agree. */
+internal fun resolvedSentryDsn(dsn: String? = null): String = dsn ?: BuildConfig.SENTRY_DSN

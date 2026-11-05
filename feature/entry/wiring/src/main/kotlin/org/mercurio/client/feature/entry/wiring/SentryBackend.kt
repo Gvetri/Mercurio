@@ -6,17 +6,20 @@ import io.sentry.android.core.SentryAndroid
 import io.sentry.android.core.SentryAndroidOptions
 import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.application.NoOpErrorReporter
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import java.util.concurrent.atomic.AtomicBoolean
 
 fun interface SentryBackend {
     fun start(
         context: Context,
         config: SentryReportingConfig,
+        consent: () -> ErrorReportingConsent,
     ): ErrorReporter
 }
 
 internal class AndroidSentryBackend(
-    private val install: (Context, SentryReportingConfig) -> Unit = ::installSentryAndroid,
+    private val install: (Context, SentryReportingConfig, () -> ErrorReportingConsent) -> Unit =
+        ::installSentryAndroid,
 ) : SentryBackend {
     private val started = AtomicBoolean(false)
     private val installed = AtomicBoolean(false)
@@ -24,12 +27,13 @@ internal class AndroidSentryBackend(
     override fun start(
         context: Context,
         config: SentryReportingConfig,
+        consent: () -> ErrorReportingConsent,
     ): ErrorReporter {
         if (!config.isEnabled) return NoOpErrorReporter
         if (started.compareAndSet(false, true)) {
-            installed.set(runCatching { install(context, config) }.isSuccess)
+            installed.set(runCatching { install(context, config, consent) }.isSuccess)
         }
-        return if (installed.get()) SentryErrorReporter(config) else NoOpErrorReporter
+        return if (installed.get()) SentryErrorReporter(config, consent = consent) else NoOpErrorReporter
     }
 }
 
@@ -38,14 +42,16 @@ internal val defaultSentryBackend: SentryBackend = AndroidSentryBackend()
 private fun installSentryAndroid(
     context: Context,
     config: SentryReportingConfig,
+    consent: () -> ErrorReportingConsent,
 ) {
     val scrubber = ReportScrubber()
-    SentryAndroid.init(context) { options -> options.applyReporting(config, scrubber) }
+    SentryAndroid.init(context) { options -> options.applyReporting(config, scrubber, consent) }
 }
 
 internal fun SentryAndroidOptions.applyReporting(
     config: SentryReportingConfig,
     scrubber: ReportScrubber,
+    consent: () -> ErrorReportingConsent,
 ) {
     dsn = config.dsn
     release = config.release
@@ -64,6 +70,6 @@ internal fun SentryAndroidOptions.applyReporting(
     isAttachStacktrace = true
     beforeSend =
         BeforeSendCallback { event, _ ->
-            scrubber.scrub(event)
+            if (consent().isGranted) scrubber.scrub(event) else null
         }
 }

@@ -225,6 +225,12 @@ is absent from the capture, so the matrix grows with the code issues that add th
 | `settings_23_about_dark` | `w360dp-h640dp-night` | The same rows on the dark token set |
 | `settings_27_font_scale_200_light` | `w360dp-h640dp-notnight` | 200% type in the shortened window |
 | `settings_27_font_scale_200_dark` | `w360dp-h640dp-night` | The same witness on the dark token set |
+| `settings_24_error_reporting_off_light` | `w360dp-h800dp-notnight` | The Diagnostics consent row off, with its scope line |
+| `settings_24_error_reporting_off_dark` | `w360dp-h800dp-night` | The same row on the dark token set |
+| `settings_25_error_reporting_on_light` | `w360dp-h800dp-notnight` | The same row on, stating what is sent until it is turned off |
+| `settings_25_error_reporting_on_dark` | `w360dp-h800dp-night` | The same row on the dark token set |
+| `settings_error_reporting_absent_light` | `w360dp-h800dp-notnight` | A build with no reporting endpoint: the row is absent, not disabled |
+| `settings_error_reporting_absent_dark` | `w360dp-h800dp-night` | The same absent row on the dark token set |
 
 The Session list has no creation dialog: `+ new session` creates the Session and keeps
 the list in place, and the new row carries the pending-title preview until the Gateway

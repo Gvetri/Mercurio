@@ -227,6 +227,9 @@ private fun SettingsDiagnosticsSection(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     SettingsSectionHeader(stringResource(R.string.settings_section_diagnostics))
+    if (state.isErrorReportingConfigured) {
+        SettingsErrorReportingRow(state = state, onEvent = onEvent)
+    }
     HorizontalDivider()
     SettingsActionRow(
         label = stringResource(R.string.settings_local_diagnostics),
@@ -243,6 +246,31 @@ private fun SettingsDiagnosticsSection(
     SettingsActionRow(
         label = stringResource(R.string.settings_clear_history_cache),
         onClick = { onEvent(EntryUiEvent.ClearHistoryCacheClicked) },
+    )
+}
+
+@Composable
+private fun SettingsErrorReportingRow(
+    state: EntryUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val granted = state.errorReportingConsent.isGranted
+    SettingsSwitchRow(
+        model =
+            SettingsSwitchRowModel(
+                label = stringResource(R.string.settings_error_reporting_row),
+                supporting =
+                    stringResource(
+                        if (granted) {
+                            R.string.settings_error_reporting_supporting_on
+                        } else {
+                            R.string.settings_error_reporting_supporting_off
+                        },
+                    ),
+                checked = granted,
+                description = stringResource(R.string.settings_error_reporting_row),
+            ),
+        onCheckedChange = { checked -> onEvent(EntryUiEvent.ErrorReportingConsentToggleClicked(checked)) },
     )
 }
 
