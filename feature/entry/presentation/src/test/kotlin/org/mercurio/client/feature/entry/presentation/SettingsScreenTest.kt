@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -85,7 +87,8 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithText("Local diagnostics").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Clear cached conversations").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Version").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("demo-build.1").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("demo-build.1").assertCountEquals(2)
+        composeTestRule.onAllNodesWithText("demo-build.1")[0].performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Build").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("412").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Install source").performScrollTo().assertIsDisplayed()

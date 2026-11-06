@@ -136,6 +136,7 @@
     <string name="settings_section_diagnostics">DIAGNOSTICS</string>
     <string name="settings_section_app_updates">APP UPDATES</string>
     <string name="settings_app_updates_row">App updates</string>
+    <string name="settings_app_updates_installed_version">Installed version</string>
     <string name="settings_app_updates_idle">Not checked yet</string>
     <string name="settings_app_updates_checking">Checking for updates…</string>
     <string name="settings_app_updates_check">Check for updates</string>

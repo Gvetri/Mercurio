@@ -34,6 +34,10 @@ internal fun SettingsAppUpdatesSection(
     val status = state.appUpdates.status
     SettingsSectionHeader(stringResource(R.string.settings_section_app_updates))
     SettingsValueRow(
+        label = stringResource(R.string.settings_app_updates_installed_version),
+        value = state.clientVersion,
+    )
+    SettingsValueRow(
         label = stringResource(R.string.settings_app_updates_row),
         value = settingsUpdateSummary(status = status, playManaged = playManaged),
         detail =

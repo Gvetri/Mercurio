@@ -20,7 +20,7 @@ private val RELEASE =
     NightlyRelease(
         tag = RELEASE_TAG,
         publishedAt = Instant.parse("2026-11-05T18:31:00Z"),
-        metadataAddress = "https://github.com/Gvetri/Mercurio/releases/download/$RELEASE_TAG/signing-metadata.json",
+        metadataAddress = "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/3",
     )
 
 class GitHubNightlyUpdateFeedTest {
@@ -31,7 +31,8 @@ class GitHubNightlyUpdateFeedTest {
 
             val listing = feed(transport).publishedNightlies()
 
-            val tags = (listing as NightlyListing.Listed).releases.map(NightlyRelease::tag)
+            val releases = (listing as NightlyListing.Listed).releases
+            val tags = releases.map(NightlyRelease::tag)
             assertEquals(
                 listOf(
                     RELEASE_TAG,
@@ -40,8 +41,16 @@ class GitHubNightlyUpdateFeedTest {
                 tags,
             )
             assertEquals(
+                "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/3",
+                releases.first().metadataAddress,
+            )
+            assertEquals(
                 listOf("https://api.github.com/repos/Gvetri/Mercurio/releases?per_page=30"),
                 transport.requestedUrls,
+            )
+            assertEquals(
+                listOf(GitHubReleaseHttpRequest.GITHUB_API_MEDIA_TYPE),
+                transport.requestedAccepts,
             )
         }
 
@@ -66,6 +75,10 @@ class GitHubNightlyUpdateFeedTest {
                 result,
             )
             assertEquals(listOf(RELEASE.metadataAddress), transport.requestedUrls)
+            assertEquals(
+                listOf(GitHubReleaseHttpRequest.GITHUB_RAW_MEDIA_TYPE),
+                transport.requestedAccepts,
+            )
         }
 
     @Test
@@ -165,6 +178,22 @@ class GitHubNightlyUpdateFeedTest {
             assertEquals(NightlySigningMetadataResult.Failed(NightlyFeedFailure.OFFLINE), result)
         }
 
+    @Test
+    fun reports_a_redirecting_metadata_response_as_service_unavailable() =
+        runTest {
+            val result = feed(FakeGitHubTransport { error(302) }).signingMetadata(RELEASE)
+
+            assertEquals(NightlySigningMetadataResult.Failed(NightlyFeedFailure.SERVICE_UNAVAILABLE), result)
+        }
+
+    @Test
+    fun reports_an_oversized_response_as_service_unavailable() =
+        runTest {
+            val listing = feed(FakeGitHubTransport { throw GitHubResponseTooLargeException() }).publishedNightlies()
+
+            assertEquals(NightlyListing.Failed(NightlyFeedFailure.SERVICE_UNAVAILABLE), listing)
+        }
+
     private fun feed(transport: FakeGitHubTransport): GitHubNightlyUpdateFeed = GitHubNightlyUpdateFeed(transport)
 
     private fun payload(name: String): String =
@@ -180,9 +209,11 @@ private class FakeGitHubTransport(
     private val respond: (String) -> GitHubReleaseHttpResponse,
 ) : GitHubReleaseHttpTransport {
     val requestedUrls: MutableList<String> = mutableListOf()
+    val requestedAccepts: MutableList<String> = mutableListOf()
 
     override suspend fun get(request: GitHubReleaseHttpRequest): GitHubReleaseHttpResponse {
         requestedUrls += request.url
+        requestedAccepts += request.accept
         return respond(request.url)
     }
 }

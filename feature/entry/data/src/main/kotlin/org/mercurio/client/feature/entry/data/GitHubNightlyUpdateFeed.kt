@@ -28,10 +28,24 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** One GitHub API request: the absolute URL the feed already built. */
+/**
+ * One GitHub API request: the absolute URL the feed already built, and the Accept media type the
+ * answer must carry. Release metadata is requested through the API asset endpoint, so it is read
+ * as raw text and never follows a download redirect.
+ */
 class GitHubReleaseHttpRequest(
     val url: String,
-)
+    val accept: String = GITHUB_API_MEDIA_TYPE,
+) {
+    companion object {
+        const val GITHUB_API_MEDIA_TYPE = "application/vnd.github+json"
+        const val GITHUB_RAW_MEDIA_TYPE = "application/vnd.github.raw"
+    }
+}
+
+/** The GitHub answer exceeded the update transport's bounded body budget. */
+class GitHubResponseTooLargeException :
+    IOException("GitHub response exceeded the update budget")
 
 /** One GitHub API answer, with a body the transport bounded. */
 class GitHubReleaseHttpResponse(
@@ -48,8 +62,8 @@ interface GitHubReleaseHttpTransport {
 fun defaultGitHubReleaseHttpTransport(): GitHubReleaseHttpTransport = OkHttpGitHubReleaseHttpTransport()
 
 /**
- * The OkHttp implementation: one GET with the GitHub API media type, no redirect, a bounded body,
- * a hard timeout, and cancellation that cancels the call.
+ * The OkHttp implementation: one GET with the request's Accept media type, no redirect, a bounded
+ * body, a hard timeout, and cancellation that cancels the call.
  */
 class OkHttpGitHubReleaseHttpTransport(
     client: OkHttpClient = OkHttpClient(),
@@ -104,7 +118,7 @@ class OkHttpGitHubReleaseHttpTransport(
         Request
             .Builder()
             .url(request.url)
-            .header("Accept", GITHUB_API_MEDIA_TYPE)
+            .header("Accept", request.accept)
             .header("X-GitHub-Api-Version", GITHUB_API_VERSION)
             .header("User-Agent", USER_AGENT)
             .get()
@@ -118,12 +132,11 @@ class OkHttpGitHubReleaseHttpTransport(
             val read = source.read(buffer, limit - buffer.size)
             if (read == -1L) break
         }
-        if (buffer.size > MAX_RESPONSE_BYTES) throw IOException("GitHub response exceeded the update budget")
+        if (buffer.size > MAX_RESPONSE_BYTES) throw GitHubResponseTooLargeException()
         return buffer.readUtf8()
     }
 
     private companion object {
-        const val GITHUB_API_MEDIA_TYPE = "application/vnd.github+json"
         const val GITHUB_API_VERSION = "2022-11-28"
         const val USER_AGENT = "Mercurio"
         const val CALL_TIMEOUT_SECONDS = 15L
@@ -153,7 +166,7 @@ class GitHubNightlyUpdateFeed(
         if (!release.metadataAddress.startsWith(HTTPS_PREFIX)) {
             NightlySigningMetadataResult.Failed(NightlyFeedFailure.MALFORMED_RESPONSE)
         } else {
-            requestMetadata(release.metadataAddress) { response ->
+            requestMetadata(release.metadataAddress, GitHubReleaseHttpRequest.GITHUB_RAW_MEDIA_TYPE) { response ->
                 parseMetadata(response.body)?.let(NightlySigningMetadataResult::Available)
                     ?: NightlySigningMetadataResult.Failed(NightlyFeedFailure.MALFORMED_RESPONSE)
             }
@@ -174,10 +187,11 @@ class GitHubNightlyUpdateFeed(
 
     private suspend fun requestMetadata(
         url: String,
+        accept: String,
         transform: (GitHubReleaseHttpResponse) -> NightlySigningMetadataResult,
     ): NightlySigningMetadataResult =
         try {
-            val response = transport.get(GitHubReleaseHttpRequest(url))
+            val response = transport.get(GitHubReleaseHttpRequest(url, accept))
             response.failure()?.let(NightlySigningMetadataResult::Failed) ?: transform(response)
         } catch (error: IOException) {
             NightlySigningMetadataResult.Failed(error.toFeedFailure())
@@ -200,7 +214,8 @@ class GitHubNightlyUpdateFeed(
                     val assetNames = assets.mapNotNull { asset -> asset.string("name") }.toSet()
                     val metadataAddress =
                         assets.firstOrNull { asset -> asset.string("name") == SIGNING_METADATA_ASSET }
-                            ?.string("browser_download_url")
+                            ?.long("id")
+                            ?.let { assetId -> "$apiBase/repos/$repository/releases/assets/$assetId" }
                     val eligible =
                         boolean("draft") == false &&
                             boolean("prerelease") == true &&
@@ -283,6 +298,7 @@ private fun parsePublishedAt(value: String): Instant? =
 
 private fun IOException.toFeedFailure(): NightlyFeedFailure =
     when (this) {
+        is GitHubResponseTooLargeException -> NightlyFeedFailure.SERVICE_UNAVAILABLE
         is UnknownHostException -> NightlyFeedFailure.OFFLINE
         is InterruptedIOException -> NightlyFeedFailure.SERVICE_UNAVAILABLE
         else -> NightlyFeedFailure.OFFLINE

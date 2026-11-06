@@ -507,6 +507,8 @@ class EntryStateHolder(
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
     internal var updateCheckJob: Job? = null
+
+    @Volatile
     internal var updateCheckGeneration = 0L
     internal var credentialBeforeRotation: String? = null
 

@@ -1,9 +1,11 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -113,6 +115,18 @@ class SettingsAppUpdatesScreenTest {
                     "contradicts its signing metadata. Nothing was downloaded.",
             ).performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun settings_app_updates_section_lists_the_installed_version() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = settingsState(), onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("Installed version").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("nightly-6001-89abcdef0123").assertCountEquals(2)
     }
 
     private fun settingsState(installSource: InstallSource = InstallSource.OTHER_SOURCE): EntryUiState =
