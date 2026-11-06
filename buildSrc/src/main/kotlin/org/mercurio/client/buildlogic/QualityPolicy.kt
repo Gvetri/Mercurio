@@ -68,6 +68,7 @@ object QualityPolicy {
         BoundaryDoubleRequirement("ErrorReportingConsentStore", "repository"),
         BoundaryDoubleRequirement("AppLockSettingsStore", "repository"),
         BoundaryDoubleRequirement("AppLockEnrolment", "datasource"),
+        BoundaryDoubleRequirement("NightlyUpdateFeed", "repository"),
     )
 
     /**

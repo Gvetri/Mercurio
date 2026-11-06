@@ -4,16 +4,21 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -74,7 +79,7 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithText("NOTIFICATIONS").assertIsDisplayed()
         composeTestRule.onNodeWithText("MEDIA").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("DIAGNOSTICS").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("ABOUT").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("APP UPDATES").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Connected · gateway ready").assertIsDisplayed()
         composeTestRule.onNodeWithText("App lock").assertIsDisplayed()
         composeTestRule.onNodeWithText("Notifications").performScrollTo().assertIsDisplayed()
@@ -82,11 +87,15 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithText("Local diagnostics").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Clear cached conversations").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Version").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("demo-build.1").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("demo-build.1").assertCountEquals(2)
+        composeTestRule.onAllNodesWithText("demo-build.1")[0].performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Build").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("412").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Install source").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Google Play").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("ABOUT"))
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("ABOUT").assertIsDisplayed()
         assertTrue(events.isEmpty())
     }
 
@@ -99,10 +108,16 @@ class SettingsScreenTest {
         }
 
         val tops =
-            listOf("CONNECTION", "SECURITY", "NOTIFICATIONS", "MEDIA", "DIAGNOSTICS", "ABOUT").map { label ->
+            listOf("CONNECTION", "SECURITY", "NOTIFICATIONS", "MEDIA", "DIAGNOSTICS").map { label ->
                 composeTestRule.onNodeWithText(label).fetchSemanticsNode().boundsInRoot.top
             }
         assertEquals(tops.sorted(), tops)
+
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("ABOUT"))
+        composeTestRule.waitForIdle()
+        val appUpdatesTop = composeTestRule.onNodeWithText("APP UPDATES").fetchSemanticsNode().boundsInRoot.top
+        val aboutTop = composeTestRule.onNodeWithText("ABOUT").fetchSemanticsNode().boundsInRoot.top
+        assertTrue(appUpdatesTop < aboutTop)
     }
 
     @Test
