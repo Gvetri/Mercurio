@@ -62,6 +62,27 @@ remains, so the record shows why it reopened.
 The template's `## Design evidence` section is not one of the four headings, and no check reads it.
 It is evidence for the reviewer; [Design delivery](../design-delivery.md) states what it carries.
 
+## The review record
+
+A change is reviewed on two axes before it is offered for merge: **Standards** (does it follow the
+repository's documented standards?) and **Spec** (does it do what the issue asked?). The verdicts
+reach the pull request itself, as one comment, so a later reviewer continues from the record instead
+of re-deriving the review, and the merge stays auditable after the session that ran it is gone.
+
+The record is one comment that carries, in order:
+
+1. **Verdicts.** `Standards: PASS` or `Standards: CHANGES REQUESTED`, and the same for `Spec`, each
+   pinned to the exact head SHA the review read. A review binds to that head: when the head moves,
+   the record is stale, and the re-review posts a fresh record for the new head.
+2. **Applied findings.** Each finding the review raised that was then fixed, with what changed.
+3. **Rejected findings.** Each finding that was not applied, with the evidence that refutes it, so a
+   reader can re-check the rejection instead of trusting it.
+
+The comment stands on its own: no session transcript, no thread elsewhere, nothing outside the pull
+request needed to read the verdicts. It is a plain comment, never an approving GitHub review — the
+protected branch requires zero approvals, and the deliverer's own approval would dress self-review up
+as independent review. The required-approval count stays at zero.
+
 ## Blocked, behind, and mergeable
 
 A pull request that reads green but cannot merge is in one of these `mergeStateStatus` states. Each
