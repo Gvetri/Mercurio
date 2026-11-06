@@ -13,4 +13,5 @@ enum class LocalDiagnosticEventType(
     GATEWAY_CONNECTION_VERIFICATION("gateway_connection_verification"),
     SESSION_LIST_LOAD("session_list_load"),
     RUN_SUBMISSION("run_submission"),
+    HISTORY_CACHE_CLEAR("history_cache_clear"),
 }
