@@ -1,23 +1,43 @@
 package org.mercurio.client.buildlogic
 
 import java.io.File
+import org.junit.After
+import org.junit.AfterClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestName
 
 /**
- * Runs the declared gate tasks against the real repository with injected fixtures, and requires the
- * gate to fail on the injected production or test code. Every fixture is restored or removed, so the
- * repository stays exactly as the run found it.
+ * Runs the declared gate tasks against a temporary copy of the repository with injected fixtures,
+ * and requires the gate to fail on the injected production or test code. Tests that inject get their
+ * own copy, the tests that only run the gate share one, and every copy is discarded, so the checkout
+ * is never modified.
  */
 class QualityVerificationFailClosedTest {
-    private val repositoryRoot =
-        File(
-            requireNotNull(System.getProperty("architecture.projectDir")) {
-                "architecture.projectDir must identify the repository root"
-            },
-        )
+    @get:Rule
+    val testName = TestName()
+    private lateinit var repositoryRoot: File
+
+    @Before
+    fun createRepositoryCopy() {
+        repositoryRoot =
+            if (testName.methodName in sharedCopyTests) {
+                sharedRepositoryCopy()
+            } else {
+                temporaryRepositoryCopy(sourceRepositoryRoot)
+            }
+    }
+
+    @After
+    fun discardRepositoryCopy() {
+        if (testName.methodName !in sharedCopyTests) {
+            repositoryRoot.deleteRecursively()
+        }
+    }
 
     @Test
     fun coverage_verification_rejects_unreached_production_code() {
@@ -245,31 +265,28 @@ class QualityVerificationFailClosedTest {
 
     @Test
     fun detekt_verification_rejects_a_committed_baseline() {
+        requireFixtureRepository()
         val baseline = repositoryRoot.resolve("config/detekt/baseline.xml")
         check(!baseline.exists()) { "config/detekt/baseline.xml must not exist before the fixture is written." }
-        try {
-            baseline.writeText(
-                "<?xml version=\"1.0\" ?>\n" +
-                    "<SmellBaseline>\n" +
-                    "  <ManuallySuppressedIssues/>\n" +
-                    "  <CurrentIssues>\n" +
-                    "  </CurrentIssues>\n" +
-                    "</SmellBaseline>\n",
-            )
-            val result = runGradle(listOf("detektVerify"))
+        baseline.writeText(
+            "<?xml version=\"1.0\" ?>\n" +
+                "<SmellBaseline>\n" +
+                "  <ManuallySuppressedIssues/>\n" +
+                "  <CurrentIssues>\n" +
+                "  </CurrentIssues>\n" +
+                "</SmellBaseline>\n",
+        )
+        val result = runGradle(listOf("detektVerify"))
 
-            assertNotEquals(
-                "The detekt verification accepted a committed baseline:\n${result.output}",
-                0,
-                result.exitCode,
-            )
-            assertTrue(
-                "The detekt verification did not report the baseline file:\n${result.output}",
-                result.output.contains("Detekt verification found baseline files"),
-            )
-        } finally {
-            baseline.delete()
-        }
+        assertNotEquals(
+            "The detekt verification accepted a committed baseline:\n${result.output}",
+            0,
+            result.exitCode,
+        )
+        assertTrue(
+            "The detekt verification did not report the baseline file:\n${result.output}",
+            result.output.contains("Detekt verification found baseline files"),
+        )
     }
 
     private fun assertInjectedFixturesFail(
@@ -277,13 +294,13 @@ class QualityVerificationFailClosedTest {
         tasks: List<String>,
         expected: String,
     ) {
-        val originals = fixtures.associateWith { fixture -> fixture.resolve(repositoryRoot).readText() }
-        try {
-            fixtures.forEach { fixture -> fixture.resolve(repositoryRoot).writeText(originals.getValue(fixture) + fixture.appended) }
-            assertRunFails(tasks, expected, fixtures.map { fixture -> fixture.relativePath })
-        } finally {
-            originals.forEach { (fixture, original) -> fixture.resolve(repositoryRoot).writeText(original) }
+        requireFixtureRepository()
+        fixtures.forEach { fixture ->
+            val target = fixture.resolve(repositoryRoot)
+            check(target.isFile) { "The injected fixture path is missing: ${fixture.relativePath}" }
+            target.appendText(fixture.appended)
         }
+        assertRunFails(tasks, expected, fixtures.map { fixture -> fixture.relativePath })
     }
 
     private fun assertNewFixtureFails(
@@ -292,14 +309,17 @@ class QualityVerificationFailClosedTest {
         tasks: List<String>,
         expected: String,
     ) {
+        requireFixtureRepository()
         val target = repositoryRoot.resolve(relativePath)
         check(!target.exists()) { "$relativePath must not already exist before the fixture is written." }
-        try {
-            target.parentFile.mkdirs()
-            target.writeText(content)
-            assertRunFails(tasks, expected, listOf(relativePath))
-        } finally {
-            target.delete()
+        target.parentFile.mkdirs()
+        target.writeText(content)
+        assertRunFails(tasks, expected, listOf(relativePath))
+    }
+
+    private fun requireFixtureRepository() {
+        check(repositoryRoot != sharedRepositoryRoot) {
+            "This test injects a fixture and must not run against the shared repository copy."
         }
     }
 
@@ -364,7 +384,31 @@ class QualityVerificationFailClosedTest {
         val output: String,
     )
 
-    private companion object {
+    companion object {
+        private val sourceRepositoryRoot =
+            File(
+                requireNotNull(System.getProperty("architecture.projectDir")) {
+                    "architecture.projectDir must identify the repository root"
+                },
+            )
+        private val sharedCopyTests =
+            setOf(
+                "detekt_verification_passes_on_a_clean_tree",
+                "quality_gate_rejects_a_skipped_coverage_verification",
+                "quality_gate_rejects_a_skipped_detekt_verification",
+                "quality_gate_rejects_a_skipped_mutation_verification",
+            )
+        private var sharedRepositoryRoot: File? = null
+
+        private fun sharedRepositoryCopy(): File =
+            sharedRepositoryRoot ?: temporaryRepositoryCopy(sourceRepositoryRoot).also { sharedRepositoryRoot = it }
+
+        @JvmStatic
+        @AfterClass
+        fun discardSharedRepositoryCopy() {
+            sharedRepositoryRoot?.deleteRecursively()
+        }
+
         /** The gate tasks that cost minutes; the verification contracts are what these tests exercise. */
         val excludedGateTasks =
             listOf(
