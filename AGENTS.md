@@ -32,5 +32,5 @@ Run the documented loop and gates before opening a PR. See `docs/agents/verify-y
 ### Pull request checks
 
 A pull request merges only when both required contexts pass. See
-`docs/agents/pull-request-checks.md` for the two checks, the body headings, and what blocked,
-behind, and mergeable each mean.
+`docs/agents/pull-request-checks.md` for the two checks, the body headings, what blocked, behind, and
+mergeable each mean, and the review record the two-axis review leaves on the pull request.
