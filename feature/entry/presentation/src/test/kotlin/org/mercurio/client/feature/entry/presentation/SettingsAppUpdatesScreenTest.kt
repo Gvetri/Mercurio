@@ -13,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.application.NightlyUpdateFailure
 import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionId
@@ -127,6 +128,30 @@ class SettingsAppUpdatesScreenTest {
 
         composeTestRule.onNodeWithText("Installed version").performScrollTo().assertIsDisplayed()
         composeTestRule.onAllNodesWithText("nightly-6001-89abcdef0123").assertCountEquals(2)
+    }
+
+    @Test
+    fun settings_app_updates_section_pins_the_failed_banner_copy() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        settingsState().copy(
+                            appUpdates =
+                                AppUpdatesUiState(
+                                    status = AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE),
+                                ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Check failed").performScrollTo().assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("The update service did not answer. Try again later.")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     private fun settingsState(installSource: InstallSource = InstallSource.OTHER_SOURCE): EntryUiState =

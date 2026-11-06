@@ -142,7 +142,7 @@ class CheckForNightlyUpdateTest {
         }
 
     @Test
-    fun refuses_a_document_that_cannot_be_read_by_its_release_tag() =
+    fun reports_an_unreadable_document_as_a_service_failure_not_a_refusal() =
         runTest {
             val unreadable = NightlySigningMetadataResult.Failed(NightlyFeedFailure.MALFORMED_RESPONSE)
             val feed =
@@ -152,7 +152,7 @@ class CheckForNightlyUpdateTest {
                 )
 
             assertEquals(
-                NightlyUpdateCheck.Refused(NEW_RELEASE.tag, NightlyUpdateRefusal.CONTRADICTORY_RELEASE),
+                NightlyUpdateCheck.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE),
                 checker(feed, installedVersionCode = 6001L).execute(),
             )
         }

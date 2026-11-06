@@ -45,14 +45,7 @@ class CheckForNightlyUpdate(
                 ?: return NightlyUpdateCheck.UpToDate(now())
         return when (val metadata = feed.signingMetadata(newest)) {
             is NightlySigningMetadataResult.Failed ->
-                when (metadata.reason) {
-                    NightlyFeedFailure.MALFORMED_RESPONSE ->
-                        NightlyUpdateCheck.Refused(newest.tag, NightlyUpdateRefusal.CONTRADICTORY_RELEASE)
-                    NightlyFeedFailure.OFFLINE,
-                    NightlyFeedFailure.RATE_LIMITED,
-                    NightlyFeedFailure.SERVICE_UNAVAILABLE,
-                    -> NightlyUpdateCheck.Failed(metadata.reason.toUpdateFailure())
-                }
+                NightlyUpdateCheck.Failed(metadata.reason.toUpdateFailure())
             is NightlySigningMetadataResult.Available ->
                 when {
                     metadata.metadata.contradicts(newest.tag) ->

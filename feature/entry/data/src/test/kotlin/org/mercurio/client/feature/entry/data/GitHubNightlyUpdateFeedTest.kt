@@ -16,6 +16,9 @@ import java.time.Instant
 
 private const val RELEASE_TAG = "nightly-7002-0123456789abcdef0123456789abcdef01234567"
 
+private const val ASSET_LOCATION =
+    "https://release-assets.githubusercontent.com/github-production-release-asset/1/signing-metadata.json"
+
 private val RELEASE =
     NightlyRelease(
         tag = RELEASE_TAG,
@@ -45,7 +48,7 @@ class GitHubNightlyUpdateFeedTest {
                 releases.first().metadataAddress,
             )
             assertEquals(
-                listOf("https://api.github.com/repos/Gvetri/Mercurio/releases?per_page=30"),
+                listOf("https://api.github.com/repos/Gvetri/Mercurio/releases?per_page=100"),
                 transport.requestedUrls,
             )
             assertEquals(
@@ -57,7 +60,14 @@ class GitHubNightlyUpdateFeedTest {
     @Test
     fun reads_the_signing_metadata_of_one_release() =
         runTest {
-            val transport = FakeGitHubTransport { ok(payload("metadata.json")) }
+            val transport =
+                FakeGitHubTransport { request ->
+                    when (request.url) {
+                        RELEASE.metadataAddress -> error(302, location = ASSET_LOCATION)
+                        ASSET_LOCATION -> ok(payload("metadata.json"))
+                        else -> error(500)
+                    }
+                }
 
             val result = feed(transport).signingMetadata(RELEASE)
 
@@ -74,9 +84,12 @@ class GitHubNightlyUpdateFeedTest {
                 ),
                 result,
             )
-            assertEquals(listOf(RELEASE.metadataAddress), transport.requestedUrls)
+            assertEquals(listOf(RELEASE.metadataAddress, ASSET_LOCATION), transport.requestedUrls)
             assertEquals(
-                listOf(GitHubReleaseHttpRequest.GITHUB_RAW_MEDIA_TYPE),
+                listOf(
+                    GitHubReleaseHttpRequest.GITHUB_ASSET_MEDIA_TYPE,
+                    GitHubReleaseHttpRequest.GITHUB_ASSET_MEDIA_TYPE,
+                ),
                 transport.requestedAccepts,
             )
         }
@@ -187,6 +200,28 @@ class GitHubNightlyUpdateFeedTest {
         }
 
     @Test
+    fun reports_a_redirect_to_a_foreign_host_as_service_unavailable() =
+        runTest {
+            val transport = FakeGitHubTransport { error(302, location = "https://example.invalid/metadata.json") }
+
+            val result = feed(transport).signingMetadata(RELEASE)
+
+            assertEquals(NightlySigningMetadataResult.Failed(NightlyFeedFailure.SERVICE_UNAVAILABLE), result)
+            assertEquals(listOf(RELEASE.metadataAddress), transport.requestedUrls)
+        }
+
+    @Test
+    fun reports_a_second_redirect_as_service_unavailable() =
+        runTest {
+            val transport = FakeGitHubTransport { error(302, location = ASSET_LOCATION) }
+
+            val result = feed(transport).signingMetadata(RELEASE)
+
+            assertEquals(NightlySigningMetadataResult.Failed(NightlyFeedFailure.SERVICE_UNAVAILABLE), result)
+            assertEquals(listOf(RELEASE.metadataAddress, ASSET_LOCATION), transport.requestedUrls)
+        }
+
+    @Test
     fun reports_an_oversized_response_as_service_unavailable() =
         runTest {
             val listing = feed(FakeGitHubTransport { throw GitHubResponseTooLargeException() }).publishedNightlies()
@@ -199,14 +234,24 @@ class GitHubNightlyUpdateFeedTest {
     private fun payload(name: String): String =
         requireNotNull(javaClass.getResource("/nightly-update/$name")) { "missing payload $name" }.readText()
 
-    private fun ok(body: String): GitHubReleaseHttpResponse = GitHubReleaseHttpResponse(statusCode = 200, body = body)
+    private fun ok(
+        body: String,
+        location: String? = null,
+    ): GitHubReleaseHttpResponse = GitHubReleaseHttpResponse(statusCode = 200, body = body, location = location)
 
-    private fun error(statusCode: Int): GitHubReleaseHttpResponse =
-        GitHubReleaseHttpResponse(statusCode = statusCode, body = """{"message":"request refused"}""")
+    private fun error(
+        statusCode: Int,
+        location: String? = null,
+    ): GitHubReleaseHttpResponse =
+        GitHubReleaseHttpResponse(
+            statusCode = statusCode,
+            body = """{"message":"request refused"}""",
+            location = location,
+        )
 }
 
 private class FakeGitHubTransport(
-    private val respond: (String) -> GitHubReleaseHttpResponse,
+    private val respond: (GitHubReleaseHttpRequest) -> GitHubReleaseHttpResponse,
 ) : GitHubReleaseHttpTransport {
     val requestedUrls: MutableList<String> = mutableListOf()
     val requestedAccepts: MutableList<String> = mutableListOf()
@@ -214,6 +259,6 @@ private class FakeGitHubTransport(
     override suspend fun get(request: GitHubReleaseHttpRequest): GitHubReleaseHttpResponse {
         requestedUrls += request.url
         requestedAccepts += request.accept
-        return respond(request.url)
+        return respond(request)
     }
 }

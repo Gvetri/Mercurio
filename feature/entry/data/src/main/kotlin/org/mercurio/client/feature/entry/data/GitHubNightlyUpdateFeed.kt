@@ -21,6 +21,7 @@ import org.mercurio.client.feature.entry.domain.NightlySigningMetadataResult
 import org.mercurio.client.feature.entry.domain.NightlyUpdateFeed
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.net.URI
 import java.net.UnknownHostException
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -30,8 +31,9 @@ import kotlin.coroutines.resumeWithException
 
 /**
  * One GitHub API request: the absolute URL the feed already built, and the Accept media type the
- * answer must carry. Release metadata is requested through the API asset endpoint, so it is read
- * as raw text and never follows a download redirect.
+ * answer must carry. Release metadata content is requested through the API asset endpoint with the
+ * octet-stream media type. The transport never follows redirects, so a redirect answer comes back
+ * with its target and the feed decides whether to chase it.
  */
 class GitHubReleaseHttpRequest(
     val url: String,
@@ -39,7 +41,7 @@ class GitHubReleaseHttpRequest(
 ) {
     companion object {
         const val GITHUB_API_MEDIA_TYPE = "application/vnd.github+json"
-        const val GITHUB_RAW_MEDIA_TYPE = "application/vnd.github.raw"
+        const val GITHUB_ASSET_MEDIA_TYPE = "application/octet-stream"
     }
 }
 
@@ -47,10 +49,11 @@ class GitHubReleaseHttpRequest(
 class GitHubResponseTooLargeException :
     IOException("GitHub response exceeded the update budget")
 
-/** One GitHub API answer, with a body the transport bounded. */
+/** One GitHub API answer, with a body the transport bounded and the redirect target, if any. */
 class GitHubReleaseHttpResponse(
     val statusCode: Int,
     val body: String,
+    val location: String? = null,
 )
 
 /** The GitHub API boundary the Nightly feed drives; a test double replaces it. */
@@ -102,6 +105,7 @@ class OkHttpGitHubReleaseHttpTransport(
                                     GitHubReleaseHttpResponse(
                                         statusCode = it.code,
                                         body = boundedBody(it.body),
+                                        location = it.header("Location"),
                                     )
                                 }
                             }
@@ -166,7 +170,7 @@ class GitHubNightlyUpdateFeed(
         if (!release.metadataAddress.startsWith(HTTPS_PREFIX)) {
             NightlySigningMetadataResult.Failed(NightlyFeedFailure.MALFORMED_RESPONSE)
         } else {
-            requestMetadata(release.metadataAddress, GitHubReleaseHttpRequest.GITHUB_RAW_MEDIA_TYPE) { response ->
+            requestMetadata(release.metadataAddress, GitHubReleaseHttpRequest.GITHUB_ASSET_MEDIA_TYPE) { response ->
                 parseMetadata(response.body)?.let(NightlySigningMetadataResult::Available)
                     ?: NightlySigningMetadataResult.Failed(NightlyFeedFailure.MALFORMED_RESPONSE)
             }
@@ -192,12 +196,27 @@ class GitHubNightlyUpdateFeed(
     ): NightlySigningMetadataResult =
         try {
             val response = transport.get(GitHubReleaseHttpRequest(url, accept))
-            response.failure()?.let(NightlySigningMetadataResult::Failed) ?: transform(response)
+            val content = fetchMetadataContent(response, accept)
+            content.failure()?.let(NightlySigningMetadataResult::Failed) ?: transform(content)
         } catch (error: IOException) {
             NightlySigningMetadataResult.Failed(error.toFeedFailure())
         } catch (_: IllegalArgumentException) {
             NightlySigningMetadataResult.Failed(NightlyFeedFailure.MALFORMED_RESPONSE)
         }
+
+    private suspend fun fetchMetadataContent(
+        response: GitHubReleaseHttpResponse,
+        accept: String,
+    ): GitHubReleaseHttpResponse =
+        when (val target = redirectTarget(response)) {
+            null -> response
+            else -> transport.get(GitHubReleaseHttpRequest(target, accept))
+        }
+
+    private fun redirectTarget(response: GitHubReleaseHttpResponse): String? =
+        response.location
+            ?.takeIf { response.statusCode == HTTP_REDIRECT }
+            ?.takeIf { it.isAllowlistedAssetLocation() }
 
     private fun parseReleases(body: String): List<NightlyRelease>? {
         val array = parseJson(body) as? JsonArray ?: return null
@@ -264,8 +283,9 @@ class GitHubNightlyUpdateFeed(
     private companion object {
         const val DEFAULT_REPOSITORY = "Gvetri/Mercurio"
         const val DEFAULT_API_BASE = "https://api.github.com"
-        const val PAGE_SIZE = 30
+        const val PAGE_SIZE = 100
         const val HTTP_OK = 200
+        const val HTTP_REDIRECT = 302
         const val HTTP_FORBIDDEN = 403
         const val HTTP_TOO_MANY_REQUESTS = 429
         const val HTTPS_PREFIX = "https://"
@@ -302,4 +322,12 @@ private fun IOException.toFeedFailure(): NightlyFeedFailure =
         is UnknownHostException -> NightlyFeedFailure.OFFLINE
         is InterruptedIOException -> NightlyFeedFailure.SERVICE_UNAVAILABLE
         else -> NightlyFeedFailure.OFFLINE
+    }
+
+private const val RELEASE_ASSET_HOST = "release-assets.githubusercontent.com"
+
+private fun String?.isAllowlistedAssetLocation(): Boolean =
+    when (val candidate = this?.let { value -> runCatching { URI(value) }.getOrNull() }) {
+        null -> false
+        else -> candidate.scheme == "https" && candidate.host == RELEASE_ASSET_HOST
     }
