@@ -36,6 +36,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -102,6 +104,11 @@ private fun SessionRowContent(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val haptics = LocalHapticFeedback.current
+    val openActions = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onLongPress()
+    }
     val component = tokens.componentColors
     val showActionsLabel = stringResource(R.string.sessions_show_actions)
     val selected = row.selected || inlineRename
@@ -120,7 +127,7 @@ private fun SessionRowContent(
                 .combinedClickable(
                     enabled = row.enabled && row.mutation?.pendingAction == null && !inlineRename,
                     onClick = row.onClick,
-                    onLongClick = onLongPress,
+                    onLongClick = openActions,
                 )
                 .semantics {
                     this.selected = row.selected
