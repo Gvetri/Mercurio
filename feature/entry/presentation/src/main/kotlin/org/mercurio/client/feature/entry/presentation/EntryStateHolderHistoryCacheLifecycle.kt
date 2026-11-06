@@ -1,6 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.flow.update
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticEventType
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticStatus
 
 /** Opens the Settings clear confirmation; the store is touched only by an explicit confirm. */
 internal fun EntryStateHolder.requestClearHistoryCache() {
@@ -17,11 +19,15 @@ internal fun EntryStateHolder.cancelClearHistoryCache() {
  * Empties every endpoint's cached content in one action after an explicit confirm. A
  * successful clear drops cache-served content from the view right away: that content
  * has no backing anymore, and the offline experience must show the truthful cleared
- * state without a restart. Authoritative content is left untouched.
+ * state without a restart. Authoritative content is left untouched. A failed clear
+ * records one local-diagnostics event; a successful clear records none.
  */
 internal fun EntryStateHolder.confirmClearHistoryCache() {
     if (!mutableUiState.value.isClearHistoryCacheConfirmationOpen) return
     val cleared = runCatching { historyCacheStore.clear() }.isSuccess
+    if (!cleared) {
+        recordDiagnostic(LocalDiagnosticEventType.HISTORY_CACHE_CLEAR, LocalDiagnosticStatus.FAILED)
+    }
     mutableUiState.update { current ->
         val reset = if (cleared) current.withCacheServedContentDropped() else current
         reset.copy(isClearHistoryCacheConfirmationOpen = false)
