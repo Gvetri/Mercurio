@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -149,6 +151,7 @@ private fun ChatComposerDraft(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = CHAT_TOUCH_TARGET),
         verticalAlignment = Alignment.Bottom,
@@ -165,7 +168,10 @@ private fun ChatComposerDraft(
         ChatTextControl(
             label = stringResource(R.string.chat_send),
             enabled = composer.sendEnabled,
-            onClick = { onEvent(EntryUiEvent.SendMessageClicked) },
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onEvent(EntryUiEvent.SendMessageClicked)
+            },
             modifier = Modifier.testTag("conversation-send"),
             contentDescription = stringResource(R.string.chat_send_message),
         )
@@ -183,6 +189,7 @@ private fun ChatComposerField(
     val tokens = LocalHermesDesignTokens.current
     val focusRequester = remember { FocusRequester() }
     val handledFocusRequestId = remember { mutableStateOf(0L) }
+    val haptics = LocalHapticFeedback.current
     LaunchedEffect(state.composerFocusRequestId, composer.fieldEnabled) {
         val requested = state.composerFocusRequestId
         if (requested > handledFocusRequestId.value && composer.fieldEnabled) {
@@ -207,7 +214,12 @@ private fun ChatComposerField(
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions =
             KeyboardActions(
-                onSend = { if (composer.sendEnabled) onEvent(EntryUiEvent.SendMessageClicked) },
+                onSend = {
+                    if (composer.sendEnabled) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onEvent(EntryUiEvent.SendMessageClicked)
+                    }
+                },
             ),
         modifier =
             modifier
