@@ -6,7 +6,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Test
 
-class JourneyCacheLifecycleVerifierTest {
+class JourneyHistoryCacheLifecycleVerifierTest {
     @Test
     fun cache_lifecycle_verifiers_accept_get_only_telemetry_with_the_required_reads() {
         JourneyInvariants.verify(
