@@ -84,7 +84,8 @@ workflow contracts are self-tested in
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,
 and `ReportEvidenceTest`, the fail-closed behaviour of the real tasks in
 `QualityVerificationFailClosedTest`, and the architecture rules in `ArchitectureCheckTest`. The
-documentation check is covered by
+fail-closed suites inject their fixtures into a temporary copy of the repository and discard it, so an
+interrupted run cannot leave fixture code in the checkout. The documentation check is covered by
 `.github/scripts/tests/test_public_documentation.py`, and the published-release artifact check by
 `.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. The six
 workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
