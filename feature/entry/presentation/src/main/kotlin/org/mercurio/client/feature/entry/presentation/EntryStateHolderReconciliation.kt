@@ -195,23 +195,33 @@ internal fun EntryStateHolder.markRecoveryUnavailable(
         ) {
             return@synchronized
         }
-        val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                isRefreshing = false,
-                                isStale = true,
-                                errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
-                                sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                hasUnresolvedSubmission = true,
-                                latestRunState = opened.latestRunState ?: RunPresentationState.UNCERTAIN,
-                                isReconciliationInProgress = false,
+        submitStateChange {
+            synchronized(sessionRequestLock) {
+                if (
+                    connectionGeneration != requestConnectionGeneration ||
+                    sessionRequestGeneration != requestSessionGeneration
+                ) {
+                    return@submitStateChange
+                }
+                val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                openedSession =
+                                    opened.copy(
+                                        isRefreshing = false,
+                                        isStale = true,
+                                        errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
+                                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                                        hasUnresolvedSubmission = true,
+                                        latestRunState = opened.latestRunState ?: RunPresentationState.UNCERTAIN,
+                                        isReconciliationInProgress = false,
+                                    ),
                             ),
-                    ),
-            )
+                    )
+            }
+        }
     }
 }
 
@@ -275,22 +285,47 @@ internal fun EntryStateHolder.beginReconciliation(
             false
         } else {
             reconcilingSessions[sessionId] = requestSessionGeneration
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        mutableUiState.value.sessionList?.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = true,
-                                    isReconciliationInProgress = true,
-                                    errorCategory = null,
+            submitStateChange {
+                synchronized(sessionRequestLock) {
+                    if (
+                        connectionGeneration != requestConnectionGeneration ||
+                        sessionRequestGeneration != requestSessionGeneration ||
+                        reconcilingSessions[sessionId] != requestSessionGeneration
+                    ) {
+                        return@submitStateChange
+                    }
+                    val current = mutableUiState.value.sessionList ?: return@submitStateChange
+                    val openedNow =
+                        current.openedSession?.takeIf { it.session.id == sessionId }
+                            ?: return@submitStateChange
+                    mutableUiState.value =
+                        mutableUiState.value.copy(
+                            sessionList =
+                                current.copy(
+                                    openedSession =
+                                        openedNow.copy(
+                                            isRefreshing = true,
+                                            isReconciliationInProgress = true,
+                                            errorCategory = null,
+                                        ),
                                 ),
-                        ),
-                )
+                        )
+                }
+            }
             true
         }
     }
 
+/**
+ * Releases the reconciliation claim and clears its visible in-progress state.
+ *
+ * The flag release stays a direct write: `blocksRunSubmission` and the composer send state
+ * read `isRefreshing`/`isReconciliationInProgress` synchronously on `onEvent`, and the issue
+ * keeps `onEvent` synchronous in this slice. Routing the release through the state-change
+ * consumer made the release invisible to those synchronous guards, so a retry click after a
+ * failed send would be refused. The claim bookkeeping above stays under
+ * `synchronized(sessionRequestLock)`; the write itself is the release the guards read.
+ */
 internal fun EntryStateHolder.finishReconciliation(
     sessionId: SessionId,
     requestConnectionGeneration: Long,

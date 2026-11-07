@@ -106,13 +106,20 @@ internal fun EntryStateHolder.createRunJob(
                 synchronized(sessionRequestLock) {
                     if (runJobs[sessionId] === job) {
                         runJobs.remove(sessionId)
-                        val current = mutableUiState.value.sessionList
-                        val opened = current?.openedSession?.takeIf { it.session.id == sessionId }
-                        if (current != null && opened?.isSending == true) {
-                            mutableUiState.value =
-                                mutableUiState.value.copy(
-                                    sessionList = current.copy(openedSession = opened.copy(isSending = false)),
-                                )
+                        submitStateChange {
+                            synchronized(sessionRequestLock) {
+                                if (runJobs[sessionId] != null) return@submitStateChange
+                                val current = mutableUiState.value.sessionList ?: return@submitStateChange
+                                val opened =
+                                    current.openedSession?.takeIf { it.session.id == sessionId }
+                                        ?: return@submitStateChange
+                                if (opened.isSending) {
+                                    mutableUiState.value =
+                                        mutableUiState.value.copy(
+                                            sessionList = current.copy(openedSession = opened.copy(isSending = false)),
+                                        )
+                                }
+                            }
                         }
                     }
                 }

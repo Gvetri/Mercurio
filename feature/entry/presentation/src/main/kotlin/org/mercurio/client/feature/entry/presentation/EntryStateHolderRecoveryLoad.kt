@@ -4,15 +4,44 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 
+/**
+ * Begins the initial session-list load for the IO-reached recovery flow.
+ *
+ * `runVerification` calls this from the holder's IO scope, so the visible begin state routes
+ * through the state-change consumer instead of writing on the producing coroutine; the load's
+ * asynchronous result is applied on the consumer via `updateCurrentSessionRequest`.
+ */
 internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
-    val sessionList = mutableUiState.value.sessionList ?: return
-    createFirstPageLoadJob(
-        gateway = gateway,
-        query = sessionList.searchQuery,
-        isRefreshing = false,
-        isSearching = false,
-        preserveSessions = false,
-    )?.start()
+    synchronized(sessionRequestLock) {
+        val sessionList = mutableUiState.value.sessionList ?: return
+        val requestGeneration = beginSessionRequest()
+        val request = SessionRequestContext(requestGeneration, sessionList.searchQuery, offset = null)
+        submitStateChange {
+            synchronized(sessionRequestLock) {
+                val current = mutableUiState.value.sessionList ?: return@submitStateChange
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                sessions = emptyList(),
+                                isLoading = true,
+                                isRefreshing = false,
+                                isSearching = false,
+                                isLoadingMore = false,
+                                isStale = false,
+                                isCached = false,
+                                isUnavailable = false,
+                                errorCategory = null,
+                                nextOffset = null,
+                                sessionMutations = restoreUnresolvedSessionMutations(emptyMap()),
+                            ),
+                    )
+            }
+        }
+        createSessionJob {
+            loadFirstPage(gateway, request, preserveSessions = false)
+        }.start()
+    }
 }
 
 internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {

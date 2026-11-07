@@ -170,7 +170,9 @@ internal fun EntryStateHolder.startNewRunObservation(
                 ?.let { observedMessageUiState(it) }
     submitStateChange {
         val currentNow = mutableUiState.value.sessionList ?: return@submitStateChange
-        val openedNow = currentNow.openedSession ?: return@submitStateChange
+        val openedNow =
+            currentNow.openedSession?.takeIf { it.session.id == sessionId }
+                ?: return@submitStateChange
         mutableUiState.value =
             mutableUiState.value.copy(
                 sessionList =
