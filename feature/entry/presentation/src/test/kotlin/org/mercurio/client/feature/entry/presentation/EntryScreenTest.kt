@@ -545,8 +545,7 @@ class EntryScreenTest {
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            awaitNodeVisible("First Session")
-            composeTestRule.onNodeWithText("First Session").performClick()
+            clickWhenVisible("First Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
@@ -563,7 +562,7 @@ class EntryScreenTest {
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             assertTrue(gateway.firstObservation.closed.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            composeTestRule.onNodeWithText("Second Session").performClick()
+            clickWhenVisible("Second Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == second.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
@@ -577,7 +576,7 @@ class EntryScreenTest {
             assertTrue(gateway.secondRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
-            composeTestRule.onNodeWithText("First Session").performClick()
+            clickWhenVisible("First Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
@@ -589,10 +588,11 @@ class EntryScreenTest {
         }
     }
 
-    private fun awaitNodeVisible(text: String) {
+    private fun clickWhenVisible(text: String) {
         composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
             composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
+        composeTestRule.onNodeWithText(text).performClick()
     }
 
     private class SwitchingGateway(
