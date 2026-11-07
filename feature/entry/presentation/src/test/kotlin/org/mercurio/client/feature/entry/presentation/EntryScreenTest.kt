@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -544,7 +545,7 @@ class EntryScreenTest {
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            awaitSessionVisible(holder, first)
+            awaitNodeVisible("First Session")
             composeTestRule.onNodeWithText("First Session").performClick()
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
@@ -588,13 +589,9 @@ class EntryScreenTest {
         }
     }
 
-    private fun awaitSessionVisible(
-        holder: EntryStateHolder,
-        session: Session,
-    ) {
+    private fun awaitNodeVisible(text: String) {
         composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
-            val list = holder.uiState.value.sessionList
-            list != null && list.sessions.any { it.id == session.id } && !list.isLoading
+            composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
