@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -51,6 +52,7 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(store = store)
 
         holder.onEvent(EntryUiEvent.AppLockToggleClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertTrue(holder.uiState.value.appLock.isEnabled)
         assertFalse(holder.uiState.value.appLock.isLocked)
@@ -63,6 +65,7 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(store = store, enrolment = FakeAppLockEnrolment(enrolled = false))
 
         holder.onEvent(EntryUiEvent.AppLockToggleClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertFalse(holder.uiState.value.appLock.isEnabled)
         assertTrue(store.saves.isEmpty())
@@ -74,6 +77,7 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(store = store)
 
         holder.onEvent(EntryUiEvent.AppLockToggleClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertFalse(holder.uiState.value.appLock.isEnabled)
         assertFalse(holder.uiState.value.appLock.isLocked)
@@ -85,6 +89,7 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(store = FakeAppLockSettingsStore(enabled = true))
 
         holder.onEvent(EntryUiEvent.AppEnteredBackground)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertTrue(holder.uiState.value.appLock.isLocked)
     }
@@ -94,6 +99,7 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder()
 
         holder.onEvent(EntryUiEvent.AppEnteredBackground)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertFalse(holder.uiState.value.appLock.isLocked)
     }
@@ -108,6 +114,7 @@ class EntryStateHolderAppLockTest {
             )
 
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertEquals(1, requests)
         assertTrue(holder.uiState.value.appLock.isLocked)
@@ -123,8 +130,11 @@ class EntryStateHolderAppLockTest {
             )
 
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
         holder.onEvent(EntryUiEvent.AppEnteredBackground)
+        runBlocking { holder.awaitStateChangesApplied() }
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertEquals(1, requests)
     }
@@ -135,6 +145,7 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(onUnlockRequested = { requests += 1 })
 
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertEquals(0, requests)
     }
@@ -149,11 +160,14 @@ class EntryStateHolderAppLockTest {
             )
 
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
         holder.onEvent(EntryUiEvent.AppLockAuthenticationResult(authenticated = false))
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertTrue(holder.uiState.value.appLock.isUnlockRequired)
 
         holder.onEvent(EntryUiEvent.AppUnlockRequested)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertEquals(2, requests)
         assertTrue(holder.uiState.value.appLock.isUnlockRequired)
@@ -164,7 +178,9 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(store = FakeAppLockSettingsStore(enabled = true))
 
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
         holder.onEvent(EntryUiEvent.AppLockAuthenticationResult(authenticated = true))
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertTrue(holder.uiState.value.appLock.isEnabled)
         assertFalse(holder.uiState.value.appLock.isLocked)
@@ -179,6 +195,7 @@ class EntryStateHolderAppLockTest {
 
         enrolment.enrolled = false
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertFalse(holder.uiState.value.appLock.isEnabled)
         assertFalse(holder.uiState.value.appLock.isUnlockRequired)
@@ -194,6 +211,7 @@ class EntryStateHolderAppLockTest {
 
         enrolment.enrolled = true
         holder.onEvent(EntryUiEvent.AppEnteredForeground)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertTrue(holder.uiState.value.appLock.isAvailable)
     }
@@ -203,7 +221,9 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(store = FakeAppLockSettingsStore(enabled = true))
 
         holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
         holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         val lock = holder.uiState.value.appLock
 
@@ -218,6 +238,7 @@ class EntryStateHolderAppLockTest {
         val holder = appLockHolder(onUnlockRequested = { requests += 1 })
 
         holder.onEvent(EntryUiEvent.AppUnlockRequested)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertEquals(0, requests)
     }

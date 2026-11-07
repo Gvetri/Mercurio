@@ -581,21 +581,28 @@ class EntryStateHolder(
         scope.launch(StateChangeConsumerMarker()) { consumeStateChanges() }
     }
 
+    /**
+     * Enqueues the event on the state-change consumer. The consumer applies the event in order
+     * with every other queued state change, so UI events cannot race an in-flight asynchronous
+     * result application.
+     */
     fun onEvent(event: EntryUiEvent) {
-        when (event) {
-            is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
-            is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
-            is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
-            is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
-            is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
-            is EntryUiEvent.Run -> dispatchRunEvent(event)
-            is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
-            is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
-            is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
-            is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
-            is EntryUiEvent.ErrorReportingConsentEvent ->
-                recordErrorReportingConsent(event.decision)
-            is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
+        submitStateChange {
+            when (event) {
+                is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
+                is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
+                is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
+                is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
+                is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
+                is EntryUiEvent.Run -> dispatchRunEvent(event)
+                is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
+                is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
+                is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
+                is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
+                is EntryUiEvent.ErrorReportingConsentEvent ->
+                    recordErrorReportingConsent(event.decision)
+                is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
+            }
         }
     }
 
@@ -701,10 +708,16 @@ class EntryStateHolder(
     }
 
     /**
-     * Releases the connection state and clears the removal confirmation so a closed holder never
-     * reports an open dialog.
+     * Enqueues the holder teardown behind the commands already queued. The consumer applies
+     * every event enqueued before this call, then releases the connection state, clears the
+     * removal confirmation so a closed holder never reports an open dialog, and cancels the
+     * holder scope.
      */
     fun close() {
+        submitStateChange { releaseForClose() }
+    }
+
+    private fun releaseForClose() {
         mutableUiState.value = mutableUiState.value.copy(isRemoveConfirmationOpen = false)
         val released = releaseConnectionState()
         released.jobs.forEach(Job::cancel)
