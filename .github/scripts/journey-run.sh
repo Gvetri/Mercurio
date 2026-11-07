@@ -65,8 +65,56 @@ journeys=(
     model-catalog-row-mismatch
 )
 
-shard_index="${1:-}"
-shard_total="${2:-}"
+flow_selection=""
+shard_index=""
+shard_total=""
+allow_arm_translation=false
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --apk)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                log "--apk requires a non-empty APK path."
+                exit 1
+            fi
+            apk="$2"
+            shift 2
+            ;;
+        --flow)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                log "--flow requires a non-empty journey name."
+                exit 1
+            fi
+            flow_selection="$2"
+            shift 2
+            ;;
+        --arm-translation)
+            allow_arm_translation=true
+            shift
+            ;;
+        *)
+            if [[ "$1" == -* ]]; then
+                log "Unknown option: $1. Pass --apk <path>, --flow <journey>, --arm-translation, or a shard index and total."
+                exit 1
+            fi
+            if [ -z "$shard_index" ]; then
+                shard_index="$1"
+            elif [ -z "$shard_total" ]; then
+                shard_total="$1"
+            else
+                log "Too many positional arguments: $*."
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -n "$flow_selection" && ( -n "$shard_index" || -n "$shard_total" ) ]]; then
+    log "A single flow selection cannot be combined with a shard selection."
+    exit 1
+fi
+
 if [[ -n "$shard_index" || -n "$shard_total" ]]; then
     if [[ -z "$shard_index" || -z "$shard_total" ]] \
         || ! [[ "$shard_index" =~ ^[1-9][0-9]*$ ]] \
@@ -77,6 +125,36 @@ if [[ -n "$shard_index" || -n "$shard_total" ]]; then
         exit 1
     fi
     log "Running deterministic journey shard ${shard_index} of ${shard_total}."
+fi
+
+if [[ -n "$flow_selection" ]]; then
+    flow_known=false
+    for journey in "${journeys[@]}"; do
+        if [ "$journey" = "$flow_selection" ]; then
+            flow_known=true
+        fi
+    done
+    if [ "$flow_known" != true ]; then
+        log "Unknown journey flow: $flow_selection. Choose one pinned journey: ${journeys[*]}."
+        exit 1
+    fi
+    if [ ! -f "$flow_dir/$flow_selection.yaml" ]; then
+        log "The journey flow file is missing: $flow_dir/$flow_selection.yaml."
+        exit 1
+    fi
+fi
+
+if [ ! -f "$apk" ]; then
+    log "The APK to install is missing: $apk."
+    exit 1
+fi
+if [ ! -r "$apk" ]; then
+    log "The APK to install is not readable: $apk."
+    exit 1
+fi
+
+if [[ -n "$flow_selection" ]]; then
+    log "Running the single journey $flow_selection against $apk."
 fi
 
 gateway_pid=""
@@ -129,17 +207,29 @@ trap finish_gateway EXIT
 
 log "Installing the journey test CA into the emulator system trust store."
 require_root_adb "before installing the TLS CA"
-if ! timeout 120 adb remount >/dev/null; then
-    log "Emulator /system partition did not remount writable for the TLS CA. Device state:"
-    adb devices || true
-    exit 1
-fi
 ca_hash="$(openssl x509 -inform PEM -subject_hash_old -in "$ca_file" | head -1)"
 ca_device_path="/system/etc/security/cacerts/${ca_hash}.0"
-if ! timeout 120 adb push "$ca_file" "$ca_device_path" >/dev/null; then
-    log "Failed to push the journey test CA into the system trust store. Device state:"
-    adb devices || true
-    exit 1
+if ! timeout 120 adb remount >/dev/null 2>&1 ||
+    ! timeout 120 adb push "$ca_file" "$ca_device_path" >/dev/null 2>&1; then
+    if [ "$allow_arm_translation" != true ]; then
+        log "Emulator /system partition did not remount writable for the TLS CA. Device state:"
+        adb devices || true
+        exit 1
+    fi
+    ca_staging_dir="/data/local/tmp/journey-cacerts"
+    log "The system trust store is not directly writable; bind-mounting a writable copy (no reboot)."
+    if ! timeout 120 adb shell "rm -rf $ca_staging_dir && mkdir -p $ca_staging_dir && cp /system/etc/security/cacerts/* $ca_staging_dir/"; then
+        log "Failed to stage the system trust store for the journey test CA."
+        exit 1
+    fi
+    if ! timeout 120 adb push "$ca_file" "${ca_staging_dir}/${ca_hash}.0" >/dev/null; then
+        log "Failed to copy the journey test CA into the staged trust store."
+        exit 1
+    fi
+    if ! timeout 60 adb shell "nsenter --mount=/proc/1/ns/mnt -- mount --bind $ca_staging_dir /system/etc/security/cacerts"; then
+        log "Failed to bind the staged trust store over the system store."
+        exit 1
+    fi
 fi
 if ! timeout 30 adb shell chmod 644 "$ca_device_path"; then
     log "Failed to set the journey test CA permissions. Device state:"
@@ -147,7 +237,7 @@ if ! timeout 30 adb shell chmod 644 "$ca_device_path"; then
     exit 1
 fi
 if ! timeout 30 adb shell test -f "$ca_device_path"; then
-    log "The journey test CA is not present on the live system partition. Device state:"
+    log "The journey test CA is not present in the emulator trust store. Device state:"
     adb devices || true
     exit 1
 fi
@@ -179,6 +269,9 @@ classpath="$(cat "$classpath_file")"
 
 for journey_slot in "${!journeys[@]}"; do
     journey="${journeys[$journey_slot]}"
+    if [[ -n "$flow_selection" && "$journey" != "$flow_selection" ]]; then
+        continue
+    fi
     if [[ -n "$shard_total" ]] && [ $((journey_slot % shard_total)) -ne $((shard_index - 1)) ]; then
         continue
     fi
@@ -286,4 +379,8 @@ for journey_slot in "${!journeys[@]}"; do
     done
 done
 
-log "All deterministic journeys passed."
+if [[ -n "$flow_selection" ]]; then
+    log "Single journey passed: $flow_selection."
+else
+    log "All deterministic journeys passed."
+fi

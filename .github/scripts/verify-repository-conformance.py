@@ -3,7 +3,9 @@
 
 The ruleset, the merge policy, and the workflow declaration are configuration, not code, so nothing
 in the build verifies them. This check reads them back from the GitHub API and fails when a declared
-rule is missing, weakened, or replaced by a bypass.
+rule is missing, weakened, or replaced by a bypass. It also runs the pull-request template check in
+both directions, because the ruleset requires that context on every pull request: a Dependabot body
+must pass and a body that misses the template sections must fail.
 
 Every check fails closed: an unavailable or unreadable answer is a failure, never an accepted
 configuration. The repository's Actions settings need an Administration credential that a workflow
@@ -13,6 +15,7 @@ token cannot hold, so the owner verifies those separately with `--owner`.
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -20,9 +23,15 @@ from pathlib import Path
 
 REQUIRED_RULESET_CONTEXTS = sorted(["quality-gate", "pr-template"])
 NIGHTLY_LANE = "create_nightly_failure_issue"
+DEPENDABOT_AUTHOR = "dependabot[bot]"
+OTHER_BOT_AUTHOR = "renovate[bot]"
+HUMAN_AUTHOR = "octocat"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPOSITORY_ROOT / ".github/workflows/quality-gate.yml"
 REQUIRED_CHECKS = REPOSITORY_ROOT / ".github/quality-gate/required-checks.txt"
+PR_TEMPLATE_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/pr-template.yml"
+PR_TEMPLATE_CHECK = REPOSITORY_ROOT / ".github/scripts/verify-pr-template.py"
+PR_TEMPLATE_CHECK_PATH = ".github/scripts/verify-pr-template.py"
 
 
 class VerificationError(Exception):
@@ -283,11 +292,87 @@ def verify_workflow_declaration():
     return violations
 
 
+def declares_concurrency(workflow):
+    """Return True when the workflow or one of its jobs declares a concurrency block."""
+    if re.search(r"^concurrency:", workflow, flags=re.MULTILINE):
+        return True
+    return any(
+        re.search(r"^[ \t]+concurrency:", block, flags=re.MULTILINE)
+        for block in job_blocks(workflow).values()
+    )
+
+
+def verify_pull_request_template():
+    """Verify that the pr-template context keeps being produced and keeps exempting Dependabot.
+
+    The ruleset requires the context on every pull request, and a skipped job does not satisfy a
+    required check, so the job must stay unconditional. The exemption is proved by running the check
+    itself in both directions: deleting the Dependabot branch fails here rather than passing a text
+    assertion. A concurrency block would cancel a run whose verdict the required context still owes,
+    so the workflow must not declare one.
+    """
+    if not PR_TEMPLATE_WORKFLOW.is_file():
+        return ["The pr-template workflow is missing"]
+    workflow = PR_TEMPLATE_WORKFLOW.read_text(encoding="utf-8")
+    job = job_blocks(workflow).get("pr_template")
+    if job is None:
+        return ["The pr-template workflow must declare the pr_template job"]
+
+    violations = []
+    if declares_concurrency(workflow):
+        violations.append(
+            "The pr-template workflow must not declare a concurrency block at the workflow or job "
+            "level, because a cancelled required check reports no verdict"
+        )
+    if re.search(r"^    if:", job, flags=re.MULTILINE) or "continue-on-error" in job:
+        violations.append(
+            "The pr_template job must run unconditionally, because a skipped required check is not a pass"
+        )
+    for variable, expression in (
+        ("PR_AUTHOR", "${{ github.event.pull_request.user.login }}"),
+        ("PR_BODY", "${{ github.event.pull_request.body }}"),
+    ):
+        if f"          {variable}: {expression}" not in job:
+            violations.append(f"The pr_template job must pass {variable} from {expression}")
+    if f"python3 {PR_TEMPLATE_CHECK_PATH}" not in job:
+        violations.append(f"The pr_template job must run {PR_TEMPLATE_CHECK_PATH}")
+
+    for author, expected in (
+        (DEPENDABOT_AUTHOR, 0),
+        (OTHER_BOT_AUTHOR, 1),
+        (HUMAN_AUTHOR, 1),
+    ):
+        outcome = run_pull_request_template_check(author)
+        if outcome != expected:
+            violations.append(
+                f"The pr-template check must exit {expected} for {author} with an empty body, but it exited {outcome}"
+            )
+    if not violations:
+        print("Verified that the pr-template check runs unconditionally and exempts only Dependabot.")
+    return violations
+
+
+def run_pull_request_template_check(author):
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(PR_TEMPLATE_CHECK)],
+            env={**os.environ, "PR_AUTHOR": author, "PR_BODY": ""},
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise VerificationError(f"The pr-template check cannot be executed: {error}") from error
+    return completed.returncode
+
+
 def main(arguments):
     violations = []
     try:
         violations.extend(verify_ruleset())
         violations.extend(verify_workflow_declaration())
+        violations.extend(verify_pull_request_template())
         if "--owner" in arguments:
             violations.extend(verify_owner_settings())
     except VerificationError as error:

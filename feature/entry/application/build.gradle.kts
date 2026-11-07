@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":feature:entry:domain"))
     testImplementation(kotlin("test"))
     testImplementation(libs.junit4)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.test {

@@ -1,11 +1,12 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -28,9 +29,6 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class SessionPinDeleteStateHolderTest {
     @Test
@@ -87,93 +85,96 @@ class SessionPinDeleteStateHolderTest {
     }
 
     @Test
-    fun reopening_a_session_clears_a_failed_pin_mutation_and_uses_authoritative_metadata() {
-        val target = session("target", "Original")
-        val gateway =
-            FakeSessionGateway(listOf(target)).apply {
-                enqueuePinFailure(
-                    GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED),
-                )
-            }
-        val holder = connectedHolder(gateway)
+    fun reopening_a_session_clears_a_failed_pin_mutation_and_uses_authoritative_metadata() =
+        runTest {
+            val target = session("target", "Original")
+            val gateway =
+                FakeSessionGateway(listOf(target)).apply {
+                    enqueuePinFailure(
+                        GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED),
+                    )
+                }
+            val holder = connectedHolder(gateway)
 
-        holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-        assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.retryAction)
+            holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
+            assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.retryAction)
 
-        holder.onEvent(EntryUiEvent.SessionClicked(target.id))
+            holder.onEvent(EntryUiEvent.SessionClicked(target.id))
 
-        val reopened = requireNotNull(holder.uiState.value.sessionList)
-        assertNull(reopened.sessionMutations[target.id])
-        assertEquals("Original", reopened.sessions.single().title)
-        assertEquals("Original", reopened.openedSession?.session?.title)
-        holder.close()
-    }
-
-    @Test
-    fun reopen_failure_clears_a_failed_pin_mutation_and_marks_the_session_recoverable() {
-        val target = session("target", "Original")
-        val gateway =
-            FakeSessionGateway(listOf(target)).apply {
-                enqueuePinFailure(
-                    GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED),
-                )
-                openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
-            }
-        val holder = connectedHolder(gateway)
-
-        holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-        assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.retryAction)
-
-        holder.onEvent(EntryUiEvent.SessionClicked(target.id))
-
-        val unavailable = requireNotNull(holder.uiState.value.sessionList)
-        assertTrue(unavailable.isUnavailable)
-        assertNull(unavailable.sessionMutations[target.id])
-        holder.close()
-    }
+            val reopened = requireNotNull(holder.uiState.value.sessionList)
+            assertNull(reopened.sessionMutations[target.id])
+            assertEquals("Original", reopened.sessions.single().title)
+            assertEquals("Original", reopened.openedSession?.session?.title)
+            holder.close()
+        }
 
     @Test
-    fun duplicate_pin_submissions_are_blocked_while_the_gateway_call_is_pending() {
-        val target = session("target", "Original")
-        val gateway = BlockingPinGateway(target)
-        val holder = connectedHolder(gateway, asynchronous = true)
-        awaitState(holder) { it.sessionList?.sessions?.isNotEmpty() == true }
+    fun reopen_failure_clears_a_failed_pin_mutation_and_marks_the_session_recoverable() =
+        runTest {
+            val target = session("target", "Original")
+            val gateway =
+                FakeSessionGateway(listOf(target)).apply {
+                    enqueuePinFailure(
+                        GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED),
+                    )
+                    openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
+                }
+            val holder = connectedHolder(gateway)
 
-        holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-        assertTrue(gateway.started.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-        assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.pendingAction)
+            holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
+            assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.retryAction)
 
-        holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-        assertEquals(1, gateway.pinCalls)
-        assertFalse(requireNotNull(holder.uiState.value.sessionList).sessions.single().pinned)
+            holder.onEvent(EntryUiEvent.SessionClicked(target.id))
 
-        gateway.complete(SessionPinResult(target.id, pinned = true))
-        awaitState(holder) { it.sessionList?.sessions?.single()?.pinned == true }
-        assertNull(mutation(holder, target.id))
-        holder.close()
-    }
+            val unavailable = requireNotNull(holder.uiState.value.sessionList)
+            assertTrue(unavailable.isUnavailable)
+            assertNull(unavailable.sessionMutations[target.id])
+            holder.close()
+        }
 
     @Test
-    fun pending_mutation_blocks_opening_and_loading_more_sessions() {
-        val target = session("target", "Original")
-        val gateway = BlockingPinGateway(target)
-        val holder = connectedHolder(gateway, asynchronous = true)
-        awaitState(holder) { it.sessionList?.sessions?.isNotEmpty() == true }
+    fun duplicate_pin_submissions_are_blocked_while_the_gateway_call_is_pending() =
+        runTest {
+            val target = session("target", "Original")
+            val gateway = ScriptedPinGateway(target)
+            val holder = connectedHolder(gateway, StandardTestDispatcher(testScheduler))
+            awaitState(holder) { it.sessionList?.sessions?.isNotEmpty() == true }
 
-        holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-        assertTrue(gateway.started.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
+            assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.pendingAction)
 
-        holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-        holder.onEvent(EntryUiEvent.SessionClicked(target.id))
+            holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
+            assertEquals(0, gateway.pinCalls)
+            assertFalse(requireNotNull(holder.uiState.value.sessionList).sessions.single().pinned)
 
-        assertFalse(gateway.loadMoreStarted.await(250, TimeUnit.MILLISECONDS))
-        assertFalse(gateway.openStarted.await(250, TimeUnit.MILLISECONDS))
-        assertFalse(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
+            advanceUntilIdle()
+            assertEquals(1, gateway.pinCalls)
+            awaitState(holder) { it.sessionList?.sessions?.single()?.pinned == true }
+            assertNull(mutation(holder, target.id))
+            holder.close()
+        }
 
-        gateway.complete(SessionPinResult(target.id, pinned = true))
-        awaitState(holder) { it.sessionList?.sessions?.single()?.pinned == true }
-        holder.close()
-    }
+    @Test
+    fun pending_mutation_blocks_opening_and_loading_more_sessions() =
+        runTest {
+            val target = session("target", "Original")
+            val gateway = ScriptedPinGateway(target)
+            val holder = connectedHolder(gateway, StandardTestDispatcher(testScheduler))
+            awaitState(holder) { it.sessionList?.sessions?.isNotEmpty() == true }
+            advanceUntilIdle()
+
+            holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
+
+            holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
+            holder.onEvent(EntryUiEvent.SessionClicked(target.id))
+            advanceUntilIdle()
+
+            assertEquals(0, gateway.loadMoreCalls)
+            assertEquals(0, gateway.openCalls)
+            assertFalse(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
+            assertEquals(1, gateway.pinCalls)
+            holder.close()
+        }
 
     @Test
     fun delete_requires_confirmation_names_the_session_and_removes_only_after_gateway_success() {
@@ -223,31 +224,32 @@ class SessionPinDeleteStateHolderTest {
     }
 
     @Test
-    fun cancelling_a_failed_delete_clears_the_error_and_retry_state() {
-        val target = session("target", "Delete me")
-        val gateway =
-            FakeSessionGateway(listOf(target)).apply {
-                enqueueDeleteFailure(
-                    GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED),
-                )
-            }
-        val holder = connectedHolder(gateway)
+    fun cancelling_a_failed_delete_clears_the_error_and_retry_state() =
+        runTest {
+            val target = session("target", "Delete me")
+            val gateway =
+                FakeSessionGateway(listOf(target)).apply {
+                    enqueueDeleteFailure(
+                        GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED),
+                    )
+                }
+            val holder = connectedHolder(gateway)
 
-        holder.onEvent(EntryUiEvent.DeleteSessionClicked(target.id))
-        holder.onEvent(EntryUiEvent.ConfirmDeleteSessionClicked(target.id))
-        assertEquals(SessionMutationAction.DELETE, mutation(holder, target.id)?.retryAction)
+            holder.onEvent(EntryUiEvent.DeleteSessionClicked(target.id))
+            holder.onEvent(EntryUiEvent.ConfirmDeleteSessionClicked(target.id))
+            assertEquals(SessionMutationAction.DELETE, mutation(holder, target.id)?.retryAction)
 
-        holder.onEvent(EntryUiEvent.CancelDeleteSessionClicked(target.id))
+            holder.onEvent(EntryUiEvent.CancelDeleteSessionClicked(target.id))
 
-        val state = requireNotNull(holder.uiState.value.sessionList)
-        assertNull(state.sessionMutations[target.id])
-        assertEquals(listOf("target"), state.sessions.map { it.id.value })
-        holder.close()
-    }
+            val state = requireNotNull(holder.uiState.value.sessionList)
+            assertNull(state.sessionMutations[target.id])
+            assertEquals(listOf("target"), state.sessions.map { it.id.value })
+            holder.close()
+        }
 
     private fun connectedHolder(
         gateway: SessionGatewayPort,
-        asynchronous: Boolean = false,
+        dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     ): EntryStateHolder {
         val holder =
             EntryStateHolder(
@@ -256,10 +258,7 @@ class SessionPinDeleteStateHolderTest {
                     VerifyGatewayConnection(FakeGatewayConnectionRepository()) { _, _ ->
                         GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
                     },
-                scope =
-                    CoroutineScope(
-                        SupervisorJob() + if (asynchronous) Dispatchers.Default else Dispatchers.Unconfined,
-                    ),
+                scope = CoroutineScope(SupervisorJob() + dispatcher),
                 sessionGatewayFactory = { _, _ -> gateway },
             )
         holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
@@ -280,16 +279,10 @@ class SessionPinDeleteStateHolderTest {
         sessionId: SessionId,
     ): SessionMutationUiState? = requireNotNull(holder.uiState.value.sessionList).sessionMutations[sessionId]
 
-    private fun awaitState(
+    private suspend fun awaitState(
         holder: EntryStateHolder,
         predicate: (EntryUiState) -> Boolean,
-    ) {
-        runBlocking {
-            withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) {
-                holder.uiState.first(predicate)
-            }
-        }
-    }
+    ) = holder.awaitUiState("the Session mutation state", predicate)
 
     private fun session(
         id: String,
@@ -383,19 +376,20 @@ class SessionPinDeleteStateHolderTest {
         }
     }
 
-    private class BlockingPinGateway(
-        private val listedSession: Session,
+    private class ScriptedPinGateway(
+        listedSession: Session,
     ) : SessionGatewayPort {
         private var currentSession = listedSession
-        val started = CountDownLatch(1)
-        val loadMoreStarted = CountDownLatch(1)
-        val openStarted = CountDownLatch(1)
-        private val result = CompletableFuture<Result<SessionPinResult>>()
         var pinCalls = 0
+            private set
+        var loadMoreCalls = 0
+            private set
+        var openCalls = 0
+            private set
 
         override fun listSessions(request: SessionListRequest): SessionPage {
             if (request.offset > 0) {
-                loadMoreStarted.countDown()
+                loadMoreCalls += 1
             }
             return SessionPage(listOf(currentSession), if (request.offset == 0) 1 else null)
         }
@@ -403,7 +397,7 @@ class SessionPinDeleteStateHolderTest {
         override fun createSession(title: String?): Session = error("not used")
 
         override fun openSession(sessionId: SessionId): Session {
-            openStarted.countDown()
+            openCalls += 1
             error("not used")
         }
 
@@ -419,17 +413,11 @@ class SessionPinDeleteStateHolderTest {
 
         override fun pinSession(sessionId: SessionId): SessionPinResult {
             pinCalls += 1
-            started.countDown()
-            val pinResult = result.get(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).getOrThrow()
-            currentSession = currentSession.copy(pinned = pinResult.pinned)
-            return pinResult
+            currentSession = currentSession.copy(pinned = true)
+            return SessionPinResult(sessionId, pinned = true)
         }
 
         override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
-
-        fun complete(value: SessionPinResult) {
-            result.complete(Result.success(value))
-        }
     }
 
     private companion object {

@@ -7,6 +7,7 @@ import org.mercurio.client.feature.entry.data.BoundedHistoryCacheStore
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Assembles the device-local history cache: Keystore-tier blob storage, the AES-256-GCM
@@ -35,7 +36,7 @@ internal fun historyCacheEndpointNamespace(endpoint: String): String {
     return MessageDigest
         .getInstance("SHA-256")
         .digest(canonicalEndpoint.toByteArray(StandardCharsets.UTF_8))
-        .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+        .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
 }
 
 private const val BYTE_MASK = 0xFF

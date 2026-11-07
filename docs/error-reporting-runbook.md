@@ -24,7 +24,23 @@ The value is read only by the adapter in the wiring layer, and it never enters t
 domain layers.
 
 A DSN the SDK rejects is treated the same way: the backend does not install, no event is ever sent,
-and the app runs normally. Only a working DSN turns reporting on.
+and the app runs normally. Only a working DSN turns reporting on, and only together with a stored
+granted answer to the consent question below.
+
+## Consent
+
+The first screen of a fresh install asks once whether the client may send crash, error and
+not-responding reports to Sentry. Nothing is sent before the answer. Accept stores `Granted` and
+decline stores `Declined` on the device; a stored answer means the question never appears again.
+Settings › Diagnostics (issue #456) draws the same answer as a switch row and is where the answer
+changes.
+
+The composition root reads the stored answer once, before the reporting backend is built, and the
+Sentry SDK installs at most once per process. An answer that turns reporting on while the app runs
+applies from the next process start; the declined sentence on the question states the consequence,
+because that screen shows once. An answer that turns reporting off stops every event at the next
+send, including crash and not-responding events, because the before-send hook reads the stored
+answer too.
 
 ### Release builds
 
@@ -47,15 +63,17 @@ Prove real delivery from a real build once per backend change; the deterministic
 recording sink and deliberately prove nothing about the network.
 
 1. Build a debug APK with the DSN, as above, and install it.
-2. Raise one deliberate report through the debug probe:
+2. Open the app once and accept the consent question: a fresh install stores no answer, and the
+   probe reports nothing while the answer is missing or declined.
+3. Raise one deliberate report through the debug probe:
 
 ```text
 adb shell am start -a android.intent.action.VIEW -d 'mercurio-journey://error-reporting?live=1'
 ```
 
-3. The probe screen reports `Live error report raised` once the port has taken the report. Without
+4. The probe screen reports `Live error report raised` once the port has taken the report. Without
    the `live` argument the same deep link binds the recording sink and delivers nothing.
-4. In Sentry, open the project's issues and confirm one `Unexpected client failure` event whose
+5. In Sentry, open the project's issues and confirm one `Unexpected client failure` event whose
    release is the installed build and whose environment is the build type. If it does not arrive,
    check the DSN value before assuming an app defect.
 

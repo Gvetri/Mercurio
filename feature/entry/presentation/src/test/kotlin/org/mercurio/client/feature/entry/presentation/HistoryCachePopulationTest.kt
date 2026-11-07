@@ -1,6 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,7 +14,6 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
-import java.util.concurrent.TimeUnit
 
 class HistoryCachePopulationTest {
     private val endpoint = "https://gateway.example/profile"
@@ -23,195 +24,200 @@ class HistoryCachePopulationTest {
     }
 
     @Test
-    fun a_successful_first_page_load_replaces_the_cached_session_list() {
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession("session-one", "First")), null))
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
+    fun a_successful_first_page_load_replaces_the_cached_session_list() =
+        runTest {
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession("session-one", "First")), null))
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
 
-        verify(holder)
-        awaitSessions(holder, "session-one")
-
-        assertEquals(listOf(entrySession("session-one", "First")), cache.cachedSessionList(endpoint))
-        holder.close()
-    }
-
-    @Test
-    fun a_successful_next_page_load_merges_the_new_page_into_the_cached_list() {
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession("session-one", "First")), 2))
-        gateway.enqueueList(SessionPage(listOf(entrySession("session-two", "Second")), null))
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
-
-        verify(holder)
-        awaitSessions(holder, "session-one")
-        holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-        awaitSessions(holder, "session-one", "session-two")
-
-        assertEquals(
-            listOf(entrySession("session-one", "First"), entrySession("session-two", "Second")),
-            cache.cachedSessionList(endpoint),
-        )
-        holder.close()
-    }
-
-    @Test
-    fun a_failed_session_list_read_never_writes_to_the_cache() {
-        val gateway = FakeSessionGateway()
-        gateway.enqueueFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
-
-        verify(holder)
-        awaitState(holder, "failed list read") { it.sessionList?.isStale == true }
-
-        assertTrue(cache.writes().isEmpty())
-        holder.close()
-    }
-
-    @Test
-    fun opening_a_session_caches_only_its_fully_successful_transcript() {
-        val sessionId = SessionId("session-one")
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
-        gateway.openedSession = entrySession(sessionId.value, "First")
-        gateway.openedHistory =
-            SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-one", "user", "Cached content")))
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
-
-        verify(holder)
-        awaitSessions(holder, "session-one")
-        holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-        awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
-
-        assertEquals(
-            listOf(GatewayHistoryMessage("message-one", "user", "Cached content")),
-            cache.cachedTranscript(endpoint, sessionId.value),
-        )
-        holder.close()
-    }
-
-    @Test
-    fun a_partially_successful_open_never_writes_to_the_cache() {
-        val sessionId = SessionId("session-one")
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
-        gateway.openedSession = entrySession("session-other", "Mismatched identity")
-        gateway.openedHistory =
-            SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-one", "user", "Cached content")))
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
-
-        verify(holder)
-        awaitSessions(holder, "session-one")
-        holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-        awaitState(holder, "failed open") { it.sessionList?.errorCategory != null }
-
-        assertTrue(cache.writes().none { it.startsWith(TRANSCRIPT_WRITE_PREFIX) })
-        holder.close()
-    }
-
-    @Test
-    fun a_failed_open_never_writes_to_the_cache() {
-        val sessionId = SessionId("session-one")
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
-        gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
-
-        verify(holder)
-        awaitSessions(holder, "session-one")
-        holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-        awaitState(holder, "failed open") { it.sessionList?.errorCategory != null }
-
-        assertTrue(cache.writes().none { it.startsWith(TRANSCRIPT_WRITE_PREFIX) })
-        holder.close()
-    }
-
-    @Test
-    fun a_successful_refresh_replaces_the_cached_transcript_wholly() {
-        val sessionId = SessionId("session-one")
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
-        gateway.openedSession = entrySession(sessionId.value, "First")
-        gateway.openedHistory =
-            SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-one", "user", "Stale content")))
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
-
-        verify(holder)
-        awaitSessions(holder, "session-one")
-        holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-        awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
-
-        gateway.openedHistory =
-            SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-two", "user", "Fresh content")))
-        holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-        awaitState(holder, "refreshed transcript") {
-            it.sessionList?.openedSession?.messages?.singleOrNull()?.id == "message-two"
-        }
-
-        assertEquals(
-            listOf(GatewayHistoryMessage("message-two", "user", "Fresh content")),
-            cache.cachedTranscript(endpoint, sessionId.value),
-        )
-        holder.close()
-    }
-
-    @Test
-    fun a_successful_refresh_replaces_the_cache_even_after_the_opened_session_leaves_the_state() {
-        val gateway = BlockingSessionGateway(blockHistoryRefresh = true)
-        val cache = RecordingHistoryCacheStore()
-        val holder =
-            holder(
-                repository = FakeGatewayConnectionRepository(),
-                verifier = { _, _ -> clientManifestCapabilities() },
-                gateway = gateway,
-                dispatcher = Dispatchers.Default,
-                dependencies = EntryStateHolderDependencies(historyCacheStore = cache),
-            )
-
-        try {
             verify(holder)
-            awaitSessions(holder, gateway.sessionId.value)
-            holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
-            awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
-            awaitCachedTranscriptMessage(cache, endpoint, gateway.sessionId.value, "message-1")
+            awaitSessions(holder, "session-one")
 
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            assertTrue(gateway.refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
-            awaitState(holder, "back to list") { it.sessionList?.openedSession == null }
-            gateway.releaseRefresh.countDown()
-
-            awaitCachedTranscriptMessage(cache, endpoint, gateway.sessionId.value, "message-2")
-        } finally {
+            assertEquals(listOf(entrySession("session-one", "First")), cache.cachedSessionList(endpoint))
             holder.close()
         }
-    }
 
     @Test
-    fun listing_sessions_never_caches_a_transcript_of_an_unopened_session() {
-        val gateway = FakeSessionGateway()
-        gateway.enqueueList(SessionPage(listOf(entrySession("session-one", "First")), 2))
-        gateway.enqueueList(SessionPage(listOf(entrySession("session-two", "Second")), null))
-        val cache = RecordingHistoryCacheStore()
-        val holder = connectedCacheHolder(gateway, cache)
+    fun a_successful_next_page_load_merges_the_new_page_into_the_cached_list() =
+        runTest {
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession("session-one", "First")), 2))
+            gateway.enqueueList(SessionPage(listOf(entrySession("session-two", "Second")), null))
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
 
-        verify(holder)
-        awaitSessions(holder, "session-one")
-        holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-        awaitSessions(holder, "session-one", "session-two")
-        gateway.enqueueFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
-        holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
-        awaitState(holder, "failed list read") { it.sessionList?.isStale == true }
+            verify(holder)
+            awaitSessions(holder, "session-one")
+            holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
+            awaitSessions(holder, "session-one", "session-two")
 
-        assertTrue(cache.writes().none { it.startsWith(TRANSCRIPT_WRITE_PREFIX) })
-        holder.close()
-    }
+            assertEquals(
+                listOf(entrySession("session-one", "First"), entrySession("session-two", "Second")),
+                cache.cachedSessionList(endpoint),
+            )
+            holder.close()
+        }
+
+    @Test
+    fun a_failed_session_list_read_never_writes_to_the_cache() =
+        runTest {
+            val gateway = FakeSessionGateway()
+            gateway.enqueueFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
+
+            verify(holder)
+            awaitState(holder, "failed list read") { it.sessionList?.isStale == true }
+
+            assertTrue(cache.writes().isEmpty())
+            holder.close()
+        }
+
+    @Test
+    fun opening_a_session_caches_only_its_fully_successful_transcript() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
+            gateway.openedSession = entrySession(sessionId.value, "First")
+            gateway.openedHistory =
+                SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-one", "user", "Cached content")))
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
+
+            verify(holder)
+            awaitSessions(holder, "session-one")
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+            awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
+
+            assertEquals(
+                listOf(GatewayHistoryMessage("message-one", "user", "Cached content")),
+                cache.cachedTranscript(endpoint, sessionId.value),
+            )
+            holder.close()
+        }
+
+    @Test
+    fun a_partially_successful_open_never_writes_to_the_cache() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
+            gateway.openedSession = entrySession("session-other", "Mismatched identity")
+            gateway.openedHistory =
+                SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-one", "user", "Cached content")))
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
+
+            verify(holder)
+            awaitSessions(holder, "session-one")
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+            awaitState(holder, "failed open") { it.sessionList?.errorCategory != null }
+
+            assertTrue(cache.writes().none { it.startsWith(TRANSCRIPT_WRITE_PREFIX) })
+            holder.close()
+        }
+
+    @Test
+    fun a_failed_open_never_writes_to_the_cache() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
+            gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
+
+            verify(holder)
+            awaitSessions(holder, "session-one")
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+            awaitState(holder, "failed open") { it.sessionList?.errorCategory != null }
+
+            assertTrue(cache.writes().none { it.startsWith(TRANSCRIPT_WRITE_PREFIX) })
+            holder.close()
+        }
+
+    @Test
+    fun a_successful_refresh_replaces_the_cached_transcript_wholly() =
+        runTest {
+            val sessionId = SessionId("session-one")
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession(sessionId.value, "First")), null))
+            gateway.openedSession = entrySession(sessionId.value, "First")
+            gateway.openedHistory =
+                SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-one", "user", "Stale content")))
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
+
+            verify(holder)
+            awaitSessions(holder, "session-one")
+            holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
+            awaitState(holder, "open conversation") { it.sessionList?.openedSession != null }
+
+            gateway.openedHistory =
+                SessionHistory(sessionId, listOf(GatewayHistoryMessage("message-two", "user", "Fresh content")))
+            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+            awaitState(holder, "refreshed transcript") {
+                it.sessionList?.openedSession?.messages?.singleOrNull()?.id == "message-two"
+            }
+
+            assertEquals(
+                listOf(GatewayHistoryMessage("message-two", "user", "Fresh content")),
+                cache.cachedTranscript(endpoint, sessionId.value),
+            )
+            holder.close()
+        }
+
+    @Test
+    fun a_successful_refresh_replaces_the_cache_even_after_the_opened_session_leaves_the_state() =
+        runTest {
+            val gateway = ScriptedRefreshGateway()
+            val cache = RecordingHistoryCacheStore()
+            val holder =
+                scriptedHolder(
+                    gateway,
+                    StandardTestDispatcher(testScheduler),
+                    EntryStateHolderDependencies(historyCacheStore = cache),
+                )
+
+            verifyScripted(holder)
+            holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
+            advanceUntilIdle()
+            awaitCachedTranscriptMessage(cache, endpoint, gateway.sessionId.value, "message-1")
+
+            gateway.onHistory = { call ->
+                if (call == 2) {
+                    holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
+                }
+            }
+            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+            advanceUntilIdle()
+
+            awaitCachedTranscriptMessage(cache, endpoint, gateway.sessionId.value, "message-2")
+            holder.close()
+        }
+
+    @Test
+    fun listing_sessions_never_caches_a_transcript_of_an_unopened_session() =
+        runTest {
+            val gateway = FakeSessionGateway()
+            gateway.enqueueList(SessionPage(listOf(entrySession("session-one", "First")), 2))
+            gateway.enqueueList(SessionPage(listOf(entrySession("session-two", "Second")), null))
+            val cache = RecordingHistoryCacheStore()
+            val holder = connectedCacheHolder(gateway, cache)
+
+            verify(holder)
+            awaitSessions(holder, "session-one")
+            holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
+            awaitSessions(holder, "session-one", "session-two")
+            gateway.enqueueFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
+            holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
+            awaitState(holder, "failed list read") { it.sessionList?.isStale == true }
+
+            assertTrue(cache.writes().none { it.startsWith(TRANSCRIPT_WRITE_PREFIX) })
+            holder.close()
+        }
 
     private fun connectedCacheHolder(
         gateway: SessionGatewayPort,

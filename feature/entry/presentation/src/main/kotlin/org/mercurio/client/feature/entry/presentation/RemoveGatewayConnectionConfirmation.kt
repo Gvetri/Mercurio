@@ -1,6 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,12 +22,18 @@ internal fun RemoveGatewayConnectionConfirmation(onEvent: (EntryUiEvent) -> Unit
             Text(text = stringResource(R.string.dialog_remove_connection_body))
         },
         confirmButton = {
-            TextButton(onClick = { onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked) }) {
+            TextButton(
+                onClick = { onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked) },
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
                 Text(text = stringResource(R.string.action_remove))
             }
         },
         dismissButton = {
-            TextButton(onClick = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) }) {
+            TextButton(
+                onClick = { onEvent(EntryUiEvent.CancelRemoveGatewayConnectionClicked) },
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+            ) {
                 Text(text = stringResource(R.string.action_cancel))
             }
         },

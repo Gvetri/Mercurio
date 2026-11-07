@@ -6,6 +6,10 @@ see `docs/agents/local-quality-gate.md`. Full gate before marking a PR ready:
 verify in two invocations:
 `./gradlew koverXmlReport pitest --rerun-tasks` then `./gradlew coverageVerify mutationVerify`.
 
+Before committing, the optional local hooks check the commit message and the staged change:
+`git config core.hooksPath .githooks` wires them once per clone — see
+[Commit hooks](commit-hooks.md).
+
 ## Tests
 
 Unit tests sit next to each feature module's sources (`feature/entry/*/src/test`); Gateway

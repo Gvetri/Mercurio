@@ -76,7 +76,7 @@ internal class RegexSourceCursor(private val source: String) {
         var closed = false
         var unterminated = false
         while (!closed && !unterminated && !atEnd) {
-            when (val consumed = advance()) {
+            when (advance()) {
                 '\\' -> if (!atEnd) advance()
                 '\'' -> closed = true
                 '\n' -> unterminated = true

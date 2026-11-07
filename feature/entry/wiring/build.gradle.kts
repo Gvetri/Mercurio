@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":feature:entry:domain"))
     implementation(project(":feature:entry:presentation"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.sentry.android.core)
 
@@ -51,6 +52,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(libs.junit4)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
 }

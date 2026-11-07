@@ -163,7 +163,14 @@ class MessageImageStateTest {
         decoder: MessageImageDecoder,
         concurrency: Semaphore = Semaphore(MAX_CONCURRENT_IMAGE_LOADS),
         timeoutMillis: Long = IMAGE_LOAD_TIMEOUT_MILLIS,
-    ): MessageImageServices = MessageImageServices(port::fetch, decoder, concurrency, timeoutMillis)
+    ): MessageImageServices =
+        MessageImageServices(
+            loadImage = port::fetch,
+            decoder = decoder,
+            autoLoad = true,
+            concurrency = concurrency,
+            timeoutMillis = timeoutMillis,
+        )
 
     private fun fetched(): MessageImageFetch.Fetched = MessageImageFetch.Fetched(byteArrayOf(1, 2, 3), "image/png")
 }

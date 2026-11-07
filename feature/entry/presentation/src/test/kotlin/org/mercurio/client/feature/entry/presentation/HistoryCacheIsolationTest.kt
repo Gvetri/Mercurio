@@ -3,6 +3,7 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,71 +33,76 @@ import java.io.File
 
 class HistoryCacheIsolationTest {
     @Test
-    fun run_recovery_and_reconciliation_with_a_populated_cache_behave_exactly_like_a_cacheless_run() {
-        val withoutCache = runReconciledOpenScenario(NoOpHistoryCacheStore)
-        val cache = RecordingHistoryCacheStore()
-        poisonCache(cache)
-        val withCache = runReconciledOpenScenario(cache)
+    fun run_recovery_and_reconciliation_with_a_populated_cache_behave_exactly_like_a_cacheless_run() =
+        runTest {
+            val withoutCache = runReconciledOpenScenario(NoOpHistoryCacheStore)
+            val cache = RecordingHistoryCacheStore()
+            poisonCache(cache)
+            val withCache = runReconciledOpenScenario(cache)
 
-        assertEquals(withoutCache, withCache)
-        assertTrue(cache.reads().isEmpty())
-    }
-
-    @Test
-    fun session_refresh_reconciliation_with_a_populated_cache_behaves_exactly_like_a_cacheless_run() {
-        val withoutCache = runRefreshReconcileScenario(NoOpHistoryCacheStore)
-        val cache = RecordingHistoryCacheStore()
-        poisonCache(cache)
-        val withCache = runRefreshReconcileScenario(cache)
-
-        assertEquals(withoutCache, withCache)
-        assertTrue(cache.reads().isEmpty())
-    }
+            assertEquals(withoutCache, withCache)
+            assertTrue(cache.reads().isEmpty())
+        }
 
     @Test
-    fun a_successful_submission_with_a_populated_cache_behaves_exactly_like_a_cacheless_run() {
-        val withoutCache = runSubmissionScenario(NoOpHistoryCacheStore)
-        val cache = RecordingHistoryCacheStore()
-        poisonCache(cache)
-        val withCache = runSubmissionScenario(cache)
+    fun session_refresh_reconciliation_with_a_populated_cache_behaves_exactly_like_a_cacheless_run() =
+        runTest {
+            val withoutCache = runRefreshReconcileScenario(NoOpHistoryCacheStore)
+            val cache = RecordingHistoryCacheStore()
+            poisonCache(cache)
+            val withCache = runRefreshReconcileScenario(cache)
 
-        assertEquals(withoutCache, withCache)
-        assertTrue(cache.reads().isEmpty())
-    }
-
-    @Test
-    fun a_failed_submission_with_a_populated_cache_behaves_exactly_like_a_cacheless_run() {
-        val withoutCache = runFailedSubmissionScenario(NoOpHistoryCacheStore)
-        val cache = RecordingHistoryCacheStore()
-        poisonCache(cache)
-        val withCache = runFailedSubmissionScenario(cache)
-
-        assertEquals(withoutCache, withCache)
-        assertTrue(cache.reads().isEmpty())
-    }
+            assertEquals(withoutCache, withCache)
+            assertTrue(cache.reads().isEmpty())
+        }
 
     @Test
-    fun recovery_reconciliation_and_uncertainty_sources_never_reference_the_history_cache() {
-        val root = File(System.getProperty("fixture.repositoryRoot"))
-        val isolationSources =
-            listOf(
-                PRESENTATION_MAIN + "EntryStateHolderRecoveryLoad.kt",
-                PRESENTATION_MAIN + "EntryStateHolderRecoveryWork.kt",
-                PRESENTATION_MAIN + "EntryStateHolderReconciliation.kt",
-                PRESENTATION_MAIN + "EntryStateHolderReconciliationApply.kt",
-                PRESENTATION_MAIN + "ProcessRunSubmissionUncertaintyStore.kt",
-                APPLICATION_MAIN + "ReconcileSession.kt",
-                APPLICATION_MAIN + "ReconcileRun.kt",
-            )
-        val violations =
-            isolationSources.flatMap { path ->
-                File(root, path).readLines().mapIndexedNotNull { index, line ->
-                    if ("historyCache" in line || "HistoryCache" in line) "$path:${index + 1}" else null
+    fun a_successful_submission_with_a_populated_cache_behaves_exactly_like_a_cacheless_run() =
+        runTest {
+            val withoutCache = runSubmissionScenario(NoOpHistoryCacheStore)
+            val cache = RecordingHistoryCacheStore()
+            poisonCache(cache)
+            val withCache = runSubmissionScenario(cache)
+
+            assertEquals(withoutCache, withCache)
+            assertTrue(cache.reads().isEmpty())
+        }
+
+    @Test
+    fun a_failed_submission_with_a_populated_cache_behaves_exactly_like_a_cacheless_run() =
+        runTest {
+            val withoutCache = runFailedSubmissionScenario(NoOpHistoryCacheStore)
+            val cache = RecordingHistoryCacheStore()
+            poisonCache(cache)
+            val withCache = runFailedSubmissionScenario(cache)
+
+            assertEquals(withoutCache, withCache)
+            assertTrue(cache.reads().isEmpty())
+        }
+
+    @Test
+    fun recovery_reconciliation_and_uncertainty_sources_never_reference_the_history_cache() =
+        runTest {
+            val root = File(System.getProperty("fixture.repositoryRoot"))
+            val isolationSources =
+                listOf(
+                    PRESENTATION_MAIN + "EntryStateHolderRecoveryLoad.kt",
+                    PRESENTATION_MAIN + "EntryStateHolderRecoveryWork.kt",
+                    PRESENTATION_MAIN + "EntryStateHolderReconciliation.kt",
+                    PRESENTATION_MAIN + "EntryStateHolderReconciliationApply.kt",
+                    PRESENTATION_MAIN + "ProcessRunSubmissionUncertaintyStore.kt",
+                    APPLICATION_MAIN + "ReconcileSession.kt",
+                    APPLICATION_MAIN + "ReconcileRun.kt",
+                )
+            val violations =
+                isolationSources.flatMap { path ->
+                    File(root, path).readLines().mapIndexedNotNull { index, line ->
+                        if ("historyCache" in line || "HistoryCache" in line) "$path:${index + 1}" else null
+                    }
                 }
-            }
 
-        assertEquals(emptyList<String>(), violations)
-    }
+            assertEquals(emptyList<String>(), violations)
+        }
 
     private fun poisonCache(cache: RecordingHistoryCacheStore) {
         cache.writeSessionList(RECONCILED_ENDPOINT, listOf(entrySession("ghost-session", "Ghost entry")))
@@ -106,7 +112,7 @@ class HistoryCacheIsolationTest {
         )
     }
 
-    private fun runReconciledOpenScenario(cache: HistoryCacheStore): SessionListUiState {
+    private suspend fun runReconciledOpenScenario(cache: HistoryCacheStore): SessionListUiState {
         val gateway = ReconciliationFakeGateway(reconciliationSession())
         gateway.histories += SessionHistory(gateway.session.id, emptyList())
         gateway.statuses += Run(RECOVERY_RUN_ID, gateway.session.id, "completed")
@@ -120,7 +126,7 @@ class HistoryCacheIsolationTest {
         }
     }
 
-    private fun runRefreshReconcileScenario(cache: HistoryCacheStore): SessionListUiState {
+    private suspend fun runRefreshReconcileScenario(cache: HistoryCacheStore): SessionListUiState {
         val gateway = ReconciliationFakeGateway(reconciliationSession())
         gateway.histories += SessionHistory(gateway.session.id, emptyList())
         gateway.histories += SessionHistory(gateway.session.id, emptyList())
@@ -162,7 +168,7 @@ class HistoryCacheIsolationTest {
         )
     }
 
-    private fun runSubmissionScenario(cache: HistoryCacheStore): SessionListUiState {
+    private suspend fun runSubmissionScenario(cache: HistoryCacheStore): SessionListUiState {
         val session = submissionSession()
         val gateway = FakeGateway(listOf(session))
         gateway.enqueueRun(Run(RunId("run-1"), session.id, "starting"))
@@ -177,7 +183,7 @@ class HistoryCacheIsolationTest {
         }
     }
 
-    private fun runFailedSubmissionScenario(cache: HistoryCacheStore): SessionListUiState {
+    private suspend fun runFailedSubmissionScenario(cache: HistoryCacheStore): SessionListUiState {
         val session = submissionSession()
         val gateway = FakeGateway(listOf(session))
         gateway.enqueueRunFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
@@ -214,7 +220,7 @@ class HistoryCacheIsolationTest {
         )
     }
 
-    private fun openSubmissionSession(
+    private suspend fun openSubmissionSession(
         holder: EntryStateHolder,
         session: Session,
     ) {

@@ -14,6 +14,7 @@ import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.ModelCatalog
 import org.mercurio.client.feature.entry.domain.ModelCatalogEntry
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelEffortOptions
 import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.ModelSelection
@@ -35,21 +36,17 @@ import org.mercurio.client.feature.entry.domain.SessionPinResult
 internal const val PICKER_ENDPOINT = "https://gateway.example/profile"
 internal val PICKER_SESSION_ID = SessionId("session-1")
 
-internal fun pickerCapabilities(withRunModelsRow: Boolean): GatewayCapabilities {
+internal fun pickerCapabilities(surface: ModelCatalogSurface? = ModelCatalogSurface.RUN_MODELS): GatewayCapabilities {
     val endpoints = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.toMutableMap()
-    if (withRunModelsRow) {
-        endpoints[PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint.endpoint] =
-            GatewayEndpoint(
-                PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint.method,
-                PublicBetaGatewayCapabilityManifest.modelCatalogEndpoint.path,
-            )
+    if (surface != null) {
+        endpoints[surface.endpoint] = GatewayEndpoint(surface.method, surface.path)
     }
     return GatewayCapabilities(endpoints)
 }
 
 internal fun pickerCatalog(): ModelCatalog =
     ModelCatalog(
-        discriminator = "hermes.api_server.run_models",
+        surface = ModelCatalogSurface.RUN_MODELS,
         defaultModel = "alpha",
         entries =
             listOf(
@@ -60,7 +57,7 @@ internal fun pickerCatalog(): ModelCatalog =
 
 internal fun pickerEffortCatalog(): ModelCatalog =
     ModelCatalog(
-        discriminator = "hermes.api_server.run_models",
+        surface = ModelCatalogSurface.RUN_MODELS,
         defaultModel = "alpha",
         entries =
             listOf(
@@ -79,10 +76,6 @@ internal fun pickerEffortCatalog(): ModelCatalog =
             ),
     )
 
-/**
- * A model-catalog port double: serves a canned result and counts fetches so tests can
- * prove the fail-closed ladder never fetches or refetches when it must not.
- */
 internal class PickerFakeGateway(
     private val delegate: RetryFakeGateway,
     var catalogResult: Result<ModelCatalog> =
@@ -91,9 +84,11 @@ internal class PickerFakeGateway(
     RunGatewayPort by delegate,
     ModelGatewayPort {
     var fetchCount = 0
+    val fetchedSurfaces = mutableListOf<ModelCatalogSurface>()
 
-    override fun fetchModelCatalog(): ModelCatalog {
+    override fun fetchModelCatalog(surface: ModelCatalogSurface): ModelCatalog {
         fetchCount += 1
+        fetchedSurfaces += surface
         return catalogResult.getOrThrow()
     }
 }
@@ -147,11 +142,6 @@ internal class FakePickerSelectionStore(
 
 internal val PICKER_CREATED_SESSION_ID = SessionId("created-session")
 
-/**
- * A direct three-port double for the create-session path: it lands a created Session
- * on the composer without any SessionClicked and counts catalog fetches, so a test
- * can prove the picker is armed by that landing rather than by opening a Session.
- */
 internal class PickerCreateFakeGateway(
     var catalogResult: Result<ModelCatalog> = Result.success(pickerCatalog()),
 ) : SessionGatewayPort,
@@ -160,7 +150,7 @@ internal class PickerCreateFakeGateway(
     var fetchCount = 0
     private var created: Session? = null
 
-    override fun fetchModelCatalog(): ModelCatalog {
+    override fun fetchModelCatalog(surface: ModelCatalogSurface): ModelCatalog {
         fetchCount += 1
         return catalogResult.getOrThrow()
     }
@@ -197,7 +187,7 @@ internal class PickerCreateFakeGateway(
 
 internal fun pickerHolder(
     gateway: Any,
-    capabilities: GatewayCapabilities = pickerCapabilities(withRunModelsRow = true),
+    capabilities: GatewayCapabilities = pickerCapabilities(ModelCatalogSurface.RUN_MODELS),
     store: ModelSelectionStore = NoOpModelSelectionStore,
 ): EntryStateHolder = pickerHolder(gateway, store = store) { capabilities }
 
@@ -225,13 +215,13 @@ internal fun pickerHolder(
             ),
     )
 
-internal fun EntryStateHolder.connectAndOpenPickerSession(gateway: RetryFakeGateway) {
+internal suspend fun EntryStateHolder.connectAndOpenPickerSession(gateway: RetryFakeGateway) {
     connectRetryGateway(this, gateway)
     onEvent(EntryUiEvent.SessionClicked(PICKER_SESSION_ID))
     awaitRetryState(this) { it.sessionList?.openedSession?.session?.id == PICKER_SESSION_ID }
 }
 
-internal fun awaitPickerState(
+internal suspend fun awaitPickerState(
     holder: EntryStateHolder,
     predicate: (ModelPickerUiState) -> Boolean,
 ) {

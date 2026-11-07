@@ -3,15 +3,20 @@ name: empty-sessions
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Send crash and error reports[?]"
+    commands:
+      - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
 - takeScreenshot: empty-sessions-form-filled
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000
@@ -24,19 +29,24 @@ name: empty-sessions
 - extendedWaitUntil:
     visible: "Generating title…"
     timeout: 30000
-- assertVisible: "New session"
+- assertVisible: "Untitled session"
 - takeScreenshot: empty-sessions-02-created-row
 - tapOn: "Settings"
-- assertVisible: "Change Gateway credential"
+- scrollUntilVisible:
+    element:
+      text: "Local diagnostics"
+    direction: DOWN
 - assertVisible: "Local diagnostics"
-- assertVisible: "Remove Gateway Connection"
-- tapOn: "Remove Gateway Connection"
-- assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- tapOn: "::"
+- assertVisible: "Change credential"
+- assertVisible: "Remove connection"
+- tapOn: "Remove connection"
+- assertVisible: "This deletes the saved credential and the Gateway address. Your sessions stay on the Gateway."
 - takeScreenshot: empty-sessions-03-removal-confirmation
 - tapOn: "Cancel"
-- assertVisible: "Change Gateway credential"
-- assertNotVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- assertVisible: "Local diagnostics"
+- assertNotVisible: "This deletes the saved credential and the Gateway address. Your sessions stay on the Gateway."
 - takeScreenshot: empty-sessions-04-removal-cancelled-on-settings
-- tapOn: "Back to Sessions"
-- assertVisible: "New session"
+- back
+- assertVisible: "Untitled session"
 - takeScreenshot: empty-sessions-05-created-row-kept

@@ -158,6 +158,11 @@ class PublishedDocumentationTest(unittest.TestCase):
                                    text=True, check=False, env=dict(os.environ))
         self.assert_rejected(completed, "failed closed")
 
+    def test_the_journey_documentation_states_the_one_flow_invocation(self):
+        documentation = (ROOT / "docs/deterministic-emulator-journeys.md").read_text(encoding="utf-8")
+        self.assertIn(".github/scripts/journey-run.sh --flow <journey> --apk <path>", documentation)
+        self.assertIn("fails before any device work", documentation)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,6 @@
 name: Code issue
 about: Implement an approved design on one named screen or component
 title: "Implement: "
-labels: enhancement
 ---
 
 # Implement: <surface>

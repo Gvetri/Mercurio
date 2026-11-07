@@ -8,7 +8,9 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.application.NoOpErrorReporter
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
@@ -21,10 +23,10 @@ class SentryBackendTest {
     @Test
     fun a_configured_dsn_and_a_granted_decision_install_the_backend_with_the_declared_options() {
         val installed = mutableListOf<SentryReportingConfig>()
-        val backend = AndroidSentryBackend { _, config -> installed += config }
+        val backend = AndroidSentryBackend { _, config, _ -> installed += config }
         val config = reportingConfig()
 
-        val reporter = backend.start(context, config)
+        val reporter = backend.startWithStoredAnswer(context, config)
 
         assertEquals(listOf(config), installed)
         assertTrue(reporter is SentryErrorReporter)
@@ -44,9 +46,9 @@ class SentryBackendTest {
     fun a_decision_that_grants_nothing_never_installs_the_backend() {
         for (consent in listOf(ErrorReportingConsent.Undecided, ErrorReportingConsent.Declined)) {
             val installed = mutableListOf<SentryReportingConfig>()
-            val backend = AndroidSentryBackend { _, config -> installed += config }
+            val backend = AndroidSentryBackend { _, config, _ -> installed += config }
 
-            val reporter = backend.start(context, reportingConfig().copy(consent = consent))
+            val reporter = backend.startWithStoredAnswer(context, reportingConfig().copy(consent = consent))
 
             assertTrue("A $consent decision installed the backend.", installed.isEmpty())
             assertSame(NoOpErrorReporter, reporter)
@@ -56,9 +58,9 @@ class SentryBackendTest {
     @Test
     fun an_absent_dsn_never_installs_a_backend() {
         var installed: SentryReportingConfig? = null
-        val backend = AndroidSentryBackend { _, config -> installed = config }
+        val backend = AndroidSentryBackend { _, config, _ -> installed = config }
 
-        val reporter = backend.start(context, reportingConfig().copy(dsn = ""))
+        val reporter = backend.startWithStoredAnswer(context, reportingConfig().copy(dsn = ""))
 
         assertNull(installed)
         assertSame(NoOpErrorReporter, reporter)
@@ -84,9 +86,9 @@ class SentryBackendTest {
 
     @Test
     fun a_backend_that_cannot_install_degrades_to_the_no_op_sink() {
-        val backend = AndroidSentryBackend { _, _ -> error("InvalidDsnException") }
+        val backend = AndroidSentryBackend { _, _, _ -> error("InvalidDsnException") }
 
-        val reporter = backend.start(context, reportingConfig())
+        val reporter = backend.startWithStoredAnswer(context, reportingConfig())
 
         assertSame(NoOpErrorReporter, reporter)
     }
@@ -94,22 +96,27 @@ class SentryBackendTest {
     @Test
     fun a_second_start_installs_nothing_further() {
         var installs = 0
-        val backend = AndroidSentryBackend { _, _ -> installs++ }
+        val backend = AndroidSentryBackend { _, _, _ -> installs++ }
 
-        backend.start(context, reportingConfig())
-        backend.start(context, reportingConfig())
+        backend.startWithStoredAnswer(context, reportingConfig())
+        backend.startWithStoredAnswer(context, reportingConfig())
 
         assertEquals(1, installs)
     }
 
     @Test
     fun a_failed_install_keeps_every_later_start_on_the_no_op_sink() {
-        val backend = AndroidSentryBackend { _, _ -> error("InvalidDsnException") }
+        val backend = AndroidSentryBackend { _, _, _ -> error("InvalidDsnException") }
 
-        backend.start(context, reportingConfig())
+        backend.startWithStoredAnswer(context, reportingConfig())
 
-        assertSame(NoOpErrorReporter, backend.start(context, reportingConfig()))
+        assertSame(NoOpErrorReporter, backend.startWithStoredAnswer(context, reportingConfig()))
     }
+
+    private fun AndroidSentryBackend.startWithStoredAnswer(
+        context: Application,
+        config: SentryReportingConfig,
+    ): ErrorReporter = start(context, config) { config.consent }
 
     private fun reportingConfig(): SentryReportingConfig =
         SentryReportingConfig(

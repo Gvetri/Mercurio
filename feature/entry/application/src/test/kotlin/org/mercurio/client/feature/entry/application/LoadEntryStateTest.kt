@@ -59,6 +59,8 @@ class LoadEntryStateTest {
         val state = LoadEntryState(FakeGatewayConnectionRepository(endpoint = null), provider).execute()
 
         assertEquals("nightly-57-ab12cd", state.clientVersion)
+        assertEquals(57L, state.buildNumber)
+        assertEquals(InstallSource.GOOGLE_PLAY, state.installSource)
     }
 
     @Test

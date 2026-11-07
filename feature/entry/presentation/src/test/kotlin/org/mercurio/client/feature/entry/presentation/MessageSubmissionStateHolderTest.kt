@@ -1,7 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,60 +24,68 @@ private const val TEST_TIMEOUT_MILLIS = 5_000L
 
 class MessageSubmissionStateHolderTest {
     @Test
-    fun successful_send_creates_one_run_clears_only_the_submitted_draft_and_stores_the_returned_identity() {
-        val session = session("session-1")
-        val run = Run(RunId("run-1"), session.id, "starting")
-        val gateway = FakeGateway(listOf(session)).apply { enqueueRun(run) }
-        val holder = holder(gateway)
+    fun successful_send_creates_one_run_clears_only_the_submitted_draft_and_stores_the_returned_identity() =
+        runTest {
+            val session = session("session-1")
+            val run = Run(RunId("run-1"), session.id, "starting")
+            val gateway = FakeGateway(listOf(session)).apply { enqueueRun(run) }
+            val holder = holder(gateway)
 
-        try {
-            open(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            try {
+                open(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
 
-            val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals(listOf(session.id to "Run this"), gateway.runRequests)
-            assertEquals(run, opened.latestRun)
-            assertEquals("", opened.composerText)
-            assertFalse(opened.isSending)
-            assertNull(opened.sendErrorCategory)
-        } finally {
-            holder.close()
+                val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals(listOf(session.id to "Run this"), gateway.runRequests)
+                assertEquals(run, opened.latestRun)
+                assertEquals("", opened.composerText)
+                assertFalse(opened.isSending)
+                assertNull(opened.sendErrorCategory)
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
-    fun an_active_run_blocks_send_but_keeps_the_next_draft_editable() {
-        val session = session("session-1")
-        val gateway =
-            FakeGateway(
-                sessions = listOf(session),
-                histories =
-                    mapOf(
-                        session.id to
-                            SessionHistory(
-                                session.id,
-                                listOf(
-                                    GatewayHistoryMessage("run-message", "user", "Run this", RunId("run-1"), "running"),
+    fun an_active_run_blocks_send_but_keeps_the_next_draft_editable() =
+        runTest {
+            val session = session("session-1")
+            val gateway =
+                FakeGateway(
+                    sessions = listOf(session),
+                    histories =
+                        mapOf(
+                            session.id to
+                                SessionHistory(
+                                    session.id,
+                                    listOf(
+                                        GatewayHistoryMessage(
+                                            "run-message",
+                                            "user",
+                                            "Run this",
+                                            RunId("run-1"),
+                                            "running",
+                                        ),
+                                    ),
                                 ),
-                            ),
-                    ),
-            )
-        val holder = holder(gateway)
+                        ),
+                )
+            val holder = holder(gateway)
 
-        try {
-            open(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not accept this"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            try {
+                open(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not accept this"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
 
-            val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals("Do not accept this", opened.composerText)
-            assertEquals(emptyList<Pair<SessionId, String>>(), gateway.runRequests)
-            assertTrue(opened.latestRun?.status == "running")
-        } finally {
-            holder.close()
+                val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals("Do not accept this", opened.composerText)
+                assertEquals(emptyList<Pair<SessionId, String>>(), gateway.runRequests)
+                assertTrue(opened.latestRun?.status == "running")
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
     fun duplicate_send_is_ignored_while_the_first_run_request_is_pending() =
@@ -206,140 +214,143 @@ class MessageSubmissionStateHolderTest {
         }
 
     @Test
-    fun an_older_active_run_blocks_submission_when_the_latest_run_is_terminal() {
-        val session = session("session-1")
-        val gateway =
-            FakeGateway(
-                sessions = listOf(session),
-                histories =
-                    mapOf(
-                        session.id to
-                            SessionHistory(
-                                session.id,
-                                listOf(
-                                    GatewayHistoryMessage(
-                                        "run-1-message",
-                                        "user",
-                                        "First",
-                                        RunId("run-1"),
-                                        "running",
-                                    ),
-                                    GatewayHistoryMessage(
-                                        "run-2-message",
-                                        "user",
-                                        "Second",
-                                        RunId("run-2"),
-                                        "succeeded",
+    fun an_older_active_run_blocks_submission_when_the_latest_run_is_terminal() =
+        runTest {
+            val session = session("session-1")
+            val gateway =
+                FakeGateway(
+                    sessions = listOf(session),
+                    histories =
+                        mapOf(
+                            session.id to
+                                SessionHistory(
+                                    session.id,
+                                    listOf(
+                                        GatewayHistoryMessage(
+                                            "run-1-message",
+                                            "user",
+                                            "First",
+                                            RunId("run-1"),
+                                            "running",
+                                        ),
+                                        GatewayHistoryMessage(
+                                            "run-2-message",
+                                            "user",
+                                            "Second",
+                                            RunId("run-2"),
+                                            "succeeded",
+                                        ),
                                     ),
                                 ),
-                            ),
-                    ),
-            )
-        val holder = holder(gateway)
+                        ),
+                )
+            val holder = holder(gateway)
 
-        try {
-            open(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not send"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
+            try {
+                open(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not send"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
 
-            val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertTrue(opened.activeRuns.any { it.id == RunId("run-1") })
-            assertEquals(emptyList<Pair<SessionId, String>>(), gateway.runRequests)
-        } finally {
-            holder.close()
+                val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertTrue(opened.activeRuns.any { it.id == RunId("run-1") })
+                assertEquals(emptyList<Pair<SessionId, String>>(), gateway.runRequests)
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
-    fun a_returned_active_run_is_retained_when_reopened_history_omits_it() {
-        val session = session("session-1")
-        val returnedRun = Run(RunId("run-new"), session.id, "starting")
-        val gateway =
-            FakeGateway(
-                sessions = listOf(session),
-                histories =
-                    mapOf(
-                        session.id to
-                            SessionHistory(
-                                session.id,
-                                listOf(
-                                    GatewayHistoryMessage(
-                                        "old-run-message",
-                                        "user",
-                                        "Previous",
-                                        RunId("run-old"),
-                                        "succeeded",
+    fun a_returned_active_run_is_retained_when_reopened_history_omits_it() =
+        runTest {
+            val session = session("session-1")
+            val returnedRun = Run(RunId("run-new"), session.id, "starting")
+            val gateway =
+                FakeGateway(
+                    sessions = listOf(session),
+                    histories =
+                        mapOf(
+                            session.id to
+                                SessionHistory(
+                                    session.id,
+                                    listOf(
+                                        GatewayHistoryMessage(
+                                            "old-run-message",
+                                            "user",
+                                            "Previous",
+                                            RunId("run-old"),
+                                            "succeeded",
+                                        ),
                                     ),
                                 ),
-                            ),
-                    ),
-                runStatuses = mapOf(RunId("run-old") to Run(RunId("run-old"), session.id, "succeeded")),
-            ).apply { enqueueRun(returnedRun) }
-        val holder = holder(gateway)
+                        ),
+                    runStatuses = mapOf(RunId("run-old") to Run(RunId("run-old"), session.id, "succeeded")),
+                ).apply { enqueueRun(returnedRun) }
+            val holder = holder(gateway)
 
-        try {
-            open(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Create active run"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
-            holder.onEvent(EntryUiEvent.SessionClicked(session.id))
-            awaitState(holder) { it.sessionList?.openedSession?.latestRun?.id == returnedRun.id }
+            try {
+                open(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Create active run"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
+                holder.onEvent(EntryUiEvent.SessionClicked(session.id))
+                awaitState(holder) { it.sessionList?.openedSession?.latestRun?.id == returnedRun.id }
 
-            val reopened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertTrue(reopened.activeRuns.any { it.id == returnedRun.id })
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not send twice"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            assertEquals(listOf(session.id to "Create active run"), gateway.runRequests)
-        } finally {
-            holder.close()
+                val reopened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertTrue(reopened.activeRuns.any { it.id == returnedRun.id })
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not send twice"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertEquals(listOf(session.id to "Create active run"), gateway.runRequests)
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
-    fun repeated_history_statuses_use_the_latest_status_for_one_run() {
-        val session = session("session-1")
-        val gateway =
-            FakeGateway(
-                sessions = listOf(session),
-                histories =
-                    mapOf(
-                        session.id to
-                            SessionHistory(
-                                session.id,
-                                listOf(
-                                    GatewayHistoryMessage(
-                                        "run-message-started",
-                                        "user",
-                                        "Run",
-                                        RunId("run-1"),
-                                        "running",
-                                    ),
-                                    GatewayHistoryMessage(
-                                        "run-message-completed",
-                                        "assistant",
-                                        "Done",
-                                        RunId("run-1"),
-                                        "succeeded",
+    fun repeated_history_statuses_use_the_latest_status_for_one_run() =
+        runTest {
+            val session = session("session-1")
+            val gateway =
+                FakeGateway(
+                    sessions = listOf(session),
+                    histories =
+                        mapOf(
+                            session.id to
+                                SessionHistory(
+                                    session.id,
+                                    listOf(
+                                        GatewayHistoryMessage(
+                                            "run-message-started",
+                                            "user",
+                                            "Run",
+                                            RunId("run-1"),
+                                            "running",
+                                        ),
+                                        GatewayHistoryMessage(
+                                            "run-message-completed",
+                                            "assistant",
+                                            "Done",
+                                            RunId("run-1"),
+                                            "succeeded",
+                                        ),
                                     ),
                                 ),
-                            ),
-                    ),
-                runStatuses = mapOf(RunId("run-1") to Run(RunId("run-1"), session.id, "succeeded")),
-            )
-        val holder = holder(gateway)
+                        ),
+                    runStatuses = mapOf(RunId("run-1") to Run(RunId("run-1"), session.id, "succeeded")),
+                )
+            val holder = holder(gateway)
 
-        try {
-            open(holder, gateway, session.id)
-            val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals("succeeded", opened.latestRun?.status)
-            assertTrue(opened.activeRuns.isEmpty())
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Send after completion"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            assertEquals(listOf(session.id to "Send after completion"), gateway.runRequests)
-        } finally {
-            holder.close()
+            try {
+                open(holder, gateway, session.id)
+                val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals("succeeded", opened.latestRun?.status)
+                assertTrue(opened.activeRuns.isEmpty())
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Send after completion"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertEquals(listOf(session.id to "Send after completion"), gateway.runRequests)
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
     fun late_run_completion_after_removal_cannot_pollute_a_reconnected_gateway() =
@@ -398,129 +409,131 @@ class MessageSubmissionStateHolderTest {
         }
 
     @Test
-    fun a_late_completion_cannot_replace_a_newer_attempt_or_its_draft() {
-        val session = session("session-late-attempt")
-        val run = Run(RunId("run-late-attempt"), session.id, "starting")
-        val gateway =
-            FakeGateway(listOf(session)).apply {
-                enqueueRun(run)
-                blockRunCreation = true
-            }
-        val store = ProcessRunSubmissionUncertaintyStore
-        val key = PendingRunSubmissionKey("https://gateway.example/profile", session.id)
-        store.remove(key)
-        val holder = holder(gateway, Dispatchers.Default, uncertaintyStore = store)
-
-        try {
-            open(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Original attempt"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            val staleAttemptId = requireNotNull(store.attemptId(key))
-
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
-            assertTrue(store.remove(key, staleAttemptId))
-            assertTrue(store.add(key, emptySet(), "new-attempt"))
-            gateway.releaseRun.countDown()
-
-            awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
-            val settled = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals("Newer draft", settled.composerText)
-            assertTrue(settled.hasUnresolvedSubmission)
-            assertEquals(listOf(session.id to "Original attempt"), gateway.runRequests)
-            assertEquals("new-attempt", store.attemptId(key))
-            assertNull(store.boundRunId(key))
-
-            gateway.setRunStatus(run.copy(status = "succeeded"))
-            gateway.setHistory(
-                SessionHistory(
-                    session.id,
-                    listOf(GatewayHistoryMessage("late-result", "assistant", "Late result", run.id, "succeeded")),
-                ),
-            )
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            awaitState(holder) { it.sessionList?.openedSession?.isRefreshing == false }
-
-            val refreshed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals(run.id, refreshed.latestRun?.id)
-            assertEquals("succeeded", refreshed.latestRun?.status)
-            assertEquals("new-attempt", store.attemptId(key))
-            assertTrue(refreshed.hasUnresolvedSubmission)
-        } finally {
-            gateway.releaseRun.countDown()
+    fun a_late_completion_cannot_replace_a_newer_attempt_or_its_draft() =
+        runTest {
+            val session = session("session-late-attempt")
+            val run = Run(RunId("run-late-attempt"), session.id, "starting")
+            val store = ProcessRunSubmissionUncertaintyStore
+            val key = PendingRunSubmissionKey("https://gateway.example/profile", session.id)
             store.remove(key)
-            holder.close()
+            lateinit var holder: EntryStateHolder
+            val gateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRun(run)
+                    onCreateRun = {
+                        holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
+                        val staleAttemptId = requireNotNull(store.attemptId(key))
+                        assertTrue(store.remove(key, staleAttemptId))
+                        assertTrue(store.add(key, emptySet(), "new-attempt"))
+                    }
+                }
+            holder = holder(gateway, StandardTestDispatcher(testScheduler), uncertaintyStore = store)
+
+            try {
+                openWithVirtualTime(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Original attempt"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                advanceUntilIdle()
+
+                awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
+                val settled = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals("Newer draft", settled.composerText)
+                assertTrue(settled.hasUnresolvedSubmission)
+                assertEquals(listOf(session.id to "Original attempt"), gateway.runRequests)
+                assertEquals("new-attempt", store.attemptId(key))
+                assertNull(store.boundRunId(key))
+
+                gateway.setRunStatus(run.copy(status = "succeeded"))
+                gateway.setHistory(
+                    SessionHistory(
+                        session.id,
+                        listOf(GatewayHistoryMessage("late-result", "assistant", "Late result", run.id, "succeeded")),
+                    ),
+                )
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                advanceUntilIdle()
+                awaitState(holder) { it.sessionList?.openedSession?.isRefreshing == false }
+
+                val refreshed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals(run.id, refreshed.latestRun?.id)
+                assertEquals("succeeded", refreshed.latestRun?.status)
+                assertEquals("new-attempt", store.attemptId(key))
+                assertTrue(refreshed.hasUnresolvedSubmission)
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
-    fun an_active_run_in_one_session_does_not_disable_a_different_session() {
-        val first = session("session-1")
-        val second = session("session-2")
-        val firstRun = Run(RunId("run-1"), first.id, "starting")
-        val secondRun = Run(RunId("run-2"), second.id, "starting")
-        val gateway =
-            FakeGateway(listOf(first, second)).apply {
-                enqueueRun(firstRun)
-                enqueueRun(secondRun)
+    fun an_active_run_in_one_session_does_not_disable_a_different_session() =
+        runTest {
+            val first = session("session-1")
+            val second = session("session-2")
+            val firstRun = Run(RunId("run-1"), first.id, "starting")
+            val secondRun = Run(RunId("run-2"), second.id, "starting")
+            val gateway =
+                FakeGateway(listOf(first, second)).apply {
+                    enqueueRun(firstRun)
+                    enqueueRun(secondRun)
+                }
+            val holder = holder(gateway)
+
+            try {
+                open(holder, gateway, first.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
+                holder.onEvent(EntryUiEvent.SessionClicked(second.id))
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+
+                assertEquals(
+                    listOf(first.id to "First", second.id to "Second"),
+                    gateway.runRequests,
+                )
+            } finally {
+                holder.close()
             }
-        val holder = holder(gateway)
-
-        try {
-            open(holder, gateway, first.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
-            holder.onEvent(EntryUiEvent.SessionClicked(second.id))
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-
-            assertEquals(
-                listOf(first.id to "First", second.id to "Second"),
-                gateway.runRequests,
-            )
-        } finally {
-            holder.close()
         }
-    }
 
     @Test
-    fun confirmed_failure_preserves_the_draft_and_only_an_explicit_retry_submits_again() {
-        val session = session("session-1")
-        val run = Run(RunId("run-1"), session.id, "starting")
-        val gateway =
-            FakeGateway(listOf(session)).apply {
-                enqueueRunFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
-                enqueueRun(run)
+    fun confirmed_failure_preserves_the_draft_and_only_an_explicit_retry_submits_again() =
+        runTest {
+            val session = session("session-1")
+            val run = Run(RunId("run-1"), session.id, "starting")
+            val gateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRunFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
+                    enqueueRun(run)
+                }
+            val holder = holder(gateway)
+
+            try {
+                open(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Keep this draft"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+
+                val failed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals("Keep this draft", failed.composerText)
+                assertEquals(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED, failed.sendErrorCategory)
+                assertFalse(failed.isSending)
+                assertEquals(1, gateway.runRequests.size)
+                assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                awaitState(holder) {
+                    it.sessionList?.openedSession?.latestRun == run &&
+                        it.sessionList.openedSession.composerText == ""
+                }
+
+                val retried = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertEquals(2, gateway.runRequests.size)
+                assertEquals("", retried.composerText)
+                assertEquals(run, retried.latestRun)
+            } finally {
+                holder.close()
             }
-        val holder = holder(gateway)
-
-        try {
-            open(holder, gateway, session.id)
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Keep this draft"))
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-
-            val failed = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals("Keep this draft", failed.composerText)
-            assertEquals(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED, failed.sendErrorCategory)
-            assertFalse(failed.isSending)
-            assertEquals(1, gateway.runRequests.size)
-            assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-
-            holder.onEvent(EntryUiEvent.SendMessageClicked)
-            awaitState(holder) {
-                it.sessionList?.openedSession?.latestRun == run &&
-                    it.sessionList?.openedSession?.composerText == ""
-            }
-
-            val retried = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
-            assertEquals(2, gateway.runRequests.size)
-            assertEquals("", retried.composerText)
-            assertEquals(run, retried.latestRun)
-        } finally {
-            holder.close()
         }
-    }
 
     @Test
     fun failed_submission_after_leaving_session_restores_try_again_when_reopened() =
@@ -552,24 +565,25 @@ class MessageSubmissionStateHolderTest {
         }
 
     @Test
-    fun removing_the_gateway_clears_persisted_connection_and_in_memory_drafts() {
-        val session = session("session-1")
-        val dataSource = InMemoryGatewayConnectionDataSource()
-        val repository = DefaultGatewayConnectionRepository(dataSource)
-        val gateway = FakeGateway(listOf(session))
-        val holder = holder(gateway, repository = repository)
+    fun removing_the_gateway_clears_persisted_connection_and_in_memory_drafts() =
+        runTest {
+            val session = session("session-1")
+            val dataSource = InMemoryGatewayConnectionDataSource()
+            val repository = DefaultGatewayConnectionRepository(dataSource)
+            val gateway = FakeGateway(listOf(session))
+            val holder = holder(gateway, repository = repository)
 
-        try {
-            connect(holder, gateway)
-            holder.onEvent(EntryUiEvent.SessionClicked(session.id))
-            holder.onEvent(EntryUiEvent.ComposerTextChanged("Forget me"))
-            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+            try {
+                connect(holder, gateway)
+                holder.onEvent(EntryUiEvent.SessionClicked(session.id))
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Forget me"))
+                holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
 
-            assertNull(repository.load())
-            assertFalse(holder.uiState.value.isConnected)
-            assertNull(holder.uiState.value.sessionList)
-        } finally {
-            holder.close()
+                assertNull(repository.load())
+                assertFalse(holder.uiState.value.isConnected)
+                assertNull(holder.uiState.value.sessionList)
+            } finally {
+                holder.close()
+            }
         }
-    }
 }

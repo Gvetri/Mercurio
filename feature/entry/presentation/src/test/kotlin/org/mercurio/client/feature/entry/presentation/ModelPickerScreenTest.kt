@@ -14,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -29,7 +30,7 @@ class ModelPickerScreenTest {
         val picker =
             ModelPickerUiState(
                 capabilityKnown = true,
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
                 selection = ModelSelection("alpha", "high"),
             )
@@ -44,7 +45,7 @@ class ModelPickerScreenTest {
         val picker =
             ModelPickerUiState(
                 capabilityKnown = true,
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
             )
         setContent(picker)
@@ -54,7 +55,7 @@ class ModelPickerScreenTest {
 
     @Test
     fun a_gateway_without_the_row_hides_the_control_and_shows_the_truthful_copy() {
-        setContent(ModelPickerUiState(capabilityKnown = true, capabilityAdvertised = false))
+        setContent(ModelPickerUiState(capabilityKnown = true, catalogSurface = null))
 
         composeTestRule.onNodeWithTag("composer-model-picker").assertDoesNotExist()
         composeTestRule.onNodeWithText(copy(R.string.model_catalog_unavailable)).assertIsDisplayed()
@@ -65,7 +66,7 @@ class ModelPickerScreenTest {
         setContent(
             ModelPickerUiState(
                 capabilityKnown = true,
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 isFetchingCatalog = true,
             ),
         )
@@ -78,7 +79,7 @@ class ModelPickerScreenTest {
         setContent(
             ModelPickerUiState(
                 capabilityKnown = true,
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalogFetchFailed = true,
             ),
         )
@@ -89,7 +90,10 @@ class ModelPickerScreenTest {
     @Test
     fun opening_the_control_emits_the_picker_event() {
         val events = mutableListOf<EntryUiEvent>()
-        setContent(ModelPickerUiState(capabilityAdvertised = true, catalog = pickerEffortCatalog()), events::add)
+        setContent(
+            ModelPickerUiState(catalogSurface = ModelCatalogSurface.RUN_MODELS, catalog = pickerEffortCatalog()),
+            events::add,
+        )
 
         composeTestRule.onNodeWithTag("composer-model-picker").performClick()
 
@@ -100,7 +104,7 @@ class ModelPickerScreenTest {
     fun the_open_picker_orders_favorites_then_recents_then_catalog_with_the_default_first() {
         setContent(
             ModelPickerUiState(
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
                 favorites = setOf("beta"),
                 recents = listOf("gamma", "alpha"),
@@ -126,7 +130,7 @@ class ModelPickerScreenTest {
         val events = mutableListOf<EntryUiEvent>()
         setContent(
             ModelPickerUiState(
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
                 selection = ModelSelection("alpha"),
                 isPickerOpen = true,
@@ -152,7 +156,7 @@ class ModelPickerScreenTest {
     fun effort_rows_render_only_for_the_advertising_selected_entry_in_served_order_with_default_preselected() {
         setContent(
             ModelPickerUiState(
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
                 selection = ModelSelection("alpha"),
                 isPickerOpen = true,
@@ -171,7 +175,7 @@ class ModelPickerScreenTest {
     fun effort_rows_are_absent_for_a_selected_entry_without_efforts() {
         setContent(
             ModelPickerUiState(
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
                 selection = ModelSelection("beta"),
                 isPickerOpen = true,
@@ -184,7 +188,7 @@ class ModelPickerScreenTest {
     fun effort_rows_are_unrepresentable_without_a_selected_model() {
         setContent(
             ModelPickerUiState(
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
                 selection = null,
                 isPickerOpen = true,
@@ -198,7 +202,7 @@ class ModelPickerScreenTest {
         val events = mutableListOf<EntryUiEvent>()
         setContent(
             ModelPickerUiState(
-                capabilityAdvertised = true,
+                catalogSurface = ModelCatalogSurface.RUN_MODELS,
                 catalog = pickerEffortCatalog(),
                 selection = ModelSelection("alpha"),
                 isPickerOpen = true,
@@ -214,7 +218,7 @@ class ModelPickerScreenTest {
     @Test
     fun a_refused_model_shows_its_actionable_copy_and_not_the_effort_one() {
         setContent(
-            ModelPickerUiState(capabilityAdvertised = true, catalog = pickerEffortCatalog()),
+            ModelPickerUiState(catalogSurface = ModelCatalogSurface.RUN_MODELS, catalog = pickerEffortCatalog()),
             sendErrorCategory = MessageSendErrorCategory.MODEL_REFUSED,
         )
         composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.MODEL_REFUSED.messageRes)).assertIsDisplayed()
@@ -224,7 +228,7 @@ class ModelPickerScreenTest {
     @Test
     fun a_refused_effort_shows_its_actionable_copy_and_not_the_model_one() {
         setContent(
-            ModelPickerUiState(capabilityAdvertised = true, catalog = pickerEffortCatalog()),
+            ModelPickerUiState(catalogSurface = ModelCatalogSurface.RUN_MODELS, catalog = pickerEffortCatalog()),
             sendErrorCategory = MessageSendErrorCategory.EFFORT_REFUSED,
         )
         composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.EFFORT_REFUSED.messageRes)).assertIsDisplayed()

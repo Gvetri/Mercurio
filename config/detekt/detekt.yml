@@ -1,6 +1,3 @@
-build:
-  maxIssues: 0
-
 naming:
   FunctionNaming:
     active: true
@@ -24,7 +21,7 @@ coroutines:
     excludes: ['**/test/**', '**/androidTest/**']
 
 comments:
-  CommentOverPrivateFunction:
+  DocumentationOverPrivateFunction:
     active: true
-  CommentOverPrivateProperty:
+  DocumentationOverPrivateProperty:
     active: true

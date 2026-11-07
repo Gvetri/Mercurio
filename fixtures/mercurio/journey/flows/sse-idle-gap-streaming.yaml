@@ -3,15 +3,20 @@ name: sse-idle-gap-streaming
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Send crash and error reports[?]"
+    commands:
+      - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
 - takeScreenshot: sse-idle-gap-form-filled
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000

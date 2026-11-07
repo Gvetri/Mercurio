@@ -9,7 +9,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -49,7 +48,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-internal fun assertParentCancellationReleasesObserver(cancelDuringRegistration: Boolean) {
+internal suspend fun assertParentCancellationReleasesObserver(cancelDuringRegistration: Boolean) {
     val session = reconciliationSession()
     val run = Run(RunId("parent-cancelled-run"), session.id, "running")
     val dispatcher = ReconciliationPausingDispatcher()
@@ -111,7 +110,7 @@ internal fun assertParentCancellationReleasesObserver(cancelDuringRegistration: 
     }
 }
 
-internal fun connectReconciliationGateway(
+internal suspend fun connectReconciliationGateway(
     holder: EntryStateHolder,
     gateway: ReconciliationFakeGateway,
 ) {
@@ -214,7 +213,7 @@ internal fun reconciliationHolder(
     )
 }
 
-internal fun openReconciledSession(
+internal suspend fun openReconciledSession(
     holder: EntryStateHolder,
     gateway: ReconciliationFakeGateway,
 ) {
@@ -227,24 +226,14 @@ internal fun openReconciledSession(
     awaitReconciliationState(holder) {
         it.sessionList?.openingSessionId == null &&
             it.sessionList?.openedSession?.session?.id == gateway.session.id &&
-            !it.sessionList!!.openedSession!!.isReconciliationInProgress
+            !it.sessionList.openedSession.isReconciliationInProgress
     }
 }
 
-internal fun awaitReconciliationState(
+internal suspend fun awaitReconciliationState(
     holder: EntryStateHolder,
     predicate: (EntryUiState) -> Boolean,
-) {
-    runBlocking {
-        try {
-            withTimeout(RECONCILIATION_TIMEOUT_MILLIS) {
-                holder.uiState.first(predicate)
-            }
-        } catch (error: Throwable) {
-            throw AssertionError("state=${holder.uiState.value}", error)
-        }
-    }
-}
+) = holder.awaitUiState("the reconciliation state", predicate)
 
 internal fun awaitReconciliationCondition(predicate: () -> Boolean) {
     runBlocking {

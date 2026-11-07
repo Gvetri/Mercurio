@@ -10,11 +10,19 @@ human-approved promotion of an existing signed Nightly.
 
 `.github/workflows/nightly-release.yml` is scheduled daily at **04:37 UTC**. GitHub
 may delay a scheduled run. Each Nightly captures the current tip of `main`, checks
-release history, and starts `quality-gate.yml` on `main` through `workflow_dispatch`.
-The independent 02:00 UTC quality-gate schedule and its failure reporting remain
-unchanged. A merge to `main` validates and compiles debug/release Kotlin, but does
-not package an application APK, create a release, or generate a product version.
-Pull-request APK builds and scheduled/manual device tests keep their existing roles.
+release history, and first looks for an existing full gate on that exact commit. A
+completed `quality-gate` run on `main` from `schedule` or `workflow_dispatch` qualifies
+when its source SHA is the captured tip, its aggregate is successful, and every required
+check carries the conclusion this repository expects on a main run: success for the
+required jobs, and a skip for the pull-request-only jobs. Preparation reuses the newest
+qualifying run, passes its run id and attempt to signing and publishing, and does not
+dispatch another gate. A run on another
+commit, a pull-request or push-only run, an incomplete run, or a run that misses one
+required stage does not qualify. The independent 02:00 UTC quality-gate schedule and its
+failure reporting remain unchanged. A merge to `main` validates and compiles
+debug/release Kotlin, but does not package an application APK, create a release, or
+generate a product version. Pull-request APK builds and scheduled/manual device tests
+keep their existing roles.
 
 Before dispatch, a published Nightly for the captured SHA makes the run succeed
 without validation, building, signing, or publishing another one. A retained draft
@@ -23,23 +31,24 @@ publication job decides the retry. A draft with an inconsistent identity, or mor
 than one release for the source, fails closed before any dispatch. The history check
 uses the existing release listing, not workflow history.
 
-For an unreleased tip, preparation dispatches the existing full gate and waits for
-its result. It correlates new workflow-dispatch runs by `main`, the captured SHA,
-and creation time, excludes runs present before dispatch, and never substitutes a
-historical run. Several matching runs are allowed: a completed successful match is
-selected at once, and the newest one by creation time and then by run id wins. While
-no match has succeeded, preparation waits until every match reaches a terminal state,
-then fails closed on the newest completed match and reports that run. Discovery is limited to five minutes; the entire validation wait is
-limited to **three hours** (`10800` seconds), within a **190-minute** preparation
-job. This leaves room for the full gate, including its sequential device stages,
-without an unbounded wait. Dispatch errors, missing runs, cancellation, failed
-validation, unknown states, unavailable evidence, and expired waits publish nothing.
+For an unreleased tip with no qualifying gate, preparation dispatches the existing full
+gate and waits for its result. It correlates new workflow-dispatch runs by `main`, the
+captured SHA, and creation time, and excludes runs present before dispatch. Several
+matching runs are allowed: a completed successful match is selected at once, and the
+newest one by creation time and then by run id wins. While no match has succeeded,
+preparation waits until every match reaches a terminal state, then fails closed on the
+newest completed match and reports that run. Discovery is limited to five minutes for the
+reuse sweep and five minutes again for dispatch correlation; the entire validation wait
+is limited to **three hours** (`10800` seconds), within a **190-minute** preparation job.
+This leaves room for the full gate, including its sequential device stages, without an
+unbounded wait. Dispatch errors, missing runs, cancellation, failed validation, unknown
+states, unavailable evidence, and expired waits publish nothing.
 The wait never retries a dispatch or falls back to an older successful source.
 
-The exact dispatched run and attempt become release evidence only after the
-unchanged signer verifies workflow identity, repository, main membership, source
-SHA, and every declared deterministic job, including API 24 instrumentation and
-Maestro journeys. Push-only, pull-request, fork, incomplete, or changed evidence
+The exact reused or dispatched run and attempt become release evidence only after the
+unchanged signer verifies workflow identity, repository, main membership, source SHA,
+and every declared deterministic job, including API 24 instrumentation and Maestro
+journeys. Push-only, pull-request, fork, incomplete, or changed evidence
 cannot authorize publication. Signing and publication stay bound to the captured
 SHA and attempt. A newer commit merged during validation waits for the next Nightly:
 the dispatched validation has its own run-id concurrency group, so a push cannot
@@ -86,6 +95,29 @@ Missing, duplicate, nonterminal, wrong-source, or malformed stage results, and a
 conclusion outside GitHub's closed conclusion enum, fail reporting closed rather
 than inventing results. Discovery failures or expired waits without a completed identified run
 leave the Nightly red without fabricating a validation issue.
+
+## Signed-APK smoke before publication
+
+A Nightly does not publish until one product flow passes on the exact signed artifact. The
+`smoke` job runs after `sign` and before `publish` in the same run attempt:
+
+1. It downloads the signed artifact by the signing job's artifact ID and binds it to the
+   prepared source, validation run, version, and pinned certificate. The check also requires a
+   release variant, so a debug build or a re-signed foreign APK cannot satisfy the job.
+2. It installs that APK on an ARM-translation emulator and starts the existing fixture Gateway.
+   The image is `google_apis` API 30 `x86_64`: Android 11 translates the ARM64 release build on
+   an x86_64 host, and its trust store is still the live `/system/etc/security/cacerts` path that
+   the journey recipe writes. It is the lowest API level that both translates the ARM64 ABI and
+   exposes that live system store. The job uses the same test CA, fixture Gateway, flow, verifier,
+   and evidence as the scheduled journey lane.
+3. It runs the existing `terminal-success` product flow unchanged. The flow connects to the
+   fixture Gateway, opens a Session, and asserts the conversation surface. It never asserts
+   generated prose, and it uses no synthetic harness beyond the pinned journey layer.
+
+The job has a **15-minute** bound and fails closed. A failed or timed-out smoke publishes
+nothing, and the standard release-failure reporter files one `ready-for-agent` issue naming the
+failed `smoke` stage, the run, and the attempt. Journey logs and screenshots are redacted and
+retained as the `nightly-smoke-evidence-<run>-<attempt>` artifact.
 
 ## Versions and ARM64 APK
 
@@ -141,7 +173,9 @@ It refuses an existing tag, a published release for the source, and every source
 other than one well-formed retained draft. That one draft is discarded only after the
 new artifact is verified, then recreated; the section below gives the exact rule.
 
-Publication proceeds in this order:
+Publication requires a successful signed-APK smoke in the same run attempt. A failed,
+cancelled, or missing smoke stops publication, and the publisher re-reads the smoke job before it
+writes. Publication then proceeds in this order:
 
 1. Create a **draft prerelease** bound to the exact source SHA, with generated notes.
 2. Read the draft back by the exact release ID returned by creation. Do not
@@ -166,7 +200,7 @@ publication succeeded but its read-back failed, inspect and verify that existing
 release instead of publishing again. This bounded discard is the only automatic
 release-state change; it never hides a failure.
 
-A failed signing or publication stage files or updates one `ready-for-agent` issue
+A failed smoke, signing, or publication stage files or updates one `ready-for-agent` issue
 per Nightly run. The reporter reads the exact run attempt and failed jobs, lists
 only available same-attempt artifacts, and verifies the issue after writing it.
 It has `actions: read`, `issues: write`, and `contents: read` for checkout, never
@@ -297,7 +331,8 @@ validation, and cannot write repository contents or releases.
 ## Download verification
 
 The release notes include the source SHA, embedded version code and name, APK
-SHA-256, pinned signer certificate SHA-256, and validation run/attempt. The metadata
+SHA-256, pinned signer certificate SHA-256, and validation run/attempt, and the
+signed-APK smoke run/attempt. The metadata
 file also binds the signing run/attempt and actual native ABI list. These are public
 identifiers; signing material and credentials are never release assets.
 
@@ -318,11 +353,12 @@ Nightly distribution artifact.
 
 The API and publication fixtures are local test stand-ins. The tests use real
 Android packaging/signing tools with disposable keys, never the production key.
-They cover main-push routing, current-tip dispatch and exact-run correlation,
-bounded discovery and completion, cancelled/failed/unknown validation, refusal of
-historical fallback and changed evidence, duplicate prevention before dispatch,
-increasing versions, stale partial reruns, metadata and certificate checks, missing
-evidence, partial uploads, downloaded-byte corruption, and published-release read-back.
+They cover main-push routing, reuse of a qualifying full gate on the exact tip and its
+refusal cases, current-tip dispatch and exact-run correlation, bounded discovery and
+completion, cancelled/failed/unknown validation, refusal of changed evidence, duplicate
+prevention before dispatch, increasing versions, stale partial reruns, metadata and
+certificate checks, missing evidence, partial uploads, downloaded-byte corruption, and
+published-release read-back.
 The [recorded failure issue payload](../.github/scripts/tests/fixtures/nightly-publication-failure-issue.json)
 is synthetic evidence from the refusal/report test, not a live issue or run.
 Failure-report tests also cover early signer failure, missing artifacts, unreadable

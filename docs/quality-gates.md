@@ -42,13 +42,13 @@ outcome fails the aggregate; see
 | `architecture-check` | `architectureRuleTests verifyNoMocks verifyDeterministicFakes` | An inward-dependency, untrusted-content, app-external file, unidirectional-data-flow, mock, or boundary-double rule is violated |
 | `compose-jvm-tests` | `:feature:entry:presentation:verifyRoborazziBaselineManifest :feature:entry:presentation:verifyRoborazziDebug` | A pinned Compose surface drifts from its approved baseline, or the baseline manifest and the snapshots disagree |
 | `coverage-mutation` | `coverageVerify mutationVerify` | Coverage or mutation evidence is missing, empty, stale, narrowed, below a declared threshold, or outside the declared production scope. Required on every `push` to `main`, on the nightly schedule, and on manual dispatch; skipped on every pull request, so a covered production change must regenerate and verify its evidence locally before it is reviewed |
-| `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
+| `conformance` | `.github/scripts/verify-repository-conformance.py`, `.github/scripts/verify-public-documentation.py`, and `.github/scripts/release-signing.py` (`environment` and `nightly-environment`) | The protected-main contract drifts, the pull-request template job stops running unconditionally, declares a concurrency block at the workflow or job level, or stops handing the author and body to `.github/scripts/verify-pr-template.py`, that check stops exempting Dependabot or starts exempting another bot while still rejecting a body that misses the template sections, the published documentation has a broken link or anchor, carries a credential, a real-looking endpoint example, a private infrastructure reference, or an instruction outside the supported product scope, or no longer states the approved user scope, standalone signing loses its required human reviewer, Nightly signing gains an approval/wait gate, or either signing environment enables administrator bypass, permits a ref other than the `main` branch, or cannot be verified |
 | `commit-message` | `.github/scripts/verify-conventional-commits.py` | The squash-merge title or a commit of the pull request is not a Conventional Commit, or the commit list of the pull request is unavailable, empty, or truncated |
 | `draft-validation` | `formatCheck :app:lintDebug` | The head of a draft pull request is unformatted or fails Android lint |
 | `fork-guard` | `.github/workflows/quality-gate.yml` | Never on its own: it reports the handling of an external-fork pull request, and the aggregate requires it for every pull request, then fails closed for an external fork |
-| `ui-paths` | `dorny/paths-filter` (pinned revision) in `.github/workflows/quality-gate.yml` | The changed-file answer for the pull request is unavailable or the detector reports an unreadable decision: the emulator-lane routing fails closed. The detector declares the UI surface as `app/src/main/**`, `feature/entry/presentation/**`, `feature/entry/wiring/src/main/res/**`, and `fixtures/mercurio/journey/**`. The same job classifies a documentation-only head against the declared documentation surface, and an unreadable changed-file answer fails closed to the full gate |
+| `ui-paths` | `dorny/paths-filter` (pinned revision) in `.github/workflows/quality-gate.yml` | The changed-file answer for the pull request is unavailable or the detector reports an unreadable decision: the emulator-lane routing fails closed. On a main push an unreadable changed-file answer instead runs `buildsrc-contracts`, so the pushed range is still checked. The detector declares the UI surface as `app/src/main/**`, `feature/entry/presentation/**`, `feature/entry/wiring/src/main/res/**`, and `fixtures/mercurio/journey/**`. The same job classifies a documentation-only head against the declared documentation surface, and an unreadable pull-request changed-file answer fails closed to the full gate |
 | `api24-instrumentation` | `:app:verifyConnectedAndroidTests` | Instrumentation produced no tests, skipped a test, or reported a failure. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label or modifies a declared UI path; skipped on main pushes, drafts, external forks, and pull requests that carry neither |
-| `maestro-journeys` | `.github/scripts/journey-run.sh`, one partition per shard | A deterministic emulator journey fails against the controlled fake Gateway. The lane runs as three parallel shard jobs, each invoking `journey-run.sh <shard> 3` on its own partition of the pinned journeys, and a shard aggregate fails the lane when any shard fails; failure evidence is uploaded per shard. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label, after a passing `api24-instrumentation`; skipped on main pushes, drafts, external forks, and every pull request without the label, including one that modifies a declared UI path. [The journey suite](deterministic-emulator-journeys.md#requesting-the-journey-lane) lists the key areas that need the label |
+| `maestro-journeys` | `.github/scripts/journey-run.sh`, one partition per shard | A deterministic emulator journey fails against the controlled fake Gateway. The lane runs as three parallel shard jobs, each invoking `journey-run.sh <shard> 3` on its own partition of the pinned journeys, and a shard aggregate fails the lane when any shard fails; failure evidence is uploaded per shard. The shards start in parallel with `api24-instrumentation`, and the aggregate requires that device check to pass. Required on scheduled and manual runs and on a ready in-repository pull request that carries the `run-maestro` label; skipped on main pushes, drafts, external forks, and every pull request without the label, including one that modifies a declared UI path. [The journey suite](deterministic-emulator-journeys.md#requesting-the-journey-lane) lists the key areas that need the label |
 
 A documentation-only pull request takes a fast path: when the decision job reports that every
 changed file of the head is a Markdown file outside `.github/` or a file under `docs/**`, the heavy
@@ -66,12 +66,14 @@ and `buildsrc-contracts` while every core lane still runs, and the `run-maestro`
 precedence over the emulator lanes there too. On every pull request the aggregate also expects
 `coverage-mutation` to report `skipped`: the lane is a main-line and nightly signal, and the label
 does not revive it.
-Every classifier answer must be exactly `true` or `false`: an unreadable changed-file answer fails
-closed to the full gate, and the aggregate re-validates each decision guard before trusting the
-routing. The classification is deliberately conservative: code, resources, and especially
-`.github/**` route the full gate, and a push, a nightly schedule, and a manual dispatch never
-consult the decision, so the release chain always re-verifies the exact `main` tip with the
-complete gate.
+Every classifier answer must be exactly `true` or `false`: on a pull request, an unreadable
+changed-file answer fails closed to the full gate, and on a push, an unreadable changed-file answer
+runs the `buildsrc-contracts` check; the aggregate re-validates each decision guard before trusting
+the routing. The classification is deliberately conservative: code, resources, and especially
+`.github/**` route the full gate. A push consults the decision only for the `buildsrc-contracts`
+lane: a push that changes a `.github/**` or `buildSrc/**` file runs the buildSrc self-test, and an
+app-only push skips it. A nightly schedule and a manual dispatch never consult the decision, so the
+release chain always re-verifies the exact `main` tip with the complete gate.
 
 The aggregate job compares `.github/quality-gate/required-checks.txt` (plus the `buildsrc_contracts`
 support job) with its own `needs` list, so a check can neither be dropped from the declaration
@@ -82,12 +84,22 @@ workflow contracts are self-tested in
 verifications themselves in `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`,
 and `ReportEvidenceTest`, the fail-closed behaviour of the real tasks in
 `QualityVerificationFailClosedTest`, and the architecture rules in `ArchitectureCheckTest`. The
-documentation check is covered by
+fail-closed suites inject their fixtures into a temporary copy of the repository and discard it, so an
+interrupted run cannot leave fixture code in the checkout. The documentation check is covered by
 `.github/scripts/tests/test_public_documentation.py`, and the published-release artifact check by
 `.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. The six
 workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
 `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`, and
-`ReportEvidenceTest`) run in the `buildsrc-contracts` job, and the architecture rules in
+`ReportEvidenceTest`) run as three parallel shards behind the `buildsrc-contracts` umbrella job.
+Shard 1 runs the four most expensive `QualityGateConfigurationTest` suites; shard 2 runs the
+remaining `QualityGateConfigurationTest` tests and the mutation, coverage, and committed-baseline
+tests of `QualityVerificationFailClosedTest`; shard 3 runs the remaining fail-closed test groups
+plus the four verification classes. Every test is selected exactly once, no
+assertion is removed, and the shards run on exactly the events where the umbrella runs. The
+umbrella keeps the `buildsrc-contracts` key and name, remains the only result the aggregate reads,
+and fails when any shard fails. A cold measurement before the split took 25 minutes for the six
+classes in one invocation (29m51s for the CI step); the delivering pull request records the shard
+timings, and the critical-path target is 12 minutes or less. The architecture rules in
 `ArchitectureCheckTest` run in the `architecture-check` job, so a rule only exists if a check
 enforces it and CI executes that check.
 
@@ -205,10 +217,10 @@ deliberate-violation evidence of every rule.
 
 detekt is pinned in `gradle/libs.versions.toml` and every Kotlin module applies it. The root build
 script declares the strict policy once: `config/detekt/detekt.yml` is layered on detekt's default
-config (`buildUponDefaultConfig`), `build.maxIssues: 0` fails the analysis on any reported finding,
-and the rules the gate relies on are enabled explicitly, so a detekt upgrade cannot quietly turn one
-of them off — `ReturnCount`, `ElseCaseInsteadOfExhaustiveWhen`, `CommentOverPrivateFunction`, and
-`CommentOverPrivateProperty`. The configuration file carries no comments; its exemptions are
+config (`buildUponDefaultConfig`), the analysis fails on any reported finding, and the rules the gate
+relies on are enabled explicitly, so a detekt upgrade cannot quietly turn one of them off —
+`ReturnCount`, `ElseCaseInsteadOfExhaustiveWhen`, `DocumentationOverPrivateFunction`, and
+`DocumentationOverPrivateProperty`. The configuration file carries no comments; its exemptions are
 deliberate, each with its reason here:
 
 - `FunctionNaming` keeps `functionPattern: '[a-zA-Z][a-zA-Z0-9]*'`, because Compose functions are
@@ -236,7 +248,7 @@ per-module tasks exist but stay disabled, and the aggregate never runs them.
   source-set-specific `baseline-*.xml` files are gone, so a finding can never be absorbed silently
   again.
 
-A finding must be fixed, not baselined: there is no committed baseline, and `maxIssues: 0` fails the
+A finding must be fixed, not baselined: there is no committed baseline, and the analysis fails the
 build on every reported finding.
 
 The detekt contracts are self-tested as well: `QualityGateConfigurationTest` pins the workflow job,
@@ -257,8 +269,11 @@ the first code, and the generated or vendored files the class table excludes pas
 A violation reports the file, the line, the comment kind, and the remedy: delete the comment, or move
 its constraint into a test, a check, or `docs/` first. The verifier fails closed on its own scope too:
 a tracked file whose class it does not know fails instead of passing, so a new file class is decided in
-[Coding guidelines](coding-guidelines.md#scope) in the same change that adds it, and a scope that
-resolves to no in-scope file fails rather than reporting a clean tree.
+[Coding guidelines](coding-guidelines.md#scope) in the same change that adds it, and a sweep of the
+whole repository that resolves to no in-scope file fails rather than reporting a clean tree. A caller
+that names its own scope with `--files` is judged on exactly that scope, so the optional pre-commit
+hook names the staged files and passes when none of them is in scope; `--staged` reads those files as
+the index holds them, which is what the hook judges.
 
 `QualityGateConfigurationTest` pins the wiring, and `.github/scripts/tests/test_verify_comments.py`
 pins the tricky readings: comment markers inside strings, URLs, YAML block scalars, heredocs,

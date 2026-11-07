@@ -53,8 +53,9 @@ private val CHAT_MENU_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("E
 
 /**
  * Groups the transcript by day in the order the Messages already hold, so each separator
- * names the day its following rows belong to. A row without a timestamp, such as the local
- * pending Message, stays under the day of the rows before it.
+ * names the day its following rows belong to. Tool and function rows are not transcript
+ * entries, so they never reach a day separator or a card. A row without a timestamp, such
+ * as the local pending Message, stays under the day of the rows before it.
  */
 internal fun chatTranscriptItems(
     messages: List<SessionMessageUiState>,
@@ -62,7 +63,7 @@ internal fun chatTranscriptItems(
 ): List<ChatTranscriptItem> {
     val items = mutableListOf<ChatTranscriptItem>()
     var currentDay: LocalDate? = null
-    messages.forEach { message ->
+    messages.filterNot { message -> message.isToolResult() }.forEach { message ->
         val day = message.timestamp?.let { timestamp -> LocalDate.ofInstant(timestamp, zone) }
         if (day != null && day != currentDay) {
             items += ChatTranscriptItem.Day(label = day.format(CHAT_DAY_FORMAT).uppercase(Locale.getDefault()))
@@ -108,6 +109,9 @@ internal fun chatMenuTime(
     instant: Instant,
     zone: ZoneId = ZoneId.systemDefault(),
 ): String = instant.atZone(zone).format(CHAT_TIME_FORMAT)
+
+private fun SessionMessageUiState.isToolResult(): Boolean =
+    role.equals("tool", ignoreCase = true) || role.equals("function", ignoreCase = true)
 
 private fun chatRowKind(message: SessionMessageUiState): ChatRowKind =
     when {

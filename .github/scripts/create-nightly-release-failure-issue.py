@@ -90,11 +90,11 @@ def report():
                  }),
             "Unexpected Nightly run evidence")
     jobs = records(f"actions/runs/{run}/attempts/{attempt}/jobs?per_page=100", "jobs")
-    failed = [job["name"] for job in jobs if (job.get("name") == "publish" or job.get("name", "").startswith("sign / "))
+    failed = [job["name"] for job in jobs if (job.get("name") in {"smoke", "publish"} or job.get("name", "").startswith("sign / "))
               and job.get("status") == "completed" and job.get("conclusion") in {
                   "failure", "timed_out", "startup_failure", "action_required", "stale", "neutral",
               } and job.get("head_sha") == commit]
-    require(failed, "No failed signing or publication stage; refusing to file an issue")
+    require(failed, "No failed smoke, signing, or publication stage; refusing to file an issue")
     artifacts = records(f"actions/runs/{run}/artifacts?per_page=100", "artifacts")
     state = observed_state(artifacts, run, attempt, commit)
     intended = {}
@@ -107,7 +107,7 @@ def report():
         intended["tag"] = f"nightly-{intended['version_code']}-{intended['source_sha']}"
     url = f"https://github.com/{REPOSITORY}/actions/runs/{run}"
     marker = f"<!-- nightly-release-run:{run} -->"
-    lines = [marker, "", "# Nightly signing or publication failure", "", f"- Run: [{run}]({url})",
+    lines = [marker, "", "# Nightly smoke, signing, or publication failure", "", f"- Run: [{run}]({url})",
              f"- Attempt: `{attempt}`", f"- Commit: `{commit}`", "", "## Failed stages", ""]
     lines.extend(f"- `{name}`: `failure`" for name in failed)
     lines.extend(["", "## Retained release state", ""])

@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +31,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.filter
 import org.mercurio.client.feature.entry.domain.RunId
 
 /**
@@ -50,7 +46,7 @@ internal fun SessionDetailContent(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val state = detail.content
-    val listState = rememberLazyListState()
+    val transcriptScroll = rememberTranscriptScroll()
     var openTable by remember(state.session.id) { mutableStateOf<MarkdownBlock.Table?>(null) }
     BackHandler(enabled = openTable != null) { openTable = null }
     val items = rememberChatItems(state.messages, state.activeResponse)
@@ -65,9 +61,13 @@ internal fun SessionDetailContent(
                 onEvent = onEvent,
             )
         }
-    val followNewest = rememberTranscriptFollow(listState)
     LaunchedEffect(items) {
-        if (items.isNotEmpty() && followNewest) listState.pinNewestItemEnd(items.lastIndex)
+        if (items.isEmpty()) return@LaunchedEffect
+        val newestIndex = items.lastIndex
+        repeat(PIN_ATTEMPTS) {
+            if (transcriptScroll.settleNewestItemPin(newestIndex)) return@LaunchedEffect
+            withFrameNanos { }
+        }
     }
     val table = openTable
     Column(
@@ -84,7 +84,7 @@ internal fun SessionDetailContent(
             ChatMainIsland(
                 detail = detail,
                 items = items,
-                listState = listState,
+                listState = transcriptScroll.listState,
                 callbacks = callbacks,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
@@ -278,53 +278,6 @@ internal fun ChatEmptyState(
                 modifier = Modifier.padding(top = tokens.spacing.s),
             )
         }
-    }
-}
-
-/**
- * Whether the transcript follows its newest content. The follow stays on while the newest content
- * is on screen, turns off when a settled scroll leaves it out of view, and returns once the reader
- * settles back at the newest content.
- */
-@Composable
-internal fun rememberTranscriptFollow(
-    listState: LazyListState,
-    hiddenTail: Int = 0,
-): Boolean {
-    var follow by remember(listState) { mutableStateOf(true) }
-    LaunchedEffect(listState, hiddenTail) {
-        snapshotFlow { listState.isScrollInProgress }
-            .filter { inProgress -> !inProgress }
-            .collect {
-                val layoutInfo = listState.layoutInfo
-                if (layoutInfo.visibleItemsInfo.isNotEmpty()) {
-                    follow = layoutInfo.showsNewestContent(hiddenTail)
-                }
-            }
-    }
-    return follow
-}
-
-private fun LazyListLayoutInfo.showsNewestContent(hiddenTail: Int): Boolean {
-    val newestItem = visibleItemsInfo.lastOrNull()
-    val isNewest = newestItem != null && newestItem.index == totalItemsCount - 1
-    val newestIsOnScreen = isNewest && newestItem.offset < viewportEndOffset - hiddenTail
-    return totalItemsCount == 0 || newestIsOnScreen
-}
-
-private suspend fun LazyListState.pinNewestItemEnd(index: Int) {
-    repeat(PIN_ATTEMPTS) {
-        withFrameNanos { }
-        val info = layoutInfo
-        if (info.viewportEndOffset == 0) return@repeat
-        val item = info.visibleItemsInfo.firstOrNull { visible -> visible.index == index }
-        if (item == null) {
-            scrollToItem(index)
-            return@repeat
-        }
-        val distanceToEnd = item.offset + item.size - info.viewportEndOffset
-        if (distanceToEnd <= 0) return
-        scrollToItem(index, item.offset + distanceToEnd)
     }
 }
 

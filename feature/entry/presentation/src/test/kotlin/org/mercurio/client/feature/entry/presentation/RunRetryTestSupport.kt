@@ -4,9 +4,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
@@ -88,11 +85,12 @@ internal fun retryHolder(
 internal fun persistentRetryHolder(
     gateway: RetryFakeGateway,
     registry: InMemoryRunRecoveryRegistry,
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ): EntryStateHolder =
     retryHolder(
         gateway,
         RetryHolderSettings(
-            dispatcher = Dispatchers.Default,
+            dispatcher = dispatcher,
             recoveryRegistry = registry,
             uncertaintyStore = DefaultRunSubmissionUncertaintyStore(RetryUncertaintyStorage()),
             persistRunRecoveryEntry = { _, entry -> registry.save(entry) },
@@ -100,7 +98,7 @@ internal fun persistentRetryHolder(
         ),
     )
 
-internal fun connectRetryGateway(
+internal suspend fun connectRetryGateway(
     holder: EntryStateHolder,
     gateway: RetryFakeGateway,
 ) {
@@ -114,7 +112,7 @@ internal fun connectRetryGateway(
     }
 }
 
-internal fun openRetrySession(
+internal suspend fun openRetrySession(
     holder: EntryStateHolder,
     gateway: RetryFakeGateway,
     sessionId: SessionId,
@@ -124,16 +122,10 @@ internal fun openRetrySession(
     awaitRetryState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
 }
 
-internal fun awaitRetryState(
+internal suspend fun awaitRetryState(
     holder: EntryStateHolder,
     predicate: (EntryUiState) -> Boolean,
-) {
-    runBlocking {
-        withTimeout(RETRY_TIMEOUT_MILLIS) {
-            holder.uiState.first(predicate)
-        }
-    }
-}
+) = holder.awaitUiState("the retry state", predicate)
 
 internal fun retrySession(id: String): Session =
     Session(
@@ -191,8 +183,8 @@ internal class RetryUncertaintyStorage : RunSubmissionUncertaintyStorage {
 
 internal class RetryFakeGateway(
     val sessions: List<Session>,
-    private val histories: Map<SessionId, SessionHistory> = emptyMap(),
-    private val runStatuses: Map<RunId, Run> = emptyMap(),
+    histories: Map<SessionId, SessionHistory> = emptyMap(),
+    runStatuses: Map<RunId, Run> = emptyMap(),
 ) : SessionGatewayPort, RunGatewayPort {
     private val mutableHistories = histories.toMutableMap()
     private val mutableRunStatuses = runStatuses.toMutableMap()

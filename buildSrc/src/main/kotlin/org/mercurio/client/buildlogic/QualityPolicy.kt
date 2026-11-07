@@ -66,6 +66,9 @@ object QualityPolicy {
         BoundaryDoubleRequirement("SessionDraftStore", "repository"),
         BoundaryDoubleRequirement("InstalledBuildProvider", "datasource"),
         BoundaryDoubleRequirement("ErrorReportingConsentStore", "repository"),
+        BoundaryDoubleRequirement("AppLockSettingsStore", "repository"),
+        BoundaryDoubleRequirement("AppLockEnrolment", "datasource"),
+        BoundaryDoubleRequirement("NightlyUpdateFeed", "repository"),
     )
 
     /**
@@ -86,13 +89,7 @@ object QualityPolicy {
         "ZonedDateTime.now",
     )
 
-    val allowedDoubleReferences = listOf(
-        DoubleReferenceAllowance(
-            doubleType = "SlowSessionGateway",
-            reference = "System.nanoTime",
-            reason = "bounds the wait for the next request; the returned page stays a function of its inputs",
-        ),
-    )
+    val allowedDoubleReferences: List<DoubleReferenceAllowance> = emptyList()
 
     /** Module roots whose main and test Kotlin sources are scanned by the source-level checks. */
     val scannedModuleRoots = listOf("app", "feature", "fixtures")

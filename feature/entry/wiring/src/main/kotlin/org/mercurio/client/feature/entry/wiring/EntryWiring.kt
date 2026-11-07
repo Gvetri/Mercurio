@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporter
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.LoadEntryState
@@ -19,6 +20,7 @@ import org.mercurio.client.feature.entry.data.EndpointScopedRunRecoveryRegistry
 import org.mercurio.client.feature.entry.data.HttpMessageImagePort
 import org.mercurio.client.feature.entry.data.RollingLocalDiagnosticsBuffer
 import org.mercurio.client.feature.entry.data.defaultMessageImageHttpTransport
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
 import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
 import org.mercurio.client.feature.entry.domain.MessageImagePort
@@ -31,29 +33,28 @@ import java.util.concurrent.atomic.AtomicReference
 object EntryWiring {
     fun createMessageImagePort(): MessageImagePort = HttpMessageImagePort(defaultMessageImageHttpTransport())
 
+    @Suppress("LongMethod")
     fun createEntryStateHolder(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
         requestRunStatusNotificationPermission: (() -> Unit)? = null,
+        requestAppUnlock: (() -> Unit)? = null,
     ): EntryStateHolder {
         val dataSource = SharedPreferencesGatewayConnectionDataSource(context)
         val credentialStore = overrides.credentialStore ?: AndroidKeyStoreGatewayCredentialStore(context)
         val repository = DefaultGatewayConnectionRepository(dataSource, credentialStore)
         val recoveryEndpoint = AtomicReference(dataSource.loadEndpoint())
         val runRecoveryRegistry = buildRunRecoveryRegistry(context, recoveryEndpoint)
-        val installedBuildProvider = resolveInstalledBuildProvider(context, overrides)
-        val initialState = LoadEntryState(repository, installedBuildProvider).execute()
+        val (installedBuildProvider, initialState) = loadEntryStartup(context, overrides, repository)
         val clientVersion = initialState.clientVersion
         val verifyGatewayConnection = buildVerifyGatewayConnection(repository, overrides)
         val runSubmissionUncertaintyStore = SharedPreferencesRunSubmissionUncertaintyStore(context)
         val sessionDraftStore = SharedPreferencesSessionDraftStore(context)
         val modelSelectionStore = SharedPreferencesModelSelectionStore(context)
         val historyCacheStore = overrides.historyCacheStore ?: buildHistoryCacheStore(context)
-        val localDiagnosticsBuffer =
-            RollingLocalDiagnosticsBuffer(
-                FileLocalDiagnosticsStorage(context),
-                onRecordFailure = ::reportLocalDiagnosticsRecordFailure,
-            )
+        val localDiagnosticsBuffer = buildLocalDiagnosticsBuffer(context)
+        val errorReportingConsentStore =
+            overrides.errorReportingConsentStore ?: SharedPreferencesErrorReportingConsentStore(context)
         return EntryStateHolder(
             initialState = initialState,
             verifyGatewayConnection = verifyGatewayConnection,
@@ -82,15 +83,20 @@ object EntryWiring {
                             endpoint?.let(historyCacheStore::clearEndpoint)
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
-                    errorReporting = buildErrorReporting(context, overrides, clientVersion),
+                    errorReporting = buildErrorReporting(context, overrides, clientVersion, errorReportingConsentStore),
+                    errorReportingConsentStore = errorReportingConsentStore,
+                    isErrorReportingConfigured = resolvedSentryDsn(overrides.sentryDsn).isNotBlank(),
                     runSubmissionUncertaintyStore = runSubmissionUncertaintyStore,
                     sessionDraftStore = sessionDraftStore,
                     modelSelectionStore = modelSelectionStore,
                     historyCacheStore = historyCacheStore,
                     runStatusNotificationSettingsStore = SharedPreferencesRunStatusNotificationSettingsStore(context),
+                    imageLoadingSettingsStore = SharedPreferencesImageLoadingSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
                     requestRunStatusNotificationPermission = requestRunStatusNotificationPermission,
+                    appLock = appLockPorts(context, overrides, requestAppUnlock),
+                    checkForNightlyUpdate = buildCheckForNightlyUpdate(overrides, installedBuildProvider),
                 ),
         )
     }
@@ -107,6 +113,8 @@ object EntryWiring {
                 resolveInstalledBuildProvider(context, overrides)
                     .installedBuild()
                     .versionNameOr(UNKNOWN_CLIENT_VERSION),
+            consentStore =
+                overrides.errorReportingConsentStore ?: SharedPreferencesErrorReportingConsentStore(context),
         )
 
     private fun entryScope(
@@ -115,10 +123,33 @@ object EntryWiring {
     ): CoroutineScope = coroutineScope ?: CoroutineScope(SupervisorJob() + ioDispatcher)
 }
 
+private data class EntryStartup(
+    val installedBuildProvider: InstalledBuildProvider,
+    val entryState: EntryState,
+)
+
+private fun loadEntryStartup(
+    context: Context,
+    overrides: EntryWiringOverrides,
+    repository: GatewayConnectionRepository,
+): EntryStartup {
+    val installedBuildProvider = resolveInstalledBuildProvider(context, overrides)
+    return EntryStartup(
+        installedBuildProvider = installedBuildProvider,
+        entryState = LoadEntryState(repository, installedBuildProvider).execute(),
+    )
+}
+
 private fun resolveInstalledBuildProvider(
     context: Context,
     overrides: EntryWiringOverrides,
 ): InstalledBuildProvider = overrides.installedBuildProvider ?: AndroidInstalledBuildProvider(context)
+
+private fun buildLocalDiagnosticsBuffer(context: Context): RollingLocalDiagnosticsBuffer =
+    RollingLocalDiagnosticsBuffer(
+        FileLocalDiagnosticsStorage(context),
+        onRecordFailure = ::reportLocalDiagnosticsRecordFailure,
+    )
 
 private fun buildRunRecoveryRegistry(
     context: Context,
@@ -135,9 +166,8 @@ private fun buildErrorReporting(
     context: Context,
     overrides: EntryWiringOverrides,
     clientVersion: String,
+    consentStore: ErrorReportingConsentStore,
 ): ErrorReporting {
-    val consentStore =
-        overrides.errorReportingConsentStore ?: SharedPreferencesErrorReportingConsentStore(context)
     val config =
         sentryReportingConfig(
             clientVersion = clientVersion,
@@ -146,7 +176,7 @@ private fun buildErrorReporting(
         )
     val backend = overrides.sentryBackend ?: defaultSentryBackend
     return ErrorReporting(
-        reporter = overrides.errorReporter ?: reporterFor(context, config, backend),
+        reporter = overrides.errorReporter ?: reporterFor(context, config, backend, consentStore),
         release = config.release,
         environment = config.environment,
     )
@@ -156,7 +186,8 @@ private fun reporterFor(
     context: Context,
     config: SentryReportingConfig,
     backend: SentryBackend,
-): ErrorReporter = if (config.isEnabled) backend.start(context, config) else NoOpErrorReporter
+    consentStore: ErrorReportingConsentStore,
+): ErrorReporter = if (config.isEnabled) backend.start(context, config, consentStore::read) else NoOpErrorReporter
 
 private fun buildVerifyGatewayConnection(
     repository: GatewayConnectionRepository,

@@ -32,7 +32,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 
 /** The 24 dp status strip: the list count and state on the left, the Gateway state on the right. */
 @Composable
@@ -169,9 +168,10 @@ internal fun SessionCreationErrorBanner(state: SessionListUiState) {
 internal fun NewSessionRow(
     enabled: Boolean,
     onEvent: (EntryUiEvent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = LocalHermesDesignTokens.current
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         HorizontalDivider(color = tokens.colorScheme.outlineVariant)
         Row(
             modifier =
@@ -181,7 +181,7 @@ internal fun NewSessionRow(
                     .clickable(enabled = enabled, role = Role.Button) { onEvent(EntryUiEvent.CreateSessionClicked) }
                     .padding(horizontal = tokens.spacing.m),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(tokens.spacing.s),
+            horizontalArrangement = Arrangement.spacedBy(tokens.spacing.s, Alignment.End),
         ) {
             Text(
                 text = "+",
@@ -233,11 +233,8 @@ internal fun SessionSectionHeader(
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalHermesDesignTokens.current
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.16.em),
-        color = tokens.colorScheme.onSurfaceVariant,
-        maxLines = 1,
+    SectionHeaderText(
+        label = label,
         modifier =
             modifier
                 .fillMaxWidth()
@@ -266,7 +263,7 @@ private fun SessionSkeletonRow() {
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 54.dp)
+                    .heightIn(min = 56.dp)
                     .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.s),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -302,8 +299,10 @@ private fun SessionSkeletonRow() {
     }
 }
 
+internal const val NEW_SESSION_ROW_TAG = "new-session-row"
+
 private val STATUS_STRIP_HEIGHT = 24.dp
-private val NEW_SESSION_ROW_HEIGHT = 38.dp
+private val NEW_SESSION_ROW_HEIGHT = 48.dp
 private const val SKELETON_ROW_COUNT = 6
 private const val SKELETON_TITLE_WIDTH = 0.62f
 private const val SKELETON_PREVIEW_WIDTH = 0.84f

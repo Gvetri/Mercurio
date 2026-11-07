@@ -4,21 +4,29 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
+import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -38,7 +46,7 @@ class SettingsScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Run status notifications").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Notifications").assertDoesNotExist()
         composeTestRule
             .onNodeWithContentDescription("Settings")
             .assertHasClickAction()
@@ -48,30 +56,139 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun settings_surface_renders_every_relocated_control_and_the_app_version() {
+    fun settings_surface_renders_the_decided_sections_in_order() {
         val events = mutableListOf<EntryUiEvent>()
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
-                    state = connectedListState(isSettingsOpen = true, clientVersion = "demo-build.1"),
+                    state =
+                        connectedListState(
+                            isSettingsOpen = true,
+                            clientVersion = "demo-build.1",
+                            buildNumber = 412L,
+                            installSource = InstallSource.GOOGLE_PLAY,
+                        ),
                     onEvent = events::add,
                 )
             }
         }
 
         composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
-        composeTestRule.onNodeWithText("App version demo-build.1").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status notifications").performScrollTo().assertIsDisplayed()
-        composeTestRule
-            .onNodeWithContentDescription("Run status notifications")
-            .assertIsDisplayed()
-            .assertIsOff()
+        composeTestRule.onNodeWithText("CONNECTION").assertIsDisplayed()
+        composeTestRule.onNodeWithText("SECURITY").assertIsDisplayed()
+        composeTestRule.onNodeWithText("NOTIFICATIONS").assertIsDisplayed()
+        composeTestRule.onNodeWithText("MEDIA").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("DIAGNOSTICS").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("APP UPDATES").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connected · gateway ready").assertIsDisplayed()
+        composeTestRule.onNodeWithText("App lock").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Notifications").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Load pictures automatically").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Local diagnostics").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Change Gateway credential").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Clear cached conversations").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Remove Gateway Connection").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Version").performScrollTo().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("demo-build.1").assertCountEquals(2)
+        composeTestRule.onAllNodesWithText("demo-build.1")[0].performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Build").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("412").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Install source").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Google Play").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("ABOUT"))
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("ABOUT").assertIsDisplayed()
         assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun settings_sections_are_ordered_from_top_to_bottom() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = connectedListState(isSettingsOpen = true), onEvent = {})
+            }
+        }
+
+        val tops =
+            listOf("CONNECTION", "SECURITY", "NOTIFICATIONS", "MEDIA", "DIAGNOSTICS").map { label ->
+                composeTestRule.onNodeWithText(label).fetchSemanticsNode().boundsInRoot.top
+            }
+        assertEquals(tops.sorted(), tops)
+
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("ABOUT"))
+        composeTestRule.waitForIdle()
+        val appUpdatesTop = composeTestRule.onNodeWithText("APP UPDATES").fetchSemanticsNode().boundsInRoot.top
+        val aboutTop = composeTestRule.onNodeWithText("ABOUT").fetchSemanticsNode().boundsInRoot.top
+        assertTrue(appUpdatesTop < aboutTop)
+    }
+
+    @Test
+    fun settings_security_section_offers_the_app_lock_switch() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).withAppLock(),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("App lock").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Unlocks Mercurio with your device screen lock.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("App lock").assertIsOff().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.AppLockToggleClicked), events)
+    }
+
+    @Test
+    fun settings_security_switch_is_on_when_the_gate_is_enabled() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).withAppLock(isEnabled = true),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("App lock").assertIsOn()
+    }
+
+    @Test
+    fun settings_security_row_names_the_precondition_and_stays_off_without_a_screen_lock() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).withAppLock(isAvailable = false),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Set a screen lock on this device to use app lock.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("App lock").assertIsNotEnabled().assertIsOff()
+    }
+
+    @Test
+    fun settings_media_switch_defaults_on_and_routes_the_toggle_event() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = connectedListState(isSettingsOpen = true), onEvent = events::add)
+            }
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Automatic picture loading")
+            .performScrollTo()
+            .assertIsOn()
+            .assertHasClickAction()
+            .performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.AutoLoadImagesToggleClicked), events)
     }
 
     @Test
@@ -85,6 +202,8 @@ class SettingsScreenTest {
 
         composeTestRule
             .onNodeWithContentDescription("Run status notifications")
+            .performScrollTo()
+            .assertIsOff()
             .performClick()
 
         assertEquals(listOf<EntryUiEvent>(EntryUiEvent.RunStatusNotificationsToggleClicked), events)
@@ -112,6 +231,30 @@ class SettingsScreenTest {
             .onNodeWithText(copy(RunStatusNotificationExplanation.PERMISSION_DENIED.messageRes))
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun the_connection_actions_menu_routes_credential_change_and_removal() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = connectedListState(isSettingsOpen = true), onEvent = events::add)
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Connection actions").performClick()
+        composeTestRule.onNodeWithText("Change credential").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithContentDescription("Connection actions").performClick()
+        composeTestRule.onNodeWithText("Remove connection").performClick()
+
+        assertEquals(
+            listOf(
+                EntryUiEvent.ChangeGatewayCredentialClicked,
+                EntryUiEvent.RemoveGatewayConnectionClicked,
+            ),
+            events,
+        )
     }
 
     @Test
@@ -151,21 +294,19 @@ class SettingsScreenTest {
         }
 
         composeTestRule.onNodeWithText("Local diagnostics").performScrollTo().performClick()
-        composeTestRule.onNodeWithText("Change Gateway credential").performScrollTo().performClick()
-        composeTestRule.onNodeWithText("Remove Gateway Connection").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Clear cached conversations").performScrollTo().performClick()
 
         assertEquals(
             listOf(
                 EntryUiEvent.OpenLocalDiagnosticsClicked,
-                EntryUiEvent.ChangeGatewayCredentialClicked,
-                EntryUiEvent.RemoveGatewayConnectionClicked,
+                EntryUiEvent.ClearHistoryCacheClicked,
             ),
             events,
         )
     }
 
     @Test
-    fun back_to_sessions_routes_close_settings_and_the_list_keeps_its_context() {
+    fun system_back_from_settings_closes_it_and_keeps_the_list_context() {
         val events = mutableListOf<EntryUiEvent>()
         val state = mutableStateOf(connectedListState(searchQuery = "First", clientVersion = "demo-build.1"))
         composeTestRule.setContent {
@@ -186,7 +327,11 @@ class SettingsScreenTest {
         }
 
         composeTestRule.onNodeWithContentDescription("Settings").performClick()
-        composeTestRule.onNodeWithText("Back to Sessions").performScrollTo().performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.runOnUiThread {
+            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeTestRule.waitForIdle()
 
         assertEquals(
             listOf(EntryUiEvent.OpenSettingsClicked, EntryUiEvent.CloseSettingsClicked),
@@ -195,7 +340,7 @@ class SettingsScreenTest {
         composeTestRule.onNodeWithContentDescription("Search Sessions").assertIsDisplayed()
         composeTestRule.onNodeWithText("First").assertIsDisplayed()
         composeTestRule.onNodeWithText("First Session").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Run status notifications").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Notifications").assertDoesNotExist()
     }
 
     @Test
@@ -358,6 +503,89 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun settings_error_reporting_row_starts_off_and_states_the_scope() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).copy(isErrorReportingConfigured = true),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Share crash and error reports").performScrollTo().assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Crashes, errors, and not-responding reports. Off until you turn it on.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("Share crash and error reports")
+            .performScrollTo()
+            .assertIsOff()
+    }
+
+    @Test
+    fun settings_error_reporting_row_reads_a_granted_answer() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        connectedListState(isSettingsOpen = true).copy(
+                            isErrorReportingConfigured = true,
+                            errorReportingConsent = ErrorReportingConsent.Granted,
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Crashes, errors, and not-responding reports. On until you turn it off.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("Share crash and error reports")
+            .performScrollTo()
+            .assertIsOn()
+    }
+
+    @Test
+    fun settings_error_reporting_row_is_absent_without_a_reporting_endpoint() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = connectedListState(isSettingsOpen = true), onEvent = {})
+            }
+        }
+
+        composeTestRule.onNodeWithText("DIAGNOSTICS").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Share crash and error reports").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Share crash and error reports").assertDoesNotExist()
+    }
+
+    @Test
+    fun settings_error_reporting_toggle_routes_the_stored_decision() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = connectedListState(isSettingsOpen = true).copy(isErrorReportingConfigured = true),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Share crash and error reports")
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(
+            listOf<EntryUiEvent>(EntryUiEvent.ErrorReportingConsentToggleClicked(granted = true)),
+            events,
+        )
+    }
+
+    @Test
     fun settings_controls_remain_reachable_at_twice_the_font_scale() {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
@@ -367,14 +595,16 @@ class SettingsScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Remove Gateway Connection").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Back to Sessions").performScrollTo().assertHasClickAction()
+        composeTestRule.onNodeWithText("Clear cached conversations").performScrollTo().assertHasClickAction()
+        composeTestRule.onNodeWithText("Install source").performScrollTo().assertIsDisplayed()
     }
 
     private fun connectedListState(
         isSettingsOpen: Boolean = false,
         searchQuery: String = "",
         clientVersion: String = "unknown",
+        buildNumber: Long? = null,
+        installSource: InstallSource = InstallSource.OTHER_SOURCE,
     ): EntryUiState =
         EntryUiState(
             title = UiText.Resource(R.string.entry_title_connected),
@@ -383,6 +613,8 @@ class SettingsScreenTest {
             isConnected = true,
             isSettingsOpen = isSettingsOpen,
             clientVersion = clientVersion,
+            buildNumber = buildNumber,
+            installSource = installSource,
             sessionList =
                 SessionListUiState(
                     sessions =
@@ -397,4 +629,12 @@ class SettingsScreenTest {
                     searchQuery = searchQuery,
                 ),
         )
+
+    private fun EntryUiState.withAppLock(
+        isEnabled: Boolean = false,
+        isAvailable: Boolean = true,
+    ): EntryUiState {
+        val lock = AppLockUiState(isEnabled = isEnabled, isAvailable = isAvailable)
+        return copy(appLock = lock)
+    }
 }

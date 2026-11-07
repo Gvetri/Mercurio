@@ -221,10 +221,36 @@ jobs:
 
   buildsrc_contracts:
     name: buildsrc-contracts
-    needs: [ui_paths]
-    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    needs: [ui_paths, buildsrc_contracts_shard_1, buildsrc_contracts_shard_2, buildsrc_contracts_shard_3]
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    steps:
+      - name: Verify every buildSrc self-test shard succeeded
+        env:
+          SHARD_RESULTS: ${{ needs.buildsrc_contracts_shard_1.result }} ${{ needs.buildsrc_contracts_shard_2.result }} ${{ needs.buildsrc_contracts_shard_3.result }}
+        run: |
+          set -euo pipefail
+          shard_number=0
+          for result in $SHARD_RESULTS; do
+            shard_number=$((shard_number + 1))
+            if [ "$result" != success ]; then
+              printf 'Required buildSrc self-test shard %s result: %s\n' "$shard_number" "$result" >&2
+              exit 1
+            fi
+          done
+          if [ "$shard_number" -ne 3 ]; then
+            printf 'Expected 3 buildSrc self-test shard results but read %s.\n' "$shard_number" >&2
+            exit 1
+          fi
+          printf '%s\n' 'All buildSrc self-test shards passed.'
+
+  buildsrc_contracts_shard_1:
+    name: buildsrc-contracts-shard-1-of-3
+    needs: [ui_paths]
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -234,11 +260,106 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Verify the buildSrc quality self-test contracts
+      - name: Run buildSrc self-test shard 1
         run: >-
           ./gradlew -p buildSrc test
-          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest
-          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.test_job_failures_preserve_gating_reporting_and_redaction
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.evidence_wrapper_redaction_timeout_keeps_marker_and_unsanitized_file
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.nightly_release_validates_main_tip_and_publishes_verified_metadata
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.stable_beta_requires_closed_milestone_exact_candidate_and_fresh_approval
+          --no-daemon
+
+  buildsrc_contracts_shard_2:
+    name: buildsrc-contracts-shard-2-of-3
+    needs: [ui_paths]
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run buildSrc self-test shard 2
+        run: >-
+          ./gradlew -p buildSrc test
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.mutation_verification_rejects_surviving_mutations_without_the_tool_threshold
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.coverage_verification_rejects_unreached_production_code
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_verification_rejects_a_committed_baseline
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.nightly_watchdog_reports_starvation_without_changing_releases
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.release_signing_fails_closed_and_verifies_apk_identity
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.nightly_draft_recovery_is_local_guarded_and_reads_back_state
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.published_documentation_is_verified_for_links_safety_and_scope
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.published_release_artifacts_are_verified_before_announcement
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.release_artifact_carries_the_configured_dsn_before_signing
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_conformance_job_verifies_the_published_documentation
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_comment_policy_verifier_accepts_kdoc_and_rejects_the_other_comment_forms
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_commit_header_rule_is_shared_with_the_commit_message_hook
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_committed_hooks_judge_the_message_and_the_staged_change
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_protected_main_and_commit_message_contracts_hold
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_comment_policy_check_runs_in_the_formatting_job_and_the_local_gate
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_version_catalog_maps_okhttp_to_the_jvm_artifact
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.gradle_wrapper_declares_official_distribution_checksum
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.emulator_job_enables_kvm_before_runner
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.fixture_lifecycle_is_a_deterministic_required_check
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.fixture_lifecycle_requires_fresh_runner_test_execution
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.fixture_lifecycle_setup_actions_use_immutable_references
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.android_test_failures_preserve_sanitized_failure_evidence
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.evidence_wrapper_redacts_quoted_json_credentials
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.evidence_wrapper_preserves_capture_failures_as_sanitized_evidence
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.evidence_wrapper_timeout_stops_descendant_before_marker_removal
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.api24_finalizer_and_report_classify_cancellation_and_outcomes_from_real_shells
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.api24_instrumentation_is_nightly_manual_and_label_or_ui_path_gated_on_pull_requests
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.pull_request_compose_job_verifies_roborazzi_baselines
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.nightly_api24_job_preserves_device_suite_timeout_reporting_and_diagnostic_link
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.coverage_and_mutation_checks_are_declared_required_and_enforced
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.coverage_and_mutation_wiring_is_declared_once_in_a_convention_plugin
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.detekt_analyzes_every_module_with_type_resolution_and_fails_directly
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.architecture_rules_run_as_konsist_checks_in_the_architecture_job
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.checkout_steps_are_immutable_and_disable_persisted_credentials
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.maestro_journeys_is_a_deterministic_api24_gated_check
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.ui_path_detection_gates_the_emulator_lanes_on_the_declared_ui_surface
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.docs_only_detection_skips_the_heavy_lanes_for_a_documentation_head
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.nightly_failures_create_one_labeled_issue_with_verified_sanitized_artifact
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.local_quality_gate_script_runs_one_module_gate_in_the_ci_order
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.local_quality_gate_documentation_states_the_ordering_and_staleness_recipe
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.gradle_caching_is_declared_and_the_buildsrc_self_tests_stay_sharded_and_fresh
+          --no-daemon
+
+  buildsrc_contracts_shard_3:
+    name: buildsrc-contracts-shard-3-of-3
+    needs: [ui_paths]
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run buildSrc self-test shard 3
+        run: >-
+          ./gradlew -p buildSrc test
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.quality_gate_rejects_a_skipped_detekt_verification
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_else_case_violation_fails_the_real_analysis_with_type_resolution
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_documentation_over_private_property_fails_the_real_analysis
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_return_count_violation_fails_the_real_analysis_task
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_documentation_over_private_function_fails_the_real_analysis
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_verification_passes_on_a_clean_tree
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.quality_gate_rejects_a_skipped_mutation_verification
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.quality_gate_rejects_a_skipped_coverage_verification
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.the_comment_policy_check_rejects_a_line_comment
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.non_deterministic_boundary_double_fails_the_determinism_check
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.mock_based_test_code_fails_the_mock_check
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.mock_framework_dependency_fails_the_mock_check
           --tests org.mercurio.client.buildlogic.CoverageEvidenceTest
           --tests org.mercurio.client.buildlogic.MutationEvidenceTest
           --tests org.mercurio.client.buildlogic.BoundaryDoubleVerifierTest
@@ -346,7 +467,7 @@ jobs:
 
   ui_paths:
     name: ui-paths
-    if: ${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') }}
+    if: ${{ always() && (github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -359,8 +480,15 @@ jobs:
       ci_files_changed: ${{ steps.lane_decisions.outputs.ci_files }}
       build_logic_changed: ${{ steps.lane_decisions.outputs.build_logic }}
     steps:
+      - name: Check out the pushed history
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - name: Detect modified UI paths
         id: ui_paths
+        if: ${{ github.event_name == 'pull_request' }}
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
           filters: |
@@ -371,14 +499,28 @@ jobs:
               - 'fixtures/mercurio/journey/**'
       - name: Detect the changed files of the pull request
         id: changed_files
+        if: ${{ github.event_name == 'pull_request' }}
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
         with:
           list-files: json
           filters: |
             all:
               - '**'
+      - name: Detect the changed files of the push
+        id: push_changed_files
+        if: ${{ github.event_name == 'push' }}
+        continue-on-error: true
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad
+        with:
+          base: ${{ github.event.before }}
+          ref: ${{ github.sha }}
+          list-files: json
+          filters: |
+            all:
+              - '**'
       - name: Classify the docs-only decision
         id: docs_only
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
         run: |
@@ -405,19 +547,30 @@ jobs:
       - name: Classify the lane-routing decisions
         id: lane_decisions
         env:
-          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files }}
+          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files || steps.push_changed_files.outputs.all_files }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           decisions="$(python3 -c '
           import json, os, sys
+          event = os.environ.get("EVENT_NAME", "")
+          def fail_closed(message):
+              print(message, file=sys.stderr)
+              if event == "push":
+                  print("failing closed to running the buildSrc contracts check.", file=sys.stderr)
+                  print("ci_files=true")
+                  print("build_logic=true")
+                  sys.exit(0)
+              print("failing closed to the full gate.", file=sys.stderr)
+              sys.exit(1)
           try:
               changed_files = json.loads(os.environ["CHANGED_FILES"])
           except (KeyError, ValueError, TypeError) as error:
-              print("The changed-file answer is unreadable (%s); failing closed to the full gate." % error, file=sys.stderr)
-              sys.exit(1)
+              fail_closed("The changed-file answer is unreadable (%s)." % error)
           if not isinstance(changed_files, list) or not all(isinstance(path, str) for path in changed_files):
-              print("The changed-file answer is not a list of file paths; failing closed to the full gate.", file=sys.stderr)
-              sys.exit(1)
+              fail_closed("The changed-file answer is not a list of file paths.")
+          if not changed_files and event == "push":
+              fail_closed("The changed-file answer lists no changed file.")
           def is_control_plane(path):
               return "/.github/" in "/" + path
           def is_build_logic(path):
@@ -652,8 +805,8 @@ jobs:
 
   maestro_shard_1:
     name: maestro-journeys-shard-1-of-3
-    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    needs: [ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -742,8 +895,8 @@ jobs:
 
   maestro_shard_2:
     name: maestro-journeys-shard-2-of-3
-    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    needs: [ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -832,8 +985,8 @@ jobs:
 
   maestro_shard_3:
     name: maestro-journeys-shard-3-of-3
-    needs: [api24_instrumentation, ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
-    if: ${{ always() && needs.api24_instrumentation.result == 'success' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
+    needs: [ui_paths, formatting, static_analysis, detekt, unit_tests, fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, coverage_mutation, compose_test]
+    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && contains(github.event.pull_request.labels.*.name, 'run-maestro'))) && (github.event_name != 'pull_request' || !contains(needs.*.result, 'failure')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -1082,6 +1235,15 @@ jobs:
               exit 1
             fi
           }
+          require_decision() {
+            case "$2" in
+              true|false) ;;
+              *)
+                printf '%s must report true or false for this run, but reported %s.\n' "$1" "${2:-<empty>}" >&2
+                exit 1
+                ;;
+            esac
+          }
           if [ "$EVENT_NAME" = pull_request ]; then
             if [ "$EVENT_BASE_REF" != main ]; then
               printf 'The protected-main workflow accepts pull requests that target main, but this one targets %s.\n' "$EVENT_BASE_REF" >&2
@@ -1090,45 +1252,15 @@ jobs:
             require fork_guard "$FORK_GUARD_RESULT"
             require ui_paths "$UI_PATHS_RESULT"
             ui_paths_decision="$UI_PATHS_CHANGED"
-            case "$ui_paths_decision" in
-              true|false) ;;
-              *)
-                printf 'UI path detection must report true or false for this run, but reported %s.\n' "${ui_paths_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'UI path detection' "$ui_paths_decision"
             docs_only_decision="$DOCS_ONLY_CHANGED"
-            case "$docs_only_decision" in
-              true|false) ;;
-              *)
-                printf 'Docs-only detection must report true or false for this run, but reported %s.\n' "${docs_only_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'Docs-only detection' "$docs_only_decision"
             dependency_only_decision="$DEPENDENCY_ONLY_CHANGED"
-            case "$dependency_only_decision" in
-              true|false) ;;
-              *)
-                printf 'Dependency-file detection must report true or false for this run, but reported %s.\n' "${dependency_only_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'Dependency-file detection' "$dependency_only_decision"
             ci_files_decision="$CI_FILES_CHANGED"
-            case "$ci_files_decision" in
-              true|false) ;;
-              *)
-                printf 'CI-file detection must report true or false for this run, but reported %s.\n' "${ci_files_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'CI-file detection' "$ci_files_decision"
             build_logic_decision="$BUILD_LOGIC_CHANGED"
-            case "$build_logic_decision" in
-              true|false) ;;
-              *)
-                printf 'Build-logic detection must report true or false for this run, but reported %s.\n' "${build_logic_decision:-<empty>}" >&2
-                exit 1
-                ;;
-            esac
+            require_decision 'Build-logic detection' "$build_logic_decision"
             if [ "$EVENT_FORK" = true ]; then
               expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
               expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
@@ -1205,13 +1337,23 @@ jobs:
             expect commit_message "$COMMIT_MESSAGE_RESULT" skipped
             expect fork_guard "$FORK_GUARD_RESULT" skipped
             expect draft_validation "$DRAFT_VALIDATION_RESULT" skipped
-            expect ui_paths "$UI_PATHS_RESULT" skipped
             expect coverage_mutation "$COVERAGE_MUTATION_RESULT" success
-            test "$BUILDSRC_CONTRACTS_RESULT" = success
             if [ "$EVENT_NAME" = push ]; then
+              require ui_paths "$UI_PATHS_RESULT"
+              ci_files_decision="$CI_FILES_CHANGED"
+              require_decision 'CI-file detection' "$ci_files_decision"
+              build_logic_decision="$BUILD_LOGIC_CHANGED"
+              require_decision 'Build-logic detection' "$build_logic_decision"
+              if [ "$ci_files_decision" = true ] || [ "$build_logic_decision" = true ]; then
+                test "$BUILDSRC_CONTRACTS_RESULT" = success
+              else
+                test "$BUILDSRC_CONTRACTS_RESULT" = skipped
+              fi
               test "$API24_INSTRUMENTATION_RESULT" = skipped
               test "$MAESTRO_JOURNEYS_RESULT" = skipped
             else
+              expect ui_paths "$UI_PATHS_RESULT" skipped
+              test "$BUILDSRC_CONTRACTS_RESULT" = success
               test "$API24_INSTRUMENTATION_RESULT" = success
               test "$MAESTRO_JOURNEYS_RESULT" = success
             fi

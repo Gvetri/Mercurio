@@ -3,14 +3,19 @@ name: connection-removal-purge
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Send crash and error reports[?]"
+    commands:
+      - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
@@ -21,10 +26,11 @@ name: connection-removal-purge
 - tapOn: "Back to Sessions"
 - tapOn: "Settings"
 - extendedWaitUntil:
-    visible: ".*App version.*"
+    visible: "CONNECTION"
     timeout: 30000
-- tapOn: "Remove Gateway Connection"
-- assertVisible: "Remove the saved endpoint and credential from this device. Remote Sessions and Runs are not deleted or cancelled."
+- tapOn: "::"
+- tapOn: "Remove connection"
+- assertVisible: "This deletes the saved credential and the Gateway address. Your sessions stay on the Gateway."
 - takeScreenshot: connection-removal-purge-confirmation
 - tapOn: "Remove"
 - extendedWaitUntil:
@@ -32,13 +38,13 @@ name: connection-removal-purge
     timeout: 30000
 - takeScreenshot: connection-removal-purge-disconnected
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000

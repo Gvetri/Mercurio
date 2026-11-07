@@ -24,7 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +36,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -53,7 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * One 54 dp Session row: the 44 dp last-active column, the title, one preview
+ * One 56 dp Session row: the 44 dp last-active column, the title, one preview
  * line, and the trailing affordances. A hold opens the anchored context menu; an
  * inline rename replaces the title cell with the filled check/cross pair.
  */
@@ -86,7 +88,7 @@ internal fun SessionRow(
         SessionRowMutationFeedback(
             session = row.session,
             mutation = row.mutation,
-            enabled = row.enabled,
+            enabled = row.mutationEnabled,
             onEvent = onEvent,
         )
     }
@@ -102,6 +104,11 @@ private fun SessionRowContent(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val haptics = LocalHapticFeedback.current
+    val openActions = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onLongPress()
+    }
     val component = tokens.componentColors
     val showActionsLabel = stringResource(R.string.sessions_show_actions)
     val selected = row.selected || inlineRename
@@ -120,7 +127,7 @@ private fun SessionRowContent(
                 .combinedClickable(
                     enabled = row.enabled && row.mutation?.pendingAction == null && !inlineRename,
                     onClick = row.onClick,
-                    onLongClick = onLongPress,
+                    onLongClick = openActions,
                 )
                 .semantics {
                     this.selected = row.selected
@@ -162,7 +169,7 @@ private fun RowScope.SessionRowMiddle(
             RenameSessionField(
                 session = row.session,
                 state = rename,
-                enabled = row.enabled,
+                enabled = row.mutationEnabled,
                 onEvent = onEvent,
             )
         } else {
@@ -174,7 +181,7 @@ private fun RowScope.SessionRowMiddle(
         InlineRenameActions(
             session = row.session,
             state = rename,
-            enabled = row.enabled,
+            enabled = row.mutationEnabled,
             onEvent = onEvent,
         )
     }
@@ -250,7 +257,13 @@ private fun RenameSessionField(
     val tokens = LocalHermesDesignTokens.current
     val focusRequester = remember { FocusRequester() }
     val sessionTitleDescription = stringResource(R.string.sessions_title_field)
-    LaunchedEffect(session.id) { focusRequester.requestFocus() }
+    val focusRequest = remember(session.id) { RenameFocusRequest() }
+    SideEffect {
+        if (!focusRequest.requested) {
+            focusRequest.requested = true
+            focusRequester.requestFocus()
+        }
+    }
     Column(modifier = Modifier.fillMaxWidth()) {
         BasicTextField(
             value = state.titleDraft,
@@ -410,7 +423,11 @@ internal fun SessionMutationAction.pendingLabelRes(): Int =
         SessionMutationAction.DELETE -> R.string.sessions_deleting
     }
 
-private val SESSION_ROW_MIN_HEIGHT = 54.dp
+private class RenameFocusRequest {
+    var requested: Boolean = false
+}
+
+private val SESSION_ROW_MIN_HEIGHT = 56.dp
 private val SESSION_TIME_COLUMN = 44.dp
 private val RENAME_ACTION_SIZE = 32.dp
 private const val HELD_LAYER_ALPHA = 0.12f

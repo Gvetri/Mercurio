@@ -3,14 +3,19 @@ name: cache-clear-repopulates
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Send crash and error reports[?]"
+    commands:
+      - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "Alpha Session"
     timeout: 30000
@@ -30,12 +35,16 @@ name: cache-clear-repopulates
 - takeScreenshot: cache-clear-repopulates-preserved-list
 - tapOn: "Settings"
 - extendedWaitUntil:
-    visible: ".*App version.*"
+    visible: "CONNECTION"
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Clear cached conversations"
+    direction: DOWN
 - tapOn: "Clear cached conversations"
 - assertVisible: 'Clear cached conversations\?'
 - tapOn: '^Clear$'
-- tapOn: "Back to Sessions"
+- back
 - extendedWaitUntil:
     visible: "gateway :: offline"
     timeout: 30000

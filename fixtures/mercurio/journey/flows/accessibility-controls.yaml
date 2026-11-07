@@ -3,22 +3,27 @@ name: accessibility-controls
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Send crash and error reports[?]"
+    commands:
+      - tapOn: "Don't send"
 - tapOn: "Add Gateway Connection"
-- tapOn: "Gateway HTTPS endpoint"
+- tapOn: "Gateway address"
 - inputText: "https://10.0.2.2:18443"
 - hideKeyboard
-- tapOn: "Bearer credential"
+- tapOn: "Gateway credential"
 - inputText: "synthetic-token"
 - hideKeyboard
 - takeScreenshot: accessibility-controls-form-filled
-- tapOn: "Verify Gateway Connection"
+- tapOn: "Connect"
 - extendedWaitUntil:
     visible: "mercurio"
     timeout: 30000
 - tapOn: "Settings"
-- assertVisible: "Run status notifications"
-- assertVisible: ".*App version.*"
-- tapOn: "Back to Sessions"
+- assertVisible: "Notifications"
+- assertVisible: "CONNECTION"
+- back
 - assertVisible: "Search Sessions"
 - assertVisible: "new session"
 - tapOn: "Alpha Session"

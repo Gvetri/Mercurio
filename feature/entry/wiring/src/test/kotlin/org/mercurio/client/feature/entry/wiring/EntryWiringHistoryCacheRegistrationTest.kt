@@ -1,9 +1,8 @@
 package org.mercurio.client.feature.entry.wiring
 
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import app.cash.turbine.test
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,76 +54,78 @@ class EntryWiringHistoryCacheRegistrationTest {
     }
 
     @Test
-    fun registered_cache_wiring_keeps_authoritative_reads_and_refreshes_intact_without_a_keystore() {
-        val context = RuntimeEnvironment.getApplication()
-        val gateway = RegistrationGateway()
-        val holder = createRegisteredHolder(context, gateway)
-        try {
-            holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
-            holder.onEvent(EntryUiEvent.EndpointChanged(ENDPOINT))
-            holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
-            holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            awaitState(holder) { state ->
-                state.sessionList?.sessions?.singleOrNull()?.id == RegistrationGateway.SESSION_ID
-            }
-            awaitStableConnectedState(holder)
+    fun registered_cache_wiring_keeps_authoritative_reads_and_refreshes_intact_without_a_keystore() =
+        runTest {
+            val context = RuntimeEnvironment.getApplication()
+            val gateway = RegistrationGateway()
+            val holder = createRegisteredHolder(context, gateway)
+            try {
+                holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.EndpointChanged(ENDPOINT))
+                holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
+                holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+                awaitState(holder) { state ->
+                    state.sessionList?.sessions?.singleOrNull()?.id == RegistrationGateway.SESSION_ID
+                }
+                awaitStableConnectedState(holder)
 
-            holder.onEvent(EntryUiEvent.SessionClicked(RegistrationGateway.SESSION_ID))
-            awaitState(holder) { state -> state.sessionList?.openedSession?.messages?.isNotEmpty() == true }
-            val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
-            assertEquals(listOf("message-1"), opened.messages.map { it.id })
-            assertFalse(opened.isStale)
+                holder.onEvent(EntryUiEvent.SessionClicked(RegistrationGateway.SESSION_ID))
+                awaitState(holder) { state -> state.sessionList?.openedSession?.messages?.isNotEmpty() == true }
+                val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
+                assertEquals(listOf("message-1"), opened.messages.map { it.id })
+                assertFalse(opened.isStale)
 
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            awaitState(holder) { state ->
-                state.sessionList?.openedSession?.messages?.singleOrNull()?.id == "message-2"
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                awaitState(holder) { state ->
+                    state.sessionList?.openedSession?.messages?.singleOrNull()?.id == "message-2"
+                }
+            } finally {
+                holder.close()
+                holders.remove(holder)
             }
-        } finally {
-            holder.close()
-            holders.remove(holder)
+
+            assertFalse(File(context.noBackupFilesDir, CACHE_FILE_NAME).exists())
         }
-
-        assertFalse(File(context.noBackupFilesDir, CACHE_FILE_NAME).exists())
-    }
 
     @Test
-    fun connection_removal_through_production_wiring_purges_the_endpoint_cache() {
-        val context = RuntimeEnvironment.getApplication()
-        val gateway = RegistrationGateway()
-        val cache = WiringRecordingCacheStore()
-        val holder =
-            createRegisteredHolder(
-                context = context,
-                gateway = gateway,
-                historyCacheStore = cache,
-            )
-        try {
-            holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
-            holder.onEvent(EntryUiEvent.EndpointChanged(ENDPOINT))
-            holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
-            holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            awaitState(holder) { state ->
-                state.sessionList?.sessions?.singleOrNull()?.id == RegistrationGateway.SESSION_ID
+    fun connection_removal_through_production_wiring_purges_the_endpoint_cache() =
+        runTest {
+            val context = RuntimeEnvironment.getApplication()
+            val gateway = RegistrationGateway()
+            val cache = WiringRecordingCacheStore()
+            val holder =
+                createRegisteredHolder(
+                    context = context,
+                    gateway = gateway,
+                    historyCacheStore = cache,
+                )
+            try {
+                holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.EndpointChanged(ENDPOINT))
+                holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
+                holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+                awaitState(holder) { state ->
+                    state.sessionList?.sessions?.singleOrNull()?.id == RegistrationGateway.SESSION_ID
+                }
+                awaitWrittenListEndpoint(cache)
+                assertTrue(cache.writtenListEndpoints.isNotEmpty())
+                cache.writeSessionList(
+                    "https://gateway.example/other",
+                    listOf(Session(SessionId("other-session"), "Other", null, false)),
+                )
+
+                holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+                awaitClearedEndpoint(cache, cache.writtenListEndpoints.first())
+
+                assertEquals(setOf(cache.writtenListEndpoints.first()), cache.clearedEndpoints.toSet())
+                assertTrue(cache.cachedSessionList(ENDPOINT).isEmpty())
+                assertEquals(1, cache.cachedSessionList("https://gateway.example/other").size)
+            } finally {
+                holder.close()
+                holders.remove(holder)
             }
-            awaitWrittenListEndpoint(cache)
-            assertTrue(cache.writtenListEndpoints.isNotEmpty())
-            cache.writeSessionList(
-                "https://gateway.example/other",
-                listOf(Session(SessionId("other-session"), "Other", null, false)),
-            )
-
-            holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
-            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-            awaitClearedEndpoint(cache, cache.writtenListEndpoints.first())
-
-            assertEquals(setOf(cache.writtenListEndpoints.first()), cache.clearedEndpoints.toSet())
-            assertTrue(cache.cachedSessionList(ENDPOINT).isEmpty())
-            assertEquals(1, cache.cachedSessionList("https://gateway.example/other").size)
-        } finally {
-            holder.close()
-            holders.remove(holder)
         }
-    }
 
     @Test
     fun production_wiring_registers_the_cache_purge_in_the_connection_removal_lambda() {
@@ -141,15 +142,18 @@ class EntryWiringHistoryCacheRegistrationTest {
         )
     }
 
-    private fun awaitStableConnectedState(holder: EntryStateHolder) {
-        repeat(SETTLE_PROBES) {
-            val sessionList = holder.uiState.value.sessionList
-            if (sessionList?.isStale == true || sessionList?.errorCategory != null) {
-                fail("authoritative list read was poisoned by the failing cache store")
-            }
-            Thread.sleep(SETTLE_INTERVAL_MILLIS)
+    private suspend fun awaitStableConnectedState(holder: EntryStateHolder) {
+        awaitState(holder) { state ->
+            val sessionList = state.sessionList
+            sessionList != null &&
+                !sessionList.isLoading &&
+                !sessionList.isRefreshing &&
+                sessionList.sessions.isNotEmpty()
         }
         val sessionList = requireNotNull(holder.uiState.value.sessionList)
+        if (sessionList.isStale || sessionList.errorCategory != null) {
+            fail("authoritative list read was poisoned by the failing cache store")
+        }
         assertFalse(sessionList.isStale)
         assertEquals(null, sessionList.errorCategory)
     }
@@ -173,14 +177,16 @@ class EntryWiringHistoryCacheRegistrationTest {
                 ),
         ).also { holders += it }
 
-    private fun awaitState(
+    private suspend fun awaitState(
         holder: EntryStateHolder,
         predicate: (EntryUiState) -> Boolean,
     ) {
-        runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) {
-                holder.uiState.first(predicate)
+        holder.uiState.test {
+            var candidate = awaitItem()
+            while (!predicate(candidate)) {
+                candidate = awaitItem()
             }
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -198,27 +204,18 @@ class EntryWiringHistoryCacheRegistrationTest {
         }
     }
 
-    private fun awaitClearedEndpoint(
+    private suspend fun awaitClearedEndpoint(
         cache: WiringRecordingCacheStore,
         endpoint: String,
     ) {
-        runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) {
-                while (endpoint !in cache.clearedEndpoints) {
-                    delay(10)
-                }
-            }
+        while (true) {
+            val cleared = cache.clearedSignal.receive()
+            if (cleared == endpoint) return
         }
     }
 
-    private fun awaitWrittenListEndpoint(cache: WiringRecordingCacheStore) {
-        runBlocking {
-            withTimeout(TEST_TIMEOUT_MILLIS) {
-                while (cache.writtenListEndpoints.isEmpty()) {
-                    delay(10)
-                }
-            }
-        }
+    private suspend fun awaitWrittenListEndpoint(cache: WiringRecordingCacheStore) {
+        cache.writtenListSignal.receive()
     }
 
     private class WiringRecordingCacheStore : HistoryCacheStore {
@@ -235,17 +232,22 @@ class EntryWiringHistoryCacheRegistrationTest {
 
         override fun readSessionList(endpoint: String): List<Session> = lists[endpoint].orEmpty()
 
+        val writtenListSignal = Channel<String>(Channel.UNLIMITED)
+        val clearedSignal = Channel<String>(Channel.UNLIMITED)
+
         override fun writeSessionList(
             endpoint: String,
             sessions: List<Session>,
         ) {
             writtenListEndpoints += endpoint
             lists[endpoint] = sessions
+            writtenListSignal.trySend(endpoint)
         }
 
         override fun clearEndpoint(endpoint: String) {
             clearedEndpoints += endpoint
             lists.remove(endpoint)
+            clearedSignal.trySend(endpoint)
         }
 
         override fun clear() {
@@ -307,7 +309,5 @@ class EntryWiringHistoryCacheRegistrationTest {
         const val ENDPOINT = "https://gateway.example/registered"
         const val CACHE_FILE_NAME = "gateway_history_cache.enc"
         const val TEST_TIMEOUT_MILLIS = 10_000L
-        const val SETTLE_PROBES = 120
-        const val SETTLE_INTERVAL_MILLIS = 25L
     }
 }

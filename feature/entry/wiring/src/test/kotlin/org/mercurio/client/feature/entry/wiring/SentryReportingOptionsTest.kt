@@ -7,9 +7,11 @@ import io.sentry.android.core.SentryAndroidOptions
 import io.sentry.protocol.SentryException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 
 class SentryReportingOptionsTest {
     @Test
@@ -17,7 +19,7 @@ class SentryReportingOptionsTest {
         val options = SentryAndroidOptions()
         val config = reportingConfig()
 
-        options.applyReporting(config, ReportScrubber())
+        options.applyReporting(config, ReportScrubber()) { config.consent }
 
         assertEquals(config.dsn, options.dsn)
         assertEquals(config.release, options.release)
@@ -43,7 +45,7 @@ class SentryReportingOptionsTest {
     fun the_applied_options_carry_crash_error_and_not_responding_reports_only() {
         val options = SentryAndroidOptions()
 
-        options.applyReporting(reportingConfig(), ReportScrubber())
+        options.applyReporting(reportingConfig(), ReportScrubber()) { reportingConfig().consent }
 
         assertFalse(options.isEnableAutoSessionTracking)
         assertNull(options.tracesSampleRate)
@@ -62,7 +64,7 @@ class SentryReportingOptionsTest {
     @Test
     fun before_send_routes_every_event_through_the_scrubber() {
         val options = SentryAndroidOptions()
-        options.applyReporting(reportingConfig(), ReportScrubber())
+        options.applyReporting(reportingConfig(), ReportScrubber()) { reportingConfig().consent }
         val beforeSend = requireNotNull(options.beforeSend) { "The reporting options install no before-send hook." }
         val event = SentryEvent().apply { serverName = "gateway.internal.example" }
 
@@ -74,7 +76,7 @@ class SentryReportingOptionsTest {
     @Test
     fun an_anr_event_keeps_its_thread_stacks_and_loses_only_its_context() {
         val options = SentryAndroidOptions()
-        options.applyReporting(reportingConfig(), ReportScrubber())
+        options.applyReporting(reportingConfig(), ReportScrubber()) { reportingConfig().consent }
         val beforeSend = requireNotNull(options.beforeSend) { "The reporting options install no before-send hook." }
         val notResponding =
             SentryException().apply {
@@ -91,6 +93,18 @@ class SentryReportingOptionsTest {
 
         assertEquals(listOf(notResponding), scrubbed?.exceptions)
         assertNull(scrubbed?.breadcrumbs)
+    }
+
+    @Test
+    fun before_send_drops_every_event_once_the_consent_is_revoked() {
+        var consent = ErrorReportingConsent.Granted
+        val options = SentryAndroidOptions()
+        options.applyReporting(reportingConfig(), ReportScrubber()) { consent }
+        val beforeSend = requireNotNull(options.beforeSend) { "The reporting options install no before-send hook." }
+
+        assertNotNull(beforeSend.execute(SentryEvent(), Hint()))
+        consent = ErrorReportingConsent.Declined
+        assertNull(beforeSend.execute(SentryEvent(), Hint()))
     }
 
     private fun reportingConfig(): SentryReportingConfig =

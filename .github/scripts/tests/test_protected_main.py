@@ -16,6 +16,8 @@ WORKFLOW = ROOT / ".github/workflows/quality-gate.yml"
 REQUIRED_CHECKS = ROOT / ".github/quality-gate/required-checks.txt"
 COMMIT_SCRIPT = ROOT / ".github/scripts/verify-conventional-commits.py"
 CONFORMANCE_SCRIPT = ROOT / ".github/scripts/verify-repository-conformance.py"
+PR_TEMPLATE_WORKFLOW = ROOT / ".github/workflows/pr-template.yml"
+PR_TEMPLATE_CHECK = ROOT / ".github/scripts/verify-pr-template.py"
 
 HEAVY_JOBS = (
     "formatting",
@@ -122,28 +124,107 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         contracts = job_block(self.workflow, "buildsrc_contracts")
         self.assertEqual(
             "${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || "
-            "github.event_name == 'push' || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || "
-            "github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && "
-            "!github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || "
+            "(github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || "
+            "needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && "
+            "(github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && "
+            "!github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && "
+            "(needs.ui_paths.outputs.ci_files_changed == 'true' || "
             "needs.ui_paths.outputs.build_logic_changed == 'true'))) }}",
             job_key(contracts, "if"),
-            "the contracts job must run on the nightly, dispatched, and push validation and on ready in-repository CI or build-logic heads",
+            "the contracts job must run on the nightly and dispatched validation, on a main push or a ready in-repository pull request that changes CI or build logic, and stay skipped for an app-only push",
         )
-        self.assertEqual("[ui_paths]", job_key(contracts, "needs"))
-        self.assertIn("./gradlew -p buildSrc test", contracts)
-        self.assertIn("--tests org.mercurio.client.buildlogic.QualityGateConfigurationTest", contracts)
+        self.assertEqual(
+            "[ui_paths, buildsrc_contracts_shard_1, buildsrc_contracts_shard_2, buildsrc_contracts_shard_3]",
+            job_key(contracts, "needs"),
+        )
+        self.assertNotIn("./gradlew -p buildSrc test", contracts)
+        self.assertIn("SHARD_RESULTS: ${{ needs.buildsrc_contracts_shard_1.result }}", contracts)
+        shards = [job_block(self.workflow, f"buildsrc_contracts_shard_{shard}") for shard in range(1, 4)]
+        selections = []
+        for shard, shard_job in enumerate(shards, start=1):
+            self.assertEqual(f"buildsrc-contracts-shard-{shard}-of-3", job_key(shard_job, "name"))
+            self.assertEqual("[ui_paths]", job_key(shard_job, "needs"))
+            self.assertEqual(
+                job_key(contracts, "if"),
+                job_key(shard_job, "if"),
+                f"shard {shard} must run on exactly the events where the umbrella runs",
+            )
+            self.assertIn("./gradlew -p buildSrc test", shard_job)
+            self.assertIn("--no-daemon", shard_job)
+            selections.extend(
+                re.findall(
+                    r"--tests org\.mercurio\.client\.buildlogic\.([A-Za-z0-9]+)(?:\.([A-Za-z0-9_]+))?",
+                    shard_job,
+                )
+            )
+        class_selections = [test_class for test_class, method in selections if not method]
+        for test_class in (
+            "CoverageEvidenceTest",
+            "MutationEvidenceTest",
+            "BoundaryDoubleVerifierTest",
+            "ReportEvidenceTest",
+        ):
+            self.assertEqual(1, class_selections.count(test_class), f"{test_class} must run exactly once across the shards")
+        for split_class in ("QualityGateConfigurationTest", "QualityVerificationFailClosedTest"):
+            self.assertNotIn(
+                split_class,
+                class_selections,
+                f"{split_class} must be split by test group instead of selected as one class",
+            )
+            source = (
+                ROOT / f"buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/{split_class}.kt"
+            ).read_text()
+            declared_tests = re.findall(r"@Test\s*\n\s*fun ([A-Za-z0-9_]+)\(", source)
+            selected_tests = [method for test_class, method in selections if test_class == split_class]
+            self.assertTrue(declared_tests, f"{split_class} must declare its tests")
+            self.assertEqual(
+                sorted(declared_tests),
+                sorted(selected_tests),
+                f"every {split_class} test must be selected exactly once across the shards",
+            )
         architecture = job_block(self.workflow, "architecture_check")
         self.assertIn("./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon", architecture)
         self.assertNotIn("./gradlew -p buildSrc test", architecture)
+        ui_paths = job_block(self.workflow, "ui_paths")
+        push_detection = ui_paths.split("      - name: Detect the changed files of the push\n", 1)[1].split("      - name: ", 1)[0]
+        for fragment in (
+            "        if: ${{ github.event_name == 'push' }}\n",
+            "        continue-on-error: true\n",
+            "          base: ${{ github.event.before }}\n",
+            "          ref: ${{ github.sha }}\n",
+            "          list-files: json\n",
+            "            all:\n              - '**'\n",
+        ):
+            self.assertIn(fragment, push_detection, f"the push detector must read the pushed range: {fragment!r}")
+        self.assertIn(
+            "          CHANGED_FILES: ${{ steps.changed_files.outputs.all_files || steps.push_changed_files.outputs.all_files }}\n",
+            ui_paths,
+            "the classifier must read the pull-request list or the push list",
+        )
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn("      - buildsrc_contracts\n", aggregate)
         self.assertIn("BUILDSRC_CONTRACTS_RESULT: ${{ needs.buildsrc_contracts.result }}", aggregate)
         self.assertIn("DEPENDENCY_ONLY_CHANGED: ${{ needs.ui_paths.outputs.dependency_files_changed }}", aggregate)
         self.assertIn("CI_FILES_CHANGED: ${{ needs.ui_paths.outputs.ci_files_changed }}", aggregate)
         self.assertIn("BUILD_LOGIC_CHANGED: ${{ needs.ui_paths.outputs.build_logic_changed }}", aggregate)
-        self.assertIn("Dependency-file detection must report true or false for this run", aggregate)
+        self.assertIn("require_decision 'Dependency-file detection' \"$dependency_only_decision\"", aggregate)
         self.assertIn('if [ "$COVERAGE_MUTATION_RESULT" != "$coverage_expected_state" ]; then', aggregate)
         self.assertIn('[[ "$ci_files_decision" == true || "$build_logic_decision" == true ]]; then', aggregate)
+        self.assertIn(
+            'if [ "$EVENT_NAME" = push ]; then\n              require ui_paths "$UI_PATHS_RESULT"',
+            aggregate,
+            "the aggregate must require the push changed-file answer and route the contracts lane on it",
+        )
+        self.assertIn(
+            'if [ "$ci_files_decision" = true ] || [ "$build_logic_decision" = true ]; then',
+            aggregate,
+            "a main push that changes CI or build logic must require the contracts check",
+        )
+        routing = (ROOT / "docs/protected-main-workflow.md").read_text()
+        self.assertIn("app-only push", routing)
+        self.assertIn("an unreadable changed-file answer runs it", routing)
+        self.assertIn("three parallel shards", routing)
+        self.assertIn("12 minutes", (ROOT / "docs/quality-gates.md").read_text())
 
     def test_the_aggregate_gate_is_the_single_required_status(self):
         jobs = jobs_of(self.workflow)
@@ -281,15 +362,23 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             "a failed required lane must skip the shard aggregate on pull requests while nightly validations run to completion, and a changed UI path must never start the journey lane",
         )
         for shard in ("maestro_shard_1", "maestro_shard_2", "maestro_shard_3"):
+            shard_block = job_block(self.workflow, shard)
             self.assertEqual(
-                "${{ always() && needs.api24_instrumentation.result == 'success' && "
+                "${{ always() && "
                 + label_guard
                 + " && ("
                 + journey_gate
                 + ") && (github.event_name != 'pull_request' "
                 "|| !contains(needs.*.result, 'failure')) }}",
-                job_key(job_block(self.workflow, shard), "if"),
-                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion, and a changed UI path must never start a journey shard",
+                job_key(shard_block, "if"),
+                "a failed required lane must skip the doomed emulator tail on pull requests while nightly validations run to completion, a changed UI path must never start a journey shard, and a shard must start in parallel with the device check",
+            )
+            self.assertEqual(
+                "[ui_paths, formatting, static_analysis, detekt, unit_tests, "
+                "fixture_descriptor, fixture_lifecycle, fixture_contract, android_build, "
+                "coverage_mutation, compose_test]",
+                job_key(shard_block, "needs"),
+                "a journey shard must wait for the lanes that conclude before it starts, and for nothing else",
             )
         self.assertEqual(
             "[ui_paths]",
@@ -312,10 +401,10 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         ui_paths = job_block(self.workflow, "ui_paths")
         self.assertEqual("ui-paths", jobs_of(self.workflow)["ui_paths"][0])
         self.assertEqual(
-            "${{ always() && github.event_name == 'pull_request' && (github.event.action != 'labeled' "
-            "|| github.event.label.name == 'run-maestro') }}",
+            "${{ always() && (github.event_name == 'push' || (github.event_name == 'pull_request' && "
+            "(github.event.action != 'labeled' || github.event.label.name == 'run-maestro'))) }}",
             job_key(ui_paths, "if"),
-            "the detector belongs to the same pull-request activities as the fork guard",
+            "the detector must also classify a main push so the contracts lane can route on it",
         )
         self.assertIn(
             "    permissions:\n      contents: read\n      pull-requests: read\n",
@@ -347,9 +436,9 @@ class TestProtectedMainWorkflow(unittest.TestCase):
     def test_the_docs_only_detector_skips_the_heavy_lanes_for_a_documentation_head(self):
         ui_paths = job_block(self.workflow, "ui_paths")
         self.assertEqual(
-            2,
+            3,
             ui_paths.count("uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad"),
-            "the changed-file detector must reuse the same pinned paths-filter revision",
+            "the pull-request, push, and docs-only detectors must reuse the same pinned paths-filter revision",
         )
         self.assertIn("      docs_only_changed: ${{ steps.docs_only.outputs.docs_only }}\n", ui_paths)
         changed_files = ui_paths.split("      - name: Detect the changed files of the pull request\n", 1)[1].split("      - name: ", 1)[0]
@@ -392,7 +481,11 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         )
         aggregate = job_block(self.workflow, "quality-gate")
         self.assertIn("DOCS_ONLY_CHANGED: ${{ needs.ui_paths.outputs.docs_only_changed }}", aggregate)
-        self.assertIn('Docs-only detection must report true or false for this run', aggregate)
+        self.assertIn(
+            "require_decision 'Docs-only detection' \"$docs_only_decision\"",
+            aggregate,
+            "the aggregate must fail closed on an unreadable docs-only decision",
+        )
         self.assertIn(
             'if [ "$docs_only_decision" = true ] && [[ "${EVENT_LABELS:-}" != *\'"run-maestro"\'* ]]; then',
             aggregate,
@@ -406,15 +499,18 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             self.assertIn(declared, documentation, f"quality-gates.md must declare the docs-only rule: {declared}")
             self.assertIn(declared, routing, f"protected-main-workflow.md must declare the docs-only rule: {declared}")
 
-    def docs_only_python(self):
+    def step_python(self, step_name):
         classifier = (
             job_block(self.workflow, "ui_paths")
-            .split("      - name: Classify the docs-only decision\n", 1)[1]
+            .split(f"      - name: {step_name}\n", 1)[1]
             .split("      - name: ", 1)[0]
         )
         start = classifier.index("python3 -c '") + len("python3 -c '")
         raw = classifier[start : classifier.index("\n          ')", start)]
         return "\n".join(line[10:] if line.startswith(" " * 10) else line for line in raw.splitlines())
+
+    def docs_only_python(self):
+        return self.step_python("Classify the docs-only decision")
 
     def docs_only_decision(self, changed_files):
         environment = dict(os.environ)
@@ -458,6 +554,57 @@ class TestProtectedMainWorkflow(unittest.TestCase):
             completed = self.docs_only_decision(raw)
             self.assertEqual(1, completed.returncode, f"an unreadable answer {raw!r} must fail the detector")
             self.assertIn("failing closed to the full gate", completed.stderr)
+
+    def lane_decisions_python(self):
+        return self.step_python("Classify the lane-routing decisions")
+
+    def lane_decisions(self, changed_files, event="push"):
+        environment = dict(os.environ)
+        environment["CHANGED_FILES"] = (
+            changed_files if isinstance(changed_files, str) else json.dumps(changed_files)
+        )
+        environment["EVENT_NAME"] = event
+        return subprocess.run(
+            ["python3", "-c", self.lane_decisions_python()],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+
+    def test_the_push_classifier_answers_both_changed_file_surfaces(self):
+        app_only = self.lane_decisions(["app/src/main/EntryViewModel.kt", "feature/entry/domain/src/main/Entry.kt"])
+        self.assertEqual(0, app_only.returncode, app_only.stderr)
+        self.assertIn("ci_files=false", app_only.stdout)
+        self.assertIn("build_logic=false", app_only.stdout)
+        for changed, ci_files, build_logic in (
+            ([".github/workflows/quality-gate.yml"], "true", "false"),
+            ([".github/scripts/journey-run.sh"], "true", "false"),
+            (["buildSrc/src/main/kotlin/org/mercurio/client/buildlogic/QualityPolicy.kt"], "false", "true"),
+            (["buildSrc/build.gradle.kts", ".github/workflows/quality-gate.yml"], "true", "true"),
+            (["gradle/libs.versions.toml", "app/build.gradle.kts"], "false", "false"),
+        ):
+            with self.subTest(changed=changed):
+                completed = self.lane_decisions(changed)
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                self.assertIn(f"ci_files={ci_files}", completed.stdout)
+                self.assertIn(f"build_logic={build_logic}", completed.stdout)
+
+    def test_the_push_classifier_fails_closed_to_running_the_contracts_check(self):
+        for raw in ("not json", "", "{}", "[]", "[42]"):
+            with self.subTest(answer=raw):
+                completed = self.lane_decisions(raw)
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                self.assertIn("ci_files=true", completed.stdout)
+                self.assertIn("build_logic=true", completed.stdout)
+                self.assertIn("failing closed to running the buildSrc contracts check", completed.stderr)
+
+    def test_the_lane_classifier_keeps_failing_closed_on_a_pull_request(self):
+        for raw in ("not json", "", "{}", "[42]"):
+            with self.subTest(answer=raw):
+                completed = self.lane_decisions(raw, event="pull_request")
+                self.assertEqual(1, completed.returncode, "a pull-request detector must fail, not route")
+                self.assertIn("failing closed to the full gate", completed.stderr)
 
     def test_the_aggregate_gate_runs_on_non_maestro_label_runs_and_mirrors_the_last_completed_gate(self):
         aggregate = job_block(self.workflow, "quality-gate")
@@ -626,11 +773,11 @@ class TestProtectedMainWorkflow(unittest.TestCase):
         jobs = jobs_of(self.workflow)
         with_checkout = [job for job in jobs if "actions/checkout@" in job_block(self.workflow, job)]
         self.assertEqual(
-            sorted(set(jobs) - {"fork_guard", "ui_paths", "maestro_journeys"}),
+            sorted(set(jobs) - {"fork_guard", "maestro_journeys", "buildsrc_contracts"}),
             sorted(with_checkout),
-            "only the shard aggregate may lack checkout: it reads needs results and never touches the repository",
+            "the fork guard and the two shard aggregates may lack checkout: they never touch the repository",
         )
-        self.assertEqual(len(DECLARED_CHECKS) + 6, len(jobs))
+        self.assertEqual(len(DECLARED_CHECKS) + 9, len(jobs))
         self.assertIn("quality-gate", with_checkout)
         for job, block in ((job, job_block(self.workflow, job)) for job in jobs):
             keys = [line.strip().split(":", 1)[0] for line in block.splitlines() if re.match(r"^    [a-z0-9_\\-]+: ", line)]
@@ -709,6 +856,14 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertIn("the scope 'CI' must be lower case", completed.stderr)
         self.assertIn("must not end with a period", completed.stderr)
 
+    def test_a_title_with_no_subject_line_fails_closed(self):
+        self.routes["/repos/Gvetri/Mercurio/pulls/25"] = {"number": 25, "title": ""}
+        self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = self.commits(["feat: protect main"])
+        completed = self.run_check()
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("failed closed", completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+
     def test_an_empty_commit_list_fails_closed(self):
         self.routes["/repos/Gvetri/Mercurio/pulls/25/commits"] = []
         completed = self.run_check()
@@ -778,6 +933,14 @@ class TestVerifyConventionalCommits(unittest.TestCase):
         self.assertEqual(1, completed.returncode)
         self.assertIn("supports pull_request and push events", completed.stderr)
 
+    def test_the_rule_has_one_home_shared_with_the_commit_message_hook(self):
+        checker = COMMIT_SCRIPT.read_text(encoding="utf-8")
+        hook = (ROOT / ".githooks/commit-msg").read_text(encoding="utf-8")
+        self.assertIn("from commit_header import", checker)
+        self.assertIn(".github/scripts/commit_header.py", hook)
+        self.assertNotIn("COMMIT_TYPES = (", checker)
+        self.assertNotIn("HEADER = re.compile(", checker)
+
 
 class TestVerifyRepositoryConformance(unittest.TestCase):
     """The conformance check, against a local GitHub API stand-in."""
@@ -832,7 +995,7 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         self.api.start()
         self.addCleanup(self.api.stop)
 
-    def run_check(self, api_url=None, owner=False, workflow=None):
+    def run_check(self, api_url=None, owner=False, workflow=None, overrides=None):
         if owner:
             self.routes.update(self.owner_routes)
         environment = dict(os.environ)
@@ -844,15 +1007,26 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
             }
         )
         script = CONFORMANCE_SCRIPT
-        if workflow is not None:
+        if workflow is not None or overrides:
             directory = tempfile.TemporaryDirectory()
             self.addCleanup(directory.cleanup)
             copied_root = Path(directory.name)
-            for source in (CONFORMANCE_SCRIPT, WORKFLOW, REQUIRED_CHECKS):
+            for source in (
+                CONFORMANCE_SCRIPT,
+                WORKFLOW,
+                REQUIRED_CHECKS,
+                PR_TEMPLATE_WORKFLOW,
+                PR_TEMPLATE_CHECK,
+            ):
                 target = copied_root / source.relative_to(ROOT)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
-            (copied_root / WORKFLOW.relative_to(ROOT)).write_text(workflow)
+            if workflow is not None:
+                (copied_root / WORKFLOW.relative_to(ROOT)).write_text(workflow)
+            for relative, content in (overrides or {}).items():
+                target = copied_root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content)
             script = copied_root / CONFORMANCE_SCRIPT.relative_to(ROOT)
         command = ["python3", str(script)]
         if owner:
@@ -870,7 +1044,77 @@ class TestVerifyRepositoryConformance(unittest.TestCase):
         completed = self.run_check()
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertIn("Verified the 4 enforced rule(s) protecting main", completed.stdout)
+        self.assertIn("Verified that the pr-template check runs unconditionally and exempts only Dependabot.", completed.stdout)
         self.assertIn("Repository conformance passed.", completed.stdout)
+
+    def test_restoring_the_pr_template_concurrency_block_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "\njobs:\n",
+            "\nconcurrency:\n"
+            "  group: pr-template-${{ github.event.pull_request.number }}\n"
+            "  cancel-in-progress: true\n"
+            "\njobs:\n",
+            1,
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn(
+            "The pr-template workflow must not declare a concurrency block",
+            completed.stderr,
+        )
+
+    def test_a_job_level_pr_template_concurrency_block_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "    runs-on: ubuntu-latest\n",
+            "    concurrency:\n"
+            "      group: pr-template-${{ github.event.pull_request.number }}\n"
+            "      cancel-in-progress: true\n"
+            "    runs-on: ubuntu-latest\n",
+            1,
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn(
+            "The pr-template workflow must not declare a concurrency block",
+            completed.stderr,
+        )
+
+    def test_an_if_on_the_pr_template_job_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "    runs-on: ubuntu-latest\n",
+            "    if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}\n"
+            "    runs-on: ubuntu-latest\n",
+            1,
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr_template job must run unconditionally", completed.stderr)
+
+    def test_dropping_the_author_hand_off_fails_conformance(self):
+        workflow = PR_TEMPLATE_WORKFLOW.read_text().replace(
+            "          PR_AUTHOR: ${{ github.event.pull_request.user.login }}\n", ""
+        )
+        completed = self.run_check(overrides={".github/workflows/pr-template.yml": workflow})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr_template job must pass PR_AUTHOR", completed.stderr)
+
+    def test_dropping_the_dependabot_identity_fails_conformance(self):
+        check = PR_TEMPLATE_CHECK.read_text().replace(
+            'EXEMPT_AUTHORS = frozenset({"dependabot[bot]"})', "EXEMPT_AUTHORS = frozenset()"
+        )
+        completed = self.run_check(overrides={".github/scripts/verify-pr-template.py": check})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr-template check must exit 0 for dependabot[bot]", completed.stderr)
+
+    def test_exempting_another_bot_identity_fails_conformance(self):
+        check = PR_TEMPLATE_CHECK.read_text().replace(
+            'EXEMPT_AUTHORS = frozenset({"dependabot[bot]"})',
+            'EXEMPT_AUTHORS = frozenset({"dependabot[bot]", "renovate[bot]"})',
+        )
+        completed = self.run_check(overrides={".github/scripts/verify-pr-template.py": check})
+        self.assertEqual(1, completed.returncode)
+        self.assertIn("The pr-template check must exit 1 for renovate[bot]", completed.stderr)
+        self.assertNotIn("Verified that the pr-template check", completed.stdout)
 
     def test_removing_dispatch_isolation_fails_conformance(self):
         workflow = re.sub(

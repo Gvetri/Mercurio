@@ -228,7 +228,7 @@ class FakeMaestroDriver:
 
     def run_flow(self, device_id, yaml, env=None):
         self.flows.append({"device_id": device_id, "yaml": yaml, "env_keys": sorted((env or {}).keys())})
-        if "Verify Gateway Connection" in yaml:
+        if '- tapOn: "Connect"' in yaml:
             self.connected = True
         if "Confirm Create Session" in yaml:
             self.gateway_state.create_session("sess-live-1", title="Live smoke")
@@ -248,6 +248,7 @@ class FakeMaestroDriver:
         tokens = ["Latest Run: run-%d\n" % len(self.turn_prompts)] if self.turn_prompts else []
         if not self.connected:
             tokens.append("Connect to a Hermes Gateway")
+            tokens.append("Connect to your Gateway")
         elif self.session_id and not self.gateway_state.messages.get(self.session_id):
             tokens.append("No messages in this Session.")
         if self.run_active and self.deltas_remaining > 0:

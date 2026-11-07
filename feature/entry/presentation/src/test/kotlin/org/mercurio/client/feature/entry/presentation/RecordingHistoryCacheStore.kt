@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.delay
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.HistoryCacheKey
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
@@ -62,9 +63,8 @@ internal class RecordingHistoryCacheStore : HistoryCacheStore {
 }
 
 private const val TRANSCRIPT_AWAIT_SPINS = 250
-private const val TRANSCRIPT_AWAIT_INTERVAL_MILLIS = 20L
 
-internal fun awaitCachedTranscriptMessage(
+internal suspend fun awaitCachedTranscriptMessage(
     cache: RecordingHistoryCacheStore,
     endpoint: String,
     sessionId: String,
@@ -73,7 +73,7 @@ internal fun awaitCachedTranscriptMessage(
     repeat(TRANSCRIPT_AWAIT_SPINS) {
         val ids = cache.cachedTranscript(endpoint, sessionId).map(GatewayHistoryMessage::id)
         if (expectedMessageId in ids) return
-        Thread.sleep(TRANSCRIPT_AWAIT_INTERVAL_MILLIS)
+        delay(1)
     }
     throw AssertionError("Timed out waiting for cached message $expectedMessageId.")
 }

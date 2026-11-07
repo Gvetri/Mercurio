@@ -11,9 +11,9 @@ a user cannot see is out of this flow and needs no design issue.
 
 | Issue | Label | Authorizes | Closes when |
 | --- | --- | --- | --- |
-| Feature spec | `enhancement` | The scope of one screen or component change | Its design and code issues are closed |
+| Feature spec | — | The scope of one screen or component change | Its design and code issues are closed |
 | Design issue | `design` | A change to the named screen or component in the design source | The operator approves a page revision by hash |
-| Code issue | `enhancement` | The implementation of the approved design | Its pull request merges |
+| Code issue | `ready-for-agent` after design approval | The implementation of the approved design | Its pull request merges |
 
 The feature spec creates the design issue and the code issue, and records both links. The code issue
 names its blocker as `Blocked by #<design>`.
