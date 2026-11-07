@@ -277,6 +277,9 @@ class EntryStateHolderSessionActionsTest {
             awaitState(holder, "opened Session") {
                 it.sessionList?.openedSession != null
             }
+            awaitState(holder, "initial history load") {
+                it.sessionList?.openedSession?.isRefreshing == false
+            }
 
             holder.onEvent(EntryUiEvent.PinSessionClicked(gateway.sessionId))
             assertTrue(gateway.pinStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
