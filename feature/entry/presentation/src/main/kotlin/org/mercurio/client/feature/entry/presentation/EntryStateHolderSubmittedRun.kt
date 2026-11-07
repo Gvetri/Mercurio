@@ -21,7 +21,7 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
     val preparation = prepareSubmittedRun(sessionId, run, requestConnectionGeneration, requestEndpoint, attemptId)
     val result =
         try {
-            applySubmittedRunLocked(
+            applySubmittedRun(
                 SubmittedRunApplication(
                     sessionId = sessionId,
                     run = run,
@@ -119,7 +119,7 @@ internal fun EntryStateHolder.persistBeforeApply(
             connectionGeneration == requestConnectionGeneration
         }
 
-internal suspend fun EntryStateHolder.applySubmittedRunLocked(work: SubmittedRunApplication): SubmittedRunApplicationResult =
+internal suspend fun EntryStateHolder.applySubmittedRun(work: SubmittedRunApplication): SubmittedRunApplicationResult =
     applyStateChange {
         synchronized(sessionRequestLock) {
             if (connectionGeneration != work.requestConnectionGeneration) {

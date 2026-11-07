@@ -119,7 +119,7 @@ private class CountingObservation(
             }
         }
 
-    override fun close() {}
+    override fun close() = Unit
 }
 
 private class ObservingGateway(
@@ -173,8 +173,7 @@ private class ObservingGateway(
 private fun reflectionDump(
     holder: EntryStateHolder,
     name: String,
-): String =
-    runCatching { privateField(holder, name).toString() }.getOrElse { error -> "$name=<unavailable: $error>" }
+): String = runCatching { privateField(holder, name).toString() }.getOrElse { error -> "$name=<unavailable: $error>" }
 
 private fun awaitUiState(
     holder: EntryStateHolder,
@@ -205,6 +204,29 @@ private fun awaitUiState(
     }
 }
 
+private fun consumerLaneHolder(
+    recorder: LaneRecorder,
+    gateway: ObservingGateway,
+    store: LaneRecordingUncertaintyStore,
+): EntryStateHolder {
+    val repository = DefaultGatewayConnectionRepository(InMemoryGatewayConnectionDataSource())
+    return EntryStateHolder(
+        initialState = EntryState(isGatewayConnectionConfigured = false),
+        verifyGatewayConnection =
+            VerifyGatewayConnection(repository) { _, _ ->
+                GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
+            },
+        scope = CoroutineScope(SupervisorJob() + ConsumerLaneDispatcher(recorder)),
+        sessionGatewayFactory = { _, _ -> gateway },
+        runGatewayFactory = { _, _ -> gateway },
+        dependencies =
+            EntryStateHolderDependencies(
+                removeGatewayConnectionUseCase = RemoveGatewayConnection(repository),
+                runSubmissionUncertaintyStore = store,
+            ),
+    )
+}
+
 class EntryStateHolderStateConsumerTest {
     @Test
     fun observation_event_application_runs_on_the_state_change_consumer_not_the_producing_thread() {
@@ -219,23 +241,7 @@ class EntryStateHolderStateConsumerTest {
         val run = Run(RunId("run-1"), session.id, "starting")
         val gateway = ObservingGateway(session, run, recorder)
         val store = LaneRecordingUncertaintyStore(recorder)
-        val repository = DefaultGatewayConnectionRepository(InMemoryGatewayConnectionDataSource())
-        val holder =
-            EntryStateHolder(
-                initialState = EntryState(isGatewayConnectionConfigured = false),
-                verifyGatewayConnection =
-                    VerifyGatewayConnection(repository) { _, _ ->
-                        GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
-                    },
-                scope = CoroutineScope(SupervisorJob() + ConsumerLaneDispatcher(recorder)),
-                sessionGatewayFactory = { _, _ -> gateway },
-                runGatewayFactory = { _, _ -> gateway },
-                dependencies =
-                    EntryStateHolderDependencies(
-                        removeGatewayConnectionUseCase = RemoveGatewayConnection(repository),
-                        runSubmissionUncertaintyStore = store,
-                    ),
-            )
+        val holder = consumerLaneHolder(recorder, gateway, store)
 
         try {
             holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)

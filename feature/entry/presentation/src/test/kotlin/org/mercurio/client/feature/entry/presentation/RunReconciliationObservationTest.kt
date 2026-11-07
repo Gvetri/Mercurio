@@ -11,6 +11,7 @@ import org.mercurio.client.feature.entry.domain.RunEvent
 import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
+import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import java.util.concurrent.TimeUnit
@@ -472,25 +473,7 @@ class RunReconciliationObservationTest {
         val firstRun = Run(RunId("queued-run"), session.id, "running")
         val nextRun = Run(RunId("next-run"), session.id, "running")
         val dispatcher = ReconciliationPausingDispatcher()
-        val gateway =
-            ReconciliationFakeGateway(session).apply {
-                runs.add(firstRun)
-                runs.add(nextRun)
-                statuses.add(firstRun.copy(status = "succeeded"))
-                statuses.add(nextRun)
-                observation =
-                    ReconciliationScriptedObservation(
-                        listOf(
-                            RunEvent(
-                                RunEventType.MESSAGE_DELTA,
-                                nextRun.id,
-                                "running",
-                                "Replacement event",
-                                "delta",
-                            ),
-                        ),
-                    )
-            }
+        val gateway = queuedHandoffGateway(session, firstRun, nextRun)
         val holder =
             reconciliationHolder(
                 gateway,
@@ -588,4 +571,28 @@ class RunReconciliationObservationTest {
             holder.close()
         }
     }
+
+    private fun queuedHandoffGateway(
+        session: Session,
+        firstRun: Run,
+        nextRun: Run,
+    ): ReconciliationFakeGateway =
+        ReconciliationFakeGateway(session).apply {
+            runs.add(firstRun)
+            runs.add(nextRun)
+            statuses.add(firstRun.copy(status = "succeeded"))
+            statuses.add(nextRun)
+            observation =
+                ReconciliationScriptedObservation(
+                    listOf(
+                        RunEvent(
+                            RunEventType.MESSAGE_DELTA,
+                            nextRun.id,
+                            "running",
+                            "Replacement event",
+                            "delta",
+                        ),
+                    ),
+                )
+        }
 }
