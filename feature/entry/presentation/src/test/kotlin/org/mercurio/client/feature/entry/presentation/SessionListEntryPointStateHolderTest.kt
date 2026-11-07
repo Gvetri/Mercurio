@@ -240,8 +240,6 @@ class SessionListEntryPointStateHolderTest {
                 assertFalse(failed.isLoadingMore)
                 assertFalse(failed.isRefreshing)
 
-                // The parked page call resumes and its stale-generation result is dropped;
-                // the identical queued page serves the tail load below.
                 gateway.enqueueList(SessionPage(listOf(target), null))
                 gateway.onList = null
                 pageRelease.countDown()
