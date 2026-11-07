@@ -11,6 +11,8 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -551,7 +553,7 @@ class EntryScreenTest {
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First request")) }
-            composeTestRule.onNodeWithText("[ send ]").performClick()
+            clickWhenEnabled("[ send ]")
             assertTrue(gateway.firstRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertTrue(gateway.firstObservation.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertEquals(1L, gateway.firstObservation.closed.count)
@@ -591,6 +593,13 @@ class EntryScreenTest {
     private fun clickWhenVisible(text: String) {
         composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
             composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText(text).performClick()
+    }
+
+    private fun clickWhenEnabled(text: String) {
+        composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+            composeTestRule.onAllNodes(hasText(text) and isEnabled()).fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText(text).performClick()
     }
