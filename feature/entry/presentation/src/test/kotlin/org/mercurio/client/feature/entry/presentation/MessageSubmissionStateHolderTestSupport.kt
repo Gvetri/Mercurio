@@ -66,6 +66,11 @@ internal suspend fun connect(
     }
 }
 
+/**
+ * Connects, then opens [sessionId] and waits for the settled open. The open applies in two
+ * stages (metadata, then full result); the second stage runs on the state-change consumer,
+ * so the caller must not observe (or mutate) before both have applied.
+ */
 internal suspend fun open(
     holder: EntryStateHolder,
     gateway: FakeGateway,
@@ -73,8 +78,6 @@ internal suspend fun open(
 ) {
     connect(holder, gateway)
     holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-    // The open applies in two stages (metadata, then full result); the second stage now runs on
-    // the state-change consumer, so wait until the opened session is settled before returning.
     awaitState(holder) {
         val opened = it.sessionList?.openedSession
         opened?.session?.id == sessionId && !opened.isRefreshing

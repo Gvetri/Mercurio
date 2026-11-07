@@ -48,6 +48,12 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * Asserts that a cancelled parent job releases the run observer. The submission application is
+ * serialized on the holder's state-change consumer: the paused dispatcher is stepped until the
+ * producer reaches the observation registration (the counter is monotonic, so it also settles
+ * when the registration is immediately cancelled).
+ */
 internal suspend fun assertParentCancellationReleasesObserver(cancelDuringRegistration: Boolean) {
     val session = reconciliationSession()
     val run = Run(RunId("parent-cancelled-run"), session.id, "running")
@@ -80,10 +86,6 @@ internal suspend fun assertParentCancellationReleasesObserver(cancelDuringRegist
         holder.onEvent(EntryUiEvent.ComposerTextChanged("Cancel the parent"))
         holder.onEvent(EntryUiEvent.SendMessageClicked)
         dispatcher.runNext()
-        // The submission application is serialized on the holder's state-change
-        // consumer: step the paused dispatcher until the producer reaches the
-        // observation registration (the counter is monotonic, so it also settles
-        // when the registration is immediately cancelled).
         dispatcher.settleUntil { registrations.get() > 0 }
         if (!cancelDuringRegistration) {
             assertEquals(1, dispatcher.queuedCount)

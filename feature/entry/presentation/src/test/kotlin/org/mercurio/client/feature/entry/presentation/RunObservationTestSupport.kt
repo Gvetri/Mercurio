@@ -62,6 +62,11 @@ internal fun observationHolder(
     )
 }
 
+/**
+ * Opens [sessionId] and waits for the settled open. The open applies in two stages (metadata,
+ * then full result); the second stage runs on the state-change consumer, so the caller must
+ * not observe (or mutate) before both have applied.
+ */
 internal suspend fun openObservedSession(
     holder: EntryStateHolder,
     gateway: ObservationScriptedGateway,
@@ -73,8 +78,6 @@ internal suspend fun openObservedSession(
     holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
     awaitObservationState(holder) { it.sessionList?.sessions == listOf(gateway.session.toSessionItemUiState()) }
     holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-    // The open applies in two stages (metadata, then full result); the second stage now runs on
-    // the state-change consumer, so wait until the opened session is settled before returning.
     awaitObservationState(holder) {
         val opened = it.sessionList?.openedSession
         opened?.session?.id == sessionId && !opened.isRefreshing

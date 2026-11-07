@@ -331,8 +331,6 @@ internal suspend fun EntryStateHolder.applyAuthoritativeRunReconciliation(
         }
     application.observationToClose?.close()
     application.observationJobToCancel?.cancel()
-    // Recovery-entry removal is registry persistence: it can block, so it stays producer-side
-    // instead of running on the serialized state-change consumer.
     removeReconciledRecoveryEntry(
         recoveryEntryToRemove = application.recoveryEntryToRemove,
         recoveryEndpointToRemove = application.recoveryEndpointToRemove,
