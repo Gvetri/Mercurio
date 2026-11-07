@@ -156,6 +156,11 @@ class QualityGateConfigurationTest {
     }
 
     @Test
+    fun the_pr_template_check_and_its_workflow_contracts_hold() {
+        runPythonSuite(".github/scripts/tests/test_pr_template.py")
+    }
+
+    @Test
     fun the_comment_policy_check_runs_in_the_formatting_job_and_the_local_gate() {
         val workflow = repositoryRoot.resolve(".github/workflows/quality-gate.yml").readText()
         val buildScript = repositoryRoot.resolve("build.gradle.kts").readText()
