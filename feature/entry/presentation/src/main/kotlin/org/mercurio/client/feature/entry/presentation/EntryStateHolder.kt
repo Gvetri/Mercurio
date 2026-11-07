@@ -595,7 +595,7 @@ class EntryStateHolder(
                 is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
                 is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
                 is EntryUiEvent.Run -> dispatchRunEvent(event)
-                is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
+                is EntryUiEvent.ModelPicker -> handleModelPickerEvent(event)
                 is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
                 is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
                 is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)

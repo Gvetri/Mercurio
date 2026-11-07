@@ -220,17 +220,6 @@ private class StorageCallRecorder {
         }
     }
 
-    fun assertOperationsRanOn(
-        thread: Thread,
-        vararg operations: String,
-    ) {
-        operations.forEach { operation ->
-            val matching = calls.filter { it.operation == operation }
-            assertFalse("$operation never ran", matching.isEmpty())
-            assertTrue("$operation no longer runs on ${thread.name}", matching.any { it.thread === thread })
-        }
-    }
-
     fun assertOperationsNeverRan(vararg operations: String) {
         operations.forEach { operation ->
             val matching = calls.filter { it.operation == operation }
