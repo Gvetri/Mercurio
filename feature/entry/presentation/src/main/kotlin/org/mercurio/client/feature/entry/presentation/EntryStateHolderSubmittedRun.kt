@@ -11,6 +11,14 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 
+/**
+ * Applies a submitted run's state through the state-change consumer.
+ *
+ * The state-change barrier is the first suspension point after the create result. A cancelled
+ * producer (connection release, holder close) used to run the application synchronously; the
+ * consumer still applies the queued command, so the producer-side disconnect-persist obligation
+ * must survive cancellation.
+ */
 internal suspend fun EntryStateHolder.applySubmittedRun(
     sessionId: SessionId,
     run: Run,
@@ -34,14 +42,13 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
                 ),
             )
         } catch (error: CancellationException) {
-            // The state-change barrier is the first suspension point after the create
-            // result. A cancelled producer (connection release, holder close) used to
-            // run the application synchronously; the consumer still applies the queued
-            // command, and the producer-side disconnect-persist obligation must survive.
             if (!preparation.persistBeforeApply) {
                 val entry = RunRecoveryEntry(sessionId = sessionId, runId = run.id)
                 if (run.isActive()) {
-                    persistDisconnectedRecoveryEntry(endpoint = requestEndpoint, entry = entry)
+                    val persisted = persistDisconnectedRecoveryEntry(endpoint = requestEndpoint, entry = entry)
+                    if (persisted) {
+                        runCatching { runSubmissionUncertaintyStore.remove(preparation.pendingKey, attemptId) }
+                    }
                 } else {
                     reconcilePersistedRecoveryEntryIfConnected(requestEndpoint, entry)
                 }
