@@ -86,8 +86,9 @@ and `ReportEvidenceTest`, the fail-closed behaviour of the real tasks in
 `QualityVerificationFailClosedTest`, and the architecture rules in `ArchitectureCheckTest`. The
 fail-closed suites inject their fixtures into a temporary copy of the repository and discard it, so an
 interrupted run cannot leave fixture code in the checkout. The documentation check is covered by
-`.github/scripts/tests/test_public_documentation.py`, and the published-release artifact check by
-`.github/scripts/tests/test_release_artifacts.py`; `QualityGateConfigurationTest` runs both. The six
+`.github/scripts/tests/test_public_documentation.py`, the published-release artifact check by
+`.github/scripts/tests/test_release_artifacts.py`, and the pull-request template check by
+`.github/scripts/tests/test_pr_template.py`; `QualityGateConfigurationTest` runs all three. The six
 workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
 `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`, and
 `ReportEvidenceTest`) run as three parallel shards behind the `buildsrc-contracts` umbrella job.

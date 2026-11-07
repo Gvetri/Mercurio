@@ -301,6 +301,7 @@ jobs:
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_commit_header_rule_is_shared_with_the_commit_message_hook
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_committed_hooks_judge_the_message_and_the_staged_change
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_protected_main_and_commit_message_contracts_hold
+          --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_pr_template_check_and_its_workflow_contracts_hold
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_comment_policy_check_runs_in_the_formatting_job_and_the_local_gate
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.the_version_catalog_maps_okhttp_to_the_jvm_artifact
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.gradle_wrapper_declares_official_distribution_checksum
