@@ -30,19 +30,21 @@ internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
                 uncertainSendDrafts[work.sessionId] = draft
             }
             sessionSendErrors[work.sessionId] = MessageSendErrorCategory.UNCERTAIN
-            val (current, opened) = openedSessionFor(work.sessionId) ?: return@synchronized
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isSending = false,
-                                    sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                    hasUnresolvedSubmission = true,
-                                ),
-                        ),
-                )
+            submitStateChange {
+                val (current, opened) = openedSessionFor(work.sessionId) ?: return@submitStateChange
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                openedSession =
+                                    opened.copy(
+                                        isSending = false,
+                                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                                        hasUnresolvedSubmission = true,
+                                    ),
+                            ),
+                    )
+            }
         }
     }
 }

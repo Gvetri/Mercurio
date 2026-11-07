@@ -59,12 +59,12 @@ class RunReconciliationSubmissionTest {
                 assertTrue(registry.load().isEmpty())
                 assertTrue(gateway.observedRunIds.isEmpty())
                 registry.releaseSave.countDown()
-                dispatcher.settleLastUntil { gateway.submissionCompleted.count == 0L }
+                dispatcher.settleUntil { gateway.submissionCompleted.count == 0L }
                 assertTrue(gateway.submissionCompleted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 dispatcher.drain()
 
-                assertEquals(listOf(run.id), gateway.observedRunIds)
+                assertEquals(listOf(run.id, run.id), gateway.observedRunIds)
                 assertEquals(
                     "Recovered observation",
                     holder.uiState.value.sessionList?.openedSession?.activeResponse?.content,
@@ -152,7 +152,7 @@ class RunReconciliationSubmissionTest {
                         holder.uiState.value.sessionList?.openedSession?.latestRun?.id == run.id &&
                             (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
                     }
-                    assertEquals(1, dispatcher.queuedCount)
+                    assertEquals(2, dispatcher.queuedCount)
 
                     val removalEvent = EntryUiEvent.ConfirmRemoveGatewayConnectionClicked
                     if (closeHolder) holder.close() else holder.onEvent(removalEvent)

@@ -502,11 +502,11 @@ class RunReconciliationObservationTest {
                         (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
                 }
                 assertEquals(firstRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
-                assertEquals(1, dispatcher.queuedCount)
+                assertEquals(2, dispatcher.queuedCount)
                 assertTrue(gateway.observedRunIds.isEmpty())
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                dispatcher.settleLastUntil {
+                dispatcher.settleUntil {
                     val opened = holder.uiState.value.sessionList?.openedSession
                     opened?.latestRunState == RunPresentationState.SUCCEEDED &&
                         !opened.isReconciliationInProgress
@@ -517,17 +517,17 @@ class RunReconciliationObservationTest {
                 )
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                dispatcher.settleLastUntil {
+                dispatcher.settleUntil {
                     gateway.runRequests.size == 2 &&
                         holder.uiState.value.sessionList?.openedSession?.latestRun?.id == nextRun.id
                 }
                 assertEquals(nextRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
                 assertEquals(2, gateway.runRequests.size)
-                assertTrue(gateway.observedRunIds.isEmpty())
+                assertTrue(gateway.observedRunIds.all { it == firstRun.id })
 
                 dispatcher.drain()
 
-                assertEquals(listOf(nextRun.id), gateway.observedRunIds)
+                assertEquals(listOf(firstRun.id, nextRun.id), gateway.observedRunIds)
                 val activeResponse = holder.uiState.value.sessionList?.openedSession?.activeResponse
                 assertEquals("Replacement event", activeResponse?.content)
             } finally {

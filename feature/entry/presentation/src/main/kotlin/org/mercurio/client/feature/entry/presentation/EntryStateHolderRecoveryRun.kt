@@ -196,18 +196,20 @@ internal fun EntryStateHolder.beginRecoveryJob(
     }
 
 internal fun EntryStateHolder.markRecoveryUiRefreshing(entry: RunRecoveryEntry) {
-    val (current, opened) = openedSessionFor(entry.sessionId) ?: return
-    mutableUiState.value =
-        mutableUiState.value.copy(
-            sessionList =
-                current.copy(
-                    openedSession =
-                        opened.copy(
-                            isRefreshing = true,
-                            isReconciliationInProgress = true,
-                        ),
-                ),
-        )
+    submitStateChange {
+        val (current, opened) = openedSessionFor(entry.sessionId) ?: return@submitStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        openedSession =
+                            opened.copy(
+                                isRefreshing = true,
+                                isReconciliationInProgress = true,
+                            ),
+                    ),
+            )
+    }
 }
 
 internal fun EntryStateHolder.startRecoveryObservationJob(

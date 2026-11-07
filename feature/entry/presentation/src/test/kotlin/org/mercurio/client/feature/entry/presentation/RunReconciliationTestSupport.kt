@@ -88,7 +88,7 @@ internal suspend fun assertParentCancellationReleasesObserver(cancelDuringRegist
         dispatcher.runNext()
         dispatcher.settleUntil { registrations.get() > 0 }
         if (!cancelDuringRegistration) {
-            assertEquals(1, dispatcher.queuedCount)
+            assertEquals(2, dispatcher.queuedCount)
             assertTrue(observerJobs.values.single().isActive)
         }
 

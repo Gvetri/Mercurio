@@ -29,7 +29,7 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
     val preparation = prepareSubmittedRun(sessionId, run, requestConnectionGeneration, requestEndpoint, attemptId)
     val result =
         try {
-            applySubmittedRun(
+            applySubmitted(
                 SubmittedRunApplication(
                     sessionId = sessionId,
                     run = run,
@@ -42,29 +42,11 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
                 ),
             )
         } catch (error: CancellationException) {
-            if (!preparation.persistBeforeApply) {
-                val entry = RunRecoveryEntry(sessionId = sessionId, runId = run.id)
-                if (run.isActive()) {
-                    val persisted = persistDisconnectedRecoveryEntry(endpoint = requestEndpoint, entry = entry)
-                    if (persisted) {
-                        runCatching { runSubmissionUncertaintyStore.remove(preparation.pendingKey, attemptId) }
-                    }
-                } else {
-                    reconcilePersistedRecoveryEntryIfConnected(requestEndpoint, entry)
-                }
-            }
+            runNotAppliedObligations(preparation, sessionId, run, requestEndpoint, attemptId)
             throw error
         }
     if (!result.applied && result.persistAfterDisconnect && !preparation.persistBeforeApply) {
-        val entry = RunRecoveryEntry(sessionId = sessionId, runId = run.id)
-        if (run.isActive()) {
-            val persisted = persistDisconnectedRecoveryEntry(endpoint = requestEndpoint, entry = entry)
-            if (persisted) {
-                runCatching { runSubmissionUncertaintyStore.remove(preparation.pendingKey, attemptId) }
-            }
-        } else {
-            reconcilePersistedRecoveryEntryIfConnected(requestEndpoint, entry)
-        }
+        runNotAppliedObligations(preparation, sessionId, run, requestEndpoint, attemptId)
     }
     result.observationToClose?.close()
     result.observationJobToCancel?.cancel()
@@ -77,6 +59,25 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
         )
     }
     return result.applied
+}
+
+private fun EntryStateHolder.runNotAppliedObligations(
+    preparation: SubmittedRunPreparation,
+    sessionId: SessionId,
+    run: Run,
+    requestEndpoint: String,
+    attemptId: String,
+) {
+    if (preparation.persistBeforeApply) return
+    val entry = RunRecoveryEntry(sessionId = sessionId, runId = run.id)
+    if (run.isActive()) {
+        val persisted = persistDisconnectedRecoveryEntry(endpoint = requestEndpoint, entry = entry)
+        if (persisted) {
+            runCatching { runSubmissionUncertaintyStore.remove(preparation.pendingKey, attemptId) }
+        }
+    } else {
+        reconcilePersistedRecoveryEntryIfConnected(requestEndpoint, entry)
+    }
 }
 
 internal fun EntryStateHolder.prepareSubmittedRun(
@@ -126,7 +127,7 @@ internal fun EntryStateHolder.persistBeforeApply(
             connectionGeneration == requestConnectionGeneration
         }
 
-internal suspend fun EntryStateHolder.applySubmittedRun(work: SubmittedRunApplication): SubmittedRunApplicationResult =
+internal suspend fun EntryStateHolder.applySubmitted(work: SubmittedRunApplication): SubmittedRunApplicationResult =
     applyStateChange {
         synchronized(sessionRequestLock) {
             if (connectionGeneration != work.requestConnectionGeneration) {
