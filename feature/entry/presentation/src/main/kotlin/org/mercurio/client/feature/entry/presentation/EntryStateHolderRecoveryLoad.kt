@@ -15,9 +15,16 @@ internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
     synchronized(sessionRequestLock) {
         val sessionList = mutableUiState.value.sessionList ?: return
         val requestGeneration = beginSessionRequest()
+        val expectedConnectionGeneration = connectionGeneration
         val request = SessionRequestContext(requestGeneration, sessionList.searchQuery, offset = null)
         submitStateChange {
             synchronized(sessionRequestLock) {
+                if (
+                    connectionGeneration != expectedConnectionGeneration ||
+                    sessionRequestGeneration != requestGeneration
+                ) {
+                    return@submitStateChange
+                }
                 val current = mutableUiState.value.sessionList ?: return@submitStateChange
                 mutableUiState.value =
                     mutableUiState.value.copy(
@@ -40,8 +47,8 @@ internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
         }
         createSessionJob {
             loadFirstPage(gateway, request, preserveSessions = false)
-        }.start()
-    }
+        }
+    }.start()
 }
 
 internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
@@ -107,21 +114,26 @@ internal fun EntryStateHolder.beginRecoveryLoad(expectedConnectionGeneration: Lo
             recoveryLoadPending = true
             recoveryLoadFailed = false
             submitStateChange {
-                val current = mutableUiState.value.sessionList
-                val opened = current?.openedSession
-                if (current != null && opened != null) {
-                    mutableUiState.value =
-                        mutableUiState.value.copy(
-                            sessionList =
-                                current.copy(
-                                    openedSession =
-                                        opened.copy(
-                                            isRefreshing = true,
-                                            isReconciliationInProgress = true,
-                                            hasUnresolvedSubmission = true,
-                                        ),
-                                ),
-                        )
+                synchronized(sessionRequestLock) {
+                    if (connectionGeneration != expectedConnectionGeneration || !recoveryLoadPending) {
+                        return@submitStateChange
+                    }
+                    val current = mutableUiState.value.sessionList
+                    val opened = current?.openedSession
+                    if (current != null && opened != null) {
+                        mutableUiState.value =
+                            mutableUiState.value.copy(
+                                sessionList =
+                                    current.copy(
+                                        openedSession =
+                                            opened.copy(
+                                                isRefreshing = true,
+                                                isReconciliationInProgress = true,
+                                                hasUnresolvedSubmission = true,
+                                            ),
+                                    ),
+                            )
+                    }
                 }
             }
             true
@@ -176,27 +188,33 @@ internal suspend fun EntryStateHolder.finishRecoveryLoad(
     }
 }
 
-internal fun EntryStateHolder.markRecoveryFailure(sessionId: SessionId) {
+internal fun EntryStateHolder.markRecoveryFailure(
+    sessionId: SessionId,
+    expectedConnectionGeneration: Long,
+) {
     synchronized(sessionRequestLock) {
         recoveryUnavailableSessions += sessionId
     }
     submitStateChange {
-        val current = mutableUiState.value.sessionList
-        val opened = current?.openedSession?.takeIf { it.session.id == sessionId }
-        if (current != null && opened != null) {
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = false,
-                                    isReconciliationInProgress = false,
-                                    hasUnresolvedSubmission = true,
-                                    sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                ),
-                        ),
-                )
+        synchronized(sessionRequestLock) {
+            if (connectionGeneration != expectedConnectionGeneration) return@synchronized
+            val current = mutableUiState.value.sessionList
+            val opened = current?.openedSession?.takeIf { it.session.id == sessionId }
+            if (current != null && opened != null) {
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                openedSession =
+                                    opened.copy(
+                                        isRefreshing = false,
+                                        isReconciliationInProgress = false,
+                                        hasUnresolvedSubmission = true,
+                                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                                    ),
+                            ),
+                    )
+            }
         }
     }
 }
@@ -215,19 +233,22 @@ internal fun EntryStateHolder.openedSessionFor(sessionId: SessionId): Pair<Sessi
 internal fun EntryStateHolder.clearRecoveryUiIfIdle(sessionId: SessionId) {
     if (hasPendingRecoveryWork(sessionId)) return
     submitStateChange {
-        val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                isRefreshing = false,
-                                isReconciliationInProgress = false,
-                                hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId),
-                                sendErrorCategory = sendErrorCategoryFor(sessionId),
-                            ),
-                    ),
-            )
+        synchronized(sessionRequestLock) {
+            if (hasPendingRecoveryWork(sessionId)) return@synchronized
+            val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            openedSession =
+                                opened.copy(
+                                    isRefreshing = false,
+                                    isReconciliationInProgress = false,
+                                    hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId),
+                                    sendErrorCategory = sendErrorCategoryFor(sessionId),
+                                ),
+                        ),
+                )
+        }
     }
 }

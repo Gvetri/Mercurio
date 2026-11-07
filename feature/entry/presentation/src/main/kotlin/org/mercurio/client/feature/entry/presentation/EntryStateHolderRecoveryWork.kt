@@ -173,7 +173,7 @@ internal suspend fun EntryStateHolder.runRecoveryWorkItem(
         }
     }
     if (recoveredRun == null) {
-        markRecoveryFailure(entry.sessionId)
+        markRecoveryFailure(entry.sessionId, expectedConnectionGeneration)
     } else {
         recoveredRun.takeIf(Run::isActive)?.let { run ->
             startRunObservation(

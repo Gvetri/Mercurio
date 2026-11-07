@@ -68,7 +68,7 @@ internal fun EntryStateHolder.releaseRecoverySessionCount(
             sessionRequestGeneration == recoveryContext.sessionGeneration
         ) {
             if (recoveryFailed) {
-                markRecoveryFailure(entry.sessionId)
+                markRecoveryFailure(entry.sessionId, recoveryContext.connectionGeneration)
             } else {
                 clearRecoveryUiIfIdle(entry.sessionId)
             }

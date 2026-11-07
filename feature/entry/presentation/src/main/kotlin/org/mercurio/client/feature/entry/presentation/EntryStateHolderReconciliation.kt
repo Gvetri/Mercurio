@@ -317,14 +317,19 @@ internal fun EntryStateHolder.beginReconciliation(
     }
 
 /**
- * Releases the reconciliation claim and clears its visible in-progress state.
+ * Releases the reconciliation claim and clears its visible in-progress state on the
+ * state-change consumer.
  *
- * The flag release stays a direct write: `blocksRunSubmission` and the composer send state
- * read `isRefreshing`/`isReconciliationInProgress` synchronously on `onEvent`, and the issue
- * keeps `onEvent` synchronous in this slice. Routing the release through the state-change
- * consumer made the release invisible to those synchronous guards, so a retry click after a
- * failed send would be refused. The claim bookkeeping above stays under
- * `synchronized(sessionRequestLock)`; the write itself is the release the guards read.
+ * The claim bookkeeping is removed synchronously under `synchronized(sessionRequestLock)`
+ * because it protects the claim round-trip itself, while the visible release is enqueued so
+ * it cannot overtake a begin state that was queued before it: with both sides on the
+ * consumer, a reconciliation attempt's set and release keep their submission order and a
+ * later attempt's begin re-arms the flags after the earlier release applies. The release
+ * re-derives the connection and request generations and the opened-session identity at
+ * application time; it does not re-check the claim, which was already removed as
+ * bookkeeping. `blocksRunSubmission` and the composer send state read the flags through the
+ * UI state flow, so a retry click observes the release once the consumer has drained the
+ * commands queued before it.
  */
 internal fun EntryStateHolder.finishReconciliation(
     sessionId: SessionId,
@@ -335,24 +340,28 @@ internal fun EntryStateHolder.finishReconciliation(
         if (reconcilingSessions[sessionId] == requestSessionGeneration) {
             reconcilingSessions.remove(sessionId)
         }
-        if (
-            connectionGeneration != requestConnectionGeneration ||
-            sessionRequestGeneration != requestSessionGeneration
-        ) {
-            return@synchronized
+    }
+    submitStateChange {
+        synchronized(sessionRequestLock) {
+            if (
+                connectionGeneration != requestConnectionGeneration ||
+                sessionRequestGeneration != requestSessionGeneration
+            ) {
+                return@submitStateChange
+            }
+            val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            openedSession =
+                                opened.copy(
+                                    isRefreshing = false,
+                                    isReconciliationInProgress = false,
+                                ),
+                        ),
+                )
         }
-        val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                isRefreshing = false,
-                                isReconciliationInProgress = false,
-                            ),
-                    ),
-            )
     }
 }
 

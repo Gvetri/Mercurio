@@ -39,9 +39,9 @@ internal suspend fun <T> EntryStateHolder.applyStateChange(block: () -> T): T {
  * after an unbounded number of earlier commands have run; a block that also touches the
  * request bookkeeping maps must take `synchronized(sessionRequestLock)`.
  *
- * The command is dropped when the queue refuses it, which only happens once the holder's
- * scope has stopped draining the queue; this keeps `submitStateChange` safe to call from
- * producer `finally` blocks without masking the failure the block is unwinding.
+ * The queue is unbounded, so a refused enqueue only happens once the holder's scope has
+ * stopped draining it; this keeps `submitStateChange` safe to call from producer `finally`
+ * blocks without masking the failure the block is unwinding.
  */
 internal fun EntryStateHolder.submitStateChange(block: () -> Unit) {
     val command = StateChangeCommand(block)
@@ -55,4 +55,17 @@ internal suspend fun EntryStateHolder.consumeStateChanges() {
             onFailure = { command.done.completeExceptionally(it) },
         )
     }
+}
+
+/**
+ * Suspends until every state-change command enqueued before this call has been applied by the
+ * state-change consumer. Commands are applied FIFO, so awaiting the trailing marker guarantees
+ * the caller observes the UI state produced by all earlier enqueued writes.
+ */
+internal suspend fun EntryStateHolder.awaitStateChangesApplied() {
+    val applied = CompletableDeferred<Unit>()
+    submitStateChange {
+        applied.complete(Unit)
+    }
+    applied.await()
 }

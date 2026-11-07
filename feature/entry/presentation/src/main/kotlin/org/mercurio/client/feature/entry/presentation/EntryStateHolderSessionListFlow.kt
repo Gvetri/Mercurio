@@ -56,13 +56,15 @@ internal fun EntryStateHolder.startFirstPageListLoad(
 /**
  * Begins the first-page session-list load and applies its visible begin state directly.
  *
- * Callers are the synchronous session-list event paths (`RefreshSessionsClicked`,
- * `RefreshSessionListClicked`, foreground resume, inbound link) and the pin/delete refreshes
- * that already run inside state-change commands, so the write is either part of `onEvent`'s
- * synchronous behavior in this slice or already serialized on the state-change consumer. The
- * IO-reached initial load does not use this function: `loadInitialSessions` routes its begin
- * state through the consumer instead. The load's asynchronous result is applied on the
- * consumer via `updateCurrentSessionRequest`.
+ * Most callers are synchronous session-list event paths (`RefreshSessionsClicked`,
+ * `RefreshSessionListClicked`, foreground resume) or pin/delete refreshes that already run
+ * inside state-change commands. The initial load does not use this function:
+ * `loadInitialSessions` routes its begin state through the consumer instead. The inbound
+ * link open-failure path (`showUnknownInboundLink` via `showLinkedSessionOpenFailure`) also
+ * reaches `refreshSessionList`, but from the IO open job; that failure frame and its direct
+ * writes are a documented exception to be serialized in the follow-up slice that removes
+ * the request locks. The load's asynchronous result is applied on the consumer via
+ * `updateCurrentSessionRequest`.
  */
 internal fun EntryStateHolder.createFirstPageLoadJob(
     gateway: SessionGatewayPort,

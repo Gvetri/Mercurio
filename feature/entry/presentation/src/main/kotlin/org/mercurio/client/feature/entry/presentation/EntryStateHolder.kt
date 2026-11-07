@@ -575,7 +575,7 @@ class EntryStateHolder(
     internal val reconcilingSessions = mutableMapOf<SessionId, Long>()
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
 
-    internal val stateChangeCommands = Channel<StateChangeCommand>(Channel.BUFFERED)
+    internal val stateChangeCommands = Channel<StateChangeCommand>(Channel.UNLIMITED)
 
     init {
         scope.launch(StateChangeConsumerMarker()) { consumeStateChanges() }

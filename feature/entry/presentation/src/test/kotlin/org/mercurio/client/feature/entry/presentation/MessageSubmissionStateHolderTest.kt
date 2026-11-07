@@ -519,6 +519,13 @@ class MessageSubmissionStateHolderTest {
                 assertFalse(failed.isSending)
                 assertEquals(1, gateway.runRequests.size)
                 assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                awaitReconciliationCondition {
+                    val opened = holder.uiState.value.sessionList?.openedSession
+                    opened != null &&
+                        !opened.isSending &&
+                        !opened.isReconciliationInProgress &&
+                        !opened.isRefreshing
+                }
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitState(holder) {

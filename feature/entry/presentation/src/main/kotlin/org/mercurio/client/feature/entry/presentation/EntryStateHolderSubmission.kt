@@ -55,7 +55,10 @@ internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
                 synchronized(sessionRequestLock) {
                     !hasUnresolvedSubmission(sessionId)
                 }
-            if (canRetry) sendMessage()
+            if (canRetry) {
+                awaitStateChangesApplied()
+                sendMessage()
+            }
         }
     }
 }
