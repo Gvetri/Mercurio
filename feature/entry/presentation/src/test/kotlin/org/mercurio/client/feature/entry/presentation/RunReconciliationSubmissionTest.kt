@@ -26,13 +26,7 @@ class RunReconciliationSubmissionTest {
             val run = Run(RunId("overlapping-run"), session.id, "running")
             val registry = ReconciliationBlockingRecoveryRegistry()
             val dispatcher = ReconciliationPausingDispatcher(Dispatchers.Default)
-            val gateway =
-                ReconciliationFakeGateway(session).apply {
-                    runs.add(run)
-                    statuses.add(run)
-                    statuses.add(run)
-                    observation = recoveredDeltaObservation(run)
-                }
+            val gateway = recoverySubmissionGateway(session, run)
             val holder =
                 reconciliationHolder(
                     gateway,
@@ -57,11 +51,15 @@ class RunReconciliationSubmissionTest {
 
                 dispatcher.paused = true
                 registry.releaseLoad.countDown()
-                awaitReconciliationCondition { dispatcher.queuedCount == 1 }
+                dispatcher.settleUntil {
+                    holder.uiState.value.sessionList?.openedSession?.latestRun?.id == run.id &&
+                        (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+                }
                 assertEquals(run.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
                 assertTrue(registry.load().isEmpty())
                 assertTrue(gateway.observedRunIds.isEmpty())
                 registry.releaseSave.countDown()
+                dispatcher.settleLastUntil { gateway.submissionCompleted.count == 0L }
                 assertTrue(gateway.submissionCompleted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 dispatcher.drain()
@@ -150,6 +148,10 @@ class RunReconciliationSubmissionTest {
                     holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                     holder.onEvent(EntryUiEvent.SendMessageClicked)
                     dispatcher.runNext()
+                    dispatcher.settleUntil {
+                        holder.uiState.value.sessionList?.openedSession?.latestRun?.id == run.id &&
+                            (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+                    }
                     assertEquals(1, dispatcher.queuedCount)
 
                     val removalEvent = EntryUiEvent.ConfirmRemoveGatewayConnectionClicked
@@ -552,4 +554,15 @@ class RunReconciliationSubmissionTest {
         assertTrue(gateway.observedRunIds.isEmpty())
         assertEquals(5, gateway.historyRequests)
     }
+
+    private fun recoverySubmissionGateway(
+        session: Session,
+        run: Run,
+    ): ReconciliationFakeGateway =
+        ReconciliationFakeGateway(session).apply {
+            runs.add(run)
+            statuses.add(run)
+            statuses.add(run)
+            observation = recoveredDeltaObservation(run)
+        }
 }

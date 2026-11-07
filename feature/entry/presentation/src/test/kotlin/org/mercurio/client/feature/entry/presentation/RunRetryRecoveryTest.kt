@@ -77,6 +77,12 @@ class RunRetryRecoveryTest {
 
             try {
                 openRetrySession(holder, gateway, session.id)
+                awaitRetryState(holder) {
+                    val opened = it.sessionList?.openedSession
+                    opened?.session?.id == session.id &&
+                        !opened.isRefreshing &&
+                        !opened.isReconciliationInProgress
+                }
                 gateway.setHistory(
                     retryHistory(
                         session.id,
