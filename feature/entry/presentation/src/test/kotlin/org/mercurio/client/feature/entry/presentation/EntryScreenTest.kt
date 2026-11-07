@@ -544,7 +544,7 @@ class EntryScreenTest {
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) { holder.uiState.value.sessionList?.isLoading == false }
+            awaitSessionVisible(holder, first)
             composeTestRule.onNodeWithText("First Session").performClick()
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
@@ -585,6 +585,16 @@ class EntryScreenTest {
             composeTestRule.onNodeWithText("[ send ]").assertIsNotEnabled()
         } finally {
             holder.close()
+        }
+    }
+
+    private fun awaitSessionVisible(
+        holder: EntryStateHolder,
+        session: Session,
+    ) {
+        composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+            val list = holder.uiState.value.sessionList
+            list != null && list.sessions.any { it.id == session.id } && !list.isLoading
         }
     }
 
