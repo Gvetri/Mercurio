@@ -221,7 +221,7 @@ internal fun EntryStateHolder.loadMorePageJob(
         }
     }
 
-internal fun EntryStateHolder.showOpenedSessionFailure(requestGeneration: Long) {
+internal suspend fun EntryStateHolder.showOpenedSessionFailure(requestGeneration: Long) {
     updateCurrentSessionRequest(requestGeneration) { current ->
         current.openedSession?.let { openedSession ->
             val cachedMessages =

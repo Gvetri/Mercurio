@@ -23,6 +23,8 @@ internal suspend fun EntryStateHolder.awaitUiState(
     } catch (error: CancellationException) {
         currentCoroutineContext().ensureActive()
         throw AssertionError("Timed out waiting for $description. Current state: ${uiState.value}", error)
+    } catch (error: AssertionError) {
+        throw AssertionError("Timed out waiting for $description. Current state: ${uiState.value}", error)
     }
     return requireNotNull(matched) { "The flow completed while waiting for $description." }
 }

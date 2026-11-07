@@ -141,22 +141,25 @@ internal fun EntryStateHolder.shouldReconcileCurrentSession(
             mutableUiState.value.sessionList?.openedSession?.session?.id == sessionId
     }
 
-internal fun EntryStateHolder.applyRunEvent(
+internal suspend fun EntryStateHolder.applyRunEvent(
     sessionId: SessionId,
     event: RunEvent,
     observationJob: Job,
 ) {
-    synchronized(sessionRequestLock) {
-        if (runObservationJobs[sessionId] !== observationJob || runObservationRunIds[sessionId] != event.runId) {
-            return@synchronized
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            if (runObservationJobs[sessionId] !== observationJob || runObservationRunIds[sessionId] != event.runId) {
+                return@synchronized
+            }
+            val previous = observationStateFor(sessionId, event.runId) ?: return@synchronized
+            val next = RunEventStateTransition.apply(previous, event)
+            rememberObservationState(next)
+            if (next.state != previous.state) {
+                postTerminalRunStatusNotificationOnce(next.run, next.state)
+            }
+            applyRunEventState(sessionId, event, next)
         }
-        val previous = observationStateFor(sessionId, event.runId) ?: return@synchronized
-        val next = RunEventStateTransition.apply(previous, event)
-        rememberObservationState(next)
-        if (next.state != previous.state) {
-            postTerminalRunStatusNotificationOnce(next.run, next.state)
-        }
-        applyRunEventState(sessionId, event, next)
+        Unit
     }
 }
 

@@ -112,7 +112,7 @@ internal suspend fun EntryStateHolder.openSessionJob(
     }
 }
 
-private fun EntryStateHolder.showOpenFailure(
+private suspend fun EntryStateHolder.showOpenFailure(
     requestGeneration: Long,
     sessionId: SessionId,
     openedSessionToRestore: OpenSessionUiState?,
@@ -224,7 +224,7 @@ internal suspend fun EntryStateHolder.applyOpenedSessionOutcome(
     )
 }
 
-internal fun EntryStateHolder.showSessionOpenFailure(
+internal suspend fun EntryStateHolder.showSessionOpenFailure(
     requestGeneration: Long,
     sessionId: SessionId,
     openedSessionToRestore: OpenSessionUiState?,

@@ -92,70 +92,74 @@ internal fun EntryStateHolder.confirmDeleteSession(sessionId: SessionId) {
     job.start()
 }
 
-internal fun EntryStateHolder.showDeleteFailure(request: SessionMutationRequest) {
-    synchronized(sessionRequestLock) {
-        val (current, mutation) = mutationFailureTarget(request) ?: return
-        val sessionId = request.sessionId
-        val delete = mutation.delete ?: return
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessionMutations =
-                            current.sessionMutations +
-                                (
-                                    sessionId to
-                                        mutation.copy(
-                                            delete = delete.copy(isSubmitting = false),
-                                            pendingAction = null,
-                                            errorCategory = SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED,
-                                            retryAction = SessionMutationAction.DELETE,
-                                        )
-                                ),
-                    ),
-            )
+internal suspend fun EntryStateHolder.showDeleteFailure(request: SessionMutationRequest) {
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            val (current, mutation) = mutationFailureTarget(request) ?: return@synchronized
+            val sessionId = request.sessionId
+            val delete = mutation.delete ?: return@synchronized
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            sessionMutations =
+                                current.sessionMutations +
+                                    (
+                                        sessionId to
+                                            mutation.copy(
+                                                delete = delete.copy(isSubmitting = false),
+                                                pendingAction = null,
+                                                errorCategory = SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED,
+                                                retryAction = SessionMutationAction.DELETE,
+                                            )
+                                    ),
+                        ),
+                )
+        }
     }
 }
 
-internal fun EntryStateHolder.removeConfirmedSession(
+internal suspend fun EntryStateHolder.removeConfirmedSession(
     sessionId: SessionId,
     request: SessionMutationRequest,
 ) {
     var observationJobToCancel: Job? = null
     var observationToClose: RunEventObservation? = null
     val refreshJob =
-        synchronized(sessionRequestLock) {
-            if (!isCurrentSessionMutation(request)) return@synchronized null
-            val current = mutableUiState.value.sessionList ?: return@synchronized null
-            val shouldRefresh = current.nextOffset != null
-            if (current.openedSession?.session?.id == sessionId) {
-                observationJobToCancel = runObservationJobs[sessionId]
-                observationToClose = runObservations.remove(sessionId)
-                runObservationRunIds.remove(sessionId)
-                runObservationStates.remove(sessionId)
-            }
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            sessions = current.sessions.filterNot { it.id == sessionId },
-                            openedSession = current.openedSession?.takeUnless { it.session.id == sessionId },
-                            sessionMutations = current.sessionMutations - sessionId,
-                        ),
-                )
-            unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
-            if (shouldRefresh) {
-                sessionGateway?.let { gateway ->
-                    createFirstPageLoadJob(
-                        gateway = gateway,
-                        query = current.searchQuery,
-                        isRefreshing = true,
-                        isSearching = false,
-                        preserveSessions = true,
-                    )
+        applyStateChange {
+            synchronized(sessionRequestLock) {
+                if (!isCurrentSessionMutation(request)) return@synchronized null
+                val current = mutableUiState.value.sessionList ?: return@synchronized null
+                val shouldRefresh = current.nextOffset != null
+                if (current.openedSession?.session?.id == sessionId) {
+                    observationJobToCancel = runObservationJobs[sessionId]
+                    observationToClose = runObservations.remove(sessionId)
+                    runObservationRunIds.remove(sessionId)
+                    runObservationStates.remove(sessionId)
                 }
-            } else {
-                null
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                sessions = current.sessions.filterNot { it.id == sessionId },
+                                openedSession = current.openedSession?.takeUnless { it.session.id == sessionId },
+                                sessionMutations = current.sessionMutations - sessionId,
+                            ),
+                    )
+                unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
+                if (shouldRefresh) {
+                    sessionGateway?.let { gateway ->
+                        createFirstPageLoadJob(
+                            gateway = gateway,
+                            query = current.searchQuery,
+                            isRefreshing = true,
+                            isSearching = false,
+                            preserveSessions = true,
+                        )
+                    }
+                } else {
+                    null
+                }
             }
         }
     observationJobToCancel?.cancel()
