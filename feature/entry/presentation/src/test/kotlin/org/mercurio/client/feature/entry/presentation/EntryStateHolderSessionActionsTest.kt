@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -15,6 +17,8 @@ import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSessionActionsTest {
     @Test
@@ -150,73 +154,130 @@ class EntryStateHolderSessionActionsTest {
     fun pin_is_rejected_during_history_refresh_and_history_refresh_can_complete() =
         runTest {
             val gateway = ScriptedRefreshGateway()
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
-
-            verifyScripted(holder)
-            holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
-            advanceUntilIdle()
-            awaitState(holder, "initial history load") {
-                it.sessionList?.openedSession?.isRefreshing == false
+            val refreshStarted = CountDownLatch(1)
+            val refreshRelease = CountDownLatch(1)
+            gateway.onHistory = { call ->
+                if (call == 2) {
+                    refreshStarted.countDown()
+                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                }
             }
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
 
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
+            try {
+                verifyScripted(holder)
+                holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
+                awaitState(holder, "initial history load") {
+                    it.sessionList?.openedSession?.isRefreshing == false
+                }
 
-            holder.onEvent(EntryUiEvent.PinSessionClicked(gateway.sessionId))
-            assertEquals(0, gateway.pinCalls)
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
-            advanceUntilIdle()
-            assertEquals(0, gateway.pinCalls)
-            assertEquals(2, gateway.historyCalls)
-            assertEquals(false, requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing)
+                holder.onEvent(EntryUiEvent.PinSessionClicked(gateway.sessionId))
+                runBlocking { holder.awaitStateChangesApplied() }
+                assertEquals(0, gateway.pinCalls)
+
+                refreshRelease.countDown()
+                gateway.onHistory = null
+                awaitState(holder, "the completed history refresh") {
+                    it.sessionList?.openedSession?.isRefreshing == false
+                }
+                assertEquals(0, gateway.pinCalls)
+                assertEquals(2, gateway.historyCalls)
+                assertEquals(false, requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing)
+            } finally {
+                gateway.onHistory = null
+                refreshRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test
     fun list_refresh_is_rejected_while_a_history_refresh_is_in_flight() =
         runTest {
             val gateway = ScriptedRefreshGateway()
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
-
-            verifyScripted(holder)
-            holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
-            advanceUntilIdle()
-            awaitState(holder, "initial history load") {
-                it.sessionList?.openedSession?.isRefreshing == false
+            val refreshStarted = CountDownLatch(1)
+            val refreshRelease = CountDownLatch(1)
+            gateway.onHistory = { call ->
+                if (call == 2) {
+                    refreshStarted.countDown()
+                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                }
             }
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
 
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
+            try {
+                verifyScripted(holder)
+                holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
+                awaitState(holder, "initial history load") {
+                    it.sessionList?.openedSession?.isRefreshing == false
+                }
 
-            holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
-            assertEquals(1, gateway.listCalls)
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
-            advanceUntilIdle()
-            assertEquals(1, gateway.listCalls)
-            assertEquals(2, gateway.historyCalls)
+                holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
+                runBlocking { holder.awaitStateChangesApplied() }
+                assertEquals(1, gateway.listCalls)
+
+                refreshRelease.countDown()
+                gateway.onHistory = null
+                awaitState(holder, "the completed history refresh") {
+                    it.sessionList?.openedSession?.isRefreshing == false
+                }
+                assertEquals(1, gateway.listCalls)
+                assertEquals(2, gateway.historyCalls)
+            } finally {
+                gateway.onHistory = null
+                refreshRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test
     fun load_more_is_rejected_while_a_history_refresh_is_in_flight() =
         runTest {
             val gateway = ScriptedRefreshGateway(nextPageOffset = 2)
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
-
-            verifyScripted(holder)
-            holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
-            advanceUntilIdle()
-            awaitState(holder, "initial history load") {
-                it.sessionList?.openedSession?.isRefreshing == false
+            val refreshStarted = CountDownLatch(1)
+            val refreshRelease = CountDownLatch(1)
+            gateway.onHistory = { call ->
+                if (call == 2) {
+                    refreshStarted.countDown()
+                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                }
             }
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
 
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
+            try {
+                verifyScripted(holder)
+                holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
+                awaitState(holder, "initial history load") {
+                    it.sessionList?.openedSession?.isRefreshing == false
+                }
 
-            holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-            assertEquals(1, gateway.listCalls)
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
-            advanceUntilIdle()
-            assertEquals(1, gateway.listCalls)
-            assertEquals(2, gateway.historyCalls)
+                holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
+                runBlocking { holder.awaitStateChangesApplied() }
+                assertEquals(1, gateway.listCalls)
+
+                refreshRelease.countDown()
+                gateway.onHistory = null
+                awaitState(holder, "the completed history refresh") {
+                    it.sessionList?.openedSession?.isRefreshing == false
+                }
+                assertEquals(1, gateway.listCalls)
+                assertEquals(2, gateway.historyCalls)
+            } finally {
+                gateway.onHistory = null
+                refreshRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test
@@ -399,29 +460,44 @@ class EntryStateHolderSessionActionsTest {
     fun pending_creation_ignores_a_duplicate_create_click() =
         runTest {
             val created = entrySession("created", title = "Created")
+            val createStarted = CountDownLatch(1)
+            val createRelease = CountDownLatch(1)
             val gateway = ScriptedCreateGateway(entrySession("initial", title = "Initial"), created)
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
-            verifyScripted(holder)
-            advanceUntilIdle()
-
-            holder.onEvent(EntryUiEvent.CreateSessionClicked)
-            val pending = requireNotNull(holder.uiState.value.sessionList)
-            assertTrue(pending.createSession?.isSubmitting == true)
-
-            holder.onEvent(EntryUiEvent.CreateSessionClicked)
-            assertEquals(0, gateway.createCalls)
-            holder.onEvent(EntryUiEvent.CreateSessionClicked)
-            assertEquals(0, gateway.createCalls)
-
-            advanceUntilIdle()
-            awaitState(holder, "the created Session row") { state ->
-                state.sessionList?.sessions?.any { session -> session.id == created.id } == true
+            gateway.onCreate = {
+                createStarted.countDown()
+                assertTrue(createRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             }
-            val confirmed = requireNotNull(holder.uiState.value.sessionList)
-            assertEquals(1, gateway.createCalls)
-            assertNull(confirmed.createSession)
-            assertNull(confirmed.openedSession)
-            holder.close()
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
+
+            try {
+                verifyScripted(holder)
+
+                holder.onEvent(EntryUiEvent.CreateSessionClicked)
+                assertTrue(createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                val pending = requireNotNull(holder.uiState.value.sessionList)
+                assertTrue(pending.createSession?.isSubmitting == true)
+
+                holder.onEvent(EntryUiEvent.CreateSessionClicked)
+                runBlocking { holder.awaitStateChangesApplied() }
+                assertEquals(1, gateway.createCalls)
+                holder.onEvent(EntryUiEvent.CreateSessionClicked)
+                runBlocking { holder.awaitStateChangesApplied() }
+                assertEquals(1, gateway.createCalls)
+
+                createRelease.countDown()
+                gateway.onCreate = null
+                awaitState(holder, "the created Session row") { state ->
+                    state.sessionList?.sessions?.any { session -> session.id == created.id } == true
+                }
+                val confirmed = requireNotNull(holder.uiState.value.sessionList)
+                assertEquals(1, gateway.createCalls)
+                assertNull(confirmed.createSession)
+                assertNull(confirmed.openedSession)
+            } finally {
+                gateway.onCreate = null
+                createRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test

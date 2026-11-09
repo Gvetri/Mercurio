@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -92,21 +93,31 @@ class MessageSubmissionStateHolderTest {
         runTest {
             val session = session("session-1")
             val run = Run(RunId("run-1"), session.id, "starting")
-            val gateway = FakeGateway(listOf(session)).apply { enqueueRun(run) }
-            val holder = holder(gateway, StandardTestDispatcher(testScheduler))
+            val gateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRun(run)
+                    blockRunCreation = true
+                }
+            val holder = holder(gateway, Dispatchers.Default)
 
             try {
-                openWithVirtualTime(holder, gateway, session.id)
+                open(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 assertTrue(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                testScheduler.advanceUntilIdle()
+                gateway.releaseRun.countDown()
+                awaitState(holder) {
+                    val opened = it.sessionList?.openedSession
+                    opened != null && !opened.isSending && opened.latestRun == run
+                }
 
                 assertEquals(listOf(session.id to "Run once"), gateway.runRequests)
                 assertFalse(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
             } finally {
+                gateway.releaseRun.countDown()
                 holder.close()
             }
         }
@@ -116,20 +127,27 @@ class MessageSubmissionStateHolderTest {
         runTest {
             val session = session("session-1")
             val run = Run(RunId("run-1"), session.id, "starting")
-            val gateway = FakeGateway(listOf(session)).apply { enqueueRun(run) }
-            val holder = holder(gateway, StandardTestDispatcher(testScheduler))
+            val gateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRun(run)
+                    blockRunCreation = true
+                }
+            val holder = holder(gateway, Dispatchers.Default)
 
             try {
-                openWithVirtualTime(holder, gateway, session.id)
+                open(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 val stateAtClose = holder.uiState.value
 
                 holder.close()
-                testScheduler.advanceUntilIdle()
+                gateway.releaseRun.countDown()
+                assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 assertEquals(stateAtClose, holder.uiState.value)
             } finally {
+                gateway.releaseRun.countDown()
                 holder.close()
             }
         }
@@ -188,20 +206,29 @@ class MessageSubmissionStateHolderTest {
         runTest {
             val session = session("session-1")
             val run = Run(RunId("run-1"), session.id, "starting")
-            val gateway = FakeGateway(listOf(session)).apply { enqueueRun(run) }
-            val holder = holder(gateway, StandardTestDispatcher(testScheduler))
+            val gateway =
+                FakeGateway(listOf(session)).apply {
+                    enqueueRun(run)
+                    blockRunCreation = true
+                }
+            val holder = holder(gateway, Dispatchers.Default)
 
             try {
-                openWithVirtualTime(holder, gateway, session.id)
+                open(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 assertTrue(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("New draft"))
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
-                testScheduler.advanceUntilIdle()
+                gateway.releaseRun.countDown()
+                awaitState(holder) {
+                    val opened = it.sessionList?.openedSession
+                    opened != null && !opened.isSending && opened.latestRun == run
+                }
 
                 assertEquals(listOf(session.id to "Run once"), gateway.runRequests)
                 val reopened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
@@ -209,6 +236,7 @@ class MessageSubmissionStateHolderTest {
                 assertEquals(run, reopened.latestRun)
                 assertFalse(reopened.isSending)
             } finally {
+                gateway.releaseRun.countDown()
                 holder.close()
             }
         }

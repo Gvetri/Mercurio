@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -28,6 +29,7 @@ class ErrorReportingConsentStateHolderTest {
 
         try {
             holder.onEvent(EntryUiEvent.ErrorReportingConsentGranted)
+            runBlocking { holder.awaitStateChangesApplied() }
 
             assertEquals(ErrorReportingConsent.Granted, store.read())
             assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
@@ -43,6 +45,7 @@ class ErrorReportingConsentStateHolderTest {
 
         try {
             holder.onEvent(EntryUiEvent.ErrorReportingConsentDeclined)
+            runBlocking { holder.awaitStateChangesApplied() }
 
             assertEquals(ErrorReportingConsent.Declined, store.read())
             assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
@@ -105,12 +108,14 @@ class ErrorReportingConsentStateHolderTest {
 
         try {
             holder.onEvent(EntryUiEvent.ErrorReportingConsentToggleClicked(granted = false))
+            runBlocking { holder.awaitStateChangesApplied() }
 
             assertEquals(ErrorReportingConsent.Declined, store.read())
             assertEquals(ErrorReportingConsent.Declined, holder.uiState.value.errorReportingConsent)
             assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
 
             holder.onEvent(EntryUiEvent.ErrorReportingConsentToggleClicked(granted = true))
+            runBlocking { holder.awaitStateChangesApplied() }
 
             assertEquals(ErrorReportingConsent.Granted, store.read())
             assertEquals(ErrorReportingConsent.Granted, holder.uiState.value.errorReportingConsent)

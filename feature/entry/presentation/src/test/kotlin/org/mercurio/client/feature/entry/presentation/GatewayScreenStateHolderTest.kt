@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -16,6 +17,7 @@ class GatewayScreenStateHolderTest {
         holder.onEvent(EntryUiEvent.BearerCredentialChanged("synthetic-token"))
 
         holder.onEvent(EntryUiEvent.CloseGatewayConnectionSetupClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertFalse(holder.uiState.value.connectionSetupRequested)
         assertEquals("", holder.uiState.value.endpoint)
@@ -35,6 +37,7 @@ class GatewayScreenStateHolderTest {
             )
 
         holder.onEvent(EntryUiEvent.CloseGatewayConnectionSetupClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertFalse(holder.uiState.value.connectionSetupRequested)
         assertEquals("https://gateway.example", holder.uiState.value.endpoint)
@@ -56,6 +59,7 @@ class GatewayScreenStateHolderTest {
         holder.onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
         holder.onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
         holder.onEvent(EntryUiEvent.CancelGatewayCredentialChangeClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertFalse(holder.uiState.value.isChangingCredential)
         assertEquals("saved-token", holder.uiState.value.bearerCredential)
@@ -74,6 +78,7 @@ class GatewayScreenStateHolderTest {
             )
 
         holder.onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
+        runBlocking { holder.awaitStateChangesApplied() }
 
         assertTrue(holder.uiState.value.isChangingCredential)
         assertEquals("https://gateway.example", holder.uiState.value.endpoint)

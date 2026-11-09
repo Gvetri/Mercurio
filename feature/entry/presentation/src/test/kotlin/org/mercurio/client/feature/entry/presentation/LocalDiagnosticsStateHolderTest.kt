@@ -303,6 +303,7 @@ class LocalDiagnosticsStateHolderTest {
 
         try {
             holder.onEvent(EntryUiEvent.OpenLocalDiagnosticsClicked)
+            dispatcher.runNext()
 
             val opening = holder.uiState.value.localDiagnostics
             assertTrue(opening.isOpen)
@@ -479,6 +480,10 @@ class LocalDiagnosticsStateHolderTest {
 
         fun runPending() {
             while (pending.isNotEmpty()) pending.removeFirst().run()
+        }
+
+        fun runNext() {
+            pending.removeFirst().run()
         }
     }
 

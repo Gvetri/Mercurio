@@ -4,6 +4,9 @@ import android.app.Application
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -173,6 +176,13 @@ class EntryWiringErrorReportingTest {
         try {
             assertTrue(first.uiState.value.isErrorReportingConsentRequired)
             first.onEvent(EntryUiEvent.ErrorReportingConsentDeclined)
+            runBlocking {
+                withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) {
+                    while (first.uiState.value.isErrorReportingConsentRequired) {
+                        delay(10)
+                    }
+                }
+            }
         } finally {
             first.close()
         }
@@ -201,5 +211,7 @@ class EntryWiringErrorReportingTest {
                 ),
         )
 }
+
+private const val BOUNDED_AWAIT_TIMEOUT_MILLIS = 60_000L
 
 private const val SYNTHETIC_DSN = "https://synthetic-key@ingest.example.invalid/1"

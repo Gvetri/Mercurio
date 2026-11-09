@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -29,6 +30,8 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class SessionPinDeleteStateHolderTest {
     @Test
@@ -136,22 +139,38 @@ class SessionPinDeleteStateHolderTest {
     fun duplicate_pin_submissions_are_blocked_while_the_gateway_call_is_pending() =
         runTest {
             val target = session("target", "Original")
-            val gateway = ScriptedPinGateway(target)
-            val holder = connectedHolder(gateway, StandardTestDispatcher(testScheduler))
+            val pinStarted = CountDownLatch(1)
+            val pinRelease = CountDownLatch(1)
+            val gateway =
+                ScriptedPinGateway(target).apply {
+                    onPin = {
+                        pinStarted.countDown()
+                        assertTrue(pinRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    }
+                }
+            val holder = connectedHolder(gateway, Dispatchers.Default)
             awaitState(holder) { it.sessionList?.sessions?.isNotEmpty() == true }
 
-            holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-            assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.pendingAction)
+            try {
+                holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
+                assertTrue(pinStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.pendingAction)
 
-            holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-            assertEquals(0, gateway.pinCalls)
-            assertFalse(requireNotNull(holder.uiState.value.sessionList).sessions.single().pinned)
+                holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
+                runBlocking { holder.awaitStateChangesApplied() }
+                assertEquals(1, gateway.pinCalls)
+                assertFalse(requireNotNull(holder.uiState.value.sessionList).sessions.single().pinned)
 
-            advanceUntilIdle()
-            assertEquals(1, gateway.pinCalls)
-            awaitState(holder) { it.sessionList?.sessions?.single()?.pinned == true }
-            assertNull(mutation(holder, target.id))
-            holder.close()
+                pinRelease.countDown()
+                gateway.onPin = null
+                awaitState(holder) { it.sessionList?.sessions?.single()?.pinned == true }
+                assertEquals(1, gateway.pinCalls)
+                assertNull(mutation(holder, target.id))
+            } finally {
+                gateway.onPin = null
+                pinRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test
@@ -386,6 +405,7 @@ class SessionPinDeleteStateHolderTest {
             private set
         var openCalls = 0
             private set
+        var onPin: (() -> Unit)? = null
 
         override fun listSessions(request: SessionListRequest): SessionPage {
             if (request.offset > 0) {
@@ -413,6 +433,7 @@ class SessionPinDeleteStateHolderTest {
 
         override fun pinSession(sessionId: SessionId): SessionPinResult {
             pinCalls += 1
+            onPin?.invoke()
             currentSession = currentSession.copy(pinned = true)
             return SessionPinResult(sessionId, pinned = true)
         }

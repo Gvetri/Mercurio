@@ -2,11 +2,16 @@ package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.ThreadContextElement
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.application.EntryState
@@ -31,6 +36,8 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
 private const val TEST_TIMEOUT_MILLIS = 5_000L
@@ -280,4 +287,166 @@ class EntryStateHolderStateConsumerTest {
             holder.close()
         }
     }
+
+    @Test
+    fun ui_event_dispatch_writes_state_on_the_state_change_consumer() {
+        val holder = bareHolderOn(Dispatchers.Unconfined)
+        val recording = installRecordingUiState(holder) { false }
+        try {
+            holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
+            holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
+
+            assertEquals("https://gateway.example/profile", holder.uiState.value.endpoint)
+            assertEquals("memory-only-token", holder.uiState.value.bearerCredential)
+            assertTrue(
+                "every UI-event write must run on the consumer: ${recording.writes.map { it.appliedOnConsumer }}",
+                recording.writes.isNotEmpty() && recording.writes.all { it.appliedOnConsumer },
+            )
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun queued_events_are_not_applied_until_the_consumer_runs_and_apply_in_submission_order() {
+        val dispatcher = ReconciliationPausingDispatcher()
+        val holder = bareHolderOn(dispatcher)
+        val recording = installRecordingUiState(holder) { false }
+        try {
+            dispatcher.paused = true
+            holder.onEvent(EntryUiEvent.EndpointChanged("first"))
+            holder.onEvent(EntryUiEvent.EndpointChanged("second"))
+            holder.onEvent(EntryUiEvent.EndpointChanged("third"))
+
+            assertTrue(
+                "the paused consumer must not apply an enqueued event: ${recording.writes.size}",
+                recording.writes.isEmpty(),
+            )
+            assertEquals("", holder.uiState.value.endpoint)
+
+            dispatcher.drain()
+
+            assertEquals("third", holder.uiState.value.endpoint)
+            assertEquals(
+                "the consumer must apply enqueued events in submission order",
+                listOf("first", "second", "third"),
+                recording.writes.map { it.state.endpoint },
+            )
+            assertTrue(recording.writes.all { it.appliedOnConsumer })
+        } finally {
+            holder.close()
+            dispatcher.drain()
+        }
+    }
+
+    @Test
+    fun close_applies_queued_events_before_the_scope_teardown() {
+        val dispatcher = ReconciliationPausingDispatcher()
+        val holder = bareHolderOn(dispatcher)
+        val closeCalled = AtomicBoolean(false)
+        val recording = installRecordingUiState(holder) { closeCalled.get() }
+        try {
+            dispatcher.paused = true
+            holder.onEvent(EntryUiEvent.EndpointChanged("queued-endpoint"))
+            holder.close()
+            closeCalled.set(true)
+
+            dispatcher.drain()
+
+            assertEquals("queued-endpoint", holder.uiState.value.endpoint)
+            assertTrue(
+                "the event queued before close must still be applied ahead of the teardown: " +
+                    recording.writes.map { it.state.endpoint },
+                recording.writes.size == 2 && recording.writes.first().state.endpoint == "queued-endpoint",
+            )
+            assertTrue(
+                "the queued event must apply after close() returned, on the consumer",
+                recording.writes.first().appliedAfterClose && recording.writes.first().appliedOnConsumer,
+            )
+            assertTrue(
+                "the teardown must end the holder scope",
+                (privateField(holder, "scope") as CoroutineScope).coroutineContext[Job]!!.isCancelled,
+            )
+        } finally {
+            holder.close()
+            dispatcher.drain()
+        }
+    }
 }
+
+private class RecordedStateWrite(
+    val state: EntryUiState,
+    val appliedOnConsumer: Boolean,
+    val appliedAfterClose: Boolean,
+)
+
+private class ConsumerThreadProbe : ThreadContextElement<Boolean>, AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<ConsumerThreadProbe>
+
+    private val onConsumerThreads = ThreadLocal.withInitial { false }
+
+    fun isOnConsumer(): Boolean = onConsumerThreads.get()
+
+    override fun updateThreadContext(context: CoroutineContext): Boolean {
+        val previous = onConsumerThreads.get()
+        onConsumerThreads.set(true)
+        return previous
+    }
+
+    override fun restoreThreadContext(
+        context: CoroutineContext,
+        oldState: Boolean,
+    ) {
+        onConsumerThreads.set(oldState)
+    }
+}
+
+private class RecordingUiStateFlow(
+    private val delegate: MutableStateFlow<EntryUiState>,
+    private val consumerProbe: ConsumerThreadProbe,
+    private val closeCalled: () -> Boolean,
+) : MutableStateFlow<EntryUiState> by delegate {
+    val writes = mutableListOf<RecordedStateWrite>()
+
+    override var value: EntryUiState
+        get() = delegate.value
+        set(newState) {
+            record(newState)
+            delegate.value = newState
+        }
+
+    override fun compareAndSet(
+        expect: EntryUiState,
+        update: EntryUiState,
+    ): Boolean {
+        val changed = delegate.compareAndSet(expect, update)
+        if (changed) record(update)
+        return changed
+    }
+
+    private fun record(state: EntryUiState) {
+        writes += RecordedStateWrite(state, consumerProbe.isOnConsumer(), closeCalled())
+    }
+}
+
+private fun installRecordingUiState(
+    holder: EntryStateHolder,
+    closeCalled: () -> Boolean,
+): RecordingUiStateFlow {
+    val recording =
+        RecordingUiStateFlow(
+            privateField(holder, "mutableUiState") as MutableStateFlow<EntryUiState>,
+            CONSUMER_THREAD_PROBE,
+            closeCalled,
+        )
+    privateField(holder, "mutableUiState", recording)
+    return recording
+}
+
+private val CONSUMER_THREAD_PROBE = ConsumerThreadProbe()
+
+private fun bareHolderOn(dispatcher: CoroutineDispatcher): EntryStateHolder =
+    EntryStateHolder(
+        initialState = EntryState(isGatewayConnectionConfigured = false),
+        scope = CoroutineScope(SupervisorJob() + CONSUMER_THREAD_PROBE + dispatcher),
+    )

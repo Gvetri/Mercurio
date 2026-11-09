@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -17,6 +19,8 @@ import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class EntryStateHolderTest {
     @Test
@@ -27,6 +31,7 @@ class EntryStateHolderTest {
             )
 
         stateHolder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+        runBlocking { stateHolder.awaitStateChangesApplied() }
 
         assertTrue(stateHolder.uiState.value.connectionSetupRequested)
     }
@@ -434,24 +439,40 @@ class EntryStateHolderTest {
     @Test
     fun duplicate_load_more_actions_are_ignored_while_the_page_is_in_flight() =
         runTest {
+            val pageStarted = CountDownLatch(1)
+            val pageRelease = CountDownLatch(1)
             val gateway = ScriptedSessionGateway(SessionPage(listOf(entrySession("first")), nextOffset = 1))
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
+            gateway.onList = { request, _ ->
+                if (request == SessionListRequest(offset = 1)) {
+                    pageStarted.countDown()
+                    assertTrue(pageRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                }
+            }
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
             verifyScripted(holder)
-            advanceUntilIdle()
 
-            holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
+            try {
+                holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
+                assertTrue(pageStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
-            holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-            gateway.enqueuePage(SessionPage(listOf(entrySession("second")), null))
-            advanceUntilIdle()
+                holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
+                runBlocking { holder.awaitStateChangesApplied() }
+                assertEquals(
+                    listOf(SessionListRequest(), SessionListRequest(offset = 1)),
+                    gateway.listRequests,
+                )
+                gateway.enqueuePage(SessionPage(listOf(entrySession("second")), null))
+                gateway.onList = null
+                pageRelease.countDown()
 
-            assertEquals(
-                listOf(SessionListRequest(), SessionListRequest(offset = 1)),
-                gateway.listRequests,
-            )
-            awaitSessions(holder, "first", "second")
-            holder.close()
+                awaitSessions(holder, "first", "second")
+                assertFalse(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
+            } finally {
+                gateway.onList = null
+                pageRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test
@@ -466,26 +487,47 @@ class EntryStateHolderTest {
                     target,
                     listOf(GatewayHistoryMessage("message-one", "user", "Opened during refresh")),
                 )
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
+            val refreshStarted = CountDownLatch(1)
+            val refreshRelease = CountDownLatch(1)
+            gateway.onList = { _ ->
+                if (gateway.listRequests.size == 2) {
+                    refreshStarted.countDown()
+                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                }
+            }
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
             verifyScripted(holder)
-            advanceUntilIdle()
 
-            holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
+            try {
+                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
 
-            holder.onEvent(EntryUiEvent.SessionClicked(target))
-            advanceUntilIdle()
+                holder.onEvent(EntryUiEvent.SessionClicked(target))
+                runBlocking { holder.awaitStateChangesApplied() }
+                gateway.enqueueList(SessionPage(listOf(entrySession(target.value, "Target")), null))
+                refreshRelease.countDown()
+                gateway.onList = null
 
-            val state = requireNotNull(holder.uiState.value.sessionList)
-            assertEquals(target, state.openedSession?.session?.id)
-            assertEquals(
-                listOf("Opened during refresh"),
-                state.openedSession?.messages?.map { message -> message.content },
-            )
-            assertFalse(state.isRefreshing)
-            assertFalse(state.isSearching)
-            assertFalse(state.isLoading)
-            holder.close()
+                awaitState(holder, "the opened session after the dropped refresh") {
+                    val opened = it.sessionList?.openedSession
+                    opened?.session?.id == target && !it.sessionList.isRefreshing
+                }
+
+                val state = requireNotNull(holder.uiState.value.sessionList)
+                assertEquals(target, state.openedSession?.session?.id)
+                assertEquals(
+                    listOf("Opened during refresh"),
+                    state.openedSession?.messages?.map { message -> message.content },
+                )
+                assertFalse(state.isRefreshing)
+                assertFalse(state.isSearching)
+                assertFalse(state.isLoading)
+            } finally {
+                gateway.onList = null
+                refreshRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test
@@ -526,26 +568,39 @@ class EntryStateHolderTest {
     fun search_is_ignored_while_session_creation_is_submitting() =
         runTest {
             val created = entrySession("created", title = "Created")
+            val createStarted = CountDownLatch(1)
+            val createRelease = CountDownLatch(1)
             val gateway = ScriptedCreateGateway(entrySession("initial", title = "Initial"), created)
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
-            verifyScripted(holder)
-            advanceUntilIdle()
-
-            holder.onEvent(EntryUiEvent.CreateSessionClicked)
-            assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession?.isSubmitting == true)
-
-            holder.onEvent(EntryUiEvent.SessionSearchQueryChanged("needle"))
-
-            val submitting = requireNotNull(holder.uiState.value.sessionList)
-            assertEquals("", submitting.searchQuery)
-            assertTrue(submitting.createSession?.isSubmitting == true)
-            assertEquals(listOf(SessionListRequest()), gateway.listRequests)
-
-            advanceUntilIdle()
-            awaitState(holder, "the created Session row") {
-                it.sessionList?.sessions?.any { session -> session.id == created.id } == true
+            gateway.onCreate = {
+                createStarted.countDown()
+                assertTrue(createRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             }
-            holder.close()
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            verifyScripted(holder)
+
+            try {
+                holder.onEvent(EntryUiEvent.CreateSessionClicked)
+                assertTrue(createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession?.isSubmitting == true)
+
+                holder.onEvent(EntryUiEvent.SessionSearchQueryChanged("needle"))
+                runBlocking { holder.awaitStateChangesApplied() }
+
+                val submitting = requireNotNull(holder.uiState.value.sessionList)
+                assertEquals("", submitting.searchQuery)
+                assertTrue(submitting.createSession?.isSubmitting == true)
+                assertEquals(listOf(SessionListRequest()), gateway.listRequests)
+
+                createRelease.countDown()
+                gateway.onCreate = null
+                awaitState(holder, "the created Session row") {
+                    it.sessionList?.sessions?.any { session -> session.id == created.id } == true
+                }
+            } finally {
+                gateway.onCreate = null
+                createRelease.countDown()
+                holder.close()
+            }
         }
 
     @Test

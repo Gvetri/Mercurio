@@ -31,9 +31,11 @@ internal suspend fun <T> EntryStateHolder.applyStateChange(block: () -> T): T {
  *
  * The write is enqueued behind every already-submitted command, so producers that cannot
  * suspend (job `finally` blocks, cancellation barriers) still serialize their visible state
- * through the same consumer without adding a coroutine to the producer dispatcher. A holder
- * scope that dies on `close` leaves the command unapplied, which matches the close contract:
- * no UI is visible anymore.
+ * through the same consumer without adding a coroutine to the producer dispatcher. Close
+ * enqueues the holder teardown behind the commands already queued, so a command submitted
+ * before `close` is still applied. A command submitted after the teardown has stopped the
+ * consumer leaves the command unapplied, which matches the close contract: no UI is visible
+ * anymore.
  *
  * Every block must re-derive its guards from current state, because the consumer applies it
  * after an unbounded number of earlier commands have run; a block that also touches the

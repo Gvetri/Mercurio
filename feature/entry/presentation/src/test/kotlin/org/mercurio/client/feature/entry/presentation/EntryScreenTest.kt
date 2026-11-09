@@ -11,7 +11,10 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -544,14 +547,13 @@ class EntryScreenTest {
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) { holder.uiState.value.sessionList?.isLoading == false }
-            composeTestRule.onNodeWithText("First Session").performClick()
+            clickWhenVisible("First Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First request")) }
-            composeTestRule.onNodeWithText("[ send ]").performClick()
+            clickWhenEnabled("[ send ]")
             assertTrue(gateway.firstRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertTrue(gateway.firstObservation.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertEquals(1L, gateway.firstObservation.closed.count)
@@ -562,18 +564,21 @@ class EntryScreenTest {
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             assertTrue(gateway.firstObservation.closed.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            composeTestRule.onNodeWithText("Second Session").performClick()
+            clickWhenVisible("Second Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == second.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("Second draft")) }
+            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+                holder.uiState.value.sessionList?.openedSession?.composerText == "Second draft"
+            }
             composeTestRule.onNodeWithText("[ send ]").assertIsEnabled()
             composeTestRule.onNodeWithText("[ send ]").performClick()
             assertTrue(gateway.secondRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
-            composeTestRule.onNodeWithText("First Session").performClick()
+            clickWhenVisible("First Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
@@ -583,6 +588,20 @@ class EntryScreenTest {
         } finally {
             holder.close()
         }
+    }
+
+    private fun clickWhenVisible(text: String) {
+        composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+            composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText(text).performClick()
+    }
+
+    private fun clickWhenEnabled(text: String) {
+        composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+            composeTestRule.onAllNodes(hasText(text) and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText(text).performClick()
     }
 
     private class SwitchingGateway(

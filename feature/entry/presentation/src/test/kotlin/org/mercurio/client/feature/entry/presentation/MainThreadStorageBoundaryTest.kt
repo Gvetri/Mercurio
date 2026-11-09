@@ -48,7 +48,8 @@ internal class MainThreadStorageBoundaryTest {
                 open(holder, gateway, session.id)
                 gateway.enqueueRun(activeRun())
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
-                recorder.assertOperationsRanOn(eventThread, "draft.write", "uncertainty.contains")
+                holder.awaitStateChangesApplied()
+                recorder.assertOperationsRanOffThread(eventThread, "draft.write", "uncertainty.contains")
                 recorder.reset()
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
@@ -216,17 +217,6 @@ private class StorageCallRecorder {
             val matching = calls.filter { it.operation == operation }
             assertFalse("$operation never ran", matching.isEmpty())
             assertTrue("$operation ran on ${thread.name}", matching.none { it.thread === thread })
-        }
-    }
-
-    fun assertOperationsRanOn(
-        thread: Thread,
-        vararg operations: String,
-    ) {
-        operations.forEach { operation ->
-            val matching = calls.filter { it.operation == operation }
-            assertFalse("$operation never ran", matching.isEmpty())
-            assertTrue("$operation no longer runs on ${thread.name}", matching.any { it.thread === thread })
         }
     }
 
