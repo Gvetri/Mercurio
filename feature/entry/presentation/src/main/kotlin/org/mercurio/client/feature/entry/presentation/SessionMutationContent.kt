@@ -38,9 +38,12 @@ internal fun RenameSessionContent(
         Spacer(modifier = Modifier.height(4.dp))
         Text(text = stringResource(R.string.sessions_current_title, sessionTitle(session)))
         Spacer(modifier = Modifier.height(8.dp))
+        val title = rememberEchoSafeTextFieldBuffer(state.titleDraft, session.id)
         OutlinedTextField(
-            value = state.titleDraft,
-            onValueChange = { onEvent(EntryUiEvent.RenameSessionTitleChanged(session.id, it)) },
+            value = title.value,
+            onValueChange = { change ->
+                if (title.onUserChange(change)) onEvent(EntryUiEvent.RenameSessionTitleChanged(session.id, change.text))
+            },
             enabled = enabled && !state.isSubmitting,
             label = { Text(stringResource(R.string.sessions_new_title)) },
             singleLine = true,

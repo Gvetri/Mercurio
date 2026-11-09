@@ -203,9 +203,12 @@ private fun ChatComposerField(
         } else {
             tokens.colorScheme.onSurface.copy(alpha = CHAT_DISABLED_ALPHA)
         }
+    val draft = rememberEchoSafeTextFieldBuffer(state.composerText, state.session.id)
     BasicTextField(
-        value = state.composerText,
-        onValueChange = { onEvent(EntryUiEvent.ComposerTextChanged(it)) },
+        value = draft.value,
+        onValueChange = { change ->
+            if (draft.onUserChange(change)) onEvent(EntryUiEvent.ComposerTextChanged(change.text))
+        },
         enabled = composer.fieldEnabled,
         singleLine = false,
         maxLines = CHAT_DRAFT_MAX_LINES,
@@ -230,18 +233,22 @@ private fun ChatComposerField(
                 .semantics { testTagsAsResourceId = true },
         decorationBox = { innerTextField ->
             Box(contentAlignment = Alignment.TopStart) {
-                if (state.composerText.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.chat_placeholder),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = tokens.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                ChatDraftPlaceholder(visible = draft.value.text.isEmpty())
                 innerTextField()
             }
         },
+    )
+}
+
+@Composable
+private fun ChatDraftPlaceholder(visible: Boolean) {
+    if (!visible) return
+    Text(
+        text = stringResource(R.string.chat_placeholder),
+        style = MaterialTheme.typography.bodyLarge,
+        color = LocalHermesDesignTokens.current.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 

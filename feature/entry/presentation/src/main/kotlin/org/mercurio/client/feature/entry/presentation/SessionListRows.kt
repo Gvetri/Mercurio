@@ -265,9 +265,12 @@ private fun RenameSessionField(
         }
     }
     Column(modifier = Modifier.fillMaxWidth()) {
+        val title = rememberEchoSafeTextFieldBuffer(state.titleDraft, session.id)
         BasicTextField(
-            value = state.titleDraft,
-            onValueChange = { onEvent(EntryUiEvent.RenameSessionTitleChanged(session.id, it)) },
+            value = title.value,
+            onValueChange = { change ->
+                if (title.onUserChange(change)) onEvent(EntryUiEvent.RenameSessionTitleChanged(session.id, change.text))
+            },
             enabled = enabled && !state.isSubmitting,
             singleLine = true,
             textStyle =

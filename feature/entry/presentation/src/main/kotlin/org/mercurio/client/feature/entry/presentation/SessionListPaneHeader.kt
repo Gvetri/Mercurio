@@ -151,9 +151,12 @@ private fun RowScope.SessionSearchField(
 ) {
     val tokens = LocalHermesDesignTokens.current
     val searchSessionsDescription = stringResource(R.string.shell_search_sessions)
+    val search = rememberEchoSafeTextFieldBuffer(state.searchQuery)
     BasicTextField(
-        value = state.searchQuery,
-        onValueChange = { onEvent(EntryUiEvent.SessionSearchQueryChanged(it)) },
+        value = search.value,
+        onValueChange = { change ->
+            if (search.onUserChange(change)) onEvent(EntryUiEvent.SessionSearchQueryChanged(change.text))
+        },
         enabled = state.sessionMutations.isEmpty(),
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = tokens.colorScheme.onSurface),
@@ -164,7 +167,7 @@ private fun RowScope.SessionSearchField(
                 .semantics { contentDescription = searchSessionsDescription },
         decorationBox = { innerTextField ->
             Box(contentAlignment = Alignment.CenterStart) {
-                if (state.searchQuery.isEmpty()) {
+                if (search.value.text.isEmpty()) {
                     Text(
                         text = stringResource(R.string.shell_search_placeholder),
                         style = MaterialTheme.typography.bodyMedium,

@@ -38,9 +38,14 @@ internal fun GatewayAddressField(
     val pending = state.isVerifying || state.isSaving
     val host = state.endpointHost()
     val invalid = host.isNotEmpty() && !host.isValidGatewayHost()
+    val address = rememberEchoSafeTextFieldBuffer(host)
     OutlinedTextField(
-        value = host,
-        onValueChange = { value -> onEvent(EntryUiEvent.EndpointChanged(value.toGatewayEndpoint())) },
+        value = address.value,
+        onValueChange = { change ->
+            if (address.onUserChange(change)) {
+                onEvent(EntryUiEvent.EndpointChanged(change.text.toGatewayEndpoint()))
+            }
+        },
         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
         enabled = !pending,
         isError = invalid,
@@ -93,9 +98,14 @@ internal fun GatewayCredentialField(
     val pending = state.isVerifying || state.isSaving
     var credentialVisible by remember(state.isChangingCredential) { mutableStateOf(false) }
     val rejected = state.errorCategory == EntryErrorCategory.AUTHENTICATION_FAILED
+    val credential = rememberEchoSafeTextFieldBuffer(state.bearerCredential)
     OutlinedTextField(
-        value = state.bearerCredential,
-        onValueChange = { value -> onEvent(EntryUiEvent.BearerCredentialChanged(value)) },
+        value = credential.value,
+        onValueChange = { value ->
+            if (credential.onUserChange(value)) {
+                onEvent(EntryUiEvent.BearerCredentialChanged(value.text))
+            }
+        },
         modifier = Modifier.fillMaxWidth(),
         enabled = !pending,
         isError = rejected,
