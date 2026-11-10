@@ -33,9 +33,10 @@ import java.time.Instant
  * Appearance waits on its own capability, so its frames are absent here. #273 ships the sections
  * whose capability exists, #268 adds the Security frames with the app-lock capability they draw, and
  * the error-reporting consent row appears only with a reporting endpoint, so its absent state is
- * captured as an extra witness. The App updates frames cover the states the manual check and its
- * verified download reach: idle, checking, up to date, offered, downloading, and refused. Permission,
- * installed, and recovery wait on the later tickets that add those capabilities.
+ * captured as an extra witness. The App updates frames cover the states the manual check, its
+ * verified download, and the install gate reach: idle, checking, up to date, offered, downloading,
+ * refused, install permission missing, and installed. Recovery waits on the later ticket that adds
+ * that capability.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-notnight")
@@ -250,6 +251,40 @@ class SettingsDesignStatesTest {
         )
 
     @Test
+    fun settings_20_app_updates_permission_missing_light() =
+        captureSettings(
+            dark = false,
+            state = appUpdatesState(permissionRequiredStatus()),
+            beforeCapture = ::scrollToAppUpdates,
+        )
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_20_app_updates_permission_missing_dark() =
+        captureSettings(
+            dark = true,
+            state = appUpdatesState(permissionRequiredStatus()),
+            beforeCapture = ::scrollToAppUpdates,
+        )
+
+    @Test
+    fun settings_21_app_updates_installed_light() =
+        captureSettings(
+            dark = false,
+            state = appUpdatesState(installedStatus()),
+            beforeCapture = ::scrollToAppUpdates,
+        )
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_21_app_updates_installed_dark() =
+        captureSettings(
+            dark = true,
+            state = appUpdatesState(installedStatus()),
+            beforeCapture = ::scrollToAppUpdates,
+        )
+
+    @Test
     fun settings_error_reporting_absent_light() =
         captureSettings(
             dark = false,
@@ -337,6 +372,18 @@ class SettingsDesignStatesTest {
         AppUpdateStatus.Refused(
             releaseTag = "nightly-7002-0123456789abcdef0123456789abcdef01234567",
             reason = NightlyUpdateRefusal.CONTRADICTORY_RELEASE,
+        )
+
+    private fun permissionRequiredStatus(): AppUpdateStatus =
+        AppUpdateStatus.PermissionRequired(
+            versionName = "nightly-7002-0123456789ab",
+            versionCode = 7002L,
+        )
+
+    private fun installedStatus(): AppUpdateStatus =
+        AppUpdateStatus.Installed(
+            versionName = "nightly-7002-0123456789ab",
+            versionCode = 7002L,
         )
 
     private fun scrollToDiagnostics() {

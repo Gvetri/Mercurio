@@ -4,10 +4,11 @@ import org.mercurio.client.feature.entry.application.NightlyDownloadRefusal
 import org.mercurio.client.feature.entry.application.NightlyUpdateFailure
 import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
 import org.mercurio.client.feature.entry.domain.NightlyDownloadProgress
+import org.mercurio.client.feature.entry.domain.NightlyInstallRefusal
 import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import java.time.Instant
 
-/** The App updates section: one manual check, one download, and their last result. */
+/** The App updates section: one manual check, one download, one install, and their last result. */
 data class AppUpdatesUiState(
     val status: AppUpdateStatus = AppUpdateStatus.Idle,
 )
@@ -34,6 +35,16 @@ sealed interface AppUpdateStatus {
         val verifiedAt: Instant,
     ) : AppUpdateStatus
 
+    data class PermissionRequired(
+        val versionName: String,
+        val versionCode: Long,
+    ) : AppUpdateStatus
+
+    data class Installed(
+        val versionName: String,
+        val versionCode: Long,
+    ) : AppUpdateStatus
+
     data class Refused(
         val releaseTag: String?,
         val reason: NightlyUpdateRefusal,
@@ -41,6 +52,10 @@ sealed interface AppUpdateStatus {
 
     data class DownloadRefused(
         val reason: NightlyDownloadRefusal,
+    ) : AppUpdateStatus
+
+    data class InstallRefused(
+        val reason: NightlyInstallRefusal,
     ) : AppUpdateStatus
 
     data class Failed(

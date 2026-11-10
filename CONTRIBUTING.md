@@ -234,6 +234,10 @@ issues that add those capabilities.
 | `settings_18_app_updates_downloading_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_19_app_updates_refused_light` | `w360dp-h800dp-notnight` | The refusal banner naming the release tag, with its retry |
 | `settings_19_app_updates_refused_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_20_app_updates_permission_missing_light` | `w360dp-h800dp-notnight` | The install permission gate: the explanation banner and its open-settings action |
+| `settings_20_app_updates_permission_missing_dark` | `w360dp-h800dp-night` | The same gate on the dark token set |
+| `settings_21_app_updates_installed_light` | `w360dp-h800dp-notnight` | The installed terminal state, with its restart action |
+| `settings_21_app_updates_installed_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_23_about_light` | `w360dp-h640dp-notnight` | Version, build, and install-source rows in the shortened window, scrolled to the install-source value |
 | `settings_23_about_dark` | `w360dp-h640dp-night` | The same rows on the dark token set |
 | `settings_27_font_scale_200_light` | `w360dp-h640dp-notnight` | 200% type in the shortened window |

@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -9,6 +10,8 @@ import org.mercurio.client.feature.entry.application.NightlyUpdateCheck
 import org.mercurio.client.feature.entry.application.NightlyUpdateFailure
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.NightlyDownloadProgress
+import org.mercurio.client.feature.entry.domain.NightlyInstallOutcome
+import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 
 @Suppress("SwallowedException", "TooGenericExceptionCaught")
 internal fun EntryStateHolder.checkForUpdates() {
@@ -45,23 +48,66 @@ internal fun EntryStateHolder.downloadUpdate() {
     val generation = updateDownloadGeneration + 1
     updateDownloadGeneration = generation
     updateDownloadJob?.cancel()
+    discardInstallArtifact()
     updateDownloadOffer = offer
     setUpdateStatus(AppUpdateStatus.Downloading(NightlyDownloadProgress(0L, offer.apk.sizeBytes)))
     updateDownloadJob =
         scope.launch {
-            val status =
+            val outcome =
                 try {
                     download.execute(offer) { progress -> reportDownloadProgress(generation, progress) }
-                        .toAppUpdateStatus()
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE)
+                    null
                 }
             ensureActive()
             if (updateDownloadGeneration != generation) return@launch
-            setUpdateStatus(status)
+            when (outcome) {
+                null -> setUpdateStatus(AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE))
+                is NightlyDownloadOutcome.Verified -> {
+                    updateInstallArtifact = outcome.artifact
+                    setUpdateStatus(AppUpdateStatus.Verified(outcome.verifiedAt))
+                    continueInstall(offer, generation)
+                }
+                is NightlyDownloadOutcome.Refused ->
+                    setUpdateStatus(AppUpdateStatus.DownloadRefused(outcome.reason))
+                is NightlyDownloadOutcome.Failed -> setUpdateStatus(AppUpdateStatus.Failed(outcome.reason))
+            }
         }
+}
+
+@Suppress("SwallowedException", "TooGenericExceptionCaught")
+internal suspend fun EntryStateHolder.continueInstall(
+    offer: NightlyUpdateOffer,
+    generation: Long,
+) {
+    val install = installNightlyUpdate
+    val artifact = updateInstallArtifact
+    if (install == null || artifact == null) return
+    val outcome =
+        try {
+            install.execute(artifact)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            null
+        }
+    currentCoroutineContext().ensureActive()
+    if (updateDownloadGeneration != generation) return
+    when (outcome) {
+        null -> setUpdateStatus(AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE))
+        NightlyInstallOutcome.PermissionRequired ->
+            setUpdateStatus(AppUpdateStatus.PermissionRequired(offer.versionName, offer.versionCode))
+        NightlyInstallOutcome.Installed -> {
+            discardInstallArtifact()
+            setUpdateStatus(AppUpdateStatus.Installed(offer.versionName, offer.versionCode))
+        }
+        is NightlyInstallOutcome.Refused -> {
+            discardInstallArtifact()
+            setUpdateStatus(AppUpdateStatus.InstallRefused(outcome.reason))
+        }
+    }
 }
 
 internal fun EntryStateHolder.reportDownloadProgress(
@@ -89,6 +135,12 @@ private fun EntryStateHolder.stopDownload() {
     updateDownloadJob?.cancel()
     updateDownloadJob = null
     updateDownloadOffer = null
+    discardInstallArtifact()
+}
+
+private fun EntryStateHolder.discardInstallArtifact() {
+    updateInstallArtifact?.let { artifact -> downloadNightlyUpdate?.discard(artifact) }
+    updateInstallArtifact = null
 }
 
 private fun NightlyUpdateCheck.toAppUpdateStatus(): AppUpdateStatus =
@@ -97,11 +149,4 @@ private fun NightlyUpdateCheck.toAppUpdateStatus(): AppUpdateStatus =
         is NightlyUpdateCheck.Offered -> AppUpdateStatus.Offered(offer)
         is NightlyUpdateCheck.Refused -> AppUpdateStatus.Refused(releaseTag, reason)
         is NightlyUpdateCheck.Failed -> AppUpdateStatus.Failed(reason)
-    }
-
-private fun NightlyDownloadOutcome.toAppUpdateStatus(): AppUpdateStatus =
-    when (this) {
-        is NightlyDownloadOutcome.Verified -> AppUpdateStatus.Verified(verifiedAt)
-        is NightlyDownloadOutcome.Refused -> AppUpdateStatus.DownloadRefused(reason)
-        is NightlyDownloadOutcome.Failed -> AppUpdateStatus.Failed(reason)
     }

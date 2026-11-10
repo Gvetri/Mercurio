@@ -19,6 +19,7 @@ import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.NightlyApk
 import org.mercurio.client.feature.entry.domain.NightlyDownloadProgress
+import org.mercurio.client.feature.entry.domain.NightlyInstallRefusal
 import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
@@ -224,6 +225,102 @@ class SettingsAppUpdatesScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
     }
+
+    @Test
+    fun settings_app_updates_permission_gate_names_the_block_and_opens_the_setting() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        settingsState().copy(
+                            appUpdates =
+                                AppUpdatesUiState(
+                                    status = permissionRequiredStatus(),
+                                ),
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText(
+                "Android blocks installs from Mercurio. Allow installs from this source in system settings, " +
+                    "then return here. The update resumes where it stopped.",
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("nightly-7002-0123456789ab (7002) · waiting for permission").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Check for updates").assertCountEquals(0)
+        composeTestRule.onNodeWithText("open settings").performScrollTo().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.OpenInstallPermissionSettingsClicked), events)
+    }
+
+    @Test
+    fun settings_app_updates_installed_state_offers_the_restart_and_hides_the_check() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        settingsState().copy(
+                            appUpdates =
+                                AppUpdatesUiState(
+                                    status =
+                                        AppUpdateStatus.Installed(
+                                            versionName = "nightly-7002-0123456789ab",
+                                            versionCode = 7002L,
+                                        ),
+                                ),
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Installed nightly-7002-0123456789ab (7002) · restart to use")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Check for updates").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Restart to finish").performScrollTo().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.RestartToFinishClicked), events)
+    }
+
+    @Test
+    fun settings_app_updates_install_refusal_names_the_storage_reason() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        settingsState().copy(
+                            appUpdates =
+                                AppUpdatesUiState(
+                                    status =
+                                        AppUpdateStatus.InstallRefused(
+                                            NightlyInstallRefusal.INSUFFICIENT_STORAGE,
+                                        ),
+                                ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Install refused").performScrollTo().assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Update refused: not enough storage to install. Free some space and try again.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    private fun permissionRequiredStatus(): AppUpdateStatus =
+        AppUpdateStatus.PermissionRequired(
+            versionName = "nightly-7002-0123456789ab",
+            versionCode = 7002L,
+        )
 
     private fun offeredOffer(): NightlyUpdateOffer =
         NightlyUpdateOffer(

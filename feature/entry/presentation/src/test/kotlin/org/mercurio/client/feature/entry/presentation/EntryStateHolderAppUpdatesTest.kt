@@ -16,6 +16,7 @@ import org.junit.Test
 import org.mercurio.client.feature.entry.application.CheckForNightlyUpdate
 import org.mercurio.client.feature.entry.application.DownloadNightlyUpdate
 import org.mercurio.client.feature.entry.application.EntryState
+import org.mercurio.client.feature.entry.application.InstallNightlyUpdate
 import org.mercurio.client.feature.entry.application.NightlyUpdateFailure
 import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
 import org.mercurio.client.feature.entry.domain.InstallSource
@@ -28,6 +29,9 @@ import org.mercurio.client.feature.entry.domain.NightlyApkEvidenceSource
 import org.mercurio.client.feature.entry.domain.NightlyArtifact
 import org.mercurio.client.feature.entry.domain.NightlyDownloadProgress
 import org.mercurio.client.feature.entry.domain.NightlyFeedFailure
+import org.mercurio.client.feature.entry.domain.NightlyInstallOutcome
+import org.mercurio.client.feature.entry.domain.NightlyInstallRefusal
+import org.mercurio.client.feature.entry.domain.NightlyInstaller
 import org.mercurio.client.feature.entry.domain.NightlyListing
 import org.mercurio.client.feature.entry.domain.NightlyRelease
 import org.mercurio.client.feature.entry.domain.NightlySigningMetadata
@@ -46,6 +50,8 @@ private const val UPDATE_CERTIFICATE_SHA = "222222222222222222222222222222222222
 private const val UPDATE_APK_BYTES = 13_002_342L
 
 private const val UPDATE_VERSION_NAME = "nightly-7002-0123456789ab"
+
+private const val UPDATE_VERSION_CODE = 7002L
 
 private val UPDATE_PUBLISHED_AT = Instant.parse("2026-11-05T18:31:00Z")
 
@@ -223,7 +229,7 @@ class EntryStateHolderAppUpdatesTest {
         }
 
     @Test
-    fun a_verified_download_is_reported_and_its_artifact_is_removed() =
+    fun a_verified_download_without_an_install_stage_keeps_the_artifact_and_reports_verified() =
         runTest {
             val download = CompletingApkDownload()
             val holder = offeredHolder(download, Dispatchers.Unconfined) { }
@@ -233,7 +239,202 @@ class EntryStateHolderAppUpdatesTest {
                 advanceUntilIdle()
 
                 assertEquals(AppUpdateStatus.Verified(UPDATE_CHECKED_AT), holder.uiState.value.appUpdates.status)
+                assertTrue(download.discarded.isEmpty())
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun a_verified_download_hands_the_artifact_to_the_install_stage_and_reports_installed() =
+        runTest {
+            val download = CompletingApkDownload()
+            val installer = FakeNightlyInstaller(outcome = NightlyInstallOutcome.Installed)
+            val holder = offeredHolder(download, Dispatchers.Unconfined, installer)
+
+            try {
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+
+                assertEquals(
+                    AppUpdateStatus.Installed(UPDATE_VERSION_NAME, UPDATE_VERSION_CODE),
+                    holder.uiState.value.appUpdates.status,
+                )
+                assertEquals(listOf(ARTIFACT), installer.installed)
                 assertEquals(listOf(ARTIFACT), download.discarded)
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun a_missing_install_permission_reports_the_gate_before_anything_is_staged() =
+        runTest {
+            val download = CompletingApkDownload()
+            val installer = FakeNightlyInstaller(allowed = false)
+            val holder = offeredHolder(download, Dispatchers.Unconfined, installer)
+
+            try {
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+
+                assertEquals(
+                    AppUpdateStatus.PermissionRequired(UPDATE_VERSION_NAME, UPDATE_VERSION_CODE),
+                    holder.uiState.value.appUpdates.status,
+                )
+                assertTrue(installer.installed.isEmpty())
+                assertTrue(download.discarded.isEmpty())
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun a_granted_permission_resumes_the_install_when_the_app_returns_to_the_foreground() =
+        runTest {
+            val download = CompletingApkDownload()
+            val installer = FakeNightlyInstaller(allowed = false)
+            val holder = offeredHolder(download, Dispatchers.Unconfined, installer)
+
+            try {
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+                assertEquals(
+                    AppUpdateStatus.PermissionRequired(UPDATE_VERSION_NAME, UPDATE_VERSION_CODE),
+                    holder.uiState.value.appUpdates.status,
+                )
+
+                installer.allowed = true
+                holder.onEvent(EntryUiEvent.AppEnteredBackground)
+                holder.onEvent(EntryUiEvent.AppEnteredForeground)
+                advanceUntilIdle()
+
+                assertEquals(
+                    AppUpdateStatus.Installed(UPDATE_VERSION_NAME, UPDATE_VERSION_CODE),
+                    holder.uiState.value.appUpdates.status,
+                )
+                assertEquals(listOf(ARTIFACT), installer.installed)
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun a_still_missing_permission_keeps_the_gate_when_the_app_returns_to_the_foreground() =
+        runTest {
+            val download = CompletingApkDownload()
+            val installer = FakeNightlyInstaller(allowed = false)
+            val holder = offeredHolder(download, Dispatchers.Unconfined, installer)
+
+            try {
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+
+                holder.onEvent(EntryUiEvent.AppEnteredBackground)
+                holder.onEvent(EntryUiEvent.AppEnteredForeground)
+                advanceUntilIdle()
+
+                assertEquals(
+                    AppUpdateStatus.PermissionRequired(UPDATE_VERSION_NAME, UPDATE_VERSION_CODE),
+                    holder.uiState.value.appUpdates.status,
+                )
+                assertTrue(installer.installed.isEmpty())
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun an_install_refusal_is_reported_with_its_reason_and_the_artifact_is_removed() =
+        runTest {
+            val download = CompletingApkDownload()
+            val refusal = NightlyInstallOutcome.Refused(NightlyInstallRefusal.BLOCKED_BY_SYSTEM)
+            val holder = offeredHolder(download, Dispatchers.Unconfined, FakeNightlyInstaller(outcome = refusal))
+
+            try {
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+
+                assertEquals(
+                    AppUpdateStatus.InstallRefused(NightlyInstallRefusal.BLOCKED_BY_SYSTEM),
+                    holder.uiState.value.appUpdates.status,
+                )
+                assertEquals(listOf(ARTIFACT), download.discarded)
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun an_insufficient_storage_refusal_is_reported_and_the_artifact_is_removed() =
+        runTest {
+            val download = CompletingApkDownload()
+            val refusal = NightlyInstallOutcome.Refused(NightlyInstallRefusal.INSUFFICIENT_STORAGE)
+            val holder = offeredHolder(download, Dispatchers.Unconfined, FakeNightlyInstaller(outcome = refusal))
+
+            try {
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+
+                assertEquals(
+                    AppUpdateStatus.InstallRefused(NightlyInstallRefusal.INSUFFICIENT_STORAGE),
+                    holder.uiState.value.appUpdates.status,
+                )
+                assertEquals(listOf(ARTIFACT), download.discarded)
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun opening_the_install_settings_is_reported_only_at_the_permission_gate() =
+        runTest {
+            val download = CompletingApkDownload()
+            val installer = FakeNightlyInstaller(allowed = false)
+            var settingsRequests = 0
+            val holder =
+                offeredHolder(
+                    download,
+                    Dispatchers.Unconfined,
+                    installer,
+                    handlers = LifecycleHandlers(settingsRequests = { settingsRequests++ }),
+                )
+
+            try {
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+
+                holder.onEvent(EntryUiEvent.OpenInstallPermissionSettingsClicked)
+
+                assertEquals(1, settingsRequests)
+            } finally {
+                holder.close()
+            }
+        }
+
+    @Test
+    fun restarting_to_finish_is_reported_only_after_the_install() =
+        runTest {
+            val download = CompletingApkDownload()
+            var restarts = 0
+            val holder =
+                offeredHolder(
+                    download,
+                    Dispatchers.Unconfined,
+                    FakeNightlyInstaller(outcome = NightlyInstallOutcome.Installed),
+                    handlers = LifecycleHandlers(restarts = { restarts++ }),
+                )
+
+            try {
+                holder.onEvent(EntryUiEvent.RestartToFinishClicked)
+                holder.onEvent(EntryUiEvent.DownloadUpdateClicked)
+                advanceUntilIdle()
+
+                assertEquals(0, restarts)
+
+                holder.onEvent(EntryUiEvent.RestartToFinishClicked)
+
+                assertEquals(1, restarts)
             } finally {
                 holder.close()
             }
@@ -300,14 +501,16 @@ class EntryStateHolderAppUpdatesTest {
     private fun offeredHolder(
         download: NightlyApkDownload,
         dispatcher: CoroutineDispatcher,
-        advance: () -> Unit,
+        installer: NightlyInstaller? = null,
+        handlers: LifecycleHandlers = LifecycleHandlers(),
+        advance: () -> Unit = {},
     ): EntryStateHolder {
         val feed =
             FakeUpdateFeed(
                 listing = NightlyListing.Listed(listOf(UPDATE_RELEASE)),
                 metadata = NightlySigningMetadataResult.Available(offeredMetadata()),
             )
-        return updatesHolder(feed, dispatcher, download).also { holder ->
+        return updatesHolder(feed, dispatcher, download, installer, handlers).also { holder ->
             holder.onEvent(EntryUiEvent.CheckForUpdatesClicked)
             advance()
         }
@@ -317,6 +520,8 @@ class EntryStateHolderAppUpdatesTest {
         feed: NightlyUpdateFeed,
         dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
         download: NightlyApkDownload = CompletingApkDownload(),
+        installer: NightlyInstaller? = null,
+        handlers: LifecycleHandlers = LifecycleHandlers(),
     ): EntryStateHolder =
         holder(
             repository = FakeGatewayConnectionRepository(),
@@ -331,6 +536,9 @@ class EntryStateHolderAppUpdatesTest {
                             evidence = FakeApkEvidenceSource(),
                             now = { UPDATE_CHECKED_AT },
                         ),
+                    installNightlyUpdate = installer?.let { chosenInstaller -> InstallNightlyUpdate(chosenInstaller) },
+                    requestInstallPermissionSettings = handlers.settingsRequests,
+                    requestAppRestart = handlers.restarts,
                 ),
         )
 
@@ -478,3 +686,22 @@ private class FixedInstalledBuildProvider(
 ) : InstalledBuildProvider {
     override fun installedBuild(): InstalledBuild = build
 }
+
+private class FakeNightlyInstaller(
+    var allowed: Boolean = true,
+    private val outcome: NightlyInstallOutcome = NightlyInstallOutcome.Installed,
+) : NightlyInstaller {
+    val installed: MutableList<NightlyArtifact> = mutableListOf()
+
+    override fun installAllowed(): Boolean = allowed
+
+    override suspend fun install(artifact: NightlyArtifact): NightlyInstallOutcome {
+        installed += artifact
+        return outcome
+    }
+}
+
+private class LifecycleHandlers(
+    val settingsRequests: (() -> Unit)? = null,
+    val restarts: (() -> Unit)? = null,
+)
