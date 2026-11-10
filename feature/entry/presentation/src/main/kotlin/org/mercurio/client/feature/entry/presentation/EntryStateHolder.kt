@@ -559,6 +559,7 @@ class EntryStateHolder(
     internal var isForeground = false
     internal var isUnlockPromptPending = false
     internal val recoveryClaims = mutableMapOf<RecoveryEntryKey, RecoveryClaim>()
+    internal val recoveryReconciledRunIds = mutableSetOf<RunId>()
     internal val recoveryHandledEntries = mutableSetOf<RecoveryEntryKey>()
     internal var recoveryLoadPending = false
     internal var recoveryLoadFailed = false

@@ -9,6 +9,7 @@ internal fun EntryStateHolder.clearRecoveryState() {
     connectionRecoveryFailedSessions.clear()
     recoverySessionCounts.clear()
     recoveryClaims.clear()
+    recoveryReconciledRunIds.clear()
     recoveryHandledEntries.clear()
 }
 
