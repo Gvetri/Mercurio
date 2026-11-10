@@ -56,7 +56,11 @@ internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
         synchronized(sessionRequestLock) {
             pendingDisconnectedRecoveryEntries.remove(endpoint).orEmpty().toList()
         }
-    entries.forEach { entry -> persistOrQueueRecoveryEntry(endpoint, entry) }
+    entries.forEach { entry ->
+        if (persistOrQueueRecoveryEntry(endpoint, entry)) {
+            reconcilePersistedRecoveryEntryIfConnected(endpoint, entry)
+        }
+    }
 }
 
 internal fun EntryStateHolder.persistOrQueueRecoveryEntry(

@@ -191,7 +191,8 @@ class SessionListEntryPointStateHolderTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitState(holder, "the tail refresh reloading the list") {
                     val list = it.sessionList
-                    list != null &&
+                    gateway.listRequests.size == 3 &&
+                        list != null &&
                         list.sessions.map { session -> session.id.value } == listOf("target") &&
                         list.nextOffset == null &&
                         !list.isRefreshing &&

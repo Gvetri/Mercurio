@@ -95,6 +95,20 @@ internal fun EntryStateHolder.persistDisconnectedRecoveryEntry(
 ): Boolean {
     val persisted = persistOrQueueRecoveryEntry(endpoint, entry)
     if (persisted) {
+        val reconcileNow =
+            synchronized(sessionRequestLock) {
+                mutableUiState.value.isConnected &&
+                    mutableUiState.value.endpoint == endpoint &&
+                    sessionGateway != null &&
+                    runGateway != null
+            }
+        if (!reconcileNow) {
+            synchronized(sessionRequestLock) {
+                pendingDisconnectedRecoveryEntries
+                    .getOrPut(endpoint, ::mutableSetOf)
+                    .add(entry)
+            }
+        }
         reconcilePersistedRecoveryEntryIfConnected(endpoint, entry)
     }
     return persisted
