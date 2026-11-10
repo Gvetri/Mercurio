@@ -11,6 +11,7 @@ import org.mercurio.client.feature.entry.domain.HistoryCacheStore
 import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
 import org.mercurio.client.feature.entry.domain.NightlyApkDownload
 import org.mercurio.client.feature.entry.domain.NightlyApkEvidenceSource
+import org.mercurio.client.feature.entry.domain.NightlyInstaller
 import org.mercurio.client.feature.entry.domain.NightlyUpdateFeed
 import org.mercurio.client.feature.entry.domain.RunGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
@@ -26,6 +27,7 @@ data class EntryWiringOverrides(
     val nightlyUpdateFeed: NightlyUpdateFeed? = null,
     val nightlyApkDownload: NightlyApkDownload? = null,
     val nightlyApkEvidence: NightlyApkEvidenceSource? = null,
+    val nightlyInstaller: NightlyInstaller? = null,
     val errorReporter: ErrorReporter? = null,
     val sentryBackend: SentryBackend? = null,
     val errorReportingConsentStore: ErrorReportingConsentStore? = null,

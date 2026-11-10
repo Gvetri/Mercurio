@@ -71,6 +71,7 @@ object QualityPolicy {
         BoundaryDoubleRequirement("NightlyUpdateFeed", "repository"),
         BoundaryDoubleRequirement("NightlyApkDownload", "datasource"),
         BoundaryDoubleRequirement("NightlyApkEvidenceSource", "datasource"),
+        BoundaryDoubleRequirement("NightlyInstaller", "datasource"),
     )
 
     /**

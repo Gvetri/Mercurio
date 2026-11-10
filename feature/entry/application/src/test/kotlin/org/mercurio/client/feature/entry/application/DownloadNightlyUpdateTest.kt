@@ -62,15 +62,27 @@ class DownloadNightlyUpdateTest {
 
             val outcome = downloader(download, FakeNightlyApkEvidenceSource()).execute(OFFER)
 
-            assertEquals(NightlyDownloadOutcome.Verified(VERIFIED_AT), outcome)
+            assertEquals(NightlyDownloadOutcome.Verified(ARTIFACT, VERIFIED_AT), outcome)
         }
 
     @Test
-    fun removes_the_artifact_after_verification_because_this_stage_offers_no_install_path() =
+    fun keeps_the_artifact_after_verification_because_the_install_stage_consumes_it() =
         runTest {
             val download = FakeNightlyApkDownload(NightlyTransfer.Transferred(ARTIFACT))
 
             downloader(download, FakeNightlyApkEvidenceSource()).execute(OFFER)
+
+            assertTrue(download.discarded.isEmpty())
+        }
+
+    @Test
+    fun discards_a_retained_artifact_when_the_caller_asks() =
+        runTest {
+            val download = FakeNightlyApkDownload(NightlyTransfer.Transferred(ARTIFACT))
+            val update = downloader(download, FakeNightlyApkEvidenceSource())
+
+            update.execute(OFFER)
+            update.discard(ARTIFACT)
 
             assertEquals(listOf(ARTIFACT), download.discarded)
         }

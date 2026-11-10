@@ -37,8 +37,7 @@ object EntryWiring {
     fun createEntryStateHolder(
         context: Context,
         overrides: EntryWiringOverrides = EntryWiringOverrides(),
-        requestRunStatusNotificationPermission: (() -> Unit)? = null,
-        requestAppUnlock: (() -> Unit)? = null,
+        hostActions: EntryHostActions = EntryHostActions(),
     ): EntryStateHolder {
         val dataSource = SharedPreferencesGatewayConnectionDataSource(context)
         val credentialStore = overrides.credentialStore ?: AndroidKeyStoreGatewayCredentialStore(context)
@@ -94,10 +93,13 @@ object EntryWiring {
                     imageLoadingSettingsStore = SharedPreferencesImageLoadingSettingsStore(context),
                     runStatusNotificationPermission = AndroidRunStatusNotificationPermission(context),
                     runStatusNotifier = SystemRunStatusNotifier(context),
-                    requestRunStatusNotificationPermission = requestRunStatusNotificationPermission,
-                    appLock = appLockPorts(context, overrides, requestAppUnlock),
+                    requestRunStatusNotificationPermission = hostActions.requestRunStatusNotificationPermission,
+                    appLock = appLockPorts(context, overrides, hostActions.requestAppUnlock),
                     checkForNightlyUpdate = buildCheckForNightlyUpdate(overrides, installedBuildProvider),
                     downloadNightlyUpdate = buildDownloadNightlyUpdate(context, overrides),
+                    installNightlyUpdate = buildInstallNightlyUpdate(context, overrides),
+                    requestInstallPermissionSettings = hostActions.requestInstallPermissionSettings,
+                    requestAppRestart = hostActions.requestAppRestart,
                 ),
         )
     }

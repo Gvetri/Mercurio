@@ -13,8 +13,9 @@ import java.time.Instant
 /**
  * Downloads the offered Nightly and verifies it before anything else may use it: the byte count, the
  * published digest, the embedded version, the signing certificate against both the published metadata
- * and the installed application, and then the native ABI list. A refusal names its reason, and the
- * artifact is removed on every terminal outcome, because this stage offers no install path.
+ * and the installed application, and then the native ABI list. A refusal names its reason and removes
+ * the artifact; a verified artifact is kept, because it is the install stage's input. The caller
+ * discards a kept artifact through [discard] once the install stage reached a terminal result.
  */
 class DownloadNightlyUpdate(
     private val download: NightlyApkDownload,
@@ -27,19 +28,26 @@ class DownloadNightlyUpdate(
     ): NightlyDownloadOutcome =
         when (val transfer = download.transfer(offer.apk, onProgress)) {
             is NightlyTransfer.Failed -> transfer.reason.toOutcome()
-            is NightlyTransfer.Transferred -> verifyThenDiscard(offer, transfer.artifact)
+            is NightlyTransfer.Transferred -> verifyThenHandOver(offer, transfer.artifact)
         }
 
-    private fun verifyThenDiscard(
+    /** Removes a retained artifact the caller will not install. */
+    fun discard(artifact: NightlyArtifact) {
+        download.discard(artifact)
+    }
+
+    private fun verifyThenHandOver(
         offer: NightlyUpdateOffer,
         artifact: NightlyArtifact,
-    ): NightlyDownloadOutcome =
-        try {
-            refusalFor(offer, artifact)?.let(NightlyDownloadOutcome::Refused)
-                ?: NightlyDownloadOutcome.Verified(now())
-        } finally {
+    ): NightlyDownloadOutcome {
+        val refusal = refusalFor(offer, artifact)
+        return if (refusal == null) {
+            NightlyDownloadOutcome.Verified(artifact, now())
+        } else {
             download.discard(artifact)
+            NightlyDownloadOutcome.Refused(refusal)
         }
+    }
 
     private fun refusalFor(
         offer: NightlyUpdateOffer,
@@ -86,6 +94,7 @@ class DownloadNightlyUpdate(
 sealed interface NightlyDownloadOutcome {
     /** The archive agreed with every published and installed value, so it may be installed. */
     data class Verified(
+        val artifact: NightlyArtifact,
         val verifiedAt: Instant,
     ) : NightlyDownloadOutcome
 

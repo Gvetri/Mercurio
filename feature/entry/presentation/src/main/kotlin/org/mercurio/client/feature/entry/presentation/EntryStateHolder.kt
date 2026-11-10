@@ -14,6 +14,7 @@ import org.mercurio.client.feature.entry.application.CheckForNightlyUpdate
 import org.mercurio.client.feature.entry.application.DownloadNightlyUpdate
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
+import org.mercurio.client.feature.entry.application.InstallNightlyUpdate
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
 import org.mercurio.client.feature.entry.domain.AppLockEnrolment
@@ -30,6 +31,7 @@ import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.mercurio.client.feature.entry.domain.ModelSelectionStore
+import org.mercurio.client.feature.entry.domain.NightlyArtifact
 import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import org.mercurio.client.feature.entry.domain.NoOpHistoryCacheStore
 import org.mercurio.client.feature.entry.domain.NoOpModelSelectionStore
@@ -229,6 +231,10 @@ sealed interface EntryUiEvent {
     data object DownloadUpdateClicked : Settings
 
     data object CancelUpdateDownloadClicked : Settings
+
+    data object OpenInstallPermissionSettingsClicked : Settings
+
+    data object RestartToFinishClicked : Settings
 
     data object CloseSettingsClicked : Settings
 
@@ -456,6 +462,9 @@ data class EntryStateHolderDependencies(
     val appLock: AppLockPorts? = null,
     val checkForNightlyUpdate: CheckForNightlyUpdate? = null,
     val downloadNightlyUpdate: DownloadNightlyUpdate? = null,
+    val installNightlyUpdate: InstallNightlyUpdate? = null,
+    val requestInstallPermissionSettings: (() -> Unit)? = null,
+    val requestAppRestart: (() -> Unit)? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -490,6 +499,9 @@ class EntryStateHolder(
     internal val appLock = dependencies.appLock
     internal val checkForNightlyUpdate = dependencies.checkForNightlyUpdate
     internal val downloadNightlyUpdate = dependencies.downloadNightlyUpdate
+    internal val installNightlyUpdate = dependencies.installNightlyUpdate
+    internal val requestInstallPermissionSettings = dependencies.requestInstallPermissionSettings
+    internal val requestAppRestart = dependencies.requestAppRestart
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
 
     private val storedErrorReportingConsent: ErrorReportingConsent? = errorReportingConsentStore?.read()
@@ -518,6 +530,7 @@ class EntryStateHolder(
     internal var updateCheckJob: Job? = null
     internal var updateDownloadJob: Job? = null
     internal var updateDownloadOffer: NightlyUpdateOffer? = null
+    internal var updateInstallArtifact: NightlyArtifact? = null
 
     @Volatile
     internal var updateDownloadGeneration = 0L
@@ -691,6 +704,8 @@ class EntryStateHolder(
             is EntryUiEvent.CheckForUpdatesClicked -> checkForUpdates()
             is EntryUiEvent.DownloadUpdateClicked -> downloadUpdate()
             is EntryUiEvent.CancelUpdateDownloadClicked -> cancelUpdateDownload()
+            is EntryUiEvent.OpenInstallPermissionSettingsClicked -> openInstallPermissionSettings()
+            is EntryUiEvent.RestartToFinishClicked -> restartToFinish()
             is EntryUiEvent.CloseSettingsClicked -> closeSettings()
             is EntryUiEvent.ClearHistoryCacheClicked -> requestClearHistoryCache()
             is EntryUiEvent.ConfirmClearHistoryCacheClicked -> confirmClearHistoryCache()

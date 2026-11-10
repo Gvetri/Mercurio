@@ -2,7 +2,10 @@ package org.mercurio.client
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -23,7 +26,9 @@ import org.mercurio.client.feature.entry.presentation.EntryStateHolder
 import org.mercurio.client.feature.entry.presentation.EntryUiEvent
 import org.mercurio.client.feature.entry.presentation.HermesTheme
 import org.mercurio.client.feature.entry.presentation.MessageImageProvider
+import org.mercurio.client.feature.entry.wiring.EntryHostActions
 import org.mercurio.client.feature.entry.wiring.EntryWiring
+import kotlin.system.exitProcess
 import org.mercurio.client.feature.entry.presentation.R as PresentationR
 
 class MainActivity : FragmentActivity() {
@@ -38,8 +43,13 @@ class MainActivity : FragmentActivity() {
         entryStateHolder =
             EntryWiring.createEntryStateHolder(
                 context = applicationContext,
-                requestRunStatusNotificationPermission = { notificationPermissionRequests.tryEmit(Unit) },
-                requestAppUnlock = { appUnlockRequests.trySend(Unit) },
+                hostActions =
+                    EntryHostActions(
+                        requestRunStatusNotificationPermission = { notificationPermissionRequests.tryEmit(Unit) },
+                        requestAppUnlock = { appUnlockRequests.trySend(Unit) },
+                        requestInstallPermissionSettings = { openInstallPermissionSettings() },
+                        requestAppRestart = { restartApplication() },
+                    ),
             )
         messageImagePort = EntryWiring.createMessageImagePort()
         applyInboundLink(intent)
@@ -108,6 +118,21 @@ class MainActivity : FragmentActivity() {
                 isMultiple = action == Intent.ACTION_SEND_MULTIPLE,
             ),
         )
+    }
+
+    private fun openInstallPermissionSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        startActivity(
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")),
+        )
+    }
+
+    private fun restartApplication() {
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+        )
+        exitProcess(0)
     }
 
     private fun promptForAppUnlock() {

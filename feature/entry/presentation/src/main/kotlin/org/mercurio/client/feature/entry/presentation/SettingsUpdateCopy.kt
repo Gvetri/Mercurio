@@ -5,6 +5,7 @@ import androidx.compose.ui.res.stringResource
 import org.mercurio.client.feature.entry.application.NightlyDownloadRefusal
 import org.mercurio.client.feature.entry.application.NightlyUpdateFailure
 import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
+import org.mercurio.client.feature.entry.domain.NightlyInstallRefusal
 
 @Composable
 internal fun settingsUpdateRefusal(status: AppUpdateStatus.Refused): String =
@@ -40,5 +41,16 @@ internal fun settingsUpdateFailure(reason: NightlyUpdateFailure): String =
             NightlyUpdateFailure.RATE_LIMITED -> R.string.settings_app_updates_rate_limited
             NightlyUpdateFailure.SERVICE_UNAVAILABLE -> R.string.settings_app_updates_unavailable
             NightlyUpdateFailure.STORAGE_UNAVAILABLE -> R.string.settings_app_updates_storage
+        },
+    )
+
+@Composable
+internal fun settingsInstallRefusal(reason: NightlyInstallRefusal): String =
+    stringResource(
+        when (reason) {
+            NightlyInstallRefusal.CANCELLED -> R.string.settings_app_updates_install_cancelled
+            NightlyInstallRefusal.BLOCKED_BY_SYSTEM -> R.string.settings_app_updates_install_blocked
+            NightlyInstallRefusal.SYSTEM_REFUSED -> R.string.settings_app_updates_install_failed
+            NightlyInstallRefusal.INSUFFICIENT_STORAGE -> R.string.settings_app_updates_install_storage
         },
     )

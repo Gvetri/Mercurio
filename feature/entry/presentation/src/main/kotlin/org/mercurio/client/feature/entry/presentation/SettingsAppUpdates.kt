@@ -56,11 +56,23 @@ internal fun SettingsAppUpdatesSection(
             onClick = { onEvent(EntryUiEvent.DownloadUpdateClicked) },
         )
     }
-    SettingsActionRow(
-        label = stringResource(R.string.settings_app_updates_check),
-        enabled = !playManaged,
-        onClick = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
-    )
+    if (status is AppUpdateStatus.Installed) {
+        SettingsActionRow(
+            label = stringResource(R.string.settings_app_updates_restart),
+            enabled = !playManaged,
+            onClick = { onEvent(EntryUiEvent.RestartToFinishClicked) },
+        )
+    }
+    if (status !is AppUpdateStatus.PermissionRequired &&
+        status !is AppUpdateStatus.Installed &&
+        status !is AppUpdateStatus.InstallRefused
+    ) {
+        SettingsActionRow(
+            label = stringResource(R.string.settings_app_updates_check),
+            enabled = !playManaged,
+            onClick = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
+        )
+    }
 }
 
 @Composable
@@ -75,6 +87,15 @@ private fun SettingsUpdateStatusBody(
                 progress = status.progress,
                 onCancel = { onEvent(EntryUiEvent.CancelUpdateDownloadClicked) },
             )
+        is AppUpdateStatus.PermissionRequired ->
+            SettingsUpdatePermissionBanner(
+                message =
+                    stringResource(
+                        R.string.settings_app_updates_permission_banner,
+                        stringResource(R.string.brand_name),
+                    ),
+                onOpenSettings = { onEvent(EntryUiEvent.OpenInstallPermissionSettingsClicked) },
+            )
         is AppUpdateStatus.Refused ->
             SettingsUpdateFailureBanner(
                 message = settingsUpdateRefusal(status),
@@ -83,6 +104,11 @@ private fun SettingsUpdateStatusBody(
         is AppUpdateStatus.DownloadRefused ->
             SettingsUpdateFailureBanner(
                 message = settingsDownloadRefusal(status.reason),
+                onRetry = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
+            )
+        is AppUpdateStatus.InstallRefused ->
+            SettingsUpdateFailureBanner(
+                message = settingsInstallRefusal(status.reason),
                 onRetry = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
             )
         is AppUpdateStatus.Failed ->
@@ -94,6 +120,7 @@ private fun SettingsUpdateStatusBody(
         is AppUpdateStatus.UpToDate,
         is AppUpdateStatus.Offered,
         is AppUpdateStatus.Verified,
+        is AppUpdateStatus.Installed,
         -> Unit
     }
 }
@@ -120,8 +147,22 @@ private fun settingsUpdateSummary(
             is AppUpdateStatus.Downloading -> stringResource(R.string.settings_app_updates_downloading_phase)
             is AppUpdateStatus.Verified ->
                 stringResource(R.string.settings_app_updates_verified, status.verifiedAt.settingsCheckedTime())
+            is AppUpdateStatus.PermissionRequired ->
+                stringResource(
+                    R.string.settings_app_updates_waiting_permission,
+                    status.versionName,
+                    status.versionCode,
+                )
+            is AppUpdateStatus.Installed ->
+                stringResource(
+                    R.string.settings_app_updates_installed,
+                    status.versionName,
+                    status.versionCode,
+                )
             is AppUpdateStatus.Refused -> stringResource(R.string.settings_app_updates_refused_row)
             is AppUpdateStatus.DownloadRefused -> stringResource(R.string.settings_app_updates_download_refused_row)
+            is AppUpdateStatus.InstallRefused ->
+                stringResource(R.string.settings_app_updates_install_refused_row)
             is AppUpdateStatus.Failed -> stringResource(R.string.settings_app_updates_failed_row)
         }
     }
