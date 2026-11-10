@@ -215,6 +215,7 @@ class RunReconciliationSubmissionTest {
 
             try {
                 openReconciledSession(holder, gateway)
+                awaitRunSubmissionAllowed(holder, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 assertTrue(gateway.observationOpenStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
@@ -225,6 +226,7 @@ class RunReconciliationSubmissionTest {
                         !it.sessionList.openedSession.isRefreshing
                 }
 
+                awaitRunSubmissionAllowed(holder, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 assertFalse(gateway.secondObservationRequested.await(100, TimeUnit.MILLISECONDS))

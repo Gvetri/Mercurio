@@ -141,9 +141,21 @@ internal fun EntryStateHolder.reconciliationRunIds(
                     ?.id
                     ?.let(ids::add)
             }
+            ids.removeAll(unreconciledRecoveryRunIds(context.sessionId))
             ids.toList()
         }
     }
+
+internal fun EntryStateHolder.unreconciledRecoveryRunIds(sessionId: SessionId): Set<RunId> {
+    val endpoint = mutableUiState.value.endpoint
+    return recoveryClaims.keys
+        .asSequence()
+        .filter { key ->
+            key.sessionId == sessionId &&
+                key.endpoint == endpoint &&
+                key.runId !in recoveryReconciledRunIds
+        }.mapTo(mutableSetOf()) { key -> key.runId }
+}
 
 internal suspend fun EntryStateHolder.reconcileRunObservationCandidate(
     context: OpenedRunReconcileContext,
@@ -373,6 +385,16 @@ internal suspend fun EntryStateHolder.applyAuthoritativeRunReconciliation(
         applyStateChange {
             applyReconciliationLocked(request, reconciliation)
         }
+    synchronized(sessionRequestLock) {
+        val reconciledRun = reconciliation.run
+        val runIsClaimed =
+            recoveryClaims.keys.any { key ->
+                key.sessionId == request.sessionId && key.runId == reconciledRun.id
+            }
+        if (runIsClaimed) {
+            recoveryReconciledRunIds += reconciledRun.id
+        }
+    }
     application.observationToClose?.close()
     application.observationJobToCancel?.cancel()
     removeReconciledRecoveryEntry(

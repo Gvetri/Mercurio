@@ -245,6 +245,16 @@ internal fun awaitReconciliationCondition(predicate: () -> Boolean) {
     }
 }
 
+internal fun awaitRunSubmissionAllowed(
+    holder: EntryStateHolder,
+    sessionId: SessionId,
+) {
+    awaitReconciliationCondition {
+        val sessionList = holder.uiState.value.sessionList
+        sessionList != null && !holder.blocksRunSubmissionNow(sessionList, sessionId)
+    }
+}
+
 internal fun recoveredDeltaObservation(run: Run): ReconciliationScriptedObservation =
     ReconciliationScriptedObservation(
         listOf(RunEvent(RunEventType.MESSAGE_DELTA, run.id, "running", "Recovered observation", "delta")),

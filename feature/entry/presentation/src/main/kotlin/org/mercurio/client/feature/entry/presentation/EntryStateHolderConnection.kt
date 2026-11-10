@@ -61,6 +61,7 @@ internal fun EntryStateHolder.clearSessionStateForClose() {
     connectionRecoveryFailedSessions.clear()
     recoverySessionCounts.clear()
     recoveryClaims.clear()
+    recoveryReconciledRunIds.clear()
     recoveryHandledEntries.clear()
     recoveryLoadPending = false
     recoveryLoadFailed = false
