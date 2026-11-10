@@ -168,6 +168,16 @@
     <string name="settings_app_updates_refused_signer">Update refused: the download is not signed by this app\'s certificate. Nothing was installed.</string>
     <string name="settings_app_updates_refused_abi">Update refused: the download carries no native code this device can run.</string>
     <string name="settings_app_updates_storage">Not enough storage to save the update. Free some space and try again.</string>
+    <string name="settings_app_updates_waiting_permission">%1$s (%2$d) · waiting for permission</string>
+    <string name="settings_app_updates_permission_banner">Android blocks installs from %1$s. Allow installs from this source in system settings, then return here. The update resumes where it stopped.</string>
+    <string name="settings_app_updates_open_settings">open settings</string>
+    <string name="settings_app_updates_installed">Installed %1$s (%2$d) · restart to use</string>
+    <string name="settings_app_updates_restart">Restart to finish</string>
+    <string name="settings_app_updates_install_refused_row">Install refused</string>
+    <string name="settings_app_updates_install_cancelled">Update refused: the install was cancelled. Nothing was installed.</string>
+    <string name="settings_app_updates_install_blocked">Update refused: Android blocked this install. Nothing was installed.</string>
+    <string name="settings_app_updates_install_failed">Update refused: the system did not complete the install. Nothing was installed.</string>
+    <string name="settings_app_updates_install_storage">Update refused: not enough storage to install. Free some space and try again.</string>
     <string name="settings_error_reporting_row">Share crash and error reports</string>
     <string name="settings_error_reporting_supporting_off">Crashes, errors, and not-responding reports. Off until you turn it on.</string>
     <string name="settings_error_reporting_supporting_on">Crashes, errors, and not-responding reports. On until you turn it off.</string>

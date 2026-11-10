@@ -19,6 +19,7 @@ internal fun EntryStateHolder.enterForeground() {
     refreshAppLockAvailability()
     if (!isUnlockPromptPending) requestAppUnlock()
     refreshSessions()
+    resumeInstallAfterPermission()
 }
 
 internal fun EntryStateHolder.leaveForeground() {

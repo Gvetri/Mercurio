@@ -150,7 +150,7 @@ class HapticsTest {
     }
 
     @Test
-    fun the_manifest_stays_free_of_the_vibrate_permission() {
+    fun the_manifest_declares_exactly_the_expected_permissions() {
         val manifest =
             File(
                 requireNotNull(System.getProperty("fixture.repositoryRoot")) {
@@ -166,7 +166,11 @@ class HapticsTest {
                 .toSet()
 
         assertEquals(
-            setOf("android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS"),
+            setOf(
+                "android.permission.INTERNET",
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.REQUEST_INSTALL_PACKAGES",
+            ),
             permissions,
         )
     }
