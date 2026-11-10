@@ -97,6 +97,7 @@ object EntryWiring {
                     requestRunStatusNotificationPermission = requestRunStatusNotificationPermission,
                     appLock = appLockPorts(context, overrides, requestAppUnlock),
                     checkForNightlyUpdate = buildCheckForNightlyUpdate(overrides, installedBuildProvider),
+                    downloadNightlyUpdate = buildDownloadNightlyUpdate(context, overrides),
                 ),
         )
     }

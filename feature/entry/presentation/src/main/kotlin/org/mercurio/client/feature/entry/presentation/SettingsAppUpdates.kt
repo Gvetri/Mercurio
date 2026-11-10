@@ -16,9 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import org.mercurio.client.feature.entry.application.NightlyUpdateFailure
-import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
 import org.mercurio.client.feature.entry.domain.InstallSource
+import org.mercurio.client.feature.entry.domain.NightlyDownloadProgress
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -44,16 +43,46 @@ internal fun SettingsAppUpdatesSection(
             (status as? AppUpdateStatus.Offered)?.let { offered ->
                 stringResource(
                     R.string.settings_app_updates_offered_detail,
-                    offered.publishedAt.settingsPublishedTime(),
-                    offered.releaseTag,
+                    offered.offer.publishedAt.settingsPublishedTime(),
+                    offered.offer.releaseTag,
                 )
             },
     )
+    SettingsUpdateStatusBody(status = status, onEvent = onEvent)
+    if (status is AppUpdateStatus.Offered) {
+        SettingsActionRow(
+            label = stringResource(R.string.settings_app_updates_download),
+            enabled = !playManaged,
+            onClick = { onEvent(EntryUiEvent.DownloadUpdateClicked) },
+        )
+    }
+    SettingsActionRow(
+        label = stringResource(R.string.settings_app_updates_check),
+        enabled = !playManaged,
+        onClick = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
+    )
+}
+
+@Composable
+private fun SettingsUpdateStatusBody(
+    status: AppUpdateStatus,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
     when (status) {
         AppUpdateStatus.Checking -> SettingsUpdateProgress()
+        is AppUpdateStatus.Downloading ->
+            SettingsDownloadProgress(
+                progress = status.progress,
+                onCancel = { onEvent(EntryUiEvent.CancelUpdateDownloadClicked) },
+            )
         is AppUpdateStatus.Refused ->
             SettingsUpdateFailureBanner(
                 message = settingsUpdateRefusal(status),
+                onRetry = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
+            )
+        is AppUpdateStatus.DownloadRefused ->
+            SettingsUpdateFailureBanner(
+                message = settingsDownloadRefusal(status.reason),
                 onRetry = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
             )
         is AppUpdateStatus.Failed ->
@@ -61,13 +90,12 @@ internal fun SettingsAppUpdatesSection(
                 message = settingsUpdateFailure(status.reason),
                 onRetry = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
             )
-        AppUpdateStatus.Idle, is AppUpdateStatus.UpToDate, is AppUpdateStatus.Offered -> Unit
+        AppUpdateStatus.Idle,
+        is AppUpdateStatus.UpToDate,
+        is AppUpdateStatus.Offered,
+        is AppUpdateStatus.Verified,
+        -> Unit
     }
-    SettingsActionRow(
-        label = stringResource(R.string.settings_app_updates_check),
-        enabled = !playManaged,
-        onClick = { onEvent(EntryUiEvent.CheckForUpdatesClicked) },
-    )
 }
 
 @Composable
@@ -84,8 +112,16 @@ private fun settingsUpdateSummary(
             is AppUpdateStatus.UpToDate ->
                 stringResource(R.string.settings_app_updates_up_to_date, status.checkedAt.settingsCheckedTime())
             is AppUpdateStatus.Offered ->
-                stringResource(R.string.settings_app_updates_offered, status.versionName, status.sourceCommit)
+                stringResource(
+                    R.string.settings_app_updates_offered,
+                    status.offer.versionName,
+                    status.offer.sourceCommit,
+                )
+            is AppUpdateStatus.Downloading -> stringResource(R.string.settings_app_updates_downloading_phase)
+            is AppUpdateStatus.Verified ->
+                stringResource(R.string.settings_app_updates_verified, status.verifiedAt.settingsCheckedTime())
             is AppUpdateStatus.Refused -> stringResource(R.string.settings_app_updates_refused_row)
+            is AppUpdateStatus.DownloadRefused -> stringResource(R.string.settings_app_updates_download_refused_row)
             is AppUpdateStatus.Failed -> stringResource(R.string.settings_app_updates_failed_row)
         }
     }
@@ -110,6 +146,45 @@ private fun SettingsUpdateProgress() {
                     .fillMaxWidth()
                     .padding(top = tokens.spacing.xs)
                     .height(tokens.spacing.s),
+        )
+    }
+}
+
+@Composable
+private fun SettingsDownloadProgress(
+    progress: NightlyDownloadProgress,
+    onCancel: () -> Unit,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = tokens.spacing.xs),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_app_updates_downloading, progress.percent()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LinearProgressIndicator(
+            progress = { progress.fraction() },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = tokens.spacing.xs)
+                    .height(tokens.spacing.s),
+        )
+        Text(
+            text = stringResource(R.string.settings_app_updates_cancel),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier =
+                Modifier
+                    .align(Alignment.End)
+                    .heightIn(min = tokens.spacing.xxxl)
+                    .clickable(role = Role.Button, onClick = onCancel)
+                    .padding(horizontal = tokens.spacing.s, vertical = tokens.spacing.xs),
         )
     }
 }
@@ -147,30 +222,20 @@ private fun SettingsUpdateFailureBanner(
     }
 }
 
-@Composable
-private fun settingsUpdateRefusal(status: AppUpdateStatus.Refused): String =
-    when (status.reason) {
-        NightlyUpdateRefusal.CONTRADICTORY_RELEASE ->
-            status.releaseTag?.let { tag ->
-                stringResource(R.string.settings_app_updates_refused_contradiction, tag)
-            } ?: stringResource(R.string.settings_app_updates_refused_generic)
-        NightlyUpdateRefusal.UNREADABLE_INSTALLED_BUILD ->
-            stringResource(R.string.settings_app_updates_refused_unreadable_build)
+private fun NightlyDownloadProgress.fraction(): Float =
+    if (totalBytes <= 0L) {
+        0f
+    } else {
+        (bytesDownloaded.toFloat() / totalBytes).coerceIn(0f, 1f)
     }
 
-@Composable
-private fun settingsUpdateFailure(reason: NightlyUpdateFailure): String =
-    stringResource(
-        when (reason) {
-            NightlyUpdateFailure.OFFLINE -> R.string.settings_app_updates_offline
-            NightlyUpdateFailure.RATE_LIMITED -> R.string.settings_app_updates_rate_limited
-            NightlyUpdateFailure.SERVICE_UNAVAILABLE -> R.string.settings_app_updates_unavailable
-        },
-    )
+private fun NightlyDownloadProgress.percent(): Int = (fraction() * PERCENT_FULL).toInt()
 
 private fun Instant.settingsCheckedTime(): String = SETTINGS_CHECKED_TIME.format(atZone(ZoneId.systemDefault()))
 
 private fun Instant.settingsPublishedTime(): String = SETTINGS_PUBLISHED_TIME.format(atZone(ZoneOffset.UTC))
+
+private const val PERCENT_FULL = 100f
 
 private val SETTINGS_CHECKED_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())
 

@@ -2,11 +2,14 @@ package org.mercurio.client.feature.entry.application
 
 import org.mercurio.client.feature.entry.domain.InstalledBuild
 import org.mercurio.client.feature.entry.domain.InstalledBuildProvider
+import org.mercurio.client.feature.entry.domain.NightlyApk
 import org.mercurio.client.feature.entry.domain.NightlyFeedFailure
 import org.mercurio.client.feature.entry.domain.NightlyListing
 import org.mercurio.client.feature.entry.domain.NightlyRelease
+import org.mercurio.client.feature.entry.domain.NightlySigningMetadata
 import org.mercurio.client.feature.entry.domain.NightlySigningMetadataResult
 import org.mercurio.client.feature.entry.domain.NightlyUpdateFeed
+import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import org.mercurio.client.feature.entry.domain.SHORT_COMMIT_LENGTH
 import org.mercurio.client.feature.entry.domain.contradicts
 import java.time.Instant
@@ -51,17 +54,30 @@ class CheckForNightlyUpdate(
                     metadata.metadata.contradicts(newest.tag) ->
                         NightlyUpdateCheck.Refused(newest.tag, NightlyUpdateRefusal.CONTRADICTORY_RELEASE)
                     metadata.metadata.versionCode <= installed.versionCode -> NightlyUpdateCheck.UpToDate(now())
-                    else ->
-                        NightlyUpdateCheck.Offered(
-                            versionName = metadata.metadata.versionName,
-                            sourceCommit = metadata.metadata.sourceSha.take(SHORT_COMMIT_LENGTH),
-                            publishedAt = newest.publishedAt,
-                            releaseTag = newest.tag,
-                            checkedAt = now(),
-                        )
+                    else -> NightlyUpdateCheck.Offered(offer(newest, metadata.metadata), now())
                 }
         }
     }
+
+    private fun offer(
+        release: NightlyRelease,
+        metadata: NightlySigningMetadata,
+    ): NightlyUpdateOffer =
+        NightlyUpdateOffer(
+            releaseTag = release.tag,
+            versionName = metadata.versionName,
+            versionCode = metadata.versionCode,
+            sourceCommit = metadata.sourceSha.take(SHORT_COMMIT_LENGTH),
+            publishedAt = release.publishedAt,
+            apk =
+                NightlyApk(
+                    address = release.apkAddress,
+                    sizeBytes = release.apkSizeBytes,
+                    sha256 = metadata.apkSha256,
+                    certificateSha256 = metadata.certificateSha256,
+                    nativeAbis = metadata.nativeAbis,
+                ),
+        )
 }
 
 /** The outcome of one manual Nightly update check. */
@@ -71,10 +87,7 @@ sealed interface NightlyUpdateCheck {
     ) : NightlyUpdateCheck
 
     data class Offered(
-        val versionName: String,
-        val sourceCommit: String,
-        val publishedAt: Instant,
-        val releaseTag: String,
+        val offer: NightlyUpdateOffer,
         val checkedAt: Instant,
     ) : NightlyUpdateCheck
 
@@ -102,6 +115,9 @@ enum class NightlyUpdateFailure {
     OFFLINE,
     RATE_LIMITED,
     SERVICE_UNAVAILABLE,
+
+    /** The device could not hold the downloaded update. */
+    STORAGE_UNAVAILABLE,
 }
 
 private fun NightlyFeedFailure.toUpdateFailure(): NightlyUpdateFailure =

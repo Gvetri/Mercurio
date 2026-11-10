@@ -15,12 +15,14 @@ interface NightlyUpdateFeed {
 
 /**
  * One published Nightly release that carries the channel's application APK, signing metadata, and
- * checksum asset.
+ * checksum asset, with the APK asset address and the size the release states for it.
  */
 data class NightlyRelease(
     val tag: String,
     val publishedAt: Instant,
     val metadataAddress: String,
+    val apkAddress: String,
+    val apkSizeBytes: Long,
 )
 
 /** The listing outcome: the published Nightly releases, or a typed failure. */
