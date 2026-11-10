@@ -229,15 +229,13 @@ private class MarkdownImageSuspendingPort : MessageImagePort {
 }
 
 private class MarkdownImageRefusedPort : MessageImagePort {
-    override suspend fun fetch(destination: String): MessageImageFetch {
-        return MessageImageFetch.Refused(MessageImageRefusal.NETWORK)
-    }
+    override suspend fun fetch(destination: String): MessageImageFetch =
+        MessageImageFetch.Refused(MessageImageRefusal.NETWORK)
 }
 
 private class MarkdownImageLoadedPort : MessageImagePort {
-    override suspend fun fetch(destination: String): MessageImageFetch {
-        return MessageImageFetch.Fetched(byteArrayOf(1, 2, 3), "image/png")
-    }
+    override suspend fun fetch(destination: String): MessageImageFetch =
+        MessageImageFetch.Fetched(byteArrayOf(1, 2, 3), "image/png")
 }
 
 private class MarkdownImageDecoder : MessageImageDecoder {

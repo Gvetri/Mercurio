@@ -24,9 +24,8 @@ import java.util.Locale
 
 private val GATEWAY_FACTS_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
 
-internal fun EntryUiState.blocksVerification(): Boolean {
-    return !connectionSetupRequested || isVerifying || isSaving || (isConnected && !isChangingCredential)
-}
+internal fun EntryUiState.blocksVerification(): Boolean =
+    !connectionSetupRequested || isVerifying || isSaving || (isConnected && !isChangingCredential)
 
 internal suspend fun EntryStateHolder.runVerification(
     verifier: VerifyGatewayConnection,

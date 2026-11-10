@@ -70,7 +70,11 @@ class SentMessageVisibilityTest {
                         listOf(
                             GatewayHistoryMessage("message-3", "user", "Second message", RunId("run-2"), "completed"),
                             GatewayHistoryMessage(
-                                "message-4", "assistant", "Second answer", RunId("run-2"), "completed",
+                                "message-4",
+                                "assistant",
+                                "Second answer",
+                                RunId("run-2"),
+                                "completed",
                             ),
                         ),
                 )

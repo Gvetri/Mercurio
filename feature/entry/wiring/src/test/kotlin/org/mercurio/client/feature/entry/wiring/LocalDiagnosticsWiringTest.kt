@@ -262,9 +262,8 @@ class LocalDiagnosticsWiringTest {
         )
     }
 
-    private fun buffer(): RollingLocalDiagnosticsBuffer {
-        return RollingLocalDiagnosticsBuffer(FileLocalDiagnosticsStorage(context))
-    }
+    private fun buffer(): RollingLocalDiagnosticsBuffer =
+        RollingLocalDiagnosticsBuffer(FileLocalDiagnosticsStorage(context))
 
     private fun storedFile(create: Boolean = false): File? {
         val file = File(context.noBackupFilesDir, "local-diagnostics.jsonl")

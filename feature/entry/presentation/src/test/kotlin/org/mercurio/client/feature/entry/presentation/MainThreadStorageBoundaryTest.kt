@@ -240,10 +240,15 @@ private class StorageCallRecorder {
         )
     }
 
-    private data class StorageCall(val operation: String, val thread: Thread)
+    private data class StorageCall(
+        val operation: String,
+        val thread: Thread,
+    )
 }
 
-private class RecordingDraftStore(private val recorder: StorageCallRecorder) : SessionDraftStore {
+private class RecordingDraftStore(
+    private val recorder: StorageCallRecorder,
+) : SessionDraftStore {
     private val drafts = mutableMapOf<SessionDraftKey, String>()
 
     override fun read(key: SessionDraftKey): String? {
@@ -270,7 +275,9 @@ private class RecordingDraftStore(private val recorder: StorageCallRecorder) : S
     }
 }
 
-private class RecordingModelSelectionStore(private val recorder: StorageCallRecorder) : ModelSelectionStore {
+private class RecordingModelSelectionStore(
+    private val recorder: StorageCallRecorder,
+) : ModelSelectionStore {
     private var selection: ModelSelection? = null
     val cleared = CountDownLatch(1)
 
@@ -324,7 +331,9 @@ private class RecordingModelSelectionStore(private val recorder: StorageCallReco
     }
 }
 
-private class RecordingUncertaintyStore(private val recorder: StorageCallRecorder) : RunSubmissionUncertaintyStore {
+private class RecordingUncertaintyStore(
+    private val recorder: StorageCallRecorder,
+) : RunSubmissionUncertaintyStore {
     private val keys = mutableSetOf<PendingRunSubmissionKey>()
     private val adds = CountDownLatch(SEND_CLAIM_AND_CLOSE_MARKER_ADDS)
 
@@ -362,7 +371,9 @@ private class RecordingUncertaintyStore(private val recorder: StorageCallRecorde
     override fun snapshot(key: PendingRunSubmissionKey): RunSubmissionUncertaintySnapshot? = null
 }
 
-private class RecordingConnectionRepository(private val recorder: StorageCallRecorder) : GatewayConnectionRepository {
+private class RecordingConnectionRepository(
+    private val recorder: StorageCallRecorder,
+) : GatewayConnectionRepository {
     private var saved: GatewayConnection? = null
 
     override fun load(): GatewayConnection? {

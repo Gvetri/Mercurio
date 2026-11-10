@@ -45,9 +45,10 @@ internal sealed class UncertaintyStoreState : RunSubmissionUncertaintyStore {
         }
     }
 
-    override fun knownRunIds(key: PendingRunSubmissionKey): Set<RunId> {
-        return synchronized(lock) { keys[key]?.knownRunIds?.toSet().orEmpty() }
-    }
+    override fun knownRunIds(key: PendingRunSubmissionKey): Set<RunId> =
+        synchronized(lock) {
+            keys[key]?.knownRunIds?.toSet().orEmpty()
+        }
 
     override fun attemptId(key: PendingRunSubmissionKey): String? = synchronized(lock) { keys[key]?.attemptId }
 
@@ -64,9 +65,8 @@ internal sealed class UncertaintyStoreState : RunSubmissionUncertaintyStore {
             }
         }
 
-    protected fun UncertaintyRecord.matchesAttempt(attemptId: String?): Boolean {
-        return attemptId == null || this.attemptId == attemptId
-    }
+    protected fun UncertaintyRecord.matchesAttempt(attemptId: String?): Boolean =
+        attemptId == null || this.attemptId == attemptId
 }
 
 internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
@@ -108,9 +108,10 @@ internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
             true
         }
 
-    override fun requiresRunMatch(key: PendingRunSubmissionKey): Boolean {
-        return synchronized(lock) { keys[key]?.requiresRunMatch == true }
-    }
+    override fun requiresRunMatch(key: PendingRunSubmissionKey): Boolean =
+        synchronized(lock) {
+            keys[key]?.requiresRunMatch == true
+        }
 
     override fun removeIfKnownRunIdsMatch(
         key: PendingRunSubmissionKey,

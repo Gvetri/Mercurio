@@ -50,9 +50,8 @@ class SharedPreferencesSessionDraftStore(
     private fun recordKey(key: SessionDraftKey): String =
         "$RECORDS_KEY.${endpointNamespace(key.endpoint)}.${encodePart(key.sessionId.value)}"
 
-    private fun encodePart(value: String): String {
-        return Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-    }
+    private fun encodePart(value: String): String =
+        Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
 
     private fun endpointNamespace(endpoint: String): String {
         val canonicalEndpoint = runCatching { normalizeGatewayEndpoint(endpoint) }.getOrDefault(endpoint.trim())

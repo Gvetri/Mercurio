@@ -140,9 +140,8 @@ private object ModelSelectionKeys {
         )
     }
 
-    fun encodePart(value: String): String {
-        return Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-    }
+    fun encodePart(value: String): String =
+        Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
 
     fun decodePart(value: String): String = String(Base64.decode(value, Base64.NO_WRAP), StandardCharsets.UTF_8)
 

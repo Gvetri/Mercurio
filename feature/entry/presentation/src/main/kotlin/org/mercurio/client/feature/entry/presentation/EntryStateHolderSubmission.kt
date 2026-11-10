@@ -183,9 +183,7 @@ internal fun EntryStateHolder.submissionPersisted(
     persistBeforeApply: Boolean,
     recoveryEntryPersisted: Boolean,
     submissionBindingSucceeded: Boolean,
-): Boolean {
-    return run.isActive() && persistBeforeApply && recoveryEntryPersisted && submissionBindingSucceeded
-}
+): Boolean = run.isActive() && persistBeforeApply && recoveryEntryPersisted && submissionBindingSucceeded
 
 internal fun EntryStateHolder.submissionRunsAndState(
     opened: OpenSessionUiState,

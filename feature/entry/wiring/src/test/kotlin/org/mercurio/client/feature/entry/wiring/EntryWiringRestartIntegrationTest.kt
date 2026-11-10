@@ -649,7 +649,9 @@ class EntryWiringRestartIntegrationTest {
         }
     }
 
-    private class RestartGateway : SessionGatewayPort, RunGatewayPort {
+    private class RestartGateway :
+        SessionGatewayPort,
+        RunGatewayPort {
         companion object {
             val SESSION_ID = SessionId("wiring-session")
         }
@@ -779,9 +781,10 @@ class EntryWiringRestartIntegrationTest {
             return statusByRun[runId] ?: if (terminal) activeRun.copy(status = "succeeded") else activeRun
         }
 
-        override fun observeRun(runId: RunId): RunEventObservation {
-            return BlockingObservation(observationStarted).also { observations += it }
-        }
+        override fun observeRun(runId: RunId): RunEventObservation =
+            BlockingObservation(observationStarted).also {
+                observations += it
+            }
     }
 
     private class BlockingObservation(

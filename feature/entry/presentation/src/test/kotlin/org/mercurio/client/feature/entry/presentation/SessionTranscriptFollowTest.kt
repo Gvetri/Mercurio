@@ -321,16 +321,16 @@ class SessionTranscriptFollowTest {
             isStreaming = true,
         )
 
-    private fun transcriptMessage(index: Int): SessionMessageUiState {
-        return message("message-$index", "user", "Transcript message $index")
-    }
+    private fun transcriptMessage(index: Int): SessionMessageUiState =
+        message("message-$index", "user", "Transcript message $index")
 
     private fun transcriptBody(paragraphCount: Int): String =
         (1..paragraphCount).joinToString(separator = "\n\n") { number -> "Paragraph $number" }
 
-    private fun longBody(lineCount: Int): String {
-        return (1..lineCount).joinToString(separator = "\n\n") { number -> "Long line $number" }
-    }
+    private fun longBody(lineCount: Int): String =
+        (1..lineCount).joinToString(separator = "\n\n") { number ->
+            "Long line $number"
+        }
 }
 
 private const val SETTLED_FRAMES = 4

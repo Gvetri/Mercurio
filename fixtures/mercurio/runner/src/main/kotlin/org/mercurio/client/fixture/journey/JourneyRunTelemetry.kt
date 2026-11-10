@@ -26,9 +26,7 @@ internal fun runCreatesFor(
     telemetry["run_creates"]?.jsonObject?.get(sessionId)?.jsonPrimitive?.int
         ?: error("Telemetry has no run-create record for session '$sessionId'.")
 
-internal fun runStatusRequests(telemetry: JsonObject): Int {
-    return telemetry.getValue("run_status_requests").jsonPrimitive.int
-}
+internal fun runStatusRequests(telemetry: JsonObject): Int = telemetry.getValue("run_status_requests").jsonPrimitive.int
 
 internal fun interruptedRunIds(telemetry: JsonObject): Set<String> =
     telemetry["interrupted_run_ids"]?.jsonArray?.map { it.jsonPrimitive.content }?.toSet().orEmpty()

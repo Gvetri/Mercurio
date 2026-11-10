@@ -5,8 +5,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
-internal class StateChangeConsumerMarker :
-    AbstractCoroutineContextElement(StateChangeConsumerMarker) {
+internal class StateChangeConsumerMarker : AbstractCoroutineContextElement(StateChangeConsumerMarker) {
     companion object Key : CoroutineContext.Key<StateChangeConsumerMarker>
 }
 

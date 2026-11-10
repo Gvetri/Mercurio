@@ -608,7 +608,8 @@ class EntryScreenTest {
         private val first: Session,
         private val second: Session,
         private val activeRun: Run,
-    ) : SessionGatewayPort, RunGatewayPort {
+    ) : SessionGatewayPort,
+        RunGatewayPort {
         val firstRunCreated = CountDownLatch(1)
         val secondRunCreated = CountDownLatch(1)
         val firstObservation = BlockingObservation()
@@ -659,8 +660,8 @@ class EntryScreenTest {
         override fun createRun(
             sessionId: SessionId,
             input: String,
-        ): Run {
-            return if (sessionId == first.id) {
+        ): Run =
+            if (sessionId == first.id) {
                 firstRunHasBeenCreated = true
                 firstRunCreated.countDown()
                 activeRun
@@ -668,7 +669,6 @@ class EntryScreenTest {
                 secondRunCreated.countDown()
                 secondRun
             }
-        }
 
         override fun getRunStatus(runId: RunId): Run =
             when (runId) {

@@ -55,9 +55,8 @@ internal fun assertDeleteRetryKeepsTheSession(
     assertEquals(SessionMutationAction.DELETE, deleteFailure.sessionMutations[targetId]?.retryAction)
 }
 
-internal fun clientManifestEndpoints(): Map<String, GatewayEndpoint> {
-    return PublicBetaGatewayCapabilityManifest.current.requiredEndpoints
-}
+internal fun clientManifestEndpoints(): Map<String, GatewayEndpoint> =
+    PublicBetaGatewayCapabilityManifest.current.requiredEndpoints
 
 internal fun sessionRunsTrackedBy(
     holder: EntryStateHolder,

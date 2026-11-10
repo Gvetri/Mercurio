@@ -196,7 +196,9 @@ class BoundedHistoryCacheStoreTest {
         value.toByteArray(StandardCharsets.UTF_8)
             .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
 
-    private class MutableClock(initial: Instant) {
+    private class MutableClock(
+        initial: Instant,
+    ) {
         var instantValue: Instant = initial
             private set
 

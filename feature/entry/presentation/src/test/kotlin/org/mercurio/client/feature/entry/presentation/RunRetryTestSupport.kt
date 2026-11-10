@@ -185,7 +185,8 @@ internal class RetryFakeGateway(
     val sessions: List<Session>,
     histories: Map<SessionId, SessionHistory> = emptyMap(),
     runStatuses: Map<RunId, Run> = emptyMap(),
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     private val mutableHistories = histories.toMutableMap()
     private val mutableRunStatuses = runStatuses.toMutableMap()
     private val runObservations = mutableMapOf<RunId, List<RunEvent>>()

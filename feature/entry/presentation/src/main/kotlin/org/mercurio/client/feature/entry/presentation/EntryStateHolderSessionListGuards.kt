@@ -54,9 +54,8 @@ internal fun SessionListUiState.allowsSessionOpen(
     return canOpen && !blocked && sessionMutations[sessionId]?.pendingAction == null
 }
 
-internal fun SessionListUiState.interruptsListRequest(): Boolean {
-    return isLoading || isRefreshing || isSearching || isLoadingMore
-}
+internal fun SessionListUiState.interruptsListRequest(): Boolean =
+    isLoading || isRefreshing || isSearching || isLoadingMore
 
 internal fun EntryStateHolder.blocksRunSubmission(
     opened: OpenSessionUiState,

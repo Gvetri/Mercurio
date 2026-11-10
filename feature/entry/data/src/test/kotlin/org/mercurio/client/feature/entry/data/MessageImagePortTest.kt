@@ -290,9 +290,8 @@ class MessageImagePortTest {
         resolver: MessageImageHostResolver = MapHostResolver(),
     ): HttpMessageImagePort = HttpMessageImagePort(transport, resolver, StandardTestDispatcher(testScheduler))
 
-    private fun imageResponse(): MessageImageHttpResponse {
-        return MessageImageHttpResponse(200, "image/png", null, byteArrayOf(1, 2, 3))
-    }
+    private fun imageResponse(): MessageImageHttpResponse =
+        MessageImageHttpResponse(200, "image/png", null, byteArrayOf(1, 2, 3))
 
     private fun transportFailure(kind: MessageImageTransportException.Kind): MessageImageTransportException =
         MessageImageTransportException(kind, "The transport refused the request.")
