@@ -31,6 +31,8 @@ private val NEW_RELEASE =
         metadataAddress =
             "https://github.com/Gvetri/Mercurio/releases/download/" +
                 "nightly-7002-$NEW_SOURCE_SHA/signing-metadata.json",
+        apkAddress = "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/1",
+        apkSizeBytes = 13_002_342L,
     )
 
 private val OLD_RELEASE =
@@ -40,6 +42,8 @@ private val OLD_RELEASE =
         metadataAddress =
             "https://github.com/Gvetri/Mercurio/releases/download/" +
                 "nightly-6001-$OLD_SOURCE_SHA/signing-metadata.json",
+        apkAddress = "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/9",
+        apkSizeBytes = 13_002_100L,
     )
 
 private fun metadata(
@@ -68,12 +72,31 @@ class CheckForNightlyUpdateTest {
 
             val result = checker(feed, installedVersionCode = 6001L).execute() as NightlyUpdateCheck.Offered
 
-            assertEquals("nightly-7002-0123456789ab", result.versionName)
-            assertEquals("0123456", result.sourceCommit)
-            assertEquals(NEW_RELEASE.publishedAt, result.publishedAt)
-            assertEquals(NEW_RELEASE.tag, result.releaseTag)
+            assertEquals("nightly-7002-0123456789ab", result.offer.versionName)
+            assertEquals("0123456", result.offer.sourceCommit)
+            assertEquals(NEW_RELEASE.publishedAt, result.offer.publishedAt)
+            assertEquals(NEW_RELEASE.tag, result.offer.releaseTag)
             assertEquals(CHECKED_AT, result.checkedAt)
             assertEquals(listOf(NEW_RELEASE), feed.metadataRequests)
+        }
+
+    @Test
+    fun the_offer_carries_the_apk_address_size_and_verification_values() =
+        runTest {
+            val feed =
+                FakeNightlyUpdateFeed(
+                    listing = NightlyListing.Listed(listOf(NEW_RELEASE)),
+                    metadata = mapOf(NEW_RELEASE.tag to NightlySigningMetadataResult.Available(metadata())),
+                )
+
+            val result = checker(feed, installedVersionCode = 6001L).execute() as NightlyUpdateCheck.Offered
+
+            assertEquals(NEW_RELEASE.apkAddress, result.offer.apk.address)
+            assertEquals(NEW_RELEASE.apkSizeBytes, result.offer.apk.sizeBytes)
+            assertEquals(APK_SHA, result.offer.apk.sha256)
+            assertEquals(CERTIFICATE_SHA, result.offer.apk.certificateSha256)
+            assertEquals(listOf("arm64-v8a"), result.offer.apk.nativeAbis)
+            assertEquals(7002L, result.offer.versionCode)
         }
 
     @Test

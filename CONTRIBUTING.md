@@ -228,8 +228,10 @@ issues that add those capabilities.
 | `settings_15_app_updates_checking_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_16_app_updates_up_to_date_light` | `w360dp-h800dp-notnight` | Up to date with the check time in the row |
 | `settings_16_app_updates_up_to_date_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
-| `settings_17_app_updates_offered_light` | `w360dp-h800dp-notnight` | The offered build with its version name, short commit, publication time, and release tag |
+| `settings_17_app_updates_offered_light` | `w360dp-h800dp-notnight` | The offered build with its version name, short commit, publication time, and release tag, and the Download action |
 | `settings_17_app_updates_offered_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
+| `settings_18_app_updates_downloading_light` | `w360dp-h800dp-notnight` | The running transfer with its determinate track, percent line, and Cancel action |
+| `settings_18_app_updates_downloading_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_19_app_updates_refused_light` | `w360dp-h800dp-notnight` | The refusal banner naming the release tag, with its retry |
 | `settings_19_app_updates_refused_dark` | `w360dp-h800dp-night` | The same state on the dark token set |
 | `settings_23_about_light` | `w360dp-h640dp-notnight` | Version, build, and install-source rows in the shortened window, scrolled to the install-source value |

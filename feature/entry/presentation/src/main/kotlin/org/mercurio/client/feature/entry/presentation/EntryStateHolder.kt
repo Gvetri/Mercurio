@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.mercurio.client.feature.entry.application.CheckForNightlyUpdate
+import org.mercurio.client.feature.entry.application.DownloadNightlyUpdate
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
@@ -29,6 +30,7 @@ import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.mercurio.client.feature.entry.domain.ModelSelectionStore
+import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import org.mercurio.client.feature.entry.domain.NoOpHistoryCacheStore
 import org.mercurio.client.feature.entry.domain.NoOpModelSelectionStore
 import org.mercurio.client.feature.entry.domain.NoOpSessionDraftStore
@@ -223,6 +225,10 @@ sealed interface EntryUiEvent {
     data object OpenSettingsClicked : Settings
 
     data object CheckForUpdatesClicked : Settings
+
+    data object DownloadUpdateClicked : Settings
+
+    data object CancelUpdateDownloadClicked : Settings
 
     data object CloseSettingsClicked : Settings
 
@@ -449,6 +455,7 @@ data class EntryStateHolderDependencies(
     val isErrorReportingConfigured: Boolean = false,
     val appLock: AppLockPorts? = null,
     val checkForNightlyUpdate: CheckForNightlyUpdate? = null,
+    val downloadNightlyUpdate: DownloadNightlyUpdate? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -482,6 +489,7 @@ class EntryStateHolder(
     internal val isErrorReportingConfigured = dependencies.isErrorReportingConfigured
     internal val appLock = dependencies.appLock
     internal val checkForNightlyUpdate = dependencies.checkForNightlyUpdate
+    internal val downloadNightlyUpdate = dependencies.downloadNightlyUpdate
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
 
     private val storedErrorReportingConsent: ErrorReportingConsent? = errorReportingConsentStore?.read()
@@ -508,6 +516,11 @@ class EntryStateHolder(
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
     internal var updateCheckJob: Job? = null
+    internal var updateDownloadJob: Job? = null
+    internal var updateDownloadOffer: NightlyUpdateOffer? = null
+
+    @Volatile
+    internal var updateDownloadGeneration = 0L
 
     @Volatile
     internal var updateCheckGeneration = 0L
@@ -676,6 +689,8 @@ class EntryStateHolder(
         when (event) {
             is EntryUiEvent.OpenSettingsClicked -> openSettings()
             is EntryUiEvent.CheckForUpdatesClicked -> checkForUpdates()
+            is EntryUiEvent.DownloadUpdateClicked -> downloadUpdate()
+            is EntryUiEvent.CancelUpdateDownloadClicked -> cancelUpdateDownload()
             is EntryUiEvent.CloseSettingsClicked -> closeSettings()
             is EntryUiEvent.ClearHistoryCacheClicked -> requestClearHistoryCache()
             is EntryUiEvent.ConfirmClearHistoryCacheClicked -> confirmClearHistoryCache()
