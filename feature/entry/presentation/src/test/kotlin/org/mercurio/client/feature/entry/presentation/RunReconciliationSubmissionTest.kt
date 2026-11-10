@@ -402,6 +402,7 @@ class RunReconciliationSubmissionTest {
                 awaitReconciliationState(holder) { it.sessionList?.openedSession == null }
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder, reopenedAfterTimeoutState(otherRun))
+                awaitReconciliationCondition { gateway.historyRequests == 4 }
                 assertEquals(4, gateway.historyRequests)
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitReconciliationCondition { gateway.historyRequests == 5 }

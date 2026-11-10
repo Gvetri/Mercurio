@@ -511,7 +511,9 @@ class EntryStateHolderTest {
 
                 awaitState(holder, "the opened session after the dropped refresh") {
                     val opened = it.sessionList?.openedSession
-                    opened?.session?.id == target && !it.sessionList.isRefreshing
+                    opened?.session?.id == target &&
+                        !it.sessionList.isRefreshing &&
+                        opened.messages.map { message -> message.content } == listOf("Opened during refresh")
                 }
 
                 val state = requireNotNull(holder.uiState.value.sessionList)
