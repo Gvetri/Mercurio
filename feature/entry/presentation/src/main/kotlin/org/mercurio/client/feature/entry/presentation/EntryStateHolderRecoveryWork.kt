@@ -196,6 +196,7 @@ internal fun EntryStateHolder.releaseRecoveryWork(
             workItems.forEach { workItem ->
                 if (releaseRecoveryClaim(workItem.claim)) {
                     val entry = workItem.entry
+                    recoveryReconciledRunIds.remove(entry.runId)
                     val remaining = (recoverySessionCounts[entry.sessionId] ?: 1) - 1
                     if (remaining > 0) {
                         recoverySessionCounts[entry.sessionId] = remaining

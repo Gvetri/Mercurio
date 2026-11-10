@@ -252,6 +252,7 @@ internal fun EntryStateHolder.startRecoveryObservationJob(
                         releaseRecoveryClaim(claim)
                     ) {
                         connectionRecoveryJobs.remove(job)
+                        recoveryReconciledRunIds.remove(entry.runId)
                         if (recoveryFinished) {
                             recoveryHandledEntries += claim.key
                         }
