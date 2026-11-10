@@ -58,7 +58,9 @@ internal fun EntryStateHolder.removeReconciledRecoveryEntry(
                     (authoritativeSessionHistoryGenerations[sessionId] ?: 0L) == requestHistoryGeneration ||
                     historyConfirmsTerminal
             shouldRemoveRecoveryEntry =
-                connectionGeneration == requestConnectionGeneration && endpointMatches && historyMatches
+                connectionGeneration == requestConnectionGeneration &&
+                endpointMatches &&
+                historyMatches
         }
     }
     if (shouldRemoveRecoveryEntry) {

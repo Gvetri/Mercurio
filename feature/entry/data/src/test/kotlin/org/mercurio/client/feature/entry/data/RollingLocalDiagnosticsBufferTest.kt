@@ -232,9 +232,8 @@ class RollingLocalDiagnosticsBufferTest {
         assertTrue(LocalDiagnosticsSnapshot.fileName(exportedAt).endsWith(LocalDiagnosticsSnapshot.FILE_SUFFIX))
     }
 
-    private fun retainedBytesOf(buffer: RollingLocalDiagnosticsBuffer): Int {
-        return buffer.records().sumOf(LocalDiagnosticsRecords::retainedBytes)
-    }
+    private fun retainedBytesOf(buffer: RollingLocalDiagnosticsBuffer): Int =
+        buffer.records().sumOf(LocalDiagnosticsRecords::retainedBytes)
 
     private fun scriptedClock(): () -> Instant {
         val instants = listOf(FIRST_INSTANT, SECOND_INSTANT, THIRD_INSTANT).iterator()

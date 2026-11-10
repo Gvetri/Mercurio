@@ -108,7 +108,8 @@ internal fun observationSession(id: String): Session =
 internal class ObservationScriptedGateway(
     val session: Session,
     private val additionalSessions: List<Session> = emptyList(),
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     private val runResults = ArrayDeque<Run>()
     private val historyResults = ArrayDeque<SessionHistory>()
     private val statusResults = ArrayDeque<Run>()

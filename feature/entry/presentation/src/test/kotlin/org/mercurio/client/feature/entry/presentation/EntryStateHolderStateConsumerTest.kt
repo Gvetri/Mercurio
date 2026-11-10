@@ -133,7 +133,8 @@ private class ObservingGateway(
     private val session: Session,
     private val run: Run,
     private val recorder: LaneRecorder,
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     val createRunLanes = mutableListOf<String>()
     var observeCalls = 0
     var nextCalls = 0
@@ -380,7 +381,9 @@ private class RecordedStateWrite(
     val appliedAfterClose: Boolean,
 )
 
-private class ConsumerThreadProbe : ThreadContextElement<Boolean>, AbstractCoroutineContextElement(Key) {
+private class ConsumerThreadProbe :
+    AbstractCoroutineContextElement(Key),
+    ThreadContextElement<Boolean> {
     companion object Key : CoroutineContext.Key<ConsumerThreadProbe>
 
     private val onConsumerThreads = ThreadLocal.withInitial { false }

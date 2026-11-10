@@ -92,8 +92,8 @@ internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
 internal fun EntryStateHolder.removeRecoveryEntry(
     endpoint: String?,
     entry: RunRecoveryEntry,
-): Boolean {
-    return try {
+): Boolean =
+    try {
         synchronized(recoveryPersistenceLock) {
             if (endpoint != null) {
                 removeRunRecoveryEntry?.invoke(endpoint, entry) ?: runRecoveryRegistry?.remove(entry)
@@ -108,7 +108,6 @@ internal fun EntryStateHolder.removeRecoveryEntry(
     } catch (_: Exception) {
         false
     }
-}
 
 internal fun EntryStateHolder.beginRecoveryLoad(expectedConnectionGeneration: Long): Boolean =
     synchronized(sessionRequestLock) {

@@ -141,7 +141,8 @@ internal class FakeGateway(
     val sessions: List<Session>,
     histories: Map<SessionId, SessionHistory> = emptyMap(),
     runStatuses: Map<RunId, Run> = emptyMap(),
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     private val mutableHistories = histories.toMutableMap()
     private val mutableRunStatuses = runStatuses.toMutableMap()
     val runRequests = mutableListOf<Pair<SessionId, String>>()

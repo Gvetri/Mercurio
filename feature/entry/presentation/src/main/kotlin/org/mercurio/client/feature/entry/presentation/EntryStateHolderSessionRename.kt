@@ -183,8 +183,8 @@ internal suspend fun EntryStateHolder.showRenameFailure(request: SessionMutation
     }
 }
 
-internal fun unsentRenameDrafts(mutations: SessionMutationMap): SessionMutationMap {
-    return mutations
+internal fun unsentRenameDrafts(mutations: SessionMutationMap): SessionMutationMap =
+    mutations
         .mapNotNull { (sessionId, mutation) ->
             mutation.rename
                 ?.takeIf {
@@ -200,7 +200,6 @@ internal fun unsentRenameDrafts(mutations: SessionMutationMap): SessionMutationM
                         )
                 }
         }.toMap()
-}
 
 internal fun retainRenameDrafts(
     mutations: Map<SessionId, SessionMutationUiState>,

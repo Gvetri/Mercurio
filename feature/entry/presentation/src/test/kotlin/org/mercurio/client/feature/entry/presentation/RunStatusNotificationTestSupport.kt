@@ -162,7 +162,8 @@ internal class FakeRunStatusNotifier : RunStatusNotifier {
 
 internal class NotificationScriptedGateway(
     val session: Session,
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     private val runResults = java.util.ArrayDeque<Run>()
     private val historyResults = java.util.ArrayDeque<SessionHistory>()
     private val statusResults = java.util.ArrayDeque<Run>()

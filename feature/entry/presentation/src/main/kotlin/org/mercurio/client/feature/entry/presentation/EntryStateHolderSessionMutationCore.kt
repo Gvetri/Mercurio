@@ -167,6 +167,5 @@ internal fun EntryStateHolder.mutationMapAfter(
     sessionId: SessionId,
     mutation: SessionMutationUiState,
     mutations: Map<SessionId, SessionMutationUiState>,
-): Map<SessionId, SessionMutationUiState> {
-    return if (mutation.hasNoPendingWork()) mutations - sessionId else mutations + (sessionId to mutation)
-}
+): Map<SessionId, SessionMutationUiState> =
+    if (mutation.hasNoPendingWork()) mutations - sessionId else mutations + (sessionId to mutation)

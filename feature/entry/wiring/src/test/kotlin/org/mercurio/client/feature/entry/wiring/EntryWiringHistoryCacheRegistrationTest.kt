@@ -257,7 +257,9 @@ class EntryWiringHistoryCacheRegistrationTest {
         fun cachedSessionList(endpoint: String): List<Session> = lists[endpoint].orEmpty()
     }
 
-    private class RegistrationGateway : SessionGatewayPort, RunGatewayPort {
+    private class RegistrationGateway :
+        SessionGatewayPort,
+        RunGatewayPort {
         private val historyCalls = AtomicInteger(0)
 
         override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)

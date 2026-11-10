@@ -46,8 +46,7 @@ class GitHubReleaseHttpRequest(
 }
 
 /** The GitHub answer exceeded the update transport's bounded body budget. */
-class GitHubResponseTooLargeException :
-    IOException("GitHub response exceeded the update budget")
+class GitHubResponseTooLargeException : IOException("GitHub response exceeded the update budget")
 
 /** One GitHub API answer, with a body the transport bounded and the redirect target, if any. */
 class GitHubReleaseHttpResponse(

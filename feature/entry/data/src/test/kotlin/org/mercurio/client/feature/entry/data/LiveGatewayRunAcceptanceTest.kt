@@ -337,9 +337,8 @@ class LiveGatewayRunAcceptanceTest {
     ) : GatewayTransport {
         var eventStreamClosed = false
 
-        override fun execute(request: GatewayHttpRequest): GatewayHttpResponse {
-            return GatewayHttpResponse(statusCode = HTTP_OK, body = "")
-        }
+        override fun execute(request: GatewayHttpRequest): GatewayHttpResponse =
+            GatewayHttpResponse(statusCode = HTTP_OK, body = "")
 
         override fun openEventStream(request: GatewayHttpRequest): GatewayEventStream =
             GatewayEventStream(statusCode = HTTP_OK, lines = lines.asSequence()) {

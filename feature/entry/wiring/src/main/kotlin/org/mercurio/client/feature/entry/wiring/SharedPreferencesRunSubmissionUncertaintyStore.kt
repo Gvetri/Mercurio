@@ -97,13 +97,11 @@ private class SharedPreferencesRunSubmissionUncertaintyStorage(
     private fun recordKey(key: PendingRunSubmissionKey): String =
         "$RECORDS_KEY.${endpointNamespace(key.endpoint)}.${encodePart(key.sessionId.value)}"
 
-    private fun encodePart(value: String): String {
-        return Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-    }
+    private fun encodePart(value: String): String =
+        Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
 
-    private fun decodePart(value: String): String {
-        return Base64.decode(value, Base64.NO_WRAP).toString(StandardCharsets.UTF_8)
-    }
+    private fun decodePart(value: String): String =
+        Base64.decode(value, Base64.NO_WRAP).toString(StandardCharsets.UTF_8)
 
     private fun endpointNamespace(endpoint: String): String {
         val canonicalEndpoint = runCatching { normalizeGatewayEndpoint(endpoint) }.getOrDefault(endpoint.trim())

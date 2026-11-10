@@ -163,13 +163,12 @@ internal fun EntryStateHolder.sessionListRequest(offset: Int?): SessionListReque
         offset = offset ?: 0,
     )
 
-internal fun EntryStateHolder.beginSessionRequest(): Long {
-    return synchronized(sessionRequestLock) {
+internal fun EntryStateHolder.beginSessionRequest(): Long =
+    synchronized(sessionRequestLock) {
         sessionRequestGeneration += 1
         sessionJob?.cancel()
         sessionRequestGeneration
     }
-}
 
 internal fun EntryStateHolder.createSessionJob(block: suspend CoroutineScope.() -> Unit): Job =
     synchronized(sessionRequestLock) {

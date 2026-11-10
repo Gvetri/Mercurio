@@ -286,7 +286,8 @@ internal fun invokePersistedRecoveryEntry(
 
 internal class ReconciliationFakeGateway(
     val session: Session,
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     val histories = ArrayDeque<SessionHistory>()
     val statuses = ArrayDeque<Run>()
     val runs = ArrayDeque<Run>()
@@ -433,13 +434,12 @@ internal class ReconciliationFakeGateway(
         }
     }
 
-    private fun awaitReleaseOrInterrupted(latch: CountDownLatch): Boolean {
-        return try {
+    private fun awaitReleaseOrInterrupted(latch: CountDownLatch): Boolean =
+        try {
             latch.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
         } catch (_: InterruptedException) {
             false
         }
-    }
 }
 
 internal open class ReconciliationScriptedObservation(
@@ -456,13 +456,12 @@ internal class ReconciliationThrowingObservation(
     override fun iterator(): Iterator<RunEvent> {
         val delegate = super.iterator()
         return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                return if (delegate.hasNext()) {
+            override fun hasNext(): Boolean =
+                if (delegate.hasNext()) {
                     true
                 } else {
                     error("stream interrupted")
                 }
-            }
 
             override fun next(): RunEvent = delegate.next()
         }
@@ -631,9 +630,7 @@ internal fun invokeHistoryRunIdToReconcile(
     holder: EntryStateHolder,
     sessionId: SessionId,
     openedSession: org.mercurio.client.feature.entry.application.OpenedSession,
-): RunId? {
-    return holder.historyRunIdToReconcile(sessionId, openedSession)
-}
+): RunId? = holder.historyRunIdToReconcile(sessionId, openedSession)
 
 internal class ReconciliationUncertaintyStorage : RunSubmissionUncertaintyStorage {
     private val records = mutableMapOf<PendingRunSubmissionKey, RunSubmissionUncertaintySnapshot>()
@@ -723,8 +720,8 @@ internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
     override fun iterator(): Iterator<RunEvent> {
         started.countDown()
         return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                return try {
+            override fun hasNext(): Boolean =
+                try {
                     awaitRelease()
                     false
                 } catch (error: InterruptedException) {
@@ -733,7 +730,6 @@ internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
                 } finally {
                     finished.countDown()
                 }
-            }
 
             override fun next(): RunEvent = error("not used")
         }

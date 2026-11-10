@@ -202,9 +202,8 @@ class SessionHistoryRetryScreenTest {
             ),
         )
 
-    private fun transcriptMessage(index: Int): SessionMessageUiState {
-        return message("message-$index", "user", "Transcript message $index")
-    }
+    private fun transcriptMessage(index: Int): SessionMessageUiState =
+        message("message-$index", "user", "Transcript message $index")
 
     private fun failedTurnState(
         failedRunId: RunId,

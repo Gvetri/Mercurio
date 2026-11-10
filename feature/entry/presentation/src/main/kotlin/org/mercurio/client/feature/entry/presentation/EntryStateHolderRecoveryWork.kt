@@ -60,11 +60,10 @@ internal suspend fun EntryStateHolder.startRunRecovery(expectedConnectionGenerat
     }
 }
 
-internal fun EntryStateHolder.beginRunRecovery(expectedConnectionGeneration: Long): RunRecoveryStart? {
-    return runRecoveryRegistry?.let { registry ->
+internal fun EntryStateHolder.beginRunRecovery(expectedConnectionGeneration: Long): RunRecoveryStart? =
+    runRecoveryRegistry?.let { registry ->
         recoveryGatewayContextFor(expectedConnectionGeneration)?.let { context -> registry to context }
     }
-}
 
 internal fun EntryStateHolder.recoveryGatewayContextFor(expectedConnectionGeneration: Long): RecoveryGatewayContext? =
     synchronized(sessionRequestLock) {

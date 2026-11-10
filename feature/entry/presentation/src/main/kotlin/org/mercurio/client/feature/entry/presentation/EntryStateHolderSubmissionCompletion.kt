@@ -204,8 +204,8 @@ internal suspend fun EntryStateHolder.reconcileInactiveSubmittedRun(
     }
 }
 
-internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: SessionId): TimedOutSendRecovery? {
-    return synchronized(sessionRequestLock) {
+internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: SessionId): TimedOutSendRecovery? =
+    synchronized(sessionRequestLock) {
         val key = pendingRunSubmissionKey(sessionId)
         if (
             !runSubmissionUncertaintyStore.contains(key) ||
@@ -225,4 +225,3 @@ internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: Sessio
             ).also { pendingTimedOutSends[sessionId] = it }
         }
     }
-}

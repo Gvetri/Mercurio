@@ -118,9 +118,8 @@ class SecureHistoryCacheStorageTest {
         assertTrue(exclusions.contains("device-transfer:root:no_backup/"))
     }
 
-    private fun message(content: String): GatewayHistoryMessage {
-        return GatewayHistoryMessage(id = "message-1", role = "user", content = content)
-    }
+    private fun message(content: String): GatewayHistoryMessage =
+        GatewayHistoryMessage(id = "message-1", role = "user", content = content)
 
     private fun declaredExclusions(
         @XmlRes resourceId: Int,

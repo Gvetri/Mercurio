@@ -44,7 +44,9 @@ data class JourneyRunScript(
             admissionRefusalCode == null ||
                 (
                     admissionRefusalCode.isNotBlank() &&
-                        observation.isEmpty() && finalStatus == null && terminalHistory.isEmpty()
+                        observation.isEmpty() &&
+                        finalStatus == null &&
+                        terminalHistory.isEmpty()
                 ),
         ) {
             "An admission-refused Run cannot carry a blank code or script observation or terminal behavior."
