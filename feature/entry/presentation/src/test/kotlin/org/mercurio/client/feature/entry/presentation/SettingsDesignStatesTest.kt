@@ -17,6 +17,9 @@ import org.junit.runner.RunWith
 import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.InstallSource
+import org.mercurio.client.feature.entry.domain.NightlyApk
+import org.mercurio.client.feature.entry.domain.NightlyDownloadProgress
+import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -30,9 +33,9 @@ import java.time.Instant
  * Appearance waits on its own capability, so its frames are absent here. #273 ships the sections
  * whose capability exists, #268 adds the Security frames with the app-lock capability they draw, and
  * the error-reporting consent row appears only with a reporting endpoint, so its absent state is
- * captured as an extra witness. The App updates frames cover the states the manual check reaches:
- * idle, checking, up to date, offered, and refused. Downloading, permission, installed, and recovery
- * wait on the later tickets that add those capabilities.
+ * captured as an extra witness. The App updates frames cover the states the manual check and its
+ * verified download reach: idle, checking, up to date, offered, downloading, and refused. Permission,
+ * installed, and recovery wait on the later tickets that add those capabilities.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-notnight")
@@ -213,6 +216,23 @@ class SettingsDesignStatesTest {
         )
 
     @Test
+    fun settings_18_app_updates_downloading_light() =
+        captureSettings(
+            dark = false,
+            state = appUpdatesState(downloadingStatus()),
+            beforeCapture = ::scrollToAppUpdates,
+        )
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp-night")
+    fun settings_18_app_updates_downloading_dark() =
+        captureSettings(
+            dark = true,
+            state = appUpdatesState(downloadingStatus()),
+            beforeCapture = ::scrollToAppUpdates,
+        )
+
+    @Test
     fun settings_19_app_updates_refused_light() =
         captureSettings(
             dark = false,
@@ -290,11 +310,28 @@ class SettingsDesignStatesTest {
 
     private fun offeredStatus(): AppUpdateStatus =
         AppUpdateStatus.Offered(
-            versionName = "nightly-7002-0123456789ab",
-            sourceCommit = "0123456",
-            publishedAt = Instant.parse("2026-11-05T18:31:00Z"),
-            releaseTag = "nightly-7002-0123456789abcdef0123456789abcdef01234567",
+            offer =
+                NightlyUpdateOffer(
+                    releaseTag = "nightly-7002-0123456789abcdef0123456789abcdef01234567",
+                    versionName = "nightly-7002-0123456789ab",
+                    versionCode = 7002L,
+                    sourceCommit = "0123456",
+                    publishedAt = Instant.parse("2026-11-05T18:31:00Z"),
+                    apk =
+                        NightlyApk(
+                            address = "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/1",
+                            sizeBytes = 13_002_342L,
+                            sha256 = "1111111111111111111111111111111111111111111111111111111111111111",
+                            certificateSha256 = "2222222222222222222222222222222222222222222222222222222222222222",
+                            nativeAbis = listOf("arm64-v8a"),
+                        ),
+                ),
         )
+
+    private fun downloadingStatus(): AppUpdateStatus {
+        val progress = NightlyDownloadProgress(6_501_171L, 13_002_342L)
+        return AppUpdateStatus.Downloading(progress)
+    }
 
     private fun refusedStatus(): AppUpdateStatus =
         AppUpdateStatus.Refused(

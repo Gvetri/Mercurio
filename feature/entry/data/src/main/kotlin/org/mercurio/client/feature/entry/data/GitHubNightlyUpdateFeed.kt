@@ -208,15 +208,10 @@ class GitHubNightlyUpdateFeed(
         response: GitHubReleaseHttpResponse,
         accept: String,
     ): GitHubReleaseHttpResponse =
-        when (val target = redirectTarget(response)) {
-            null -> response
-            else -> transport.get(GitHubReleaseHttpRequest(target, accept))
+        when {
+            response.statusCode != HTTP_REDIRECT || !response.location.isAllowlistedAssetLocation() -> response
+            else -> transport.get(GitHubReleaseHttpRequest(response.location.orEmpty(), accept))
         }
-
-    private fun redirectTarget(response: GitHubReleaseHttpResponse): String? =
-        response.location
-            ?.takeIf { response.statusCode == HTTP_REDIRECT }
-            ?.takeIf { it.isAllowlistedAssetLocation() }
 
     private fun parseReleases(body: String): List<NightlyRelease>? {
         val array = parseJson(body) as? JsonArray ?: return null
@@ -231,16 +226,35 @@ class GitHubNightlyUpdateFeed(
             string("published_at")?.let(::parsePublishedAt)?.let { published ->
                 (this["assets"] as? JsonArray)?.mapNotNull { it as? JsonObject }?.let { assets ->
                     val assetNames = assets.mapNotNull { asset -> asset.string("name") }.toSet()
+                    val assetIds =
+                        assets
+                            .mapNotNull { asset -> asset.string("name")?.let { name -> name to asset.long("id") } }
+                            .toMap()
                     val metadataAddress =
-                        assets.firstOrNull { asset -> asset.string("name") == SIGNING_METADATA_ASSET }
-                            ?.long("id")
-                            ?.let { assetId -> "$apiBase/repos/$repository/releases/assets/$assetId" }
+                        assetIds[SIGNING_METADATA_ASSET]?.let { id ->
+                            "$apiBase/repos/$repository/releases/assets/$id"
+                        }
+                    val apkAddress =
+                        assetIds[APPLICATION_APK_ASSET]?.let { id ->
+                            "$apiBase/repos/$repository/releases/assets/$id"
+                        }
+                    val apkSizeBytes =
+                        assets.firstOrNull { asset -> asset.string("name") == APPLICATION_APK_ASSET }
+                            ?.long("size")
+                            ?: 0L
                     val eligible =
                         boolean("draft") == false &&
                             boolean("prerelease") == true &&
                             assetNames.containsAll(REQUIRED_ASSETS)
-                    if (eligible && metadataAddress != null) {
-                        NightlyRelease(tag = tag, publishedAt = published, metadataAddress = metadataAddress)
+                    val offerable = metadataAddress != null && apkAddress != null && apkSizeBytes > 0L
+                    if (eligible && offerable) {
+                        NightlyRelease(
+                            tag = tag,
+                            publishedAt = published,
+                            metadataAddress = metadataAddress,
+                            apkAddress = apkAddress,
+                            apkSizeBytes = apkSizeBytes,
+                        )
                     } else {
                         null
                     }
@@ -291,7 +305,8 @@ class GitHubNightlyUpdateFeed(
         const val HTTPS_PREFIX = "https://"
         const val NIGHTLY_TAG_PREFIX = "nightly-"
         const val SIGNING_METADATA_ASSET = "signing-metadata.json"
-        val REQUIRED_ASSETS = setOf("mercurio.apk", SIGNING_METADATA_ASSET, "SHA256SUMS")
+        const val APPLICATION_APK_ASSET = "mercurio.apk"
+        val REQUIRED_ASSETS = setOf(APPLICATION_APK_ASSET, SIGNING_METADATA_ASSET, "SHA256SUMS")
     }
 }
 
@@ -326,7 +341,7 @@ private fun IOException.toFeedFailure(): NightlyFeedFailure =
 
 private const val RELEASE_ASSET_HOST = "release-assets.githubusercontent.com"
 
-private fun String?.isAllowlistedAssetLocation(): Boolean =
+internal fun String?.isAllowlistedAssetLocation(): Boolean =
     when (val candidate = this?.let { value -> runCatching { URI(value) }.getOrNull() }) {
         null -> false
         else -> candidate.scheme == "https" && candidate.host == RELEASE_ASSET_HOST

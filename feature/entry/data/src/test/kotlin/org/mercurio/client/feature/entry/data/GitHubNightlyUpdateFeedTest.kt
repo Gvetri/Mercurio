@@ -24,6 +24,8 @@ private val RELEASE =
         tag = RELEASE_TAG,
         publishedAt = Instant.parse("2026-11-05T18:31:00Z"),
         metadataAddress = "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/3",
+        apkAddress = "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/1",
+        apkSizeBytes = 13_002_342L,
     )
 
 class GitHubNightlyUpdateFeedTest {
@@ -47,6 +49,11 @@ class GitHubNightlyUpdateFeedTest {
                 "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/3",
                 releases.first().metadataAddress,
             )
+            assertEquals(
+                "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/1",
+                releases.first().apkAddress,
+            )
+            assertEquals(13_002_342L, releases.first().apkSizeBytes)
             assertEquals(
                 listOf("https://api.github.com/repos/Gvetri/Mercurio/releases?per_page=100"),
                 transport.requestedUrls,

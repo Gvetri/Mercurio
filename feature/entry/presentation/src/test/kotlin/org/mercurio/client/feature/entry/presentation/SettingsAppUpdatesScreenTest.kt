@@ -13,9 +13,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mercurio.client.feature.entry.application.NightlyDownloadRefusal
 import org.mercurio.client.feature.entry.application.NightlyUpdateFailure
 import org.mercurio.client.feature.entry.application.NightlyUpdateRefusal
 import org.mercurio.client.feature.entry.domain.InstallSource
+import org.mercurio.client.feature.entry.domain.NightlyApk
+import org.mercurio.client.feature.entry.domain.NightlyDownloadProgress
+import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -29,22 +33,12 @@ class SettingsAppUpdatesScreenTest {
 
     @Test
     fun settings_app_updates_section_reports_the_offered_build_identifiers() {
-        val publishedAt = Instant.parse("2026-11-05T18:31:00Z")
         composeTestRule.setContent {
             HermesTheme {
                 EntryScreen(
                     state =
                         settingsState().copy(
-                            appUpdates =
-                                AppUpdatesUiState(
-                                    status =
-                                        AppUpdateStatus.Offered(
-                                            versionName = "nightly-7002-0123456789ab",
-                                            sourceCommit = "0123456",
-                                            publishedAt = publishedAt,
-                                            releaseTag = "nightly-7002-0123456789abcdef0123456789abcdef01234567",
-                                        ),
-                                ),
+                            appUpdates = AppUpdatesUiState(status = AppUpdateStatus.Offered(offeredOffer())),
                         ),
                     onEvent = {},
                 )
@@ -58,6 +52,83 @@ class SettingsAppUpdatesScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Check for updates").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Download").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun settings_app_updates_download_action_raises_the_download_event() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        settingsState().copy(
+                            appUpdates = AppUpdatesUiState(status = AppUpdateStatus.Offered(offeredOffer())),
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Download").performScrollTo().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.DownloadUpdateClicked), events)
+    }
+
+    @Test
+    fun settings_app_updates_running_download_shows_progress_and_a_cancel_action() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        settingsState().copy(
+                            appUpdates =
+                                AppUpdatesUiState(
+                                    status =
+                                        AppUpdateStatus.Downloading(
+                                            NightlyDownloadProgress(6_501_171L, 13_002_342L),
+                                        ),
+                                ),
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Downloading 50%").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel").performScrollTo().performClick()
+
+        assertEquals(listOf<EntryUiEvent>(EntryUiEvent.CancelUpdateDownloadClicked), events)
+    }
+
+    @Test
+    fun settings_app_updates_signer_refusal_names_the_certificate_mismatch() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        settingsState().copy(
+                            appUpdates =
+                                AppUpdatesUiState(
+                                    status =
+                                        AppUpdateStatus.DownloadRefused(
+                                            NightlyDownloadRefusal.SIGNER_MISMATCH,
+                                        ),
+                                ),
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Download refused").performScrollTo().assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "Update refused: the download is not signed by this app's certificate. Nothing was installed.",
+            )
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -153,6 +224,23 @@ class SettingsAppUpdatesScreenTest {
             .performScrollTo()
             .assertIsDisplayed()
     }
+
+    private fun offeredOffer(): NightlyUpdateOffer =
+        NightlyUpdateOffer(
+            releaseTag = "nightly-7002-0123456789abcdef0123456789abcdef01234567",
+            versionName = "nightly-7002-0123456789ab",
+            versionCode = 7002L,
+            sourceCommit = "0123456",
+            publishedAt = Instant.parse("2026-11-05T18:31:00Z"),
+            apk =
+                NightlyApk(
+                    address = "https://api.github.com/repos/Gvetri/Mercurio/releases/assets/1",
+                    sizeBytes = 13_002_342L,
+                    sha256 = "1111111111111111111111111111111111111111111111111111111111111111",
+                    certificateSha256 = "2222222222222222222222222222222222222222222222222222222222222222",
+                    nativeAbis = listOf("arm64-v8a"),
+                ),
+        )
 
     private fun settingsState(installSource: InstallSource = InstallSource.OTHER_SOURCE): EntryUiState =
         EntryUiState(

@@ -69,6 +69,8 @@ object QualityPolicy {
         BoundaryDoubleRequirement("AppLockSettingsStore", "repository"),
         BoundaryDoubleRequirement("AppLockEnrolment", "datasource"),
         BoundaryDoubleRequirement("NightlyUpdateFeed", "repository"),
+        BoundaryDoubleRequirement("NightlyApkDownload", "datasource"),
+        BoundaryDoubleRequirement("NightlyApkEvidenceSource", "datasource"),
     )
 
     /**
