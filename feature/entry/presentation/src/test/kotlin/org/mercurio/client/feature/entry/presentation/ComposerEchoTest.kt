@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextInput
@@ -75,7 +74,7 @@ class ComposerEchoTest {
     }
 
     private fun typedText(): String {
-        val node = composeTestRule.onNode(hasSetTextAction()).fetchSemanticsNode()
+        val node = composeTestRule.onNodeWithTag("conversation-message-input").fetchSemanticsNode()
         return node.config.getOrNull(SemanticsProperties.EditableText)?.text ?: "<none>"
     }
 }
