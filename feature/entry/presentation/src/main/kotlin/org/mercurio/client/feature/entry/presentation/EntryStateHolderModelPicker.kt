@@ -20,60 +20,48 @@ internal fun EntryStateHolder.handleModelPickerEvent(event: EntryUiEvent.ModelPi
     }
 }
 
-private fun EntryStateHolder.openModelPicker() =
-    synchronized(sessionRequestLock) {
-        refreshModelPickerFromStoreLocked()
-        updateModelPickerLocked { it.copy(isPickerOpen = true) }
-    }
+private fun EntryStateHolder.openModelPicker() {
+    refreshModelPickerFromStore()
+    updateModelPicker { it.copy(isPickerOpen = true) }
+}
 
-private fun EntryStateHolder.closeModelPicker() =
-    synchronized(sessionRequestLock) {
-        updateModelPickerLocked { it.copy(isPickerOpen = false) }
-    }
+private fun EntryStateHolder.closeModelPicker() = updateModelPicker { it.copy(isPickerOpen = false) }
 
 private fun EntryStateHolder.selectModel(modelId: String) {
-    synchronized(sessionRequestLock) {
-        val endpoint = mutableUiState.value.endpoint
-        val current = modelSelectionStore.read(endpoint)
-        val next = current?.takeIf { it.model == modelId } ?: ModelSelection(modelId)
-        modelSelectionStore.write(endpoint, next)
-        refreshModelPickerFromStoreLocked()
-    }
+    val endpoint = mutableUiState.value.endpoint
+    val current = modelSelectionStore.read(endpoint)
+    val next = current?.takeIf { it.model == modelId } ?: ModelSelection(modelId)
+    modelSelectionStore.write(endpoint, next)
+    refreshModelPickerFromStore()
 }
 
 private fun EntryStateHolder.selectModelEffort(effort: String) {
-    synchronized(sessionRequestLock) {
-        val endpoint = mutableUiState.value.endpoint
-        val current = modelSelectionStore.read(endpoint)
-        if (current != null) {
-            modelSelectionStore.write(endpoint, current.copy(effort = effort))
-            refreshModelPickerFromStoreLocked()
-        }
+    val endpoint = mutableUiState.value.endpoint
+    val current = modelSelectionStore.read(endpoint)
+    if (current != null) {
+        modelSelectionStore.write(endpoint, current.copy(effort = effort))
+        refreshModelPickerFromStore()
     }
 }
 
 private fun EntryStateHolder.clearModelSelection() {
-    synchronized(sessionRequestLock) {
-        val endpoint = mutableUiState.value.endpoint
-        modelSelectionStore.clear(endpoint)
-        refreshModelPickerFromStoreLocked()
-    }
+    val endpoint = mutableUiState.value.endpoint
+    modelSelectionStore.clear(endpoint)
+    refreshModelPickerFromStore()
 }
 
 private fun EntryStateHolder.setModelFavorite(
     modelId: String,
     favorite: Boolean,
 ) {
-    synchronized(sessionRequestLock) {
-        val endpoint = mutableUiState.value.endpoint
-        modelSelectionStore.setFavorite(endpoint, modelId, favorite)
-        refreshModelPickerFromStoreLocked()
-    }
+    val endpoint = mutableUiState.value.endpoint
+    modelSelectionStore.setFavorite(endpoint, modelId, favorite)
+    refreshModelPickerFromStore()
 }
 
-private fun EntryStateHolder.refreshModelPickerFromStoreLocked() {
+private fun EntryStateHolder.refreshModelPickerFromStore() {
     val endpoint = mutableUiState.value.endpoint
-    updateModelPickerLocked {
+    updateModelPicker {
         it.copy(
             selection = modelSelectionStore.read(endpoint),
             favorites = modelSelectionStore.favorites(endpoint),

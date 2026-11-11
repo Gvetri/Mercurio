@@ -29,6 +29,7 @@ import org.mercurio.client.feature.entry.presentation.EntryStateHolderDependenci
 import org.mercurio.client.feature.entry.presentation.LocalDiagnosticsPorts
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.ContinuationInterceptor
 
 object EntryWiring {
     fun createMessageImagePort(): MessageImagePort = HttpMessageImagePort(defaultMessageImageHttpTransport())
@@ -100,6 +101,7 @@ object EntryWiring {
                     installNightlyUpdate = buildInstallNightlyUpdate(context, overrides),
                     requestInstallPermissionSettings = hostActions.requestInstallPermissionSettings,
                     requestAppRestart = hostActions.requestAppRestart,
+                    stateChangeDispatcher = stateChangeDispatcher(overrides.coroutineScope),
                 ),
         )
     }
@@ -124,6 +126,13 @@ object EntryWiring {
         coroutineScope: CoroutineScope?,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ): CoroutineScope = coroutineScope ?: CoroutineScope(SupervisorJob() + ioDispatcher)
+
+    private fun stateChangeDispatcher(
+        coroutineScope: CoroutineScope?,
+        confinedDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
+    ): CoroutineDispatcher =
+        coroutineScope?.coroutineContext?.get(ContinuationInterceptor) as? CoroutineDispatcher
+            ?: confinedDispatcher
 }
 
 private data class EntryStartup(

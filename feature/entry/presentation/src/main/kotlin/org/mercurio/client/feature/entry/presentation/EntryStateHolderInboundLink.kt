@@ -3,9 +3,7 @@ package org.mercurio.client.feature.entry.presentation
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showInboundLinkNotice(notice: InboundLinkNoticeCategory) {
-    synchronized(sessionRequestLock) {
-        mutableUiState.value = mutableUiState.value.copy(inboundLinkNotice = notice)
-    }
+    mutableUiState.value = mutableUiState.value.copy(inboundLinkNotice = notice)
 }
 
 /**
@@ -15,16 +13,14 @@ internal fun EntryStateHolder.showInboundLinkNotice(notice: InboundLinkNoticeCat
  */
 internal fun EntryStateHolder.dismissInboundLinkSurfaces() {
     cancelCredentialRotation()
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value
-        mutableUiState.value =
-            current.copy(
-                isSettingsOpen = false,
-                isRemoveConfirmationOpen = false,
-                isClearHistoryCacheConfirmationOpen = false,
-                localDiagnostics = current.localDiagnostics.copy(isOpen = false),
-            )
-    }
+    val current = mutableUiState.value
+    mutableUiState.value =
+        current.copy(
+            isSettingsOpen = false,
+            isRemoveConfirmationOpen = false,
+            isClearHistoryCacheConfirmationOpen = false,
+            localDiagnostics = current.localDiagnostics.copy(isOpen = false),
+        )
 }
 
 internal fun EntryStateHolder.handleInboundUri(rawUri: String?) {
@@ -32,28 +28,26 @@ internal fun EntryStateHolder.handleInboundUri(rawUri: String?) {
 }
 
 internal fun EntryStateHolder.openLinkedComposer() {
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value
-        val sessionList = current.sessionList ?: return
-        val opened = sessionList.openedSession
-        if (opened == null) {
-            mutableUiState.value =
-                current.copy(inboundLinkNotice = InboundLinkNoticeCategory.COMPOSE_LINK_NEEDS_SESSION)
-            return
-        }
-        nextComposerFocusRequestId += 1
+    val current = mutableUiState.value
+    val sessionList = current.sessionList ?: return
+    val opened = sessionList.openedSession
+    if (opened == null) {
         mutableUiState.value =
-            current.copy(
-                inboundLinkNotice = null,
-                sessionList =
-                    sessionList.copy(
-                        openedSession =
-                            opened.copy(
-                                composerFocusRequestId = nextComposerFocusRequestId,
-                            ),
-                    ),
-            )
+            current.copy(inboundLinkNotice = InboundLinkNoticeCategory.COMPOSE_LINK_NEEDS_SESSION)
+        return
     }
+    nextComposerFocusRequestId += 1
+    mutableUiState.value =
+        current.copy(
+            inboundLinkNotice = null,
+            sessionList =
+                sessionList.copy(
+                    openedSession =
+                        opened.copy(
+                            composerFocusRequestId = nextComposerFocusRequestId,
+                        ),
+                ),
+        )
 }
 
 internal fun EntryStateHolder.openLinkedSession(sessionId: String?) {
@@ -79,7 +73,7 @@ internal fun EntryStateHolder.showUnknownInboundLink() {
 }
 
 internal fun EntryStateHolder.clearCancelledListRequest(): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value
         current.sessionList
             ?.takeIf(SessionListUiState::interruptsListRequest)
@@ -115,9 +109,7 @@ internal fun EntryStateHolder.applyInboundLink(link: EntryLink) {
 
 internal fun EntryStateHolder.showLinkedSessionOpenFailure(requestGeneration: Long) {
     val isCurrent =
-        synchronized(sessionRequestLock) {
-            requestGeneration == sessionRequestGeneration
-        }
+        requestGeneration == sessionRequestGeneration
     if (!isCurrent) return
     showUnknownInboundLink()
 }

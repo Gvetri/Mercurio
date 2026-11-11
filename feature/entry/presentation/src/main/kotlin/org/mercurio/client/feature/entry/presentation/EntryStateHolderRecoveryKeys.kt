@@ -59,9 +59,9 @@ internal fun EntryStateHolder.forgetPendingRecoveryEntry(
     entry: RunRecoveryEntry,
 ) {
     if (endpoint == null) return
-    pendingDisconnectedRecoveryEntries[endpoint]?.remove(entry)
-    if (pendingDisconnectedRecoveryEntries[endpoint].isNullOrEmpty()) {
-        pendingDisconnectedRecoveryEntries.remove(endpoint)
+    pendingDisconnectedRecoveryEntries.computeIfPresent(endpoint) { _, entries ->
+        entries.remove(entry)
+        entries.takeIf(Collection<RunRecoveryEntry>::isNotEmpty)
     }
 }
 
@@ -96,7 +96,7 @@ internal fun EntryStateHolder.markPendingCreateStarted(
     pendingCreate: PendingCreateState,
     expectedConnectionGeneration: Long,
 ): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         if (
             connectionGeneration != expectedConnectionGeneration ||
             pendingCreateSessions[key] != pendingCreate
@@ -112,10 +112,8 @@ internal fun EntryStateHolder.forgetPendingCreate(
     key: RecoverySessionKey,
     pendingCreate: PendingCreateState,
 ) {
-    synchronized(sessionRequestLock) {
-        if (pendingCreateSessions[key] == pendingCreate) {
-            pendingCreateSessions.remove(key)
-            pendingCreateStarted.remove(key)
-        }
+    if (pendingCreateSessions[key] == pendingCreate) {
+        pendingCreateSessions.remove(key)
+        pendingCreateStarted.remove(key)
     }
 }

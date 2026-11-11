@@ -49,19 +49,17 @@ internal fun EntryStateHolder.removeReconciledRecoveryEntry(
 ) {
     var shouldRemoveRecoveryEntry = false
     recoveryEntryToRemove?.let { entry ->
-        synchronized(sessionRequestLock) {
-            val endpoint = recoveryEndpointToRemove
-            val historyConfirmsTerminal = historyConfirmsTerminalRun(entry.sessionId, entry.runId)
-            val endpointMatches = endpoint == null || mutableUiState.value.endpoint == endpoint
-            val historyMatches =
-                requestHistoryGeneration == null ||
-                    (authoritativeSessionHistoryGenerations[sessionId] ?: 0L) == requestHistoryGeneration ||
-                    historyConfirmsTerminal
-            shouldRemoveRecoveryEntry =
-                connectionGeneration == requestConnectionGeneration &&
-                endpointMatches &&
-                historyMatches
-        }
+        val endpoint = recoveryEndpointToRemove
+        val historyConfirmsTerminal = historyConfirmsTerminalRun(entry.sessionId, entry.runId)
+        val endpointMatches = endpoint == null || mutableUiState.value.endpoint == endpoint
+        val historyMatches =
+            requestHistoryGeneration == null ||
+                (authoritativeSessionHistoryGenerations[sessionId] ?: 0L) == requestHistoryGeneration ||
+                historyConfirmsTerminal
+        shouldRemoveRecoveryEntry =
+            connectionGeneration == requestConnectionGeneration &&
+            endpointMatches &&
+            historyMatches
     }
     if (shouldRemoveRecoveryEntry) {
         removeRecoveryEntry(
@@ -78,46 +76,44 @@ internal suspend fun EntryStateHolder.showRunReconciliationFailure(
     requestSessionGeneration: Long,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            if (
-                connectionGeneration != requestConnectionGeneration ||
-                sessionRequestGeneration != requestSessionGeneration
-            ) {
-                return@synchronized
-            }
-            val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
-            if (observationStateFor(sessionId, runId)?.state?.isTerminal() == true) {
-                return@synchronized
-            }
-            val knownRun =
-                visibleSessionRuns(sessionId).lastOrNull { it.id == runId }
-                    ?: Run(runId, sessionId, UNCERTAIN_RUN_STATUS)
-            val uncertainRun = knownRun
-            if (isLocallyOwnedRun(sessionId, runId)) {
-                sessionRuns[sessionId] = mergeRuns(sessionRuns[sessionId].orEmpty(), listOf(uncertainRun))
-            } else {
-                authoritativeSessionRuns[sessionId] =
-                    mergeRuns(authoritativeSessionRuns[sessionId].orEmpty(), listOf(uncertainRun))
-            }
-            val knownRuns = visibleSessionRuns(sessionId)
-            val previous = observationStateFor(sessionId, runId)
-            val uncertainState = uncertainObservationState(uncertainRun, previous)
-            rememberObservationState(uncertainState)
-            val latestObservation = latestObservationState(sessionId, knownRuns)
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.withRunSnapshot(knownRuns, latestObservation).copy(
-                                    sendErrorCategory = opened.sendErrorCategory,
-                                    hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId),
-                                    errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
-                                    isStale = true,
-                                ),
-                        ),
-                )
+        if (
+            connectionGeneration != requestConnectionGeneration ||
+            sessionRequestGeneration != requestSessionGeneration
+        ) {
+            return@applyStateChange
         }
+        val (current, opened) = openedSessionFor(sessionId) ?: return@applyStateChange
+        if (observationStateFor(sessionId, runId)?.state?.isTerminal() == true) {
+            return@applyStateChange
+        }
+        val knownRun =
+            visibleSessionRuns(sessionId).lastOrNull { it.id == runId }
+                ?: Run(runId, sessionId, UNCERTAIN_RUN_STATUS)
+        val uncertainRun = knownRun
+        if (isLocallyOwnedRun(sessionId, runId)) {
+            sessionRuns[sessionId] = mergeRuns(sessionRuns[sessionId].orEmpty(), listOf(uncertainRun))
+        } else {
+            authoritativeSessionRuns[sessionId] =
+                mergeRuns(authoritativeSessionRuns[sessionId].orEmpty(), listOf(uncertainRun))
+        }
+        val knownRuns = visibleSessionRuns(sessionId)
+        val previous = observationStateFor(sessionId, runId)
+        val uncertainState = uncertainObservationState(uncertainRun, previous)
+        rememberObservationState(uncertainState)
+        val latestObservation = latestObservationState(sessionId, knownRuns)
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        openedSession =
+                            opened.withRunSnapshot(knownRuns, latestObservation).copy(
+                                sendErrorCategory = opened.sendErrorCategory,
+                                hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId),
+                                errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
+                                isStale = true,
+                            ),
+                    ),
+            )
     }
 }
 

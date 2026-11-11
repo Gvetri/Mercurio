@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +55,7 @@ import org.mercurio.client.feature.entry.domain.SessionDraftStore
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface EntryUiEvent {
@@ -466,6 +468,7 @@ data class EntryStateHolderDependencies(
     val requestInstallPermissionSettings: (() -> Unit)? = null,
     val requestAppRestart: (() -> Unit)? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
+    val stateChangeDispatcher: CoroutineDispatcher? = null,
 )
 
 class EntryStateHolder(
@@ -503,6 +506,7 @@ class EntryStateHolder(
     internal val requestInstallPermissionSettings = dependencies.requestInstallPermissionSettings
     internal val requestAppRestart = dependencies.requestAppRestart
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
+    internal val stateChangeDispatcher = dependencies.stateChangeDispatcher
 
     private val storedErrorReportingConsent: ErrorReportingConsent? = errorReportingConsentStore?.read()
 
@@ -546,34 +550,31 @@ class EntryStateHolder(
     internal var sessionGateway: SessionGatewayPort? = null
     internal var runGateway: RunGatewayPort? = null
     internal var catalogGateway: ModelGatewayPort? = null
-    internal val sessionRequestLock = Any()
-    internal val recoveryPersistenceLock = Any()
-    internal val connectionPersistenceLock = Any()
     internal val localDiagnosticsClearInFlight = AtomicBoolean(false)
     internal var sessionRequestGeneration = 0L
     internal var connectionGeneration = 0L
-    internal val mutationJobs = mutableMapOf<SessionId, Job>()
+    internal val mutationJobs = ConcurrentHashMap<SessionId, Job>()
     internal var nextMutationAttemptId = 0L
-    internal val mutationOwners = mutableMapOf<SessionId, SessionMutationRequest>()
-    internal val runJobs = mutableMapOf<SessionId, Job>()
-    internal val sessionDrafts = mutableMapOf<SessionId, String>()
+    internal val mutationOwners = ConcurrentHashMap<SessionId, SessionMutationRequest>()
+    internal val runJobs = ConcurrentHashMap<SessionId, Job>()
+    internal val sessionDrafts = ConcurrentHashMap<SessionId, String>()
     internal var pendingSharedText: String? = null
-    internal val sessionDraftRevisions = mutableMapOf<SessionId, Long>()
+    internal val sessionDraftRevisions = ConcurrentHashMap<SessionId, Long>()
     internal val sessionSendErrors = mutableMapOf<SessionId, MessageSendErrorCategory>()
     internal val pendingRunDrafts = mutableMapOf<SessionId, PendingDraft>()
-    internal val pendingDisconnectedRecoveryEntries = mutableMapOf<String, MutableSet<RunRecoveryEntry>>()
+    internal val pendingDisconnectedRecoveryEntries = ConcurrentHashMap<String, MutableSet<RunRecoveryEntry>>()
     internal val connectionRecoveryJobs = mutableSetOf<Job>()
     internal val connectionRecoverySessionCounts = mutableMapOf<SessionId, Int>()
     internal val connectionRecoveryFailedSessions = mutableSetOf<SessionId>()
-    internal val recoverySessionCounts = mutableMapOf<SessionId, Int>()
+    internal val recoverySessionCounts = ConcurrentHashMap<SessionId, Int>()
     internal var nextRecoveryClaimId = 0L
     internal var nextComposerFocusRequestId = 0L
     internal var inboundLinkListRequestInterrupted = false
     internal var isForeground = false
     internal var isUnlockPromptPending = false
-    internal val recoveryClaims = mutableMapOf<RecoveryEntryKey, RecoveryClaim>()
+    internal val recoveryClaims = ConcurrentHashMap<RecoveryEntryKey, RecoveryClaim>()
     internal val recoveryReconciledRunIds = mutableSetOf<RunId>()
-    internal val recoveryHandledEntries = mutableSetOf<RecoveryEntryKey>()
+    internal val recoveryHandledEntries: MutableSet<RecoveryEntryKey> = ConcurrentHashMap.newKeySet()
     internal var recoveryLoadPending = false
     internal var recoveryLoadFailed = false
     internal val pendingCreateSessions = mutableMapOf<RecoverySessionKey, PendingCreateState>()
@@ -598,14 +599,16 @@ class EntryStateHolder(
     internal val uncertainSendDrafts = mutableMapOf<SessionId, PendingDraft>()
     internal val uncertainSubmissionRunIds = mutableMapOf<SessionId, RunId>()
     internal val uncertainSubmissionAttemptIds = mutableMapOf<SessionId, String>()
-    internal val pendingTimedOutSends = mutableMapOf<SessionId, TimedOutSendRecovery>()
+    internal val pendingTimedOutSends = ConcurrentHashMap<SessionId, TimedOutSendRecovery>()
     internal val reconcilingSessions = mutableMapOf<SessionId, Long>()
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
 
     internal val stateChangeCommands = Channel<StateChangeCommand>(Channel.UNLIMITED)
 
     init {
-        scope.launch(StateChangeConsumerMarker()) { consumeStateChanges() }
+        val marker = StateChangeConsumerMarker()
+        val stateChangeContext = stateChangeDispatcher?.let { dispatcher -> marker + dispatcher } ?: marker
+        scope.launch(stateChangeContext) { consumeStateChanges() }
     }
 
     /**
@@ -984,6 +987,7 @@ internal data class TimedOutSendReconciliationOutcome(
     val runToObserve: Run? = null,
     val runToPersist: RunRecoveryEntry? = null,
     val runToRemove: RunRecoveryEntry? = null,
+    val ambiguousMark: Pair<PendingRunSubmissionKey, String>? = null,
 )
 
 internal data class SessionRequestContext(

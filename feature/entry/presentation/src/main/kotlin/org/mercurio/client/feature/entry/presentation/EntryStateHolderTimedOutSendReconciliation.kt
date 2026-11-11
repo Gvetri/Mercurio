@@ -18,7 +18,7 @@ import org.mercurio.client.feature.entry.domain.isActive
 internal suspend fun EntryStateHolder.reconcileTimedOutSend(request: TimedOutSendReconciliationRequest): Boolean {
     var requestEndpoint = ""
     val connectionIsCurrent =
-        synchronized(sessionRequestLock) {
+        applyStateChange {
             if (connectionGeneration != request.connectionGeneration) {
                 false
             } else {
@@ -40,7 +40,7 @@ internal suspend fun EntryStateHolder.reconcileTimedOutSend(request: TimedOutSen
         }
     if (!connectionIsCurrent) return false
     val currentSessionGeneration =
-        synchronized(sessionRequestLock) {
+        run {
             mutableUiState.value.sessionList?.openedSession
                 ?.takeIf { it.session.id == request.sessionId }
                 ?.let { sessionRequestGeneration }
@@ -108,7 +108,7 @@ internal suspend fun EntryStateHolder.awaitReconciliationClaim(
     var attempt = 0
     while (!began && attempt < RECOVERY_CLAIM_ATTEMPTS) {
         val requestIsCurrent =
-            synchronized(sessionRequestLock) {
+            run {
                 connectionGeneration == requestConnectionGeneration &&
                     sessionRequestGeneration == requestSessionGeneration
             }
@@ -127,7 +127,7 @@ internal fun EntryStateHolder.timedOutSendGateways(
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
 ): Pair<SessionGatewayPort, RunGatewayPort>? =
-    synchronized(sessionRequestLock) {
+    run {
         val sessionGateway = sessionGateway
         val runGateway = runGateway
         if (
@@ -199,32 +199,31 @@ internal suspend fun EntryStateHolder.applyTimedOutSendReconciliation(
     requestSessionGeneration: Long,
     reconciliation: SessionReconciliation,
     resolveWhenNoNewRun: Boolean,
-): TimedOutSendReconciliationOutcome =
-    applyStateChange {
-        synchronized(sessionRequestLock) {
+): TimedOutSendReconciliationOutcome {
+    val outcome =
+        applyStateChange {
             if (
                 connectionGeneration != requestConnectionGeneration ||
                 sessionRequestGeneration != requestSessionGeneration
             ) {
-                return@synchronized TimedOutSendReconciliationOutcome(applied = false)
+                return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
             }
             val current =
                 mutableUiState.value.sessionList
-                    ?: return@synchronized TimedOutSendReconciliationOutcome(applied = false)
+                    ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
             val opened =
                 current.openedSession?.takeIf { it.session.id == sessionId }
-                    ?: return@synchronized TimedOutSendReconciliationOutcome(applied = false)
+                    ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
             val evaluation =
                 evaluateTimedOutSendUncertainty(sessionId, reconciliation, resolveWhenNoNewRun)
-                    ?: return@synchronized TimedOutSendReconciliationOutcome(applied = false)
+                    ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
             authoritativeSessionRuns[sessionId] =
                 mergeRuns(evaluation.retainedAuthoritativeRuns, evaluation.authoritativeRuns)
             evaluation.durableBoundRunId?.let { boundRunId -> uncertainSubmissionRunIds[sessionId] = boundRunId }
+            var ambiguousMark: Pair<PendingRunSubmissionKey, String>? = null
             if (evaluation.discoveredUnattributedRun) {
                 ambiguousSubmissionSessions += sessionId
-                runCatching {
-                    runSubmissionUncertaintyStore.markAmbiguous(evaluation.pendingKey, evaluation.attemptId)
-                }
+                ambiguousMark = evaluation.pendingKey to evaluation.attemptId
             }
             evaluation.terminalRunIds.forEach { runId -> forgetUnresolvedLocalRun(sessionId, runId) }
             if (evaluation.canClearUncertainty) {
@@ -254,6 +253,17 @@ internal suspend fun EntryStateHolder.applyTimedOutSendReconciliation(
                     evaluation.submissionRun
                         ?.takeIf { evaluation.canClearUncertainty && !it.isActive() }
                         ?.let { RunRecoveryEntry(sessionId, it.id) },
+                ambiguousMark = ambiguousMark,
             )
         }
+    applyAmbiguousMark(outcome)
+    return outcome
+}
+
+private fun EntryStateHolder.applyAmbiguousMark(outcome: TimedOutSendReconciliationOutcome) {
+    val mark = outcome.ambiguousMark ?: return
+    val (key, attemptId) = mark
+    runCatching {
+        runSubmissionUncertaintyStore.markAmbiguous(key, attemptId)
     }
+}

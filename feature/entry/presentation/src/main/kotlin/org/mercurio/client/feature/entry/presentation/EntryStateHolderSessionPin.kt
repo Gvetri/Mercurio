@@ -20,15 +20,15 @@ internal fun EntryStateHolder.changeSessionPin(
     val gateway = sessionGateway ?: return
     val action = if (pinned) SessionMutationAction.PIN else SessionMutationAction.UNPIN
     val job =
-        synchronized(sessionRequestLock) {
-            val current = mutationSessionFor(gateway) ?: return@synchronized null
+        run {
+            val current = mutationSessionFor(gateway) ?: return@run null
             val mutation = current.sessionMutations[sessionId] ?: SessionMutationUiState()
             val blocked =
                 current.sessionForMutation(sessionId) == null ||
                     mutation.pendingAction != null ||
                     mutation.rename != null ||
                     mutation.delete != null
-            if (blocked) return@synchronized null
+            if (blocked) return@run null
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =
@@ -73,48 +73,46 @@ internal suspend fun EntryStateHolder.applyConfirmedPin(
 ) {
     val refreshJob =
         applyStateChange {
-            synchronized(sessionRequestLock) {
-                if (!isCurrentSessionMutation(request)) return@synchronized null
-                val current = mutableUiState.value.sessionList ?: return@synchronized null
-                if (current.sessionForMutation(sessionId) == null) return@synchronized null
-                val mutation = current.sessionMutations[sessionId] ?: return@synchronized null
-                val updatedSessions =
-                    current.sessions
-                        .map { item -> if (item.id == sessionId) item.copy(pinned = pinned) else item }
-                        .orderedSessions()
-                val remainingMutation =
-                    mutation.copy(
-                        pendingAction = null,
-                        errorCategory = null,
-                        retryAction = null,
-                    )
-                mutableUiState.value =
-                    mutableUiState.value.copy(
-                        sessionList =
-                            current.copy(
-                                sessions = updatedSessions,
-                                openedSession =
-                                    current.openedSession?.let { opened ->
-                                        if (opened.session.id == sessionId) {
-                                            opened.copy(session = opened.session.copy(pinned = pinned))
-                                        } else {
-                                            opened
-                                        }
-                                    },
-                                sessionMutations =
-                                    mutationMapAfter(sessionId, remainingMutation, current.sessionMutations),
-                            ),
-                    )
-                unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
-                sessionGateway?.let { gateway ->
-                    createFirstPageLoadJob(
-                        gateway = gateway,
-                        query = current.searchQuery,
-                        isRefreshing = true,
-                        isSearching = false,
-                        preserveSessions = true,
-                    )
-                }
+            if (!isCurrentSessionMutation(request)) return@applyStateChange null
+            val current = mutableUiState.value.sessionList ?: return@applyStateChange null
+            if (current.sessionForMutation(sessionId) == null) return@applyStateChange null
+            val mutation = current.sessionMutations[sessionId] ?: return@applyStateChange null
+            val updatedSessions =
+                current.sessions
+                    .map { item -> if (item.id == sessionId) item.copy(pinned = pinned) else item }
+                    .orderedSessions()
+            val remainingMutation =
+                mutation.copy(
+                    pendingAction = null,
+                    errorCategory = null,
+                    retryAction = null,
+                )
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            sessions = updatedSessions,
+                            openedSession =
+                                current.openedSession?.let { opened ->
+                                    if (opened.session.id == sessionId) {
+                                        opened.copy(session = opened.session.copy(pinned = pinned))
+                                    } else {
+                                        opened
+                                    }
+                                },
+                            sessionMutations =
+                                mutationMapAfter(sessionId, remainingMutation, current.sessionMutations),
+                        ),
+                )
+            unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
+            sessionGateway?.let { gateway ->
+                createFirstPageLoadJob(
+                    gateway = gateway,
+                    query = current.searchQuery,
+                    isRefreshing = true,
+                    isSearching = false,
+                    preserveSessions = true,
+                )
             }
         }
     refreshJob?.start()
@@ -125,25 +123,23 @@ internal suspend fun EntryStateHolder.showPinFailure(
     action: SessionMutationAction,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            val (current, mutation) = mutationFailureTarget(request) ?: return@synchronized
-            val sessionId = request.sessionId
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            sessionMutations =
-                                current.sessionMutations +
-                                    (
-                                        sessionId to
-                                            mutation.copy(
-                                                pendingAction = null,
-                                                errorCategory = SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED,
-                                                retryAction = action,
-                                            )
-                                    ),
-                        ),
-                )
-        }
+        val (current, mutation) = mutationFailureTarget(request) ?: return@applyStateChange
+        val sessionId = request.sessionId
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        sessionMutations =
+                            current.sessionMutations +
+                                (
+                                    sessionId to
+                                        mutation.copy(
+                                            pendingAction = null,
+                                            errorCategory = SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED,
+                                            retryAction = action,
+                                        )
+                                ),
+                    ),
+            )
     }
 }

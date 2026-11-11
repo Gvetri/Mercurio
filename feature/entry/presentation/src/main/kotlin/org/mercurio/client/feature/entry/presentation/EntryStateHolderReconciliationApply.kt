@@ -10,15 +10,15 @@ import org.mercurio.client.feature.entry.domain.isActive
 import org.mercurio.client.feature.entry.domain.runs
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
 
-internal fun EntryStateHolder.applyReconciliationLocked(
+internal fun EntryStateHolder.applyReconciliation(
     request: AuthoritativeReconciliationRequest,
     reconciliation: AuthoritativeRunReconciliation,
 ): ReconciledRunApplication =
-    synchronized(sessionRequestLock) {
+    run {
         val requestIsCurrent =
             connectionGeneration == request.connectionGeneration &&
                 (!request.updateVisibleUi || sessionRequestGeneration == request.sessionGeneration)
-        if (!requestIsCurrent) return@synchronized ReconciledRunApplication()
+        if (!requestIsCurrent) return@run ReconciledRunApplication()
         val shouldUpdateVisibleUi =
             request.updateVisibleUi &&
                 request.sessionGeneration != null &&

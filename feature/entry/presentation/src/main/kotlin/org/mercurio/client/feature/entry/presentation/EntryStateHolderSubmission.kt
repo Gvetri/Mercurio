@@ -16,8 +16,8 @@ import java.util.UUID
 
 internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
     val retryContext =
-        synchronized(sessionRequestLock) {
-            val opened = mutableUiState.value.sessionList?.openedSession ?: return@synchronized null
+        run {
+            val opened = mutableUiState.value.sessionList?.openedSession ?: return@run null
             val sessionId = opened.session.id
             val key = pendingRunSubmissionKey(sessionId)
             if (!opened.hasUnresolvedSubmission ||
@@ -52,9 +52,7 @@ internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
             )
         if (reconciled) {
             val canRetry =
-                synchronized(sessionRequestLock) {
-                    !hasUnresolvedSubmission(sessionId)
-                }
+                !hasUnresolvedSubmission(sessionId)
             if (canRetry) {
                 awaitStateChangesApplied()
                 sendMessage()
@@ -65,7 +63,7 @@ internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
 
 internal fun EntryStateHolder.sendMessage() {
     val input =
-        synchronized(sessionRequestLock) {
+        run {
             mutableUiState.value.sessionList?.openedSession?.composerText?.takeIf { it.isNotBlank() }
         } ?: return
     launchRunSubmission(input = input, recordDraft = true)
@@ -73,9 +71,7 @@ internal fun EntryStateHolder.sendMessage() {
 
 internal fun EntryStateHolder.dispatchSendMessage() {
     val retryPending =
-        synchronized(sessionRequestLock) {
-            mutableUiState.value.sessionList?.openedSession?.hasUnresolvedSubmission == true
-        }
+        mutableUiState.value.sessionList?.openedSession?.hasUnresolvedSubmission == true
     if (retryPending) {
         scope.launch { retryUncertainSubmissionOrSend() }
     } else {
@@ -85,8 +81,8 @@ internal fun EntryStateHolder.dispatchSendMessage() {
 
 internal fun EntryStateHolder.retryRun(runId: RunId) {
     val originalMessage =
-        synchronized(sessionRequestLock) {
-            val opened = mutableUiState.value.sessionList?.openedSession ?: return@synchronized null
+        run {
+            val opened = mutableUiState.value.sessionList?.openedSession ?: return@run null
             val sessionId = opened.session.id
             val failedState =
                 visibleSessionRuns(sessionId).lastOrNull { it.id == runId }?.toRunPresentationState()
@@ -101,7 +97,7 @@ internal fun EntryStateHolder.retryRun(runId: RunId) {
                         .lastOrNull { it.runId == runId && it.role == "user" }
                         ?.content
                         ?.takeIf { it.isNotBlank() }
-            if (!isRunRetryEligible(failedState, original)) return@synchronized null
+            if (!isRunRetryEligible(failedState, original)) return@run null
             original
         } ?: return
     launchRunSubmission(input = originalMessage, recordDraft = false, rejectRunId = runId)
@@ -130,14 +126,14 @@ internal fun EntryStateHolder.prepareRunSubmission(
     recordDraft: Boolean,
     rejectRunId: RunId?,
 ): Job? =
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value.sessionList ?: return@synchronized null
-        val opened = current.openedSession ?: return@synchronized null
+    run {
+        val current = mutableUiState.value.sessionList ?: return@run null
+        val opened = current.openedSession ?: return@run null
         val sessionId = opened.session.id
         val requestConnectionGeneration = connectionGeneration
         val (knownRuns, _) = submissionRunsAndState(opened, sessionId)
         if (blocksRunSubmissionNow(current, sessionId)) {
-            return@synchronized null
+            return@run null
         }
         mutableUiState.value =
             mutableUiState.value.copy(

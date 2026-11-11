@@ -13,11 +13,11 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.refreshOpenedSession(gateway: SessionGatewayPort): Job? =
-    synchronized(sessionRequestLock) {
+    run {
         val state = mutableUiState.value
-        val sessionList = state.sessionList ?: return@synchronized null
-        val openedSession = sessionList.openedSession ?: return@synchronized null
-        if (openedSession.isRefreshing || sessionList.hasActiveRequest) return@synchronized null
+        val sessionList = state.sessionList ?: return@run null
+        val openedSession = sessionList.openedSession ?: return@run null
+        if (openedSession.isRefreshing || sessionList.hasActiveRequest) return@run null
 
         val runIdToReconcile =
             visibleSessionRuns(openedSession.session.id)
@@ -127,9 +127,7 @@ internal suspend fun EntryStateHolder.continueSessionRecovery(
 ) {
     val sessionId = openedSession.session.id
     val pendingTimeoutRecovery =
-        synchronized(sessionRequestLock) {
-            pendingTimedOutSends[sessionId]
-        }
+        pendingTimedOutSends[sessionId]
     val pendingSettledRecovery =
         if (pendingTimeoutRecovery == null) {
             prepareSettledSubmissionRecovery(sessionId)
@@ -167,11 +165,11 @@ internal suspend fun EntryStateHolder.continueSessionRecovery(
 internal fun EntryStateHolder.loadMoreSessions() {
     val gateway = sessionGateway ?: return
     val job =
-        synchronized(sessionRequestLock) {
+        run {
             val state = mutableUiState.value
-            val sessionList = state.sessionList ?: return@synchronized null
-            val offset = sessionList.nextOffset ?: return@synchronized null
-            if (sessionList.blocksLoadingMore()) return@synchronized null
+            val sessionList = state.sessionList ?: return@run null
+            val offset = sessionList.nextOffset ?: return@run null
+            if (sessionList.blocksLoadingMore()) return@run null
 
             val request =
                 SessionRequestContext(beginSessionRequest(), sessionList.searchQuery, offset)

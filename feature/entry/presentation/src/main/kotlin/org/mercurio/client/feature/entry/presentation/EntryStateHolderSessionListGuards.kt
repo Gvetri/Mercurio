@@ -62,7 +62,7 @@ internal fun EntryStateHolder.blocksRunSubmission(
 ): Boolean =
     opened.blocksRunSubmission() ||
         sessionId in connectionRecoverySessionCounts ||
-        sessionId in recoverySessionCounts ||
+        recoverySessionCounts.containsKey(sessionId) ||
         recoveryLoadPending ||
         recoveryLoadFailed
 

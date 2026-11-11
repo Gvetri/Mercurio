@@ -11,6 +11,7 @@ import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEventStateTransition
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.isActive
+import java.util.concurrent.ConcurrentHashMap
 
 internal suspend fun EntryStateHolder.recoverRun(
     entry: RunRecoveryEntry,
@@ -96,18 +97,16 @@ internal fun EntryStateHolder.persistDisconnectedRecoveryEntry(
     val persisted = persistOrQueueRecoveryEntry(endpoint, entry)
     if (persisted) {
         val reconcileNow =
-            synchronized(sessionRequestLock) {
+            run {
                 mutableUiState.value.isConnected &&
                     mutableUiState.value.endpoint == endpoint &&
                     sessionGateway != null &&
                     runGateway != null
             }
         if (!reconcileNow) {
-            synchronized(sessionRequestLock) {
-                pendingDisconnectedRecoveryEntries
-                    .getOrPut(endpoint, ::mutableSetOf)
-                    .add(entry)
-            }
+            pendingDisconnectedRecoveryEntries
+                .computeIfAbsent(endpoint) { ConcurrentHashMap.newKeySet() }
+                .add(entry)
         }
         reconcilePersistedRecoveryEntryIfConnected(endpoint, entry)
     }
@@ -137,7 +136,7 @@ internal fun EntryStateHolder.recoveryRunContextFor(
     endpoint: String,
     entry: RunRecoveryEntry,
 ): RecoveryRunContext? =
-    synchronized(sessionRequestLock) {
+    run {
         val currentSessionGateway = sessionGateway
         val currentRunGateway = runGateway
         if (
@@ -166,7 +165,7 @@ internal fun EntryStateHolder.claimRecoveryEntryForRun(
     entry: RunRecoveryEntry,
     requestConnectionGeneration: Long,
 ): RecoveryClaim? =
-    synchronized(sessionRequestLock) {
+    run {
         if (
             connectionGeneration != requestConnectionGeneration ||
             mutableUiState.value.endpoint != endpoint
@@ -183,13 +182,13 @@ internal fun EntryStateHolder.beginRecoveryJob(
     recoveryContext: RecoveryRunContext,
     claim: RecoveryClaim,
 ): Job? =
-    synchronized(sessionRequestLock) {
+    run {
         if (
             connectionGeneration != recoveryContext.connectionGeneration ||
             mutableUiState.value.endpoint != endpoint ||
             recoveryClaims[claim.key] != claim
         ) {
-            return@synchronized null
+            return@run null
         }
         rememberRecoveredRun(
             entry = entry,
@@ -214,21 +213,19 @@ internal fun EntryStateHolder.markRecoveryUiRefreshing(
     recoveryContext: RecoveryRunContext,
 ) {
     submitStateChange {
-        synchronized(sessionRequestLock) {
-            if (connectionGeneration != recoveryContext.connectionGeneration) return@synchronized
-            val (current, opened) = openedSessionFor(entry.sessionId) ?: return@synchronized
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = true,
-                                    isReconciliationInProgress = true,
-                                ),
-                        ),
-                )
-        }
+        if (connectionGeneration != recoveryContext.connectionGeneration) return@submitStateChange
+        val (current, opened) = openedSessionFor(entry.sessionId) ?: return@submitStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        openedSession =
+                            opened.copy(
+                                isRefreshing = true,
+                                isReconciliationInProgress = true,
+                            ),
+                    ),
+            )
     }
 }
 
@@ -260,21 +257,19 @@ internal fun EntryStateHolder.startRecoveryObservationJob(
                     )
                 }
             } finally {
-                synchronized(sessionRequestLock) {
-                    if (
-                        connectionGeneration == recoveryContext.connectionGeneration &&
-                        releaseRecoveryClaim(claim)
-                    ) {
-                        connectionRecoveryJobs.remove(job)
-                        recoveryReconciledRunIds.remove(entry.runId)
-                        if (recoveryFinished) {
-                            recoveryHandledEntries += claim.key
-                        }
-                        if (!recoveryCompleted) {
-                            connectionRecoveryFailedSessions += entry.sessionId
-                        }
-                        releaseRecoverySessionCount(entry, recoveryContext)
+                if (
+                    connectionGeneration == recoveryContext.connectionGeneration &&
+                    releaseRecoveryClaim(claim)
+                ) {
+                    connectionRecoveryJobs.remove(job)
+                    recoveryReconciledRunIds.remove(entry.runId)
+                    if (recoveryFinished) {
+                        recoveryHandledEntries += claim.key
                     }
+                    if (!recoveryCompleted) {
+                        connectionRecoveryFailedSessions += entry.sessionId
+                    }
+                    releaseRecoverySessionCount(entry, recoveryContext)
                 }
             }
         }

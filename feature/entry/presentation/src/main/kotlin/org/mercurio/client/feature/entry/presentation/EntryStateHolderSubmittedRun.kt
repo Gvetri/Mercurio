@@ -123,39 +123,35 @@ internal fun EntryStateHolder.persistBeforeApply(
     requestConnectionGeneration: Long,
 ): Boolean =
     run.isActive() &&
-        synchronized(sessionRequestLock) {
-            connectionGeneration == requestConnectionGeneration
-        }
+        connectionGeneration == requestConnectionGeneration
 
 internal suspend fun EntryStateHolder.applySubmitted(work: SubmittedRunApplication): SubmittedRunApplicationResult =
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            if (connectionGeneration != work.requestConnectionGeneration) {
-                if (work.run.isActive()) {
-                    rememberUnresolvedLocalRun(
-                        work.requestEndpoint,
-                        work.sessionId,
-                        work.run.id,
-                        work.attemptId,
-                    )
-                }
-                return@synchronized SubmittedRunApplicationResult(
-                    applied = false,
-                    persistAfterDisconnect = work.run.isActive(),
+        if (connectionGeneration != work.requestConnectionGeneration) {
+            if (work.run.isActive()) {
+                rememberUnresolvedLocalRun(
+                    work.requestEndpoint,
+                    work.sessionId,
+                    work.run.id,
+                    work.attemptId,
                 )
             }
-            val shouldObserve = work.run.isActive()
-            recordSubmittedRunState(work)
-            val observationState = markSubmittedRunObservationState(work, shouldObserve)
-            val releases = updateSubmittedRunUi(work, observationState)
-            SubmittedRunApplicationResult(
-                applied = true,
-                requestSessionGeneration = sessionRequestGeneration,
-                shouldObserve = shouldObserve,
-                observationJobToCancel = releases.job,
-                observationToClose = releases.observation,
+            return@applyStateChange SubmittedRunApplicationResult(
+                applied = false,
+                persistAfterDisconnect = work.run.isActive(),
             )
         }
+        val shouldObserve = work.run.isActive()
+        recordSubmittedRunState(work)
+        val observationState = markSubmittedRunObservationState(work, shouldObserve)
+        val releases = updateSubmittedRunUi(work, observationState)
+        SubmittedRunApplicationResult(
+            applied = true,
+            requestSessionGeneration = sessionRequestGeneration,
+            shouldObserve = shouldObserve,
+            observationJobToCancel = releases.job,
+            observationToClose = releases.observation,
+        )
     }
 
 internal fun EntryStateHolder.recordSubmittedRunState(application: SubmittedRunApplication) {

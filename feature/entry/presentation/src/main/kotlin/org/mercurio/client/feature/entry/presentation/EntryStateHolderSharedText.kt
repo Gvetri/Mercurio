@@ -22,45 +22,38 @@ internal fun EntryStateHolder.handleSharedText(event: EntryUiEvent.SharedText) {
         rejectSharedText(InboundLinkNoticeCategory.SHARE_UNSUPPORTED)
         return
     }
-    synchronized(sessionRequestLock) {
-        val state = mutableUiState.value
-        if (!state.isConnected || state.sessionList == null) {
-            rejectSharedText(InboundLinkNoticeCategory.SHARE_NEEDS_CONNECTION)
-            return
-        }
-        pendingSharedText = sharedText
+    val state = mutableUiState.value
+    if (!state.isConnected || state.sessionList == null) {
+        rejectSharedText(InboundLinkNoticeCategory.SHARE_NEEDS_CONNECTION)
+        return
     }
+    pendingSharedText = sharedText
+
     dismissInboundLinkSurfaces()
     returnToSessionList()
-    synchronized(sessionRequestLock) {
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                inboundLinkNotice = InboundLinkNoticeCategory.SHARE_PICK_SESSION,
-            )
-    }
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            inboundLinkNotice = InboundLinkNoticeCategory.SHARE_PICK_SESSION,
+        )
 }
 
 internal fun EntryStateHolder.discardSharedText() {
-    synchronized(sessionRequestLock) {
-        pendingSharedText = null
-        val current = mutableUiState.value
-        mutableUiState.value =
-            current.copy(
-                inboundLinkNotice =
-                    current.inboundLinkNotice
-                        ?.takeUnless { it == InboundLinkNoticeCategory.SHARE_PICK_SESSION },
-            )
-    }
+    pendingSharedText = null
+    val current = mutableUiState.value
+    mutableUiState.value =
+        current.copy(
+            inboundLinkNotice =
+                current.inboundLinkNotice
+                    ?.takeUnless { it == InboundLinkNoticeCategory.SHARE_PICK_SESSION },
+        )
 }
 
 private fun EntryStateHolder.rejectSharedText(notice: InboundLinkNoticeCategory) {
-    synchronized(sessionRequestLock) {
-        pendingSharedText = null
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                inboundLinkNotice = notice,
-            )
-    }
+    pendingSharedText = null
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            inboundLinkNotice = notice,
+        )
 }
 
 private fun EntryUiEvent.SharedText.sharedTextOrNull(): String? =

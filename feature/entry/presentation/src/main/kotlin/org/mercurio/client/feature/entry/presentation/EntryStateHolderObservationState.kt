@@ -108,7 +108,7 @@ internal fun EntryStateHolder.isLocallyOwnedRun(
  */
 internal fun EntryStateHolder.stopRunObservation() {
     val observation =
-        synchronized(sessionRequestLock) {
+        run {
             mutableUiState.value.sessionList?.openedSession?.session?.id?.let { sessionId ->
                 runObservations.remove(sessionId)
             }

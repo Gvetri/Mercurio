@@ -14,7 +14,7 @@ import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
  */
 internal fun EntryStateHolder.maybeFetchModelCatalog() {
     val request =
-        synchronized(sessionRequestLock) {
+        run {
             val state = mutableUiState.value
             val picker = state.sessionList?.modelPicker
             val surface = picker?.catalogSurface
@@ -35,10 +35,10 @@ private fun EntryStateHolder.claimModelCatalogFetch(
 ): ModelCatalogFetchRequest? {
     val port = catalogGateway
     if (port == null) {
-        updateModelPickerLocked { it.copy(catalogFetchFailed = true) }
+        updateModelPicker { it.copy(catalogFetchFailed = true) }
         return null
     }
-    updateModelPickerLocked { it.copy(isFetchingCatalog = true) }
+    updateModelPicker { it.copy(isFetchingCatalog = true) }
     return ModelCatalogFetchRequest(port, endpoint, surface, connectionGeneration)
 }
 
@@ -60,29 +60,27 @@ internal fun EntryStateHolder.applyModelCatalogResult(
     request: ModelCatalogFetchRequest,
     catalog: ModelCatalog?,
 ) {
-    synchronized(sessionRequestLock) {
-        val state = mutableUiState.value
-        if (connectionGeneration == request.connectionGeneration && state.endpoint == request.endpoint) {
-            updateModelPickerLocked {
-                ModelPickerUiState(
-                    capabilityKnown = true,
-                    catalogSurface = request.surface,
-                    catalog = catalog,
-                    catalogFetchFailed = catalog == null,
-                    selection = modelSelectionStore.read(request.endpoint),
-                    favorites = modelSelectionStore.favorites(request.endpoint),
-                    recents = modelSelectionStore.recents(request.endpoint),
-                )
-            }
+    val state = mutableUiState.value
+    if (connectionGeneration == request.connectionGeneration && state.endpoint == request.endpoint) {
+        updateModelPicker {
+            ModelPickerUiState(
+                capabilityKnown = true,
+                catalogSurface = request.surface,
+                catalog = catalog,
+                catalogFetchFailed = catalog == null,
+                selection = modelSelectionStore.read(request.endpoint),
+                favorites = modelSelectionStore.favorites(request.endpoint),
+                recents = modelSelectionStore.recents(request.endpoint),
+            )
         }
     }
 }
 
 /**
- * Applies a picker-state transform under the session lock. Callers either hold the lock
- * themselves or arrive through the fetch path, which re-checks the generation.
+ * Applies a picker-state transform. Callers run on the state-change lane, or arrive through
+ * the catalog fetch path, which re-checks the connection generation before applying.
  */
-internal fun EntryStateHolder.updateModelPickerLocked(transform: (ModelPickerUiState) -> ModelPickerUiState) {
+internal fun EntryStateHolder.updateModelPicker(transform: (ModelPickerUiState) -> ModelPickerUiState) {
     val state = mutableUiState.value
     val sessionList = state.sessionList ?: return
     mutableUiState.value = state.copy(sessionList = sessionList.copy(modelPicker = transform(sessionList.modelPicker)))

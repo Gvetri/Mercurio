@@ -171,7 +171,9 @@ internal class ReconciliationHolderSettings(
     val uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
     val sessionDraftStore: SessionDraftStore = NoOpSessionDraftStore,
     val scope: CoroutineScope? = null,
-)
+) {
+    var stateChangeDispatcher: CoroutineDispatcher? = null
+}
 
 internal fun reconciliationHolder(
     gateway: ReconciliationFakeGateway,
@@ -211,6 +213,7 @@ internal fun reconciliationHolder(
                     }
                 },
                 sendTimeoutMillis = settings.sendTimeoutMillis,
+                stateChangeDispatcher = settings.stateChangeDispatcher,
             ),
     )
 }
@@ -583,6 +586,7 @@ internal class ReconciliationBlockingRecoveryRegistry : RunRecoveryRegistry {
     val saveStarted = CountDownLatch(1)
     val releaseSave = CountDownLatch(1)
     val removeRequests = AtomicInteger(0)
+    val effectiveRemovals = AtomicInteger(0)
     val releaseRemove = CountDownLatch(1)
 
     override fun load(): List<RunRecoveryEntry> {
@@ -617,7 +621,9 @@ internal class ReconciliationBlockingRecoveryRegistry : RunRecoveryRegistry {
                 "Recovery removal was not released."
             }
         }
-        synchronized(entries) { entries -= entry }
+        synchronized(entries) {
+            if (entries.remove(entry)) effectiveRemovals.incrementAndGet()
+        }
     }
 }
 

@@ -22,11 +22,11 @@ internal fun EntryStateHolder.startSessionOpen(
 ): Boolean {
     val gateway = sessionGateway ?: return false
     val job =
-        synchronized(sessionRequestLock) {
+        run {
             val state = mutableUiState.value
             val sessionList = state.sessionList
             if (sessionList == null || !sessionList.allowsSessionOpen(sessionId, linked)) {
-                return@synchronized null
+                return@run null
             }
             val interrupted = sessionList.interruptsListRequest()
             inboundLinkListRequestInterrupted = linked && (interrupted || sessionList.isStale)
@@ -136,7 +136,7 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
         recoveryLoadPending ||
             recoveryLoadFailed ||
             sessionId in connectionRecoverySessionCounts ||
-            sessionId in recoverySessionCounts
+            recoverySessionCounts.containsKey(sessionId)
     return current.copy(
         sessions =
             current.sessions.mergeAuthoritative(openedSession.session),
@@ -179,7 +179,7 @@ internal fun EntryStateHolder.applyOpenedSessionMetadata(
         recoveryLoadPending ||
             recoveryLoadFailed ||
             sessionId in connectionRecoverySessionCounts ||
-            sessionId in recoverySessionCounts
+            recoverySessionCounts.containsKey(sessionId)
     val sessionWithoutHistory =
         OpenedSession(session = session, history = SessionHistory(sessionId, emptyList()))
     return current.copy(
@@ -212,7 +212,7 @@ internal suspend fun EntryStateHolder.applyOpenedSessionOutcome(
 ) {
     replacedSessionId?.let { releasedSessionId ->
         val released =
-            synchronized(sessionRequestLock) { releaseRunObservation(releasedSessionId) }
+            run { releaseRunObservation(releasedSessionId) }
         released.job?.cancel()
         released.observation?.close()
     }
@@ -257,47 +257,46 @@ internal data class RunObservationRelease(
 internal fun EntryStateHolder.returnToSessionList() {
     var observationToClose: RunEventObservation? = null
     var observationJobToCancel: Job? = null
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value.sessionList ?: return
-        if (current.createSession != null) {
-            if (!current.createSession.isSubmitting) {
-                mutableUiState.value =
-                    mutableUiState.value.copy(
-                        sessionList =
-                            current.copy(
-                                createSession = null,
-                                errorCategory = null,
-                                creationErrorCategory = null,
-                            ),
-                    )
-            }
-            return
+    val current = mutableUiState.value.sessionList ?: return
+    if (current.createSession != null) {
+        if (!current.createSession.isSubmitting) {
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            createSession = null,
+                            errorCategory = null,
+                            creationErrorCategory = null,
+                        ),
+                )
         }
-        current.openedSession?.session?.id?.let { sessionId ->
-            val released = releaseRunObservation(sessionId)
-            observationJobToCancel = released.job
-            observationToClose = released.observation
-        }
-        beginSessionRequest()
-        val retainedSession =
-            current.openedSession?.session?.takeIf { session ->
-                current.sessionMutations.containsKey(session.id) && current.sessions.none { it.id == session.id }
-            }
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                inboundLinkNotice = null,
-                sessionList =
-                    current.copy(
-                        sessions =
-                            retainedSession?.let { mergeSessions(current.sessions, listOf(it)) }
-                                ?: current.sessions,
-                        openedSession = null,
-                        openingSessionId = null,
-                        errorCategory = null,
-                        creationErrorCategory = null,
-                    ),
-            )
+        return
     }
+    current.openedSession?.session?.id?.let { sessionId ->
+        val released = releaseRunObservation(sessionId)
+        observationJobToCancel = released.job
+        observationToClose = released.observation
+    }
+    beginSessionRequest()
+    val retainedSession =
+        current.openedSession?.session?.takeIf { session ->
+            current.sessionMutations.containsKey(session.id) && current.sessions.none { it.id == session.id }
+        }
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            inboundLinkNotice = null,
+            sessionList =
+                current.copy(
+                    sessions =
+                        retainedSession?.let { mergeSessions(current.sessions, listOf(it)) }
+                            ?: current.sessions,
+                    openedSession = null,
+                    openingSessionId = null,
+                    errorCategory = null,
+                    creationErrorCategory = null,
+                ),
+        )
+
     observationJobToCancel?.cancel()
     observationToClose?.close()
 }

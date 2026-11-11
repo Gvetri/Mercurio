@@ -33,7 +33,7 @@ internal fun EntryStateHolder.registerActiveObservation(
     observationJob: Job,
     activeObservation: RunEventObservation,
 ): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         if (isCurrentObservationJob(sessionId, run.id, observationJob)) {
             runObservations[sessionId] = activeObservation
             true
@@ -53,7 +53,7 @@ internal suspend fun EntryStateHolder.drainObservedEvents(
         currentCoroutineContext().ensureActive()
         applyRunEvent(sessionId, event, observationJob)
         reachedTerminalState =
-            synchronized(sessionRequestLock) {
+            run {
                 observationStateFor(sessionId, run.id)
                     ?.let { state -> state.state.isTerminal() || !state.run.isActive() } == true
             }
@@ -74,10 +74,8 @@ internal fun EntryStateHolder.closeObservation(
     } else {
         observation.close()
     }
-    synchronized(sessionRequestLock) {
-        if (runObservations[sessionId] === observation) {
-            runObservations.remove(sessionId)
-        }
+    if (runObservations[sessionId] === observation) {
+        runObservations.remove(sessionId)
     }
 }
 
@@ -109,7 +107,7 @@ internal suspend fun EntryStateHolder.reconcileObservationOutcome(
 }
 
 internal fun EntryStateHolder.reconciliationGateway(request: ReconciliationRequest): SessionGatewayPort? =
-    synchronized(sessionRequestLock) {
+    run {
         sessionGateway?.takeIf {
             connectionGeneration == request.connectionGeneration &&
                 sessionRequestGeneration == request.sessionGeneration
@@ -121,7 +119,7 @@ internal fun EntryStateHolder.currentObservationReconciliationRequest(
     runId: RunId,
     observationJob: Job,
 ): ReconciliationRequest? =
-    synchronized(sessionRequestLock) {
+    run {
         val observationIsCurrent = isCurrentObservationJob(sessionId, runId, observationJob)
         if (observationIsCurrent && observationStateFor(sessionId, runId) != null) {
             ReconciliationRequest(connectionGeneration, sessionRequestGeneration)
@@ -135,7 +133,7 @@ internal fun EntryStateHolder.shouldReconcileCurrentSession(
     requestSessionGeneration: Long,
     sessionId: SessionId,
 ): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         connectionGeneration == requestConnectionGeneration &&
             sessionRequestGeneration == requestSessionGeneration &&
             mutableUiState.value.sessionList?.openedSession?.session?.id == sessionId
@@ -147,18 +145,19 @@ internal suspend fun EntryStateHolder.applyRunEvent(
     observationJob: Job,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            if (runObservationJobs[sessionId] !== observationJob || runObservationRunIds[sessionId] != event.runId) {
-                return@synchronized
-            }
-            val previous = observationStateFor(sessionId, event.runId) ?: return@synchronized
-            val next = RunEventStateTransition.apply(previous, event)
-            rememberObservationState(next)
-            if (next.state != previous.state) {
-                postTerminalRunStatusNotificationOnce(next.run, next.state)
-            }
-            applyRunEventState(sessionId, event, next)
+        if (runObservationJobs[sessionId] !== observationJob ||
+            runObservationRunIds[sessionId] != event.runId
+        ) {
+            return@applyStateChange
         }
+        val previous = observationStateFor(sessionId, event.runId) ?: return@applyStateChange
+        val next = RunEventStateTransition.apply(previous, event)
+        rememberObservationState(next)
+        if (next.state != previous.state) {
+            postTerminalRunStatusNotificationOnce(next.run, next.state)
+        }
+        applyRunEventState(sessionId, event, next)
+
         Unit
     }
 }
