@@ -74,10 +74,8 @@ internal fun EntryStateHolder.closeObservation(
     } else {
         observation.close()
     }
-    run {
-        if (runObservations[sessionId] === observation) {
-            runObservations.remove(sessionId)
-        }
+    if (runObservations[sessionId] === observation) {
+        runObservations.remove(sessionId)
     }
 }
 
@@ -147,18 +145,19 @@ internal suspend fun EntryStateHolder.applyRunEvent(
     observationJob: Job,
 ) {
     applyStateChange {
-        run {
-            if (runObservationJobs[sessionId] !== observationJob || runObservationRunIds[sessionId] != event.runId) {
-                return@run
-            }
-            val previous = observationStateFor(sessionId, event.runId) ?: return@run
-            val next = RunEventStateTransition.apply(previous, event)
-            rememberObservationState(next)
-            if (next.state != previous.state) {
-                postTerminalRunStatusNotificationOnce(next.run, next.state)
-            }
-            applyRunEventState(sessionId, event, next)
+        if (runObservationJobs[sessionId] !== observationJob ||
+            runObservationRunIds[sessionId] != event.runId
+        ) {
+            return@applyStateChange
         }
+        val previous = observationStateFor(sessionId, event.runId) ?: return@applyStateChange
+        val next = RunEventStateTransition.apply(previous, event)
+        rememberObservationState(next)
+        if (next.state != previous.state) {
+            postTerminalRunStatusNotificationOnce(next.run, next.state)
+        }
+        applyRunEventState(sessionId, event, next)
+
         Unit
     }
 }

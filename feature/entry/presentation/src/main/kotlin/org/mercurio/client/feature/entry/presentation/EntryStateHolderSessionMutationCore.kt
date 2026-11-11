@@ -77,19 +77,16 @@ internal fun EntryStateHolder.createMutationJob(
             try {
                 block()
             } finally {
-                run {
-                    if (mutationJobs[request.sessionId] === job) {
-                        mutationJobs.remove(request.sessionId)
-                    }
-                    if (mutationOwners[request.sessionId]?.attemptId == request.attemptId) {
-                        mutationOwners.remove(request.sessionId)
-                    }
+                if (mutationJobs[request.sessionId] === job) {
+                    mutationJobs.remove(request.sessionId)
+                }
+                if (mutationOwners[request.sessionId]?.attemptId == request.attemptId) {
+                    mutationOwners.remove(request.sessionId)
                 }
             }
         }
-    run {
-        mutationJobs[request.sessionId] = job
-    }
+    mutationJobs[request.sessionId] = job
+
     return job
 }
 
@@ -103,31 +100,26 @@ internal fun EntryStateHolder.createRunJob(
             try {
                 block()
             } finally {
-                run {
-                    if (runJobs[sessionId] === job) {
-                        runJobs.remove(sessionId)
-                        submitStateChange {
-                            run {
-                                if (runJobs[sessionId] != null) return@submitStateChange
-                                val current = mutableUiState.value.sessionList ?: return@submitStateChange
-                                val opened =
-                                    current.openedSession?.takeIf { it.session.id == sessionId }
-                                        ?: return@submitStateChange
-                                if (opened.isSending) {
-                                    mutableUiState.value =
-                                        mutableUiState.value.copy(
-                                            sessionList = current.copy(openedSession = opened.copy(isSending = false)),
-                                        )
-                                }
-                            }
+                if (runJobs[sessionId] === job) {
+                    runJobs.remove(sessionId)
+                    submitStateChange {
+                        if (runJobs[sessionId] != null) return@submitStateChange
+                        val current = mutableUiState.value.sessionList ?: return@submitStateChange
+                        val opened =
+                            current.openedSession?.takeIf { it.session.id == sessionId }
+                                ?: return@submitStateChange
+                        if (opened.isSending) {
+                            mutableUiState.value =
+                                mutableUiState.value.copy(
+                                    sessionList = current.copy(openedSession = opened.copy(isSending = false)),
+                                )
                         }
                     }
                 }
             }
         }
-    run {
-        runJobs[sessionId] = job
-    }
+    runJobs[sessionId] = job
+
     return job
 }
 
@@ -136,30 +128,28 @@ internal suspend fun EntryStateHolder.applyConfirmedSession(
     request: SessionMutationRequest,
 ) {
     applyStateChange {
-        run {
-            if (!isCurrentSessionMutation(request)) return@run
-            val current =
-                mutableUiState.value.sessionList?.takeIf { it.sessionForMutation(session.id) != null }
-                    ?: return@run
-            val updated = session.toSessionItemUiState()
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            sessions =
-                                current.sessions
-                                    .map { item -> if (item.id == session.id) updated else item }
-                                    .orderedSessions(),
-                            openedSession =
-                                current.openedSession
-                                    ?.takeIf { it.session.id == session.id }
-                                    ?.copy(session = updated)
-                                    ?: current.openedSession,
-                            sessionMutations = current.sessionMutations - session.id,
-                        ),
-                )
-            unresolvedSessionMutations.remove(recoverySessionKey(session.id))
-        }
+        if (!isCurrentSessionMutation(request)) return@applyStateChange
+        val current =
+            mutableUiState.value.sessionList?.takeIf { it.sessionForMutation(session.id) != null }
+                ?: return@applyStateChange
+        val updated = session.toSessionItemUiState()
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        sessions =
+                            current.sessions
+                                .map { item -> if (item.id == session.id) updated else item }
+                                .orderedSessions(),
+                        openedSession =
+                            current.openedSession
+                                ?.takeIf { it.session.id == session.id }
+                                ?.copy(session = updated)
+                                ?: current.openedSession,
+                        sessionMutations = current.sessionMutations - session.id,
+                    ),
+            )
+        unresolvedSessionMutations.remove(recoverySessionKey(session.id))
     }
 }
 

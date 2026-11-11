@@ -32,43 +32,35 @@ private fun EntryStateHolder.closeModelPicker() =
     }
 
 private fun EntryStateHolder.selectModel(modelId: String) {
-    run {
-        val endpoint = mutableUiState.value.endpoint
-        val current = modelSelectionStore.read(endpoint)
-        val next = current?.takeIf { it.model == modelId } ?: ModelSelection(modelId)
-        modelSelectionStore.write(endpoint, next)
-        refreshModelPickerFromStore()
-    }
+    val endpoint = mutableUiState.value.endpoint
+    val current = modelSelectionStore.read(endpoint)
+    val next = current?.takeIf { it.model == modelId } ?: ModelSelection(modelId)
+    modelSelectionStore.write(endpoint, next)
+    refreshModelPickerFromStore()
 }
 
 private fun EntryStateHolder.selectModelEffort(effort: String) {
-    run {
-        val endpoint = mutableUiState.value.endpoint
-        val current = modelSelectionStore.read(endpoint)
-        if (current != null) {
-            modelSelectionStore.write(endpoint, current.copy(effort = effort))
-            refreshModelPickerFromStore()
-        }
+    val endpoint = mutableUiState.value.endpoint
+    val current = modelSelectionStore.read(endpoint)
+    if (current != null) {
+        modelSelectionStore.write(endpoint, current.copy(effort = effort))
+        refreshModelPickerFromStore()
     }
 }
 
 private fun EntryStateHolder.clearModelSelection() {
-    run {
-        val endpoint = mutableUiState.value.endpoint
-        modelSelectionStore.clear(endpoint)
-        refreshModelPickerFromStore()
-    }
+    val endpoint = mutableUiState.value.endpoint
+    modelSelectionStore.clear(endpoint)
+    refreshModelPickerFromStore()
 }
 
 private fun EntryStateHolder.setModelFavorite(
     modelId: String,
     favorite: Boolean,
 ) {
-    run {
-        val endpoint = mutableUiState.value.endpoint
-        modelSelectionStore.setFavorite(endpoint, modelId, favorite)
-        refreshModelPickerFromStore()
-    }
+    val endpoint = mutableUiState.value.endpoint
+    modelSelectionStore.setFavorite(endpoint, modelId, favorite)
+    refreshModelPickerFromStore()
 }
 
 private fun EntryStateHolder.refreshModelPickerFromStore() {

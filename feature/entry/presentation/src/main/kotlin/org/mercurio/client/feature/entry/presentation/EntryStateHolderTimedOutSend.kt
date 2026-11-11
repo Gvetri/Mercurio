@@ -87,24 +87,22 @@ internal suspend fun EntryStateHolder.showTimedOutSendFailure(
     refusalCategory: MessageSendErrorCategory? = null,
 ) {
     applyStateChange {
-        run {
-            if (
-                connectionGeneration != requestConnectionGeneration ||
-                sessionRequestGeneration != requestSessionGeneration
-            ) {
-                return@run
-            }
-            val (current, opened) = openedSessionFor(sessionId) ?: return@run
-            val recoveryDraft = pendingTimedOutSends[sessionId]?.draft
-            markTimedOutSendUncertain(
-                sessionId,
-                TimedOutSendUiContext(current, opened, recoveryDraft),
-                errorCategory =
-                    refusalCategory
-                        ?: pendingTimedOutSends[sessionId]?.errorCategory
-                        ?: MessageSendErrorCategory.UNCERTAIN,
-            )
-            pendingTimedOutSends.remove(sessionId)
+        if (
+            connectionGeneration != requestConnectionGeneration ||
+            sessionRequestGeneration != requestSessionGeneration
+        ) {
+            return@applyStateChange
         }
+        val (current, opened) = openedSessionFor(sessionId) ?: return@applyStateChange
+        val recoveryDraft = pendingTimedOutSends[sessionId]?.draft
+        markTimedOutSendUncertain(
+            sessionId,
+            TimedOutSendUiContext(current, opened, recoveryDraft),
+            errorCategory =
+                refusalCategory
+                    ?: pendingTimedOutSends[sessionId]?.errorCategory
+                    ?: MessageSendErrorCategory.UNCERTAIN,
+        )
+        pendingTimedOutSends.remove(sessionId)
     }
 }

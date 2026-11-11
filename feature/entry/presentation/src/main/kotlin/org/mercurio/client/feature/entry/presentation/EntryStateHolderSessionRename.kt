@@ -7,76 +7,70 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showRenameSession(sessionId: SessionId) {
-    run {
-        val current = mutableUiState.value.sessionList?.takeIf { it.allowsSessionMutation() } ?: return
-        val mutation = current.sessionMutations[sessionId]
-        val session = current.sessionForMutation(sessionId)
-        if (mutation?.pendingAction != null || mutation?.delete != null || session == null) return
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessionMutations =
-                            current.sessionMutations +
-                                (
-                                    sessionId to
-                                        SessionMutationUiState(
-                                            rename = SessionRenameUiState(session.title),
-                                        )
-                                ),
-                    ),
-            )
-    }
+    val current = mutableUiState.value.sessionList?.takeIf { it.allowsSessionMutation() } ?: return
+    val mutation = current.sessionMutations[sessionId]
+    val session = current.sessionForMutation(sessionId)
+    if (mutation?.pendingAction != null || mutation?.delete != null || session == null) return
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    sessionMutations =
+                        current.sessionMutations +
+                            (
+                                sessionId to
+                                    SessionMutationUiState(
+                                        rename = SessionRenameUiState(session.title),
+                                    )
+                            ),
+                ),
+        )
 }
 
 internal fun EntryStateHolder.updateRenameSessionTitle(
     sessionId: SessionId,
     value: String,
 ) {
-    run {
-        val current = mutableUiState.value.sessionList ?: return
-        val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null }
-        val rename = mutation?.rename?.takeIf { !it.isSubmitting }
-        if (mutation == null || rename == null) return
-        val updated =
-            mutation.copy(
-                rename = rename.copy(titleDraft = value, errorCategory = null),
-                errorCategory = null,
-                retryAction = null,
-            )
-        val key = recoverySessionKey(sessionId)
-        if (key in unresolvedSessionMutations) {
-            unresolvedSessionMutations[key] = updated
-        }
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessionMutations = current.sessionMutations + (sessionId to updated),
-                    ),
-            )
+    val current = mutableUiState.value.sessionList ?: return
+    val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null }
+    val rename = mutation?.rename?.takeIf { !it.isSubmitting }
+    if (mutation == null || rename == null) return
+    val updated =
+        mutation.copy(
+            rename = rename.copy(titleDraft = value, errorCategory = null),
+            errorCategory = null,
+            retryAction = null,
+        )
+    val key = recoverySessionKey(sessionId)
+    if (key in unresolvedSessionMutations) {
+        unresolvedSessionMutations[key] = updated
     }
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    sessionMutations = current.sessionMutations + (sessionId to updated),
+                ),
+        )
 }
 
 internal fun EntryStateHolder.cancelRenameSession(sessionId: SessionId) {
-    run {
-        val current = mutableUiState.value.sessionList ?: return
-        val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null } ?: return
-        val remaining = mutation.copy(rename = null)
-        unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessionMutations =
-                            if (remaining.delete == null && remaining.errorCategory == null) {
-                                current.sessionMutations - sessionId
-                            } else {
-                                current.sessionMutations + (sessionId to remaining)
-                            },
-                    ),
-            )
-    }
+    val current = mutableUiState.value.sessionList ?: return
+    val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null } ?: return
+    val remaining = mutation.copy(rename = null)
+    unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    sessionMutations =
+                        if (remaining.delete == null && remaining.errorCategory == null) {
+                            current.sessionMutations - sessionId
+                        } else {
+                            current.sessionMutations + (sessionId to remaining)
+                        },
+                ),
+        )
 }
 
 internal fun EntryStateHolder.confirmRenameSession(sessionId: SessionId) {
@@ -154,32 +148,30 @@ internal fun EntryStateHolder.submitRenameSession(
 
 internal suspend fun EntryStateHolder.showRenameFailure(request: SessionMutationRequest) {
     applyStateChange {
-        run {
-            val (current, mutation) = mutationFailureTarget(request) ?: return@run
-            val sessionId = request.sessionId
-            val rename = mutation.rename ?: return@run
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            sessionMutations =
-                                current.sessionMutations +
-                                    (
-                                        sessionId to
-                                            mutation.copy(
-                                                rename =
-                                                    rename.copy(
-                                                        isSubmitting = false,
-                                                        errorCategory =
-                                                            SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED,
-                                                    ),
-                                                pendingAction = null,
-                                                retryAction = SessionMutationAction.RENAME,
-                                            )
-                                    ),
-                        ),
-                )
-        }
+        val (current, mutation) = mutationFailureTarget(request) ?: return@applyStateChange
+        val sessionId = request.sessionId
+        val rename = mutation.rename ?: return@applyStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        sessionMutations =
+                            current.sessionMutations +
+                                (
+                                    sessionId to
+                                        mutation.copy(
+                                            rename =
+                                                rename.copy(
+                                                    isSubmitting = false,
+                                                    errorCategory =
+                                                        SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED,
+                                                ),
+                                            pendingAction = null,
+                                            retryAction = SessionMutationAction.RENAME,
+                                        )
+                                ),
+                    ),
+            )
     }
 }
 

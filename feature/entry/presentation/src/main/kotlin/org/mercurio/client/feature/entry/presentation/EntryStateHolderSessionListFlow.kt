@@ -181,15 +181,13 @@ internal suspend fun EntryStateHolder.updateCurrentSessionRequest(
     transform: (SessionListUiState) -> SessionListUiState,
 ): Boolean =
     applyStateChange {
-        run {
-            val current = mutableUiState.value.sessionList ?: return@run false
-            val offsetIsStale = offset != null && current.nextOffset != offset
-            if (requestGeneration != sessionRequestGeneration || offsetIsStale) {
-                false
-            } else {
-                mutableUiState.value = mutableUiState.value.copy(sessionList = transform(current))
-                true
-            }
+        val current = mutableUiState.value.sessionList ?: return@applyStateChange false
+        val offsetIsStale = offset != null && current.nextOffset != offset
+        if (requestGeneration != sessionRequestGeneration || offsetIsStale) {
+            false
+        } else {
+            mutableUiState.value = mutableUiState.value.copy(sessionList = transform(current))
+            true
         }
     }
 

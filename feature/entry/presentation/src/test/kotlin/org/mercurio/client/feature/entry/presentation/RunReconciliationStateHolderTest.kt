@@ -1,7 +1,9 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -19,6 +21,7 @@ import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
+import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import java.util.concurrent.CountDownLatch
@@ -30,14 +33,7 @@ class RunReconciliationStateHolderTest {
     fun history_run_selection_is_serialized_against_bookkeeping_writes_on_the_state_lane() {
         val session = reconciliationSession()
         val latestRun = Run(RunId("latest-run"), session.id, "succeeded")
-        val openedSession =
-            org.mercurio.client.feature.entry.application.OpenedSession(
-                session,
-                SessionHistory(
-                    session.id,
-                    listOf(GatewayHistoryMessage("result", "assistant", "Done", latestRun.id, "succeeded")),
-                ),
-            )
+        val openedSession = historySessionWithRun(session, latestRun.id)
         val containsEntered = CountDownLatch(1)
         val releaseContains = CountDownLatch(1)
         val mutationFinished = CountDownLatch(1)
@@ -49,18 +45,21 @@ class RunReconciliationStateHolderTest {
                 release = releaseContains,
             )
         val gateway = ReconciliationFakeGateway(session)
-        val holder =
-            reconciliationHolder(
-                gateway,
-                settings = ReconciliationHolderSettings(Dispatchers.IO.limitedParallelism(1)),
-            )
+        val settings =
+            ReconciliationHolderSettings(scope = CoroutineScope(SupervisorJob() + Dispatchers.Default))
+        settings.stateChangeDispatcher = Dispatchers.IO.limitedParallelism(1)
+        val holder = reconciliationHolder(gateway, settings = settings)
         privateField(holder, "uncertainSubmissionRunIds", blockingRuns)
         val selectedRun = AtomicReference<RunId?>()
         val selectionFailure = AtomicReference<Throwable?>()
         val selection =
             holder.scope.launch {
                 try {
-                    selectedRun.set(invokeHistoryRunIdToReconcile(holder, session.id, openedSession))
+                    selectedRun.set(
+                        holder.applyStateChange {
+                            invokeHistoryRunIdToReconcile(holder, session.id, openedSession)
+                        },
+                    )
                 } catch (error: Throwable) {
                     selectionFailure.set(error)
                 }
@@ -476,4 +475,16 @@ class RunReconciliationStateHolderTest {
                 holder.close()
             }
         }
+
+    private fun historySessionWithRun(
+        session: Session,
+        runId: RunId,
+    ): OpenedSession =
+        OpenedSession(
+            session,
+            SessionHistory(
+                session.id,
+                listOf(GatewayHistoryMessage("result", "assistant", "Done", runId, "succeeded")),
+            ),
+        )
 }

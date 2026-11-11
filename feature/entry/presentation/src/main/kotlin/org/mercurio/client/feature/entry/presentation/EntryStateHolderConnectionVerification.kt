@@ -163,15 +163,13 @@ internal fun EntryStateHolder.showFailure(
         LocalDiagnosticEventType.GATEWAY_CONNECTION_VERIFICATION,
         LocalDiagnosticStatus.FAILED,
     )
-    run {
-        if (connectionGeneration == requestConnectionGeneration) {
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    isVerifying = false,
-                    isSaving = false,
-                    errorCategory = category,
-                )
-        }
+    if (connectionGeneration == requestConnectionGeneration) {
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                isVerifying = false,
+                isSaving = false,
+                errorCategory = category,
+            )
     }
 }
 

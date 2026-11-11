@@ -171,7 +171,9 @@ internal class ReconciliationHolderSettings(
     val uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
     val sessionDraftStore: SessionDraftStore = NoOpSessionDraftStore,
     val scope: CoroutineScope? = null,
-)
+) {
+    var stateChangeDispatcher: CoroutineDispatcher? = null
+}
 
 internal fun reconciliationHolder(
     gateway: ReconciliationFakeGateway,
@@ -211,6 +213,7 @@ internal fun reconciliationHolder(
                     }
                 },
                 sendTimeoutMillis = settings.sendTimeoutMillis,
+                stateChangeDispatcher = settings.stateChangeDispatcher,
             ),
     )
 }

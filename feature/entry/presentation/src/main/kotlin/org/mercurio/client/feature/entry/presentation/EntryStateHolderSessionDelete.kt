@@ -8,46 +8,42 @@ import org.mercurio.client.feature.entry.domain.RunEventObservation
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showDeleteSession(sessionId: SessionId) {
-    run {
-        val current =
-            mutableUiState.value.sessionList
-                ?.takeIf { it.allowsSessionMutation() && it.sessionForMutation(sessionId) != null }
-                ?: return
-        val mutation = current.sessionMutations[sessionId] ?: SessionMutationUiState()
-        if (mutation.pendingAction != null || mutation.rename != null) return
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessionMutations =
-                            current.sessionMutations +
-                                (
-                                    sessionId to
-                                        mutation.copy(
-                                            delete = SessionDeleteUiState(),
-                                            errorCategory = null,
-                                            retryAction = null,
-                                        )
-                                ),
-                    ),
-            )
-    }
+    val current =
+        mutableUiState.value.sessionList
+            ?.takeIf { it.allowsSessionMutation() && it.sessionForMutation(sessionId) != null }
+            ?: return
+    val mutation = current.sessionMutations[sessionId] ?: SessionMutationUiState()
+    if (mutation.pendingAction != null || mutation.rename != null) return
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    sessionMutations =
+                        current.sessionMutations +
+                            (
+                                sessionId to
+                                    mutation.copy(
+                                        delete = SessionDeleteUiState(),
+                                        errorCategory = null,
+                                        retryAction = null,
+                                    )
+                            ),
+                ),
+        )
 }
 
 internal fun EntryStateHolder.cancelDeleteSession(sessionId: SessionId) {
-    run {
-        val current = mutableUiState.value.sessionList ?: return
-        val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null } ?: return
-        val remaining = mutation.copy(delete = null, errorCategory = null, retryAction = null)
-        unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessionMutations = mutationMapAfter(sessionId, remaining, current.sessionMutations),
-                    ),
-            )
-    }
+    val current = mutableUiState.value.sessionList ?: return
+    val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null } ?: return
+    val remaining = mutation.copy(delete = null, errorCategory = null, retryAction = null)
+    unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    sessionMutations = mutationMapAfter(sessionId, remaining, current.sessionMutations),
+                ),
+        )
 }
 
 internal fun EntryStateHolder.confirmDeleteSession(sessionId: SessionId) {
@@ -94,28 +90,26 @@ internal fun EntryStateHolder.confirmDeleteSession(sessionId: SessionId) {
 
 internal suspend fun EntryStateHolder.showDeleteFailure(request: SessionMutationRequest) {
     applyStateChange {
-        run {
-            val (current, mutation) = mutationFailureTarget(request) ?: return@run
-            val sessionId = request.sessionId
-            val delete = mutation.delete ?: return@run
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            sessionMutations =
-                                current.sessionMutations +
-                                    (
-                                        sessionId to
-                                            mutation.copy(
-                                                delete = delete.copy(isSubmitting = false),
-                                                pendingAction = null,
-                                                errorCategory = SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED,
-                                                retryAction = SessionMutationAction.DELETE,
-                                            )
-                                    ),
-                        ),
-                )
-        }
+        val (current, mutation) = mutationFailureTarget(request) ?: return@applyStateChange
+        val sessionId = request.sessionId
+        val delete = mutation.delete ?: return@applyStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        sessionMutations =
+                            current.sessionMutations +
+                                (
+                                    sessionId to
+                                        mutation.copy(
+                                            delete = delete.copy(isSubmitting = false),
+                                            pendingAction = null,
+                                            errorCategory = SessionMutationErrorCategory.GATEWAY_REQUEST_FAILED,
+                                            retryAction = SessionMutationAction.DELETE,
+                                        )
+                                ),
+                    ),
+            )
     }
 }
 
@@ -127,39 +121,37 @@ internal suspend fun EntryStateHolder.removeConfirmedSession(
     var observationToClose: RunEventObservation? = null
     val refreshJob =
         applyStateChange {
-            run {
-                if (!isCurrentSessionMutation(request)) return@run null
-                val current = mutableUiState.value.sessionList ?: return@run null
-                val shouldRefresh = current.nextOffset != null
-                if (current.openedSession?.session?.id == sessionId) {
-                    observationJobToCancel = runObservationJobs[sessionId]
-                    observationToClose = runObservations.remove(sessionId)
-                    runObservationRunIds.remove(sessionId)
-                    runObservationStates.remove(sessionId)
-                }
-                mutableUiState.value =
-                    mutableUiState.value.copy(
-                        sessionList =
-                            current.copy(
-                                sessions = current.sessions.filterNot { it.id == sessionId },
-                                openedSession = current.openedSession?.takeUnless { it.session.id == sessionId },
-                                sessionMutations = current.sessionMutations - sessionId,
-                            ),
+            if (!isCurrentSessionMutation(request)) return@applyStateChange null
+            val current = mutableUiState.value.sessionList ?: return@applyStateChange null
+            val shouldRefresh = current.nextOffset != null
+            if (current.openedSession?.session?.id == sessionId) {
+                observationJobToCancel = runObservationJobs[sessionId]
+                observationToClose = runObservations.remove(sessionId)
+                runObservationRunIds.remove(sessionId)
+                runObservationStates.remove(sessionId)
+            }
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            sessions = current.sessions.filterNot { it.id == sessionId },
+                            openedSession = current.openedSession?.takeUnless { it.session.id == sessionId },
+                            sessionMutations = current.sessionMutations - sessionId,
+                        ),
+                )
+            unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
+            if (shouldRefresh) {
+                sessionGateway?.let { gateway ->
+                    createFirstPageLoadJob(
+                        gateway = gateway,
+                        query = current.searchQuery,
+                        isRefreshing = true,
+                        isSearching = false,
+                        preserveSessions = true,
                     )
-                unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
-                if (shouldRefresh) {
-                    sessionGateway?.let { gateway ->
-                        createFirstPageLoadJob(
-                            gateway = gateway,
-                            query = current.searchQuery,
-                            isRefreshing = true,
-                            isSearching = false,
-                            preserveSessions = true,
-                        )
-                    }
-                } else {
-                    null
                 }
+            } else {
+                null
             }
         }
     observationJobToCancel?.cancel()

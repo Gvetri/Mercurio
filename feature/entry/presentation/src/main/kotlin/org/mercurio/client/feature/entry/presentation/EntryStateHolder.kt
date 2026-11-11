@@ -55,6 +55,7 @@ import org.mercurio.client.feature.entry.domain.SessionDraftStore
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface EntryUiEvent {
@@ -556,12 +557,12 @@ class EntryStateHolder(
     internal var nextMutationAttemptId = 0L
     internal val mutationOwners = mutableMapOf<SessionId, SessionMutationRequest>()
     internal val runJobs = mutableMapOf<SessionId, Job>()
-    internal val sessionDrafts = mutableMapOf<SessionId, String>()
+    internal val sessionDrafts = ConcurrentHashMap<SessionId, String>()
     internal var pendingSharedText: String? = null
-    internal val sessionDraftRevisions = mutableMapOf<SessionId, Long>()
+    internal val sessionDraftRevisions = ConcurrentHashMap<SessionId, Long>()
     internal val sessionSendErrors = mutableMapOf<SessionId, MessageSendErrorCategory>()
     internal val pendingRunDrafts = mutableMapOf<SessionId, PendingDraft>()
-    internal val pendingDisconnectedRecoveryEntries = mutableMapOf<String, MutableSet<RunRecoveryEntry>>()
+    internal val pendingDisconnectedRecoveryEntries = ConcurrentHashMap<String, MutableSet<RunRecoveryEntry>>()
     internal val connectionRecoveryJobs = mutableSetOf<Job>()
     internal val connectionRecoverySessionCounts = mutableMapOf<SessionId, Int>()
     internal val connectionRecoveryFailedSessions = mutableSetOf<SessionId>()
@@ -598,7 +599,7 @@ class EntryStateHolder(
     internal val uncertainSendDrafts = mutableMapOf<SessionId, PendingDraft>()
     internal val uncertainSubmissionRunIds = mutableMapOf<SessionId, RunId>()
     internal val uncertainSubmissionAttemptIds = mutableMapOf<SessionId, String>()
-    internal val pendingTimedOutSends = mutableMapOf<SessionId, TimedOutSendRecovery>()
+    internal val pendingTimedOutSends = ConcurrentHashMap<SessionId, TimedOutSendRecovery>()
     internal val reconcilingSessions = mutableMapOf<SessionId, Long>()
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
 
@@ -986,6 +987,7 @@ internal data class TimedOutSendReconciliationOutcome(
     val runToObserve: Run? = null,
     val runToPersist: RunRecoveryEntry? = null,
     val runToRemove: RunRecoveryEntry? = null,
+    val ambiguousMark: Pair<PendingRunSubmissionKey, String>? = null,
 )
 
 internal data class SessionRequestContext(

@@ -11,6 +11,7 @@ import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEventStateTransition
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.isActive
+import java.util.concurrent.ConcurrentHashMap
 
 internal suspend fun EntryStateHolder.recoverRun(
     entry: RunRecoveryEntry,
@@ -103,11 +104,9 @@ internal fun EntryStateHolder.persistDisconnectedRecoveryEntry(
                     runGateway != null
             }
         if (!reconcileNow) {
-            run {
-                pendingDisconnectedRecoveryEntries
-                    .getOrPut(endpoint, ::mutableSetOf)
-                    .add(entry)
-            }
+            pendingDisconnectedRecoveryEntries
+                .computeIfAbsent(endpoint) { ConcurrentHashMap.newKeySet() }
+                .add(entry)
         }
         reconcilePersistedRecoveryEntryIfConnected(endpoint, entry)
     }
@@ -214,21 +213,19 @@ internal fun EntryStateHolder.markRecoveryUiRefreshing(
     recoveryContext: RecoveryRunContext,
 ) {
     submitStateChange {
-        run {
-            if (connectionGeneration != recoveryContext.connectionGeneration) return@run
-            val (current, opened) = openedSessionFor(entry.sessionId) ?: return@run
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = true,
-                                    isReconciliationInProgress = true,
-                                ),
-                        ),
-                )
-        }
+        if (connectionGeneration != recoveryContext.connectionGeneration) return@submitStateChange
+        val (current, opened) = openedSessionFor(entry.sessionId) ?: return@submitStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        openedSession =
+                            opened.copy(
+                                isRefreshing = true,
+                                isReconciliationInProgress = true,
+                            ),
+                    ),
+            )
     }
 }
 
@@ -260,21 +257,19 @@ internal fun EntryStateHolder.startRecoveryObservationJob(
                     )
                 }
             } finally {
-                run {
-                    if (
-                        connectionGeneration == recoveryContext.connectionGeneration &&
-                        releaseRecoveryClaim(claim)
-                    ) {
-                        connectionRecoveryJobs.remove(job)
-                        recoveryReconciledRunIds.remove(entry.runId)
-                        if (recoveryFinished) {
-                            recoveryHandledEntries += claim.key
-                        }
-                        if (!recoveryCompleted) {
-                            connectionRecoveryFailedSessions += entry.sessionId
-                        }
-                        releaseRecoverySessionCount(entry, recoveryContext)
+                if (
+                    connectionGeneration == recoveryContext.connectionGeneration &&
+                    releaseRecoveryClaim(claim)
+                ) {
+                    connectionRecoveryJobs.remove(job)
+                    recoveryReconciledRunIds.remove(entry.runId)
+                    if (recoveryFinished) {
+                        recoveryHandledEntries += claim.key
                     }
+                    if (!recoveryCompleted) {
+                        connectionRecoveryFailedSessions += entry.sessionId
+                    }
+                    releaseRecoverySessionCount(entry, recoveryContext)
                 }
             }
         }

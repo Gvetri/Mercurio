@@ -18,33 +18,31 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 
 internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
-    run {
-        if (
-            pendingCreateSessions[work.recoverySessionKey] ==
-            PendingCreateState(work.knownRunIds, work.attemptId)
-        ) {
-            pendingCreateSessions.remove(work.recoverySessionKey)
-            pendingCreateStarted.remove(work.recoverySessionKey)
-            unresolvedSubmissionSessions += work.sessionId
-            pendingRunDrafts.remove(work.sessionId)?.let { draft ->
-                uncertainSendDrafts[work.sessionId] = draft
-            }
-            sessionSendErrors[work.sessionId] = MessageSendErrorCategory.UNCERTAIN
-            submitStateChange {
-                val (current, opened) = openedSessionFor(work.sessionId) ?: return@submitStateChange
-                mutableUiState.value =
-                    mutableUiState.value.copy(
-                        sessionList =
-                            current.copy(
-                                openedSession =
-                                    opened.copy(
-                                        isSending = false,
-                                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                        hasUnresolvedSubmission = true,
-                                    ),
-                            ),
-                    )
-            }
+    if (
+        pendingCreateSessions[work.recoverySessionKey] ==
+        PendingCreateState(work.knownRunIds, work.attemptId)
+    ) {
+        pendingCreateSessions.remove(work.recoverySessionKey)
+        pendingCreateStarted.remove(work.recoverySessionKey)
+        unresolvedSubmissionSessions += work.sessionId
+        pendingRunDrafts.remove(work.sessionId)?.let { draft ->
+            uncertainSendDrafts[work.sessionId] = draft
+        }
+        sessionSendErrors[work.sessionId] = MessageSendErrorCategory.UNCERTAIN
+        submitStateChange {
+            val (current, opened) = openedSessionFor(work.sessionId) ?: return@submitStateChange
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            openedSession =
+                                opened.copy(
+                                    isSending = false,
+                                    sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                                    hasUnresolvedSubmission = true,
+                                ),
+                        ),
+                )
         }
     }
 }
@@ -135,15 +133,14 @@ internal suspend fun EntryStateHolder.completeSuccessfulSubmission(
             "Retry response reused the failed Run identity.",
         )
     }
-    run {
-        if (connectionGeneration == work.requestConnectionGeneration) {
-            submittedRunInputs[run.id] = work.input
-            work.selection?.let { selection ->
-                submittedRunModelSelections[run.id] = selection
-                modelSelectionStore.recordUse(work.requestEndpoint, selection.model)
-            }
+    if (connectionGeneration == work.requestConnectionGeneration) {
+        submittedRunInputs[run.id] = work.input
+        work.selection?.let { selection ->
+            submittedRunModelSelections[run.id] = selection
+            modelSelectionStore.recordUse(work.requestEndpoint, selection.model)
         }
     }
+
     val applied =
         applySubmittedRun(
             sessionId = work.sessionId,

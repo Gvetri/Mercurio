@@ -22,9 +22,7 @@ internal fun EntryStateHolder.restoredSessionDraft(sessionId: SessionId): String
         sessionDrafts[sessionId]
             ?: sessionDraftStore.read(sessionDraftKey(sessionId))?.takeIf { it.isNotEmpty() }?.also { persisted ->
                 sessionDrafts[sessionId] = persisted
-                if (sessionId !in sessionDraftRevisions) {
-                    sessionDraftRevisions[sessionId] = 0L
-                }
+                sessionDraftRevisions.putIfAbsent(sessionId, 0L)
             }
     }.orEmpty()
 
@@ -47,32 +45,28 @@ internal fun EntryStateHolder.sessionDraftForOpenedSession(sessionId: SessionId)
             val existing = restoredSessionDraft(sessionId)
             val merged = if (existing.isEmpty()) shared else existing + SHARED_TEXT_SEPARATOR + shared
             sessionDrafts[sessionId] = merged
-            sessionDraftRevisions[sessionId] =
-                sessionDraftRevisions[sessionId]?.plus(1) ?: 1L
+            sessionDraftRevisions.merge(sessionId, 1L, Long::plus)
             sessionDraftStore.write(sessionDraftKey(sessionId), merged)
             merged
         }
     }
 
 internal fun EntryStateHolder.updateComposerText(value: String) {
-    run {
-        val current = mutableUiState.value.sessionList ?: return
-        val opened = current.openedSession ?: return
-        sessionDrafts[opened.session.id] = value
-        sessionDraftRevisions[opened.session.id] =
-            sessionDraftRevisions[opened.session.id]?.plus(1) ?: 1L
-        sessionDraftStore.write(sessionDraftKey(opened.session.id), value)
-        sessionSendErrors.remove(opened.session.id)
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                composerText = value,
-                                sendErrorCategory = sendErrorCategoryFor(opened.session.id),
-                            ),
-                    ),
-            )
-    }
+    val current = mutableUiState.value.sessionList ?: return
+    val opened = current.openedSession ?: return
+    sessionDrafts[opened.session.id] = value
+    sessionDraftRevisions.merge(opened.session.id, 1L, Long::plus)
+    sessionDraftStore.write(sessionDraftKey(opened.session.id), value)
+    sessionSendErrors.remove(opened.session.id)
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    openedSession =
+                        opened.copy(
+                            composerText = value,
+                            sendErrorCategory = sendErrorCategoryFor(opened.session.id),
+                        ),
+                ),
+        )
 }

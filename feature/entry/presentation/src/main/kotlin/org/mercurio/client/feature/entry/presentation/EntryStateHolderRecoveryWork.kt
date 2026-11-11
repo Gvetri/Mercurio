@@ -124,20 +124,19 @@ internal suspend fun EntryStateHolder.startRecoveryWork(
 ) {
     lateinit var job: Job
     var jobToCancel: Job? = null
-    run {
-        jobToCancel = recoveryJob
-        job =
-            scope.launch(start = CoroutineStart.LAZY) {
-                try {
-                    workItems.forEach { workItem ->
-                        runRecoveryWorkItem(workItem, recoveryContext, expectedConnectionGeneration)
-                    }
-                } finally {
-                    releaseRecoveryWork(workItems, expectedConnectionGeneration, job)
+    jobToCancel = recoveryJob
+    job =
+        scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                workItems.forEach { workItem ->
+                    runRecoveryWorkItem(workItem, recoveryContext, expectedConnectionGeneration)
                 }
+            } finally {
+                releaseRecoveryWork(workItems, expectedConnectionGeneration, job)
             }
-        recoveryJob = job
-    }
+        }
+    recoveryJob = job
+
     finishRecoveryLoad(expectedConnectionGeneration, entries, failed = false)
     jobToCancel?.cancel()
     job.start()
@@ -165,12 +164,11 @@ internal suspend fun EntryStateHolder.runRecoveryWorkItem(
                     historyGeneration = expectedHistoryGeneration,
                 ),
         )
-    run {
-        if (connectionGeneration == expectedConnectionGeneration) {
-            recoveryHandledEntries +=
-                RecoveryEntryKey(recoveryContext.endpoint, entry.sessionId, entry.runId)
-        }
+    if (connectionGeneration == expectedConnectionGeneration) {
+        recoveryHandledEntries +=
+            RecoveryEntryKey(recoveryContext.endpoint, entry.sessionId, entry.runId)
     }
+
     if (recoveredRun == null) {
         markRecoveryFailure(entry.sessionId, expectedConnectionGeneration)
     } else {

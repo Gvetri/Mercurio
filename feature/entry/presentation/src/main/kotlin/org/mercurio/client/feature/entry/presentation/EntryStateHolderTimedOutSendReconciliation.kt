@@ -18,7 +18,7 @@ import org.mercurio.client.feature.entry.domain.isActive
 internal suspend fun EntryStateHolder.reconcileTimedOutSend(request: TimedOutSendReconciliationRequest): Boolean {
     var requestEndpoint = ""
     val connectionIsCurrent =
-        run {
+        applyStateChange {
             if (connectionGeneration != request.connectionGeneration) {
                 false
             } else {
@@ -199,59 +199,71 @@ internal suspend fun EntryStateHolder.applyTimedOutSendReconciliation(
     requestSessionGeneration: Long,
     reconciliation: SessionReconciliation,
     resolveWhenNoNewRun: Boolean,
-): TimedOutSendReconciliationOutcome =
-    applyStateChange {
-        if (
-            connectionGeneration != requestConnectionGeneration ||
-            sessionRequestGeneration != requestSessionGeneration
-        ) {
-            return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
-        }
-        val current =
-            mutableUiState.value.sessionList
-                ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
-        val opened =
-            current.openedSession?.takeIf { it.session.id == sessionId }
-                ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
-        val evaluation =
-            evaluateTimedOutSendUncertainty(sessionId, reconciliation, resolveWhenNoNewRun)
-                ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
-        authoritativeSessionRuns[sessionId] =
-            mergeRuns(evaluation.retainedAuthoritativeRuns, evaluation.authoritativeRuns)
-        evaluation.durableBoundRunId?.let { boundRunId -> uncertainSubmissionRunIds[sessionId] = boundRunId }
-        if (evaluation.discoveredUnattributedRun) {
-            ambiguousSubmissionSessions += sessionId
-            runCatching {
-                runSubmissionUncertaintyStore.markAmbiguous(evaluation.pendingKey, evaluation.attemptId)
+): TimedOutSendReconciliationOutcome {
+    val outcome =
+        applyStateChange {
+            if (
+                connectionGeneration != requestConnectionGeneration ||
+                sessionRequestGeneration != requestSessionGeneration
+            ) {
+                return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
             }
-        }
-        evaluation.terminalRunIds.forEach { runId -> forgetUnresolvedLocalRun(sessionId, runId) }
-        if (evaluation.canClearUncertainty) {
-            clearTimedOutSendUncertainty(sessionId, current, opened, evaluation, resolveWhenNoNewRun)
-        } else {
-            markTimedOutSendUncertain(
-                sessionId = sessionId,
-                ui =
-                    TimedOutSendUiContext(
-                        current = current,
-                        opened = opened,
-                        recoveryDraft = evaluation.recoveryDraft,
-                        authoritativeMessages = evaluation.authoritativeMessages,
-                    ),
-                errorCategory = evaluation.pendingRecovery?.errorCategory ?: MessageSendErrorCategory.UNCERTAIN,
+            val current =
+                mutableUiState.value.sessionList
+                    ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
+            val opened =
+                current.openedSession?.takeIf { it.session.id == sessionId }
+                    ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
+            val evaluation =
+                evaluateTimedOutSendUncertainty(sessionId, reconciliation, resolveWhenNoNewRun)
+                    ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
+            authoritativeSessionRuns[sessionId] =
+                mergeRuns(evaluation.retainedAuthoritativeRuns, evaluation.authoritativeRuns)
+            evaluation.durableBoundRunId?.let { boundRunId -> uncertainSubmissionRunIds[sessionId] = boundRunId }
+            var ambiguousMark: Pair<PendingRunSubmissionKey, String>? = null
+            if (evaluation.discoveredUnattributedRun) {
+                ambiguousSubmissionSessions += sessionId
+                ambiguousMark = evaluation.pendingKey to evaluation.attemptId
+            }
+            evaluation.terminalRunIds.forEach { runId -> forgetUnresolvedLocalRun(sessionId, runId) }
+            if (evaluation.canClearUncertainty) {
+                clearTimedOutSendUncertainty(sessionId, current, opened, evaluation, resolveWhenNoNewRun)
+            } else {
+                markTimedOutSendUncertain(
+                    sessionId = sessionId,
+                    ui =
+                        TimedOutSendUiContext(
+                            current = current,
+                            opened = opened,
+                            recoveryDraft = evaluation.recoveryDraft,
+                            authoritativeMessages = evaluation.authoritativeMessages,
+                        ),
+                    errorCategory = evaluation.pendingRecovery?.errorCategory ?: MessageSendErrorCategory.UNCERTAIN,
+                )
+            }
+            pendingTimedOutSends.remove(sessionId)
+            TimedOutSendReconciliationOutcome(
+                applied = true,
+                runToObserve = evaluation.boundSubmissionRun?.takeIf(Run::isActive),
+                runToPersist =
+                    evaluation.discoveredLocalRun
+                        ?.takeIf(Run::isActive)
+                        ?.let { RunRecoveryEntry(sessionId, it.id) },
+                runToRemove =
+                    evaluation.submissionRun
+                        ?.takeIf { evaluation.canClearUncertainty && !it.isActive() }
+                        ?.let { RunRecoveryEntry(sessionId, it.id) },
+                ambiguousMark = ambiguousMark,
             )
         }
-        pendingTimedOutSends.remove(sessionId)
-        TimedOutSendReconciliationOutcome(
-            applied = true,
-            runToObserve = evaluation.boundSubmissionRun?.takeIf(Run::isActive),
-            runToPersist =
-                evaluation.discoveredLocalRun
-                    ?.takeIf(Run::isActive)
-                    ?.let { RunRecoveryEntry(sessionId, it.id) },
-            runToRemove =
-                evaluation.submissionRun
-                    ?.takeIf { evaluation.canClearUncertainty && !it.isActive() }
-                    ?.let { RunRecoveryEntry(sessionId, it.id) },
-        )
+    applyAmbiguousMark(outcome)
+    return outcome
+}
+
+private fun EntryStateHolder.applyAmbiguousMark(outcome: TimedOutSendReconciliationOutcome) {
+    val mark = outcome.ambiguousMark ?: return
+    val (key, attemptId) = mark
+    runCatching {
+        runSubmissionUncertaintyStore.markAmbiguous(key, attemptId)
     }
+}

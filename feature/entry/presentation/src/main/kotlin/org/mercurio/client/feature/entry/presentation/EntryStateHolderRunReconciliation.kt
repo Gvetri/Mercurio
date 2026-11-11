@@ -58,12 +58,10 @@ internal suspend fun EntryStateHolder.reconcileRun(
 ): AuthoritativeRunReconciliation? {
     val runGateway =
         if (beginReconciliation(sessionId, requestConnectionGeneration, requestSessionGeneration)) {
-            run {
-                runGateway?.takeIf {
-                    connectionGeneration == requestConnectionGeneration &&
-                        sessionRequestGeneration == requestSessionGeneration &&
-                        mutableUiState.value.sessionList?.openedSession?.session?.id == sessionId
-                }
+            runGateway?.takeIf {
+                connectionGeneration == requestConnectionGeneration &&
+                    sessionRequestGeneration == requestSessionGeneration &&
+                    mutableUiState.value.sessionList?.openedSession?.session?.id == sessionId
             }
         } else {
             null
@@ -110,31 +108,29 @@ internal fun EntryStateHolder.beginReconciliation(
         } else {
             reconcilingSessions[sessionId] = requestSessionGeneration
             submitStateChange {
-                run {
-                    if (
-                        connectionGeneration != requestConnectionGeneration ||
-                        sessionRequestGeneration != requestSessionGeneration ||
-                        reconcilingSessions[sessionId] != requestSessionGeneration
-                    ) {
-                        return@submitStateChange
-                    }
-                    val current = mutableUiState.value.sessionList ?: return@submitStateChange
-                    val openedNow =
-                        current.openedSession?.takeIf { it.session.id == sessionId }
-                            ?: return@submitStateChange
-                    mutableUiState.value =
-                        mutableUiState.value.copy(
-                            sessionList =
-                                current.copy(
-                                    openedSession =
-                                        openedNow.copy(
-                                            isRefreshing = true,
-                                            isReconciliationInProgress = true,
-                                            errorCategory = null,
-                                        ),
-                                ),
-                        )
+                if (
+                    connectionGeneration != requestConnectionGeneration ||
+                    sessionRequestGeneration != requestSessionGeneration ||
+                    reconcilingSessions[sessionId] != requestSessionGeneration
+                ) {
+                    return@submitStateChange
                 }
+                val current = mutableUiState.value.sessionList ?: return@submitStateChange
+                val openedNow =
+                    current.openedSession?.takeIf { it.session.id == sessionId }
+                        ?: return@submitStateChange
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                openedSession =
+                                    openedNow.copy(
+                                        isRefreshing = true,
+                                        isReconciliationInProgress = true,
+                                        errorCategory = null,
+                                    ),
+                            ),
+                    )
             }
             true
         }
@@ -144,8 +140,7 @@ internal fun EntryStateHolder.beginReconciliation(
  * Releases the reconciliation claim and clears its visible in-progress state on the
  * state-change consumer.
  *
- * The claim bookkeeping is removed synchronously on the state-change lane because it
- * protects the claim round-trip itself, while the visible release is enqueued so
+ * The claim bookkeeping is removed synchronously before the visible release is enqueued, so
  * it cannot overtake a begin state that was queued before it: with both sides on the
  * consumer, a reconciliation attempt's set and release keep their submission order and a
  * later attempt's begin re-arms the flags after the earlier release applies. The release
@@ -160,32 +155,29 @@ internal fun EntryStateHolder.finishReconciliation(
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
 ) {
-    run {
-        if (reconcilingSessions[sessionId] == requestSessionGeneration) {
-            reconcilingSessions.remove(sessionId)
-        }
+    if (reconcilingSessions[sessionId] == requestSessionGeneration) {
+        reconcilingSessions.remove(sessionId)
     }
+
     submitStateChange {
-        run {
-            if (
-                connectionGeneration != requestConnectionGeneration ||
-                sessionRequestGeneration != requestSessionGeneration
-            ) {
-                return@submitStateChange
-            }
-            val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = false,
-                                    isReconciliationInProgress = false,
-                                ),
-                        ),
-                )
+        if (
+            connectionGeneration != requestConnectionGeneration ||
+            sessionRequestGeneration != requestSessionGeneration
+        ) {
+            return@submitStateChange
         }
+        val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        openedSession =
+                            opened.copy(
+                                isRefreshing = false,
+                                isReconciliationInProgress = false,
+                            ),
+                    ),
+            )
     }
 }
 
@@ -197,16 +189,15 @@ internal suspend fun EntryStateHolder.applyAuthoritativeRunReconciliation(
         applyStateChange {
             applyReconciliation(request, reconciliation)
         }
-    run {
-        val reconciledRun = reconciliation.run
-        val runIsClaimed =
-            recoveryClaims.keys.any { key ->
-                key.sessionId == request.sessionId && key.runId == reconciledRun.id
-            }
-        if (runIsClaimed) {
-            recoveryReconciledRunIds += reconciledRun.id
+    val reconciledRun = reconciliation.run
+    val runIsClaimed =
+        recoveryClaims.keys.any { key ->
+            key.sessionId == request.sessionId && key.runId == reconciledRun.id
         }
+    if (runIsClaimed) {
+        recoveryReconciledRunIds += reconciledRun.id
     }
+
     application.observationToClose?.close()
     application.observationJobToCancel?.cancel()
     removeReconciledRecoveryEntry(

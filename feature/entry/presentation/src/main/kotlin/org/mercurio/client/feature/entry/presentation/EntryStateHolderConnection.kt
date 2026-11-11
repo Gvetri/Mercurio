@@ -6,32 +6,30 @@ import kotlinx.coroutines.launch
 
 internal fun EntryStateHolder.releaseConnectionState(): ReleasedConnectionState =
     run {
-        run {
-            sessionRequestGeneration += 1
-            connectionGeneration += 1
-            sessionGateway = null
-            runGateway = null
-            catalogGateway = null
-            val supersededJobs = listOfNotNull(verificationJob, sessionJob, recoveryJob)
-            verificationJob = null
-            sessionJob = null
-            recoveryJob = null
-            val requestJobs =
-                listOf(
-                    mutationJobs.values,
-                    runJobs.values,
-                    runObservationJobs.values,
-                    connectionRecoveryJobs,
-                ).flatten()
-            val observationsToClose = runObservations.values.toList()
-            val pendingCreates = pendingCreateSnapshot()
-            clearSessionStateForClose()
-            ReleasedConnectionState(
-                jobs = requestJobs + supersededJobs,
-                observations = observationsToClose,
-                pendingCreates = pendingCreates,
-            )
-        }
+        sessionRequestGeneration += 1
+        connectionGeneration += 1
+        sessionGateway = null
+        runGateway = null
+        catalogGateway = null
+        val supersededJobs = listOfNotNull(verificationJob, sessionJob, recoveryJob)
+        verificationJob = null
+        sessionJob = null
+        recoveryJob = null
+        val requestJobs =
+            listOf(
+                mutationJobs.values,
+                runJobs.values,
+                runObservationJobs.values,
+                connectionRecoveryJobs,
+            ).flatten()
+        val observationsToClose = runObservations.values.toList()
+        val pendingCreates = pendingCreateSnapshot()
+        clearSessionStateForClose()
+        ReleasedConnectionState(
+            jobs = requestJobs + supersededJobs,
+            observations = observationsToClose,
+            pendingCreates = pendingCreates,
+        )
     }
 
 internal fun EntryStateHolder.clearSessionStateForClose() {
@@ -147,21 +145,19 @@ internal fun EntryStateHolder.verifyConnection() {
     val verifier = verifyGatewayConnection ?: return
     val job =
         run {
-            run {
-                val state = mutableUiState.value
-                if (state.blocksVerification()) {
-                    null
-                } else {
-                    verificationJob?.cancel()
-                    val requestConnectionGeneration = connectionGeneration
-                    mutableUiState.value = state.copy(isVerifying = true, errorCategory = null)
-                    val verification =
-                        scope.launch(start = CoroutineStart.LAZY) {
-                            runVerification(verifier, state, requestConnectionGeneration)
-                        }
-                    verificationJob = verification
-                    verification
-                }
+            val state = mutableUiState.value
+            if (state.blocksVerification()) {
+                null
+            } else {
+                verificationJob?.cancel()
+                val requestConnectionGeneration = connectionGeneration
+                mutableUiState.value = state.copy(isVerifying = true, errorCategory = null)
+                val verification =
+                    scope.launch(start = CoroutineStart.LAZY) {
+                        runVerification(verifier, state, requestConnectionGeneration)
+                    }
+                verificationJob = verification
+                verification
             }
         } ?: return
     job.start()

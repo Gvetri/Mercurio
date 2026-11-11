@@ -156,39 +156,35 @@ internal fun EntryStateHolder.markRecoveryUnavailable(
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
 ) {
-    run {
+    if (
+        connectionGeneration != requestConnectionGeneration ||
+        sessionRequestGeneration != requestSessionGeneration
+    ) {
+        return
+    }
+    submitStateChange {
         if (
             connectionGeneration != requestConnectionGeneration ||
             sessionRequestGeneration != requestSessionGeneration
         ) {
-            return@run
+            return@submitStateChange
         }
-        submitStateChange {
-            run {
-                if (
-                    connectionGeneration != requestConnectionGeneration ||
-                    sessionRequestGeneration != requestSessionGeneration
-                ) {
-                    return@submitStateChange
-                }
-                val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
-                mutableUiState.value =
-                    mutableUiState.value.copy(
-                        sessionList =
-                            current.copy(
-                                openedSession =
-                                    opened.copy(
-                                        isRefreshing = false,
-                                        isStale = true,
-                                        errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
-                                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                        hasUnresolvedSubmission = true,
-                                        latestRunState = opened.latestRunState ?: RunPresentationState.UNCERTAIN,
-                                        isReconciliationInProgress = false,
-                                    ),
+        val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    current.copy(
+                        openedSession =
+                            opened.copy(
+                                isRefreshing = false,
+                                isStale = true,
+                                errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
+                                sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                                hasUnresolvedSubmission = true,
+                                latestRunState = opened.latestRunState ?: RunPresentationState.UNCERTAIN,
+                                isReconciliationInProgress = false,
                             ),
-                    )
-            }
-        }
+                    ),
+            )
     }
 }
