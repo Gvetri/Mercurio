@@ -3,18 +3,6 @@ package org.mercurio.client.feature.entry.presentation
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 
-/** The run line's right segment: the Gateway state, or the one offered action. */
-internal sealed interface ChatRunRight {
-    data class Gateway(
-        val online: Boolean,
-    ) : ChatRunRight
-
-    data class Action(
-        val label: UiText,
-        val event: EntryUiEvent,
-    ) : ChatRunRight
-}
-
 /** The run line under the transcript: state left, dim segment, one right segment. */
 internal data class ChatRunLineState(
     val state: UiText,
@@ -151,22 +139,6 @@ private fun runState(
     } else {
         uiText(labelledRes, runId.value.take(CHAT_RUN_LABEL_LENGTH))
     }
-
-/** A Run owns the screen: its answer streams, or its state is still starting or completing. */
-internal fun OpenSessionUiState.chatStreamingRun(): Boolean =
-    activeResponse?.isStreaming == true ||
-        latestRunState == RunPresentationState.RUNNING ||
-        latestRunState == RunPresentationState.STARTING ||
-        latestRunState == RunPresentationState.COMPLETING
-
-/** What the screen shows may not match the Gateway, so the run line says `stale`. */
-internal fun OpenSessionUiState.chatStaleRun(): Boolean =
-    latestRun != null &&
-        (
-            isStale ||
-                latestRunState == RunPresentationState.UNCERTAIN ||
-                activeResponse?.streamInterrupted == true
-        )
 
 private fun OpenSessionUiState.activeRunId(): RunId? =
     activeResponse?.runId
