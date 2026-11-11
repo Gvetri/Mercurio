@@ -13,6 +13,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.mercurio.client.feature.entry.domain.RunId
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * The per-Message action menu: Copy message, Copy run ID and Share, with the run and the full
@@ -84,3 +87,17 @@ internal fun chatMenuMeta(
 private const val CHAT_META_SEPARATOR = " · "
 
 private val CHAT_MENU_WIDTH = 216.dp
+
+private val CHAT_MENU_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE dd MMM", Locale.getDefault())
+
+/** The full timestamp the message action menu prints under its items. */
+internal fun chatMenuTimestamp(
+    instant: Instant,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String = instant.atZone(zone).format(CHAT_MENU_FORMAT)
+
+/** The exact time the message action menu prints beside the date. */
+internal fun chatMenuTime(
+    instant: Instant,
+    zone: ZoneId = ZoneId.systemDefault(),
+): String = instant.atZone(zone).format(CHAT_TIME_FORMAT)

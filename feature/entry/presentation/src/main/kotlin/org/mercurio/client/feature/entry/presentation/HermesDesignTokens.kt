@@ -13,66 +13,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-/**
- * The application-owned spacing scale: the eight Pack D steps. Surfaces read these
- * steps instead of literal values.
- */
-@Immutable
-data class HermesSpacing(
-    val xxs: Dp,
-    val xs: Dp,
-    val s: Dp,
-    val m: Dp,
-    val l: Dp,
-    val xl: Dp,
-    val xxl: Dp,
-    val xxxl: Dp,
-)
-
-/**
- * The application-owned elevation scale. [raised] marks the active conversation
- * pane on larger displays; every other surface stays on the base content plane.
- */
-@Immutable
-data class HermesElevation(
-    val level0: Dp,
-    val level1: Dp,
-    val level2: Dp,
-    val level3: Dp,
-    val level4: Dp,
-    val level5: Dp,
-) {
-    val raised: Dp
-        get() = level2
-}
-
-@Immutable
-data class HermesSyntaxColors(
-    val keyword: Color,
-    val string: Color,
-    val number: Color,
-    val function: Color,
-    val type: Color,
-    val comment: Color,
-    val punctuation: Color,
-    val codeSurface: Color,
-)
-
-/**
- * The component tokens the Material role set cannot express: the island inset
- * fill and the selected session row tint with its two derived foregrounds.
- */
-@Immutable
-data class HermesComponentColors(
-    val inset: Color,
-    val sessionSelected: Color,
-    val onSessionSelected: Color,
-    val onSessionSelectedDim: Color,
-)
 
 /**
  * The complete local design-token set for one theme mode: color, typography,
