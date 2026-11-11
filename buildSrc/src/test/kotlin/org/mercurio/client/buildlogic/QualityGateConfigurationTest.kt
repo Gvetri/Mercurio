@@ -1640,7 +1640,11 @@ class QualityGateConfigurationTest {
             "./gradlew \"${'$'}module:ktlintFormat\" --no-daemon",
             "./gradlew \"${'$'}module:test\" --no-daemon",
             "./gradlew \"${'$'}module:ktlintMainSourceSetCheck\" \"${'$'}module:ktlintTestSourceSetCheck\" --no-daemon",
+            "./gradlew commentPolicyVerify --no-daemon --console=plain",
+            "./gradlew \"${'$'}module:verifyRoborazziBaselineManifest\" \"${'$'}module:verifyRoborazziDebug\" --no-daemon --console=plain",
+            "./gradlew \"${'$'}module:lintDebug\" \"${'$'}module:assembleDebug\" \"${'$'}module:assembleRelease\" --no-daemon --console=plain",
             "./gradlew \"${'$'}module:detektMain\" \"${'$'}module:detektTest\" detektVerify --no-daemon --console=plain",
+            "./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon --console=plain",
         ).forEach { invocation ->
             assertTrue("The local quality gate must run: $invocation.", script.contains(invocation))
         }
@@ -1648,9 +1652,17 @@ class QualityGateConfigurationTest {
             "The local quality gate must check the test source set with ktlint.",
             script.contains("ktlintTestSourceSetCheck"),
         )
+        assertTrue(
+            "The local quality gate must select the presentation lane only for that module.",
+            script.contains("if [[ \"${'$'}module\" == \":feature:entry:presentation\" ]]"),
+        )
+        assertTrue(
+            "The local quality gate must select the application lane only for that module.",
+            script.contains("if [[ \"${'$'}module\" == \":app\" ]]"),
+        )
         assertEquals(
             "Every local quality gate invocation must keep the CI --no-daemon shape.",
-            4,
+            8,
             Regex("--no-daemon").findAll(script).count(),
         )
         val formatter = script.indexOf("ktlintFormat")
@@ -1672,6 +1684,16 @@ class QualityGateConfigurationTest {
         assertTrue(
             "The local quality gate must run detekt after any reformat.",
             ktlintCheck != -1 && ktlintCheck < detektAnalysis,
+        )
+        val architectureRules = script.indexOf("architectureRuleTests")
+        assertTrue(
+            "The local quality gate must run the architecture-check lane after detekt.",
+            detektAnalysis != -1 && detektAnalysis < architectureRules,
+        )
+        val commentPolicy = script.indexOf("commentPolicyVerify")
+        assertTrue(
+            "The local quality gate must run the comment policy after the formatter.",
+            formatter != -1 && formatter < commentPolicy,
         )
 
         assertPosixWrapperSupport()
@@ -1709,6 +1731,38 @@ class QualityGateConfigurationTest {
             "The recipe must state the staleness convergence recipe.",
             documentation.contains("./gradlew koverXmlReport pitest --rerun-tasks") &&
                 documentation.contains("./gradlew coverageVerify mutationVerify"),
+        )
+        assertTrue(
+            "The recipe must name the architecture-check lane the loop runs.",
+            documentation.contains("architectureRuleTests verifyNoMocks verifyDeterministicFakes"),
+        )
+        assertTrue(
+            "The recipe must name the comment policy the loop runs.",
+            documentation.contains("`commentPolicyVerify` — the repository-wide comment check"),
+        )
+        assertTrue(
+            "The recipe must name the module-specific lanes the loop runs.",
+            documentation.contains("`feature/entry/presentation` also runs `verifyRoborazziBaselineManifest verifyRoborazziDebug`") &&
+                documentation.contains("`app` also runs `lintDebug assembleDebug assembleRelease`"),
+        )
+        assertTrue(
+            "The recipe must name the test task that accepts a class filter beside the aggregate it replaces.",
+            documentation.contains(":feature:entry:presentation:testDebugUnitTest --tests '*RunObservationRecoveryTest*'") &&
+                documentation.contains("`testDebugUnitTest` is the variant task that accepts `--tests`") &&
+                documentation.contains("aggregate that rejects `--tests`"),
+        )
+        assertTrue(
+            "The recipe must name the JVM module test task that accepts the filter directly.",
+            documentation.contains("Kotlin JVM module, `test` is the test task itself and accepts the filter directly") &&
+                documentation.contains(":feature:entry:domain:test --tests '*HistoryCacheNoOpPortTest*'"),
+        )
+        assertTrue(
+            "The recipe must record the measured cost bands beside the gate instructions.",
+            documentation.contains("| An ordinary pull request") &&
+                documentation.contains("| A control-plane head") &&
+                documentation.contains("| A push to the protected branch") &&
+                documentation.contains("on the 47 successful pull-request and push runs") &&
+                documentation.contains("between 2026-11-05 and 2026-11-10"),
         )
         assertTrue(
             "The recipe must link the declared thresholds.",
