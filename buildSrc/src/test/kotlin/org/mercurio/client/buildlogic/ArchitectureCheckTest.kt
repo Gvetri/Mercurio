@@ -91,6 +91,11 @@ class ArchitectureCheckTest {
     }
 
     @Test
+    fun state_holder_sources_carry_no_monitor_lock() {
+        assertNoMonitorLocks(scopeOf(presentationSourceRoot))
+    }
+
+    @Test
     fun accepts_the_declared_inward_dependency_direction() {
         withFixtureScope(layerFixture()) { scope ->
             assertRuleAccepts(layerBoundaryRule) { assertLayerBoundaries(scope) }
@@ -664,6 +669,50 @@ class ArchitectureCheckTest {
     }
 
     @Test
+    fun rejects_a_monitor_lock_in_a_state_holder_source() {
+        val violation =
+            fixturePath("presentation", "EntryStateHolderLocked.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                internal class FixtureLocked {
+                    private val lock = Any()
+
+                    fun read(): String = synchronized(lock) { "value" }
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(monitorLockRule, "synchronized") { assertNoMonitorLocks(scope) }
+        }
+    }
+
+    @Test
+    fun rejects_a_synchronized_annotation_in_a_state_holder_source() {
+        val violation =
+            fixturePath("presentation", "EntryStateHolderLocked.kt") to
+                """
+                package org.mercurio.client.feature.entry.presentation
+
+                internal class FixtureLocked {
+                    @Synchronized
+                    fun read(): String = "value"
+                }
+                """
+
+        withFixtureScope(presentationFixture(violation)) { scope ->
+            assertRuleRejects(monitorLockRule, "Synchronized") { assertNoMonitorLocks(scope) }
+        }
+    }
+
+    @Test
+    fun accepts_a_state_holder_source_without_a_monitor_lock() {
+        withFixtureScope(presentationFixture()) { scope ->
+            assertRuleAccepts(monitorLockRule) { assertNoMonitorLocks(scope) }
+        }
+    }
+
+    @Test
     fun rejects_a_forbidden_dependency_declaration_in_a_module_script() {
         withFixtureDirectory(
             mapOf(
@@ -894,6 +943,28 @@ class ArchitectureCheckTest {
             "$eventEntryRule failed. $eventEntryGuidance\nThe rule found $found reachable event entries:\n" +
                 (entries.map { entry -> entry.locationWithText } + callbacks.map { callback -> callback.locationWithText })
                     .joinToString("\n")
+        }
+    }
+
+    private fun assertNoMonitorLocks(scope: KoScope) {
+        val holderFiles = scope.files.filter { file -> file.name.startsWith(stateHolderFilePrefix) }
+        require(holderFiles.isNotEmpty()) {
+            "$monitorLockRule failed. The declared scope resolved to no state-holder source."
+        }
+
+        val violations =
+            holderFiles.flatMap { file ->
+                file.text.lines().mapIndexedNotNull { index, line ->
+                    if (monitorLockPattern.containsMatchIn(line)) {
+                        "${file.path}:${index + 1}: a monitor lock in a state-holder source: $line"
+                    } else {
+                        null
+                    }
+                }
+            }
+
+        require(violations.isEmpty()) {
+            "$monitorLockRule failed. $monitorLockGuidance\n${violations.joinToString("\n")}"
         }
     }
 
@@ -1147,6 +1218,7 @@ class ArchitectureCheckTest {
         const val stateWriterRule = "udf/one-state-writer"
         const val immutableStateRule = "udf/immutable-state-types"
         const val eventEntryRule = "udf/one-event-entry"
+        const val monitorLockRule = "state-holder/no-monitor-locks"
 
         const val layerBoundaryGuidance =
             "The dependency direction is inward, so a domain or application declaration must not reach an outer layer."
@@ -1166,6 +1238,8 @@ class ArchitectureCheckTest {
             "A UI state type is immutable: every property is a val and every collection is a read-only type, so comparing two states means something."
         const val eventEntryGuidance =
             "Events enter the feature at exactly one function that is not private, so no second path can mutate state behind the state holder."
+        const val monitorLockGuidance =
+            "State-holder sources run on the holder's single-threaded state lane, so a monitor lock guards nothing; serialize a shared mutation by routing it through the state-change consumer instead."
 
         const val composableAnnotation = "Composable"
         const val eventTypeName = "EntryUiEvent"
@@ -1178,6 +1252,7 @@ class ArchitectureCheckTest {
 
         val mutableCollectionTypePattern = Regex("""\bMutable[A-Za-z0-9]*""")
         val arrayCollectionTypePattern = Regex("""\bArray\s*<""")
+        val monitorLockPattern = Regex("""\bsynchronized\s*\(|@Synchronized\b""")
 
         const val domainSourceRoot = "feature/entry/domain/src/main/kotlin"
         const val applicationSourceRoot = "feature/entry/application/src/main/kotlin"

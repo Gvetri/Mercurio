@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -18,7 +19,6 @@ import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
-import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import java.util.concurrent.CountDownLatch
@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 class RunReconciliationStateHolderTest {
     @Test
-    fun history_run_selection_is_atomic_with_unresolved_submission_state() {
+    fun history_run_selection_is_serialized_against_bookkeeping_writes_on_the_state_lane() {
         val session = reconciliationSession()
         val latestRun = Run(RunId("latest-run"), session.id, "succeeded")
         val openedSession =
@@ -49,32 +49,43 @@ class RunReconciliationStateHolderTest {
                 release = releaseContains,
             )
         val gateway = ReconciliationFakeGateway(session)
-        val holder = reconciliationHolder(gateway)
-        val lock = privateField(holder, "sessionRequestLock")
+        val holder =
+            reconciliationHolder(
+                gateway,
+                settings = ReconciliationHolderSettings(Dispatchers.IO.limitedParallelism(1)),
+            )
         privateField(holder, "uncertainSubmissionRunIds", blockingRuns)
         val selectedRun = AtomicReference<RunId?>()
         val selectionFailure = AtomicReference<Throwable?>()
-        val selector = historySelectionProbe(holder, session, openedSession, selectedRun, selectionFailure)
-        val mutation = unresolvedRunMutation(lock, unresolvedRuns, session, mutationFinished)
+        val selection =
+            holder.scope.launch {
+                try {
+                    selectedRun.set(invokeHistoryRunIdToReconcile(holder, session.id, openedSession))
+                } catch (error: Throwable) {
+                    selectionFailure.set(error)
+                }
+            }
 
         try {
-            selector.start()
             assertTrue(containsEntered.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            mutation.start()
-            assertFalse(mutationFinished.await(100, TimeUnit.MILLISECONDS))
+            holder.submitStateChange {
+                unresolvedRuns[session.id] = RunId("unresolved-run")
+                mutationFinished.countDown()
+            }
+            assertFalse(
+                "a bookkeeping write overtook the in-flight history selection on the state lane",
+                mutationFinished.await(100, TimeUnit.MILLISECONDS),
+            )
 
             releaseContains.countDown()
-            selector.join(RECONCILIATION_TIMEOUT_MILLIS)
-            mutation.join(RECONCILIATION_TIMEOUT_MILLIS)
+            runBlocking { selection.join() }
 
-            assertFalse(selector.isAlive)
-            assertFalse(mutation.isAlive)
+            assertTrue(mutationFinished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertNull(selectionFailure.get())
             assertEquals(latestRun.id, selectedRun.get())
         } finally {
             releaseContains.countDown()
-            if (selector.isAlive) selector.join(RECONCILIATION_TIMEOUT_MILLIS)
-            if (mutation.isAlive) mutation.join(RECONCILIATION_TIMEOUT_MILLIS)
+            selection.cancel()
             holder.close()
         }
     }
@@ -463,34 +474,6 @@ class RunReconciliationStateHolderTest {
                 gateway.releaseStatus.countDown()
                 observation.release.countDown()
                 holder.close()
-            }
-        }
-
-    private fun historySelectionProbe(
-        holder: EntryStateHolder,
-        session: Session,
-        openedSession: OpenedSession,
-        selectedRun: AtomicReference<RunId?>,
-        selectionFailure: AtomicReference<Throwable?>,
-    ): Thread =
-        Thread {
-            try {
-                selectedRun.set(invokeHistoryRunIdToReconcile(holder, session.id, openedSession))
-            } catch (error: Throwable) {
-                selectionFailure.set(error)
-            }
-        }
-
-    private fun unresolvedRunMutation(
-        lock: Any,
-        unresolvedRuns: MutableMap<SessionId, RunId>,
-        session: Session,
-        finished: CountDownLatch,
-    ): Thread =
-        Thread {
-            synchronized(lock) {
-                unresolvedRuns[session.id] = RunId("unresolved-run")
-                finished.countDown()
             }
         }
 }

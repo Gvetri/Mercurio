@@ -6,7 +6,7 @@ package org.mercurio.client.feature.entry.presentation
  * warning; the composer text is kept so the user can resend or edit it.
  */
 internal fun EntryStateHolder.showDiscardUnresolvedSendConfirmation() {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList ?: return
         val opened = current.openedSession ?: return
         mutableUiState.value =
@@ -21,7 +21,7 @@ internal fun EntryStateHolder.showDiscardUnresolvedSendConfirmation() {
 }
 
 internal fun EntryStateHolder.cancelDiscardUnresolvedSend() {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList ?: return
         val opened = current.openedSession ?: return
         mutableUiState.value =
@@ -36,7 +36,7 @@ internal fun EntryStateHolder.cancelDiscardUnresolvedSend() {
 }
 
 internal fun EntryStateHolder.confirmDiscardUnresolvedSend() {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList ?: return
         val opened = current.openedSession ?: return
         val sessionId = opened.session.id

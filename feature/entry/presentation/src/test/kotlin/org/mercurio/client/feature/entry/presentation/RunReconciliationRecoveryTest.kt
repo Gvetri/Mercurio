@@ -314,7 +314,6 @@ class RunReconciliationRecoveryTest {
                 awaitReconciliationCondition { registry.removeRequests.get() == 1 }
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationCondition { gateway.statusRequests.size == 2 }
-                assertEquals(1, registry.removeRequests.get())
                 assertEquals(listOf(entry), registry.load())
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not duplicate"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
@@ -327,6 +326,7 @@ class RunReconciliationRecoveryTest {
                         !opened.isReconciliationInProgress && !opened.isRefreshing && !opened.hasUnresolvedSubmission
                     } == true
                 }
+                assertEquals(1, registry.effectiveRemovals.get())
                 assertEquals(listOf(run.id, run.id), gateway.statusRequests)
                 assertTrue(gateway.observedRunIds.isEmpty())
             } finally {

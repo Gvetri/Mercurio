@@ -8,7 +8,7 @@ import org.mercurio.client.feature.entry.domain.RunEventObservation
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showDeleteSession(sessionId: SessionId) {
-    synchronized(sessionRequestLock) {
+    run {
         val current =
             mutableUiState.value.sessionList
                 ?.takeIf { it.allowsSessionMutation() && it.sessionForMutation(sessionId) != null }
@@ -35,7 +35,7 @@ internal fun EntryStateHolder.showDeleteSession(sessionId: SessionId) {
 }
 
 internal fun EntryStateHolder.cancelDeleteSession(sessionId: SessionId) {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList ?: return
         val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null } ?: return
         val remaining = mutation.copy(delete = null, errorCategory = null, retryAction = null)
@@ -53,12 +53,12 @@ internal fun EntryStateHolder.cancelDeleteSession(sessionId: SessionId) {
 internal fun EntryStateHolder.confirmDeleteSession(sessionId: SessionId) {
     val gateway = sessionGateway ?: return
     val job =
-        synchronized(sessionRequestLock) {
-            val current = mutationSessionFor(gateway) ?: return@synchronized null
+        run {
+            val current = mutationSessionFor(gateway) ?: return@run null
             val mutation = current.sessionMutations[sessionId]
             val delete = mutation?.delete
-            if (mutation == null || delete == null) return@synchronized null
-            if (mutation.pendingAction != null || delete.isSubmitting) return@synchronized null
+            if (mutation == null || delete == null) return@run null
+            if (mutation.pendingAction != null || delete.isSubmitting) return@run null
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =
@@ -94,10 +94,10 @@ internal fun EntryStateHolder.confirmDeleteSession(sessionId: SessionId) {
 
 internal suspend fun EntryStateHolder.showDeleteFailure(request: SessionMutationRequest) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            val (current, mutation) = mutationFailureTarget(request) ?: return@synchronized
+        run {
+            val (current, mutation) = mutationFailureTarget(request) ?: return@run
             val sessionId = request.sessionId
-            val delete = mutation.delete ?: return@synchronized
+            val delete = mutation.delete ?: return@run
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =
@@ -127,9 +127,9 @@ internal suspend fun EntryStateHolder.removeConfirmedSession(
     var observationToClose: RunEventObservation? = null
     val refreshJob =
         applyStateChange {
-            synchronized(sessionRequestLock) {
-                if (!isCurrentSessionMutation(request)) return@synchronized null
-                val current = mutableUiState.value.sessionList ?: return@synchronized null
+            run {
+                if (!isCurrentSessionMutation(request)) return@run null
+                val current = mutableUiState.value.sessionList ?: return@run null
                 val shouldRefresh = current.nextOffset != null
                 if (current.openedSession?.session?.id == sessionId) {
                     observationJobToCancel = runObservationJobs[sessionId]

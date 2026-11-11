@@ -97,16 +97,16 @@ internal suspend fun EntryStateHolder.markRunObservationUncertain(
     observationJob: Job,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
+        run {
             if (runObservationJobs[sessionId] !== observationJob || runObservationRunIds[sessionId] != runId) {
-                return@synchronized
+                return@run
             }
-            val previous = observationStateFor(sessionId, runId) ?: return@synchronized
-            if (previous.state.isTerminal() || !previous.run.isActive()) return@synchronized
+            val previous = observationStateFor(sessionId, runId) ?: return@run
+            if (previous.state.isTerminal() || !previous.run.isActive()) return@run
             val next = RunEventStateTransition.interrupted(previous)
             rememberObservationState(next)
-            val current = mutableUiState.value.sessionList ?: return@synchronized
-            val opened = current.openedSession?.takeIf { it.session.id == sessionId } ?: return@synchronized
+            val current = mutableUiState.value.sessionList ?: return@run
+            val opened = current.openedSession?.takeIf { it.session.id == sessionId } ?: return@run
             val knownRuns = visibleSessionRuns(sessionId)
             val latestRun = knownRuns.latestRun()
             val latestObservation = latestObservationState(sessionId, knownRuns)

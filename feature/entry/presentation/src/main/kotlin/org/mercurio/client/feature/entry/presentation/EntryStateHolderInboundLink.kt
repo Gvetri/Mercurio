@@ -3,7 +3,7 @@ package org.mercurio.client.feature.entry.presentation
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showInboundLinkNotice(notice: InboundLinkNoticeCategory) {
-    synchronized(sessionRequestLock) {
+    run {
         mutableUiState.value = mutableUiState.value.copy(inboundLinkNotice = notice)
     }
 }
@@ -15,7 +15,7 @@ internal fun EntryStateHolder.showInboundLinkNotice(notice: InboundLinkNoticeCat
  */
 internal fun EntryStateHolder.dismissInboundLinkSurfaces() {
     cancelCredentialRotation()
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value
         mutableUiState.value =
             current.copy(
@@ -32,7 +32,7 @@ internal fun EntryStateHolder.handleInboundUri(rawUri: String?) {
 }
 
 internal fun EntryStateHolder.openLinkedComposer() {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value
         val sessionList = current.sessionList ?: return
         val opened = sessionList.openedSession
@@ -79,7 +79,7 @@ internal fun EntryStateHolder.showUnknownInboundLink() {
 }
 
 internal fun EntryStateHolder.clearCancelledListRequest(): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value
         current.sessionList
             ?.takeIf(SessionListUiState::interruptsListRequest)
@@ -115,7 +115,7 @@ internal fun EntryStateHolder.applyInboundLink(link: EntryLink) {
 
 internal fun EntryStateHolder.showLinkedSessionOpenFailure(requestGeneration: Long) {
     val isCurrent =
-        synchronized(sessionRequestLock) {
+        run {
             requestGeneration == sessionRequestGeneration
         }
     if (!isCurrent) return

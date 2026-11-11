@@ -7,7 +7,7 @@ import org.mercurio.client.feature.entry.domain.RunEventObservation
 internal fun EntryStateHolder.updateSearchQuery(value: String) {
     var observationToClose: RunEventObservation? = null
     var observationJobToCancel: Job? = null
-    synchronized(sessionRequestLock) {
+    run {
         val state = mutableUiState.value
         val sessionList = state.sessionList ?: return
         val searchIsBlocked =

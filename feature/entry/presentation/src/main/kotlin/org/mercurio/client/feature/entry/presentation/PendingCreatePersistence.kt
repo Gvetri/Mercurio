@@ -9,7 +9,7 @@ internal data class PendingCreatePersistence(
     val started: Boolean,
 )
 
-internal fun EntryStateHolder.pendingCreateSnapshotLocked(): List<PendingCreatePersistence> =
+internal fun EntryStateHolder.pendingCreateSnapshot(): List<PendingCreatePersistence> =
     pendingCreateSessions.map { (key, pendingCreate) ->
         PendingCreatePersistence(key = key, pendingCreate = pendingCreate, started = key in pendingCreateStarted)
     }

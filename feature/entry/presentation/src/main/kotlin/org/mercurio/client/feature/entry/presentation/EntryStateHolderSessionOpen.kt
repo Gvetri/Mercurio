@@ -22,11 +22,11 @@ internal fun EntryStateHolder.startSessionOpen(
 ): Boolean {
     val gateway = sessionGateway ?: return false
     val job =
-        synchronized(sessionRequestLock) {
+        run {
             val state = mutableUiState.value
             val sessionList = state.sessionList
             if (sessionList == null || !sessionList.allowsSessionOpen(sessionId, linked)) {
-                return@synchronized null
+                return@run null
             }
             val interrupted = sessionList.interruptsListRequest()
             inboundLinkListRequestInterrupted = linked && (interrupted || sessionList.isStale)
@@ -212,7 +212,7 @@ internal suspend fun EntryStateHolder.applyOpenedSessionOutcome(
 ) {
     replacedSessionId?.let { releasedSessionId ->
         val released =
-            synchronized(sessionRequestLock) { releaseRunObservation(releasedSessionId) }
+            run { releaseRunObservation(releasedSessionId) }
         released.job?.cancel()
         released.observation?.close()
     }
@@ -257,7 +257,7 @@ internal data class RunObservationRelease(
 internal fun EntryStateHolder.returnToSessionList() {
     var observationToClose: RunEventObservation? = null
     var observationJobToCancel: Job? = null
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList ?: return
         if (current.createSession != null) {
             if (!current.createSession.isSubmitting) {

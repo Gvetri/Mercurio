@@ -23,7 +23,7 @@ internal fun EntryStateHolder.historyRunIdToReconcile(
     sessionId: SessionId,
     openedSession: OpenedSession,
 ): RunId? =
-    synchronized(sessionRequestLock) {
+    run {
         val hasActiveLocalRun = sessionRuns[sessionId].orEmpty().any(Run::isActive)
         val runIdToReconcile =
             openedSession.history.latestRun()?.id ?: sessionRuns[sessionId].orEmpty().latestRun()?.id

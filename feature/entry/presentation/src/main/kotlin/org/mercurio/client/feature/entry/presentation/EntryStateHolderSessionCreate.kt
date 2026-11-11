@@ -16,9 +16,9 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 internal fun EntryStateHolder.showCreateSession() {
     val gateway = sessionGateway ?: return
     val job =
-        synchronized(sessionRequestLock) {
-            val current = mutableUiState.value.sessionList ?: return@synchronized null
-            if (current.blocksCreateSession()) return@synchronized null
+        run {
+            val current = mutableUiState.value.sessionList ?: return@run null
+            if (current.blocksCreateSession()) return@run null
             val requestGeneration = beginSessionRequest()
             val request =
                 CreateSessionRequest(

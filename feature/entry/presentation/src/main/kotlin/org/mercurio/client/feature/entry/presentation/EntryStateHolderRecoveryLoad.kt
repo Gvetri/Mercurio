@@ -12,13 +12,13 @@ import org.mercurio.client.feature.entry.domain.SessionId
  * asynchronous result is applied on the consumer via `updateCurrentSessionRequest`.
  */
 internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
-    synchronized(sessionRequestLock) {
+    run {
         val sessionList = mutableUiState.value.sessionList ?: return
         val requestGeneration = beginSessionRequest()
         val expectedConnectionGeneration = connectionGeneration
         val request = SessionRequestContext(requestGeneration, sessionList.searchQuery, offset = null)
         submitStateChange {
-            synchronized(sessionRequestLock) {
+            run {
                 if (
                     connectionGeneration != expectedConnectionGeneration ||
                     sessionRequestGeneration != requestGeneration
@@ -53,7 +53,7 @@ internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
 
 internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
     val entries =
-        synchronized(sessionRequestLock) {
+        run {
             pendingDisconnectedRecoveryEntries.remove(endpoint).orEmpty().toList()
         }
     entries.forEach { entry ->
@@ -68,19 +68,19 @@ internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
     entry: RunRecoveryEntry,
 ): Boolean {
     val persistence =
-        synchronized(sessionRequestLock) {
+        run {
             persistRunRecoveryEntry to runRecoveryRegistry
         }
     if (persistence.first == null && persistence.second == null) return true
     return try {
-        synchronized(recoveryPersistenceLock) {
+        run {
             persistence.first?.invoke(endpoint, entry)
                 ?: persistence.second?.save(entry)
                 ?: error("No endpoint-scoped recovery writer is configured.")
         }
         true
     } catch (_: Exception) {
-        synchronized(sessionRequestLock) {
+        run {
             pendingDisconnectedRecoveryEntries
                 .getOrPut(endpoint, ::mutableSetOf)
                 .add(entry)
@@ -94,14 +94,14 @@ internal fun EntryStateHolder.removeRecoveryEntry(
     entry: RunRecoveryEntry,
 ): Boolean =
     try {
-        synchronized(recoveryPersistenceLock) {
+        run {
             if (endpoint != null) {
                 removeRunRecoveryEntry?.invoke(endpoint, entry) ?: runRecoveryRegistry?.remove(entry)
             } else {
                 runRecoveryRegistry?.remove(entry)
             }
         }
-        synchronized(sessionRequestLock) {
+        run {
             forgetPendingRecoveryEntry(endpoint, entry)
         }
         true
@@ -110,14 +110,14 @@ internal fun EntryStateHolder.removeRecoveryEntry(
     }
 
 internal fun EntryStateHolder.beginRecoveryLoad(expectedConnectionGeneration: Long): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         if (connectionGeneration != expectedConnectionGeneration) {
             false
         } else {
             recoveryLoadPending = true
             recoveryLoadFailed = false
             submitStateChange {
-                synchronized(sessionRequestLock) {
+                run {
                     if (connectionGeneration != expectedConnectionGeneration || !recoveryLoadPending) {
                         return@submitStateChange
                     }
@@ -149,8 +149,8 @@ internal suspend fun EntryStateHolder.finishRecoveryLoad(
     failed: Boolean,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            if (connectionGeneration != expectedConnectionGeneration) return@synchronized
+        run {
+            if (connectionGeneration != expectedConnectionGeneration) return@run
             recoveryLoadPending = false
             recoveryLoadFailed = failed
             val recoveredSessionIds = entries.mapTo(mutableSetOf()) { it.sessionId }
@@ -195,12 +195,12 @@ internal fun EntryStateHolder.markRecoveryFailure(
     sessionId: SessionId,
     expectedConnectionGeneration: Long,
 ) {
-    synchronized(sessionRequestLock) {
+    run {
         recoveryUnavailableSessions += sessionId
     }
     submitStateChange {
-        synchronized(sessionRequestLock) {
-            if (connectionGeneration != expectedConnectionGeneration) return@synchronized
+        run {
+            if (connectionGeneration != expectedConnectionGeneration) return@run
             val current = mutableUiState.value.sessionList
             val opened = current?.openedSession?.takeIf { it.session.id == sessionId }
             if (current != null && opened != null) {
@@ -236,9 +236,9 @@ internal fun EntryStateHolder.openedSessionFor(sessionId: SessionId): Pair<Sessi
 internal fun EntryStateHolder.clearRecoveryUiIfIdle(sessionId: SessionId) {
     if (hasPendingRecoveryWork(sessionId)) return
     submitStateChange {
-        synchronized(sessionRequestLock) {
-            if (hasPendingRecoveryWork(sessionId)) return@synchronized
-            val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
+        run {
+            if (hasPendingRecoveryWork(sessionId)) return@run
+            val (current, opened) = openedSessionFor(sessionId) ?: return@run
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =

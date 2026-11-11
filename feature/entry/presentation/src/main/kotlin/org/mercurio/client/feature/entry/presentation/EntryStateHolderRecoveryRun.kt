@@ -96,14 +96,14 @@ internal fun EntryStateHolder.persistDisconnectedRecoveryEntry(
     val persisted = persistOrQueueRecoveryEntry(endpoint, entry)
     if (persisted) {
         val reconcileNow =
-            synchronized(sessionRequestLock) {
+            run {
                 mutableUiState.value.isConnected &&
                     mutableUiState.value.endpoint == endpoint &&
                     sessionGateway != null &&
                     runGateway != null
             }
         if (!reconcileNow) {
-            synchronized(sessionRequestLock) {
+            run {
                 pendingDisconnectedRecoveryEntries
                     .getOrPut(endpoint, ::mutableSetOf)
                     .add(entry)
@@ -137,7 +137,7 @@ internal fun EntryStateHolder.recoveryRunContextFor(
     endpoint: String,
     entry: RunRecoveryEntry,
 ): RecoveryRunContext? =
-    synchronized(sessionRequestLock) {
+    run {
         val currentSessionGateway = sessionGateway
         val currentRunGateway = runGateway
         if (
@@ -166,7 +166,7 @@ internal fun EntryStateHolder.claimRecoveryEntryForRun(
     entry: RunRecoveryEntry,
     requestConnectionGeneration: Long,
 ): RecoveryClaim? =
-    synchronized(sessionRequestLock) {
+    run {
         if (
             connectionGeneration != requestConnectionGeneration ||
             mutableUiState.value.endpoint != endpoint
@@ -183,13 +183,13 @@ internal fun EntryStateHolder.beginRecoveryJob(
     recoveryContext: RecoveryRunContext,
     claim: RecoveryClaim,
 ): Job? =
-    synchronized(sessionRequestLock) {
+    run {
         if (
             connectionGeneration != recoveryContext.connectionGeneration ||
             mutableUiState.value.endpoint != endpoint ||
             recoveryClaims[claim.key] != claim
         ) {
-            return@synchronized null
+            return@run null
         }
         rememberRecoveredRun(
             entry = entry,
@@ -214,9 +214,9 @@ internal fun EntryStateHolder.markRecoveryUiRefreshing(
     recoveryContext: RecoveryRunContext,
 ) {
     submitStateChange {
-        synchronized(sessionRequestLock) {
-            if (connectionGeneration != recoveryContext.connectionGeneration) return@synchronized
-            val (current, opened) = openedSessionFor(entry.sessionId) ?: return@synchronized
+        run {
+            if (connectionGeneration != recoveryContext.connectionGeneration) return@run
+            val (current, opened) = openedSessionFor(entry.sessionId) ?: return@run
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =
@@ -260,7 +260,7 @@ internal fun EntryStateHolder.startRecoveryObservationJob(
                     )
                 }
             } finally {
-                synchronized(sessionRequestLock) {
+                run {
                     if (
                         connectionGeneration == recoveryContext.connectionGeneration &&
                         releaseRecoveryClaim(claim)

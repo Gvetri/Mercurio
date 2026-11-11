@@ -77,7 +77,7 @@ internal fun EntryStateHolder.createMutationJob(
             try {
                 block()
             } finally {
-                synchronized(sessionRequestLock) {
+                run {
                     if (mutationJobs[request.sessionId] === job) {
                         mutationJobs.remove(request.sessionId)
                     }
@@ -87,7 +87,7 @@ internal fun EntryStateHolder.createMutationJob(
                 }
             }
         }
-    synchronized(sessionRequestLock) {
+    run {
         mutationJobs[request.sessionId] = job
     }
     return job
@@ -103,11 +103,11 @@ internal fun EntryStateHolder.createRunJob(
             try {
                 block()
             } finally {
-                synchronized(sessionRequestLock) {
+                run {
                     if (runJobs[sessionId] === job) {
                         runJobs.remove(sessionId)
                         submitStateChange {
-                            synchronized(sessionRequestLock) {
+                            run {
                                 if (runJobs[sessionId] != null) return@submitStateChange
                                 val current = mutableUiState.value.sessionList ?: return@submitStateChange
                                 val opened =
@@ -125,7 +125,7 @@ internal fun EntryStateHolder.createRunJob(
                 }
             }
         }
-    synchronized(sessionRequestLock) {
+    run {
         runJobs[sessionId] = job
     }
     return job
@@ -136,11 +136,11 @@ internal suspend fun EntryStateHolder.applyConfirmedSession(
     request: SessionMutationRequest,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            if (!isCurrentSessionMutation(request)) return@synchronized
+        run {
+            if (!isCurrentSessionMutation(request)) return@run
             val current =
                 mutableUiState.value.sessionList?.takeIf { it.sessionForMutation(session.id) != null }
-                    ?: return@synchronized
+                    ?: return@run
             val updated = session.toSessionItemUiState()
             mutableUiState.value =
                 mutableUiState.value.copy(

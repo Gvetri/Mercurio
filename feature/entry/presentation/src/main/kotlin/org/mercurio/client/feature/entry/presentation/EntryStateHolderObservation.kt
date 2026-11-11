@@ -57,7 +57,7 @@ internal fun EntryStateHolder.prepareRunObservation(
     expectedSessionGeneration: Long?,
     expectedHistoryGeneration: Long?,
 ): RunObservationStart =
-    synchronized(sessionRequestLock) {
+    run {
         if (
             !observationStartIsCurrent(
                 sessionId = sessionId,
@@ -66,11 +66,11 @@ internal fun EntryStateHolder.prepareRunObservation(
                 expectedHistoryGeneration = expectedHistoryGeneration,
             )
         ) {
-            return@synchronized RunObservationStart()
+            return@run RunObservationStart()
         }
-        val current = mutableUiState.value.sessionList ?: return@synchronized RunObservationStart()
+        val current = mutableUiState.value.sessionList ?: return@run RunObservationStart()
         if (!canStartObserving(sessionId, run, current.openedSession)) {
-            return@synchronized RunObservationStart()
+            return@run RunObservationStart()
         }
         val currentRun = visibleSessionRuns(sessionId).lastOrNull { it.id == run.id }
         val currentAuthoritativeRun = authoritativeSessionRuns[sessionId]?.lastOrNull { it.id == run.id }
@@ -80,7 +80,7 @@ internal fun EntryStateHolder.prepareRunObservation(
             currentAuthoritativeRun?.isActive() == false ||
             currentObservationState?.state?.isTerminal() == true
         ) {
-            return@synchronized RunObservationStart()
+            return@run RunObservationStart()
         }
         val startRequest =
             ObserverStartRequest(run, connectionGeneration, sessionRequestGeneration)
@@ -202,7 +202,7 @@ internal fun EntryStateHolder.restartObservationAfterCompletion(
     observationJob: Job,
     sessionId: SessionId,
 ): ObserverStartRequest? =
-    synchronized(sessionRequestLock) {
+    run {
         if (runObservationJobs[sessionId] !== observationJob) {
             null
         } else {
@@ -266,7 +266,7 @@ internal suspend fun EntryStateHolder.observeRun(
 }
 
 internal fun EntryStateHolder.observationGatewayFor(sessionId: SessionId): RunGatewayPort? =
-    synchronized(sessionRequestLock) {
+    run {
         runGateway?.takeIf {
             mutableUiState.value.sessionList?.openedSession?.session?.id == sessionId
         }

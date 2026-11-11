@@ -37,8 +37,7 @@ internal suspend fun <T> EntryStateHolder.applyStateChange(block: () -> T): T {
  * anymore.
  *
  * Every block must re-derive its guards from current state, because the consumer applies it
- * after an unbounded number of earlier commands have run; a block that also touches the
- * request bookkeeping maps must take `synchronized(sessionRequestLock)`.
+ * after an unbounded number of earlier commands have run.
  *
  * The queue is unbounded, so a refused enqueue only happens once the holder's scope has
  * stopped draining it; this keeps `submitStateChange` safe to call from producer `finally`

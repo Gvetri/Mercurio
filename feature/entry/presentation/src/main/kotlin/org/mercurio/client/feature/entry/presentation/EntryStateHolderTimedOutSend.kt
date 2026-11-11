@@ -55,7 +55,7 @@ internal fun EntryStateHolder.markTimedOutSendUncertain(
 internal suspend fun EntryStateHolder.reconcileTimedOutSend(request: TimedOutSendReconciliationRequest): Boolean {
     var requestEndpoint = ""
     val connectionIsCurrent =
-        synchronized(sessionRequestLock) {
+        run {
             if (connectionGeneration != request.connectionGeneration) {
                 false
             } else {
@@ -77,7 +77,7 @@ internal suspend fun EntryStateHolder.reconcileTimedOutSend(request: TimedOutSen
         }
     if (!connectionIsCurrent) return false
     val currentSessionGeneration =
-        synchronized(sessionRequestLock) {
+        run {
             mutableUiState.value.sessionList?.openedSession
                 ?.takeIf { it.session.id == request.sessionId }
                 ?.let { sessionRequestGeneration }
@@ -145,7 +145,7 @@ internal suspend fun EntryStateHolder.awaitReconciliationClaim(
     var attempt = 0
     while (!began && attempt < RECOVERY_CLAIM_ATTEMPTS) {
         val requestIsCurrent =
-            synchronized(sessionRequestLock) {
+            run {
                 connectionGeneration == requestConnectionGeneration &&
                     sessionRequestGeneration == requestSessionGeneration
             }
@@ -164,7 +164,7 @@ internal fun EntryStateHolder.timedOutSendGateways(
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
 ): Pair<SessionGatewayPort, RunGatewayPort>? =
-    synchronized(sessionRequestLock) {
+    run {
         val sessionGateway = sessionGateway
         val runGateway = runGateway
         if (
@@ -238,61 +238,59 @@ internal suspend fun EntryStateHolder.applyTimedOutSendReconciliation(
     resolveWhenNoNewRun: Boolean,
 ): TimedOutSendReconciliationOutcome =
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            if (
-                connectionGeneration != requestConnectionGeneration ||
-                sessionRequestGeneration != requestSessionGeneration
-            ) {
-                return@synchronized TimedOutSendReconciliationOutcome(applied = false)
+        if (
+            connectionGeneration != requestConnectionGeneration ||
+            sessionRequestGeneration != requestSessionGeneration
+        ) {
+            return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
+        }
+        val current =
+            mutableUiState.value.sessionList
+                ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
+        val opened =
+            current.openedSession?.takeIf { it.session.id == sessionId }
+                ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
+        val evaluation =
+            evaluateTimedOutSendUncertainty(sessionId, reconciliation, resolveWhenNoNewRun)
+                ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
+        authoritativeSessionRuns[sessionId] =
+            mergeRuns(evaluation.retainedAuthoritativeRuns, evaluation.authoritativeRuns)
+        evaluation.durableBoundRunId?.let { boundRunId -> uncertainSubmissionRunIds[sessionId] = boundRunId }
+        if (evaluation.discoveredUnattributedRun) {
+            ambiguousSubmissionSessions += sessionId
+            runCatching {
+                runSubmissionUncertaintyStore.markAmbiguous(evaluation.pendingKey, evaluation.attemptId)
             }
-            val current =
-                mutableUiState.value.sessionList
-                    ?: return@synchronized TimedOutSendReconciliationOutcome(applied = false)
-            val opened =
-                current.openedSession?.takeIf { it.session.id == sessionId }
-                    ?: return@synchronized TimedOutSendReconciliationOutcome(applied = false)
-            val evaluation =
-                evaluateTimedOutSendUncertainty(sessionId, reconciliation, resolveWhenNoNewRun)
-                    ?: return@synchronized TimedOutSendReconciliationOutcome(applied = false)
-            authoritativeSessionRuns[sessionId] =
-                mergeRuns(evaluation.retainedAuthoritativeRuns, evaluation.authoritativeRuns)
-            evaluation.durableBoundRunId?.let { boundRunId -> uncertainSubmissionRunIds[sessionId] = boundRunId }
-            if (evaluation.discoveredUnattributedRun) {
-                ambiguousSubmissionSessions += sessionId
-                runCatching {
-                    runSubmissionUncertaintyStore.markAmbiguous(evaluation.pendingKey, evaluation.attemptId)
-                }
-            }
-            evaluation.terminalRunIds.forEach { runId -> forgetUnresolvedLocalRun(sessionId, runId) }
-            if (evaluation.canClearUncertainty) {
-                clearTimedOutSendUncertainty(sessionId, current, opened, evaluation, resolveWhenNoNewRun)
-            } else {
-                markTimedOutSendUncertain(
-                    sessionId = sessionId,
-                    ui =
-                        TimedOutSendUiContext(
-                            current = current,
-                            opened = opened,
-                            recoveryDraft = evaluation.recoveryDraft,
-                            authoritativeMessages = evaluation.authoritativeMessages,
-                        ),
-                    errorCategory = evaluation.pendingRecovery?.errorCategory ?: MessageSendErrorCategory.UNCERTAIN,
-                )
-            }
-            pendingTimedOutSends.remove(sessionId)
-            TimedOutSendReconciliationOutcome(
-                applied = true,
-                runToObserve = evaluation.boundSubmissionRun?.takeIf(Run::isActive),
-                runToPersist =
-                    evaluation.discoveredLocalRun
-                        ?.takeIf(Run::isActive)
-                        ?.let { RunRecoveryEntry(sessionId, it.id) },
-                runToRemove =
-                    evaluation.submissionRun
-                        ?.takeIf { evaluation.canClearUncertainty && !it.isActive() }
-                        ?.let { RunRecoveryEntry(sessionId, it.id) },
+        }
+        evaluation.terminalRunIds.forEach { runId -> forgetUnresolvedLocalRun(sessionId, runId) }
+        if (evaluation.canClearUncertainty) {
+            clearTimedOutSendUncertainty(sessionId, current, opened, evaluation, resolveWhenNoNewRun)
+        } else {
+            markTimedOutSendUncertain(
+                sessionId = sessionId,
+                ui =
+                    TimedOutSendUiContext(
+                        current = current,
+                        opened = opened,
+                        recoveryDraft = evaluation.recoveryDraft,
+                        authoritativeMessages = evaluation.authoritativeMessages,
+                    ),
+                errorCategory = evaluation.pendingRecovery?.errorCategory ?: MessageSendErrorCategory.UNCERTAIN,
             )
         }
+        pendingTimedOutSends.remove(sessionId)
+        TimedOutSendReconciliationOutcome(
+            applied = true,
+            runToObserve = evaluation.boundSubmissionRun?.takeIf(Run::isActive),
+            runToPersist =
+                evaluation.discoveredLocalRun
+                    ?.takeIf(Run::isActive)
+                    ?.let { RunRecoveryEntry(sessionId, it.id) },
+            runToRemove =
+                evaluation.submissionRun
+                    ?.takeIf { evaluation.canClearUncertainty && !it.isActive() }
+                    ?.let { RunRecoveryEntry(sessionId, it.id) },
+        )
     }
 
 internal fun EntryStateHolder.evaluateTimedOutSendUncertainty(
@@ -405,14 +403,14 @@ internal suspend fun EntryStateHolder.showTimedOutSendFailure(
     refusalCategory: MessageSendErrorCategory? = null,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
+        run {
             if (
                 connectionGeneration != requestConnectionGeneration ||
                 sessionRequestGeneration != requestSessionGeneration
             ) {
-                return@synchronized
+                return@run
             }
-            val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
+            val (current, opened) = openedSessionFor(sessionId) ?: return@run
             val recoveryDraft = pendingTimedOutSends[sessionId]?.draft
             markTimedOutSendUncertain(
                 sessionId,

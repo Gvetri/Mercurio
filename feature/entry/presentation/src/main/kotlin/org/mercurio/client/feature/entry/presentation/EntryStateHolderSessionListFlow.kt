@@ -16,8 +16,8 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 internal fun EntryStateHolder.refreshSessions() {
     val gateway = sessionGateway ?: return
     val job =
-        synchronized(sessionRequestLock) {
-            val sessionList = mutableUiState.value.sessionList ?: return@synchronized null
+        run {
+            val sessionList = mutableUiState.value.sessionList ?: return@run null
             if (sessionList.openedSession != null) {
                 refreshOpenedSession(gateway)
             } else {
@@ -30,8 +30,8 @@ internal fun EntryStateHolder.refreshSessions() {
 internal fun EntryStateHolder.refreshSessionList() {
     val gateway = sessionGateway ?: return
     val job =
-        synchronized(sessionRequestLock) {
-            val sessionList = mutableUiState.value.sessionList ?: return@synchronized null
+        run {
+            val sessionList = mutableUiState.value.sessionList ?: return@run null
             startFirstPageListLoad(gateway, sessionList)
         }
     job?.start()
@@ -73,8 +73,8 @@ internal fun EntryStateHolder.createFirstPageLoadJob(
     isSearching: Boolean,
     preserveSessions: Boolean,
 ): Job? =
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value.sessionList ?: return@synchronized null
+    run {
+        val current = mutableUiState.value.sessionList ?: return@run null
         val requestGeneration = beginSessionRequest()
         val request = SessionRequestContext(requestGeneration, query, offset = null)
         mutableUiState.value =
@@ -164,14 +164,14 @@ internal fun EntryStateHolder.sessionListRequest(offset: Int?): SessionListReque
     )
 
 internal fun EntryStateHolder.beginSessionRequest(): Long =
-    synchronized(sessionRequestLock) {
+    run {
         sessionRequestGeneration += 1
         sessionJob?.cancel()
         sessionRequestGeneration
     }
 
 internal fun EntryStateHolder.createSessionJob(block: suspend CoroutineScope.() -> Unit): Job =
-    synchronized(sessionRequestLock) {
+    run {
         scope.launch(start = CoroutineStart.LAZY, block = block).also { sessionJob = it }
     }
 
@@ -181,8 +181,8 @@ internal suspend fun EntryStateHolder.updateCurrentSessionRequest(
     transform: (SessionListUiState) -> SessionListUiState,
 ): Boolean =
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            val current = mutableUiState.value.sessionList ?: return@synchronized false
+        run {
+            val current = mutableUiState.value.sessionList ?: return@run false
             val offsetIsStale = offset != null && current.nextOffset != offset
             if (requestGeneration != sessionRequestGeneration || offsetIsStale) {
                 false

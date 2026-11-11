@@ -70,7 +70,7 @@ internal fun EntryStateHolder.persistVerifiedCredential(
     normalizedEndpoint: String,
 ): Boolean {
     val canPersist =
-        synchronized(sessionRequestLock) {
+        run {
             if (connectionGeneration == requestConnectionGeneration) {
                 mutableUiState.value = mutableUiState.value.copy(isVerifying = false, isSaving = true)
                 true
@@ -79,9 +79,9 @@ internal fun EntryStateHolder.persistVerifiedCredential(
             }
         }
     if (!canPersist) return false
-    return synchronized(connectionPersistenceLock) {
+    return run {
         val stillCurrent =
-            synchronized(sessionRequestLock) {
+            run {
                 connectionGeneration == requestConnectionGeneration
             }
         if (!stillCurrent) {
@@ -102,7 +102,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
     requestConnectionGeneration: Long,
     capabilities: GatewayCapabilities,
 ): SessionGatewayPort? =
-    synchronized(sessionRequestLock) {
+    run {
         if (connectionGeneration != requestConnectionGeneration) {
             null
         } else {
@@ -163,7 +163,7 @@ internal fun EntryStateHolder.showFailure(
         LocalDiagnosticEventType.GATEWAY_CONNECTION_VERIFICATION,
         LocalDiagnosticStatus.FAILED,
     )
-    synchronized(sessionRequestLock) {
+    run {
         if (connectionGeneration == requestConnectionGeneration) {
             mutableUiState.value =
                 mutableUiState.value.copy(
@@ -185,8 +185,8 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
     val endpoint = mutableUiState.value.endpoint
     credentialBeforeRotation = null
     val released =
-        synchronized(connectionPersistenceLock) {
-            val releasedState = releaseGatewayConnectionLocked()
+        run {
+            val releasedState = releaseGatewayConnectionState()
             updateRunRecoveryEndpoint?.invoke(null)
             val current = mutableUiState.value
             mutableUiState.value =
@@ -213,8 +213,8 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
     return released
 }
 
-internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnectionState =
-    synchronized(sessionRequestLock) {
+internal fun EntryStateHolder.releaseGatewayConnectionState(): ReleasedConnectionState =
+    run {
         rememberUnresolvedSessionMutations(mutableUiState.value.endpoint)
         sessionRequestGeneration += 1
         connectionGeneration += 1
@@ -222,7 +222,7 @@ internal fun EntryStateHolder.releaseGatewayConnectionLocked(): ReleasedConnecti
         verificationJob = null
         sessionJob = null
         recoveryJob = null
-        val pendingCreates = pendingCreateSnapshotLocked()
+        val pendingCreates = pendingCreateSnapshot()
         pendingCreateStarted.clear()
         pendingCreateSessions.clear()
         sessionGateway = null

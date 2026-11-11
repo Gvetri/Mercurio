@@ -18,7 +18,7 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 
 internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
-    synchronized(sessionRequestLock) {
+    run {
         if (
             pendingCreateSessions[work.recoverySessionKey] ==
             PendingCreateState(work.knownRunIds, work.attemptId)
@@ -135,7 +135,7 @@ internal suspend fun EntryStateHolder.completeSuccessfulSubmission(
             "Retry response reused the failed Run identity.",
         )
     }
-    synchronized(sessionRequestLock) {
+    run {
         if (connectionGeneration == work.requestConnectionGeneration) {
             submittedRunInputs[run.id] = work.input
             work.selection?.let { selection ->
@@ -186,7 +186,7 @@ internal suspend fun EntryStateHolder.reconcileInactiveSubmittedRun(
     requestConnectionGeneration: Long,
 ) {
     val reconciliationContext =
-        synchronized(sessionRequestLock) {
+        run {
             sessionGateway
                 ?.takeIf {
                     connectionGeneration == requestConnectionGeneration &&
@@ -205,7 +205,7 @@ internal suspend fun EntryStateHolder.reconcileInactiveSubmittedRun(
 }
 
 internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: SessionId): TimedOutSendRecovery? =
-    synchronized(sessionRequestLock) {
+    run {
         val key = pendingRunSubmissionKey(sessionId)
         if (
             !runSubmissionUncertaintyStore.contains(key) ||

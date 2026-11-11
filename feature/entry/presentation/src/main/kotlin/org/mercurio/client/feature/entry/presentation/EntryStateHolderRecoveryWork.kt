@@ -66,7 +66,7 @@ internal fun EntryStateHolder.beginRunRecovery(expectedConnectionGeneration: Lon
     }
 
 internal fun EntryStateHolder.recoveryGatewayContextFor(expectedConnectionGeneration: Long): RecoveryGatewayContext? =
-    synchronized(sessionRequestLock) {
+    run {
         if (connectionGeneration != expectedConnectionGeneration) {
             null
         } else {
@@ -96,7 +96,7 @@ internal fun EntryStateHolder.claimRecoveryWorkItems(
     recoveryContext: RecoveryGatewayContext,
     expectedConnectionGeneration: Long,
 ): List<RecoveryWorkItem>? =
-    synchronized(sessionRequestLock) {
+    run {
         if (connectionGeneration != expectedConnectionGeneration) {
             null
         } else {
@@ -124,7 +124,7 @@ internal suspend fun EntryStateHolder.startRecoveryWork(
 ) {
     lateinit var job: Job
     var jobToCancel: Job? = null
-    synchronized(sessionRequestLock) {
+    run {
         jobToCancel = recoveryJob
         job =
             scope.launch(start = CoroutineStart.LAZY) {
@@ -151,7 +151,7 @@ internal suspend fun EntryStateHolder.runRecoveryWorkItem(
     val entry = workItem.entry
     currentCoroutineContext().ensureActive()
     val expectedHistoryGeneration =
-        synchronized(sessionRequestLock) {
+        run {
             authoritativeSessionHistoryGenerations[entry.sessionId] ?: 0L
         }
     val recoveredRun =
@@ -165,7 +165,7 @@ internal suspend fun EntryStateHolder.runRecoveryWorkItem(
                     historyGeneration = expectedHistoryGeneration,
                 ),
         )
-    synchronized(sessionRequestLock) {
+    run {
         if (connectionGeneration == expectedConnectionGeneration) {
             recoveryHandledEntries +=
                 RecoveryEntryKey(recoveryContext.endpoint, entry.sessionId, entry.runId)
@@ -190,22 +190,20 @@ internal fun EntryStateHolder.releaseRecoveryWork(
     expectedConnectionGeneration: Long,
     job: Job,
 ) {
-    synchronized(sessionRequestLock) {
-        if (connectionGeneration == expectedConnectionGeneration) {
-            workItems.forEach { workItem ->
-                if (releaseRecoveryClaim(workItem.claim)) {
-                    val entry = workItem.entry
-                    recoveryReconciledRunIds.remove(entry.runId)
-                    val remaining = (recoverySessionCounts[entry.sessionId] ?: 1) - 1
-                    if (remaining > 0) {
-                        recoverySessionCounts[entry.sessionId] = remaining
-                    } else {
-                        recoverySessionCounts.remove(entry.sessionId)
-                    }
-                    clearRecoveryUiIfIdle(entry.sessionId)
+    if (connectionGeneration == expectedConnectionGeneration) {
+        workItems.forEach { workItem ->
+            if (releaseRecoveryClaim(workItem.claim)) {
+                val entry = workItem.entry
+                recoveryReconciledRunIds.remove(entry.runId)
+                val remaining = (recoverySessionCounts[entry.sessionId] ?: 1) - 1
+                if (remaining > 0) {
+                    recoverySessionCounts[entry.sessionId] = remaining
+                } else {
+                    recoverySessionCounts.remove(entry.sessionId)
                 }
+                clearRecoveryUiIfIdle(entry.sessionId)
             }
         }
-        if (recoveryJob === job) recoveryJob = null
     }
+    if (recoveryJob === job) recoveryJob = null
 }

@@ -7,7 +7,7 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showRenameSession(sessionId: SessionId) {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList?.takeIf { it.allowsSessionMutation() } ?: return
         val mutation = current.sessionMutations[sessionId]
         val session = current.sessionForMutation(sessionId)
@@ -33,7 +33,7 @@ internal fun EntryStateHolder.updateRenameSessionTitle(
     sessionId: SessionId,
     value: String,
 ) {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList ?: return
         val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null }
         val rename = mutation?.rename?.takeIf { !it.isSubmitting }
@@ -59,7 +59,7 @@ internal fun EntryStateHolder.updateRenameSessionTitle(
 }
 
 internal fun EntryStateHolder.cancelRenameSession(sessionId: SessionId) {
-    synchronized(sessionRequestLock) {
+    run {
         val current = mutableUiState.value.sessionList ?: return
         val mutation = current.sessionMutations[sessionId]?.takeIf { it.pendingAction == null } ?: return
         val remaining = mutation.copy(rename = null)
@@ -82,12 +82,12 @@ internal fun EntryStateHolder.cancelRenameSession(sessionId: SessionId) {
 internal fun EntryStateHolder.confirmRenameSession(sessionId: SessionId) {
     val gateway = sessionGateway ?: return
     val job =
-        synchronized(sessionRequestLock) {
-            val current = mutationSessionFor(gateway) ?: return@synchronized null
+        run {
+            val current = mutationSessionFor(gateway) ?: return@run null
             val mutation = current.sessionMutations[sessionId]
             val rename = mutation?.rename
-            if (mutation == null || rename == null) return@synchronized null
-            if (mutation.pendingAction != null || rename.isSubmitting) return@synchronized null
+            if (mutation == null || rename == null) return@run null
+            if (mutation.pendingAction != null || rename.isSubmitting) return@run null
             val title = rename.titleDraft.trim()
             val validationError = rename.titleDraft.validateRenameTitle()
             if (validationError != null) {
@@ -105,7 +105,7 @@ internal fun EntryStateHolder.confirmRenameSession(sessionId: SessionId) {
                                         ),
                             ),
                     )
-                return@synchronized null
+                return@run null
             }
             mutableUiState.value =
                 mutableUiState.value.copy(
@@ -154,10 +154,10 @@ internal fun EntryStateHolder.submitRenameSession(
 
 internal suspend fun EntryStateHolder.showRenameFailure(request: SessionMutationRequest) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
-            val (current, mutation) = mutationFailureTarget(request) ?: return@synchronized
+        run {
+            val (current, mutation) = mutationFailureTarget(request) ?: return@run
             val sessionId = request.sessionId
-            val rename = mutation.rename ?: return@synchronized
+            val rename = mutation.rename ?: return@run
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =

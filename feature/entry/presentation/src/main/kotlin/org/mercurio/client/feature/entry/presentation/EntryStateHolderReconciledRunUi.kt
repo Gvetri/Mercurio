@@ -37,8 +37,8 @@ internal fun EntryStateHolder.updateUnconfirmedRunSessionUi(
 }
 
 /**
- * Removes a reconciled run's recovery entry. Registry persistence can block, so callers keep
- * this producer-side instead of running it on the serialized state-change consumer.
+ * Removes a reconciled run's recovery entry. Registry persistence can block, so this runs on
+ * the holder's state lane and never on the main thread.
  */
 internal fun EntryStateHolder.removeReconciledRecoveryEntry(
     recoveryEntryToRemove: RunRecoveryEntry?,
@@ -49,7 +49,7 @@ internal fun EntryStateHolder.removeReconciledRecoveryEntry(
 ) {
     var shouldRemoveRecoveryEntry = false
     recoveryEntryToRemove?.let { entry ->
-        synchronized(sessionRequestLock) {
+        run {
             val endpoint = recoveryEndpointToRemove
             val historyConfirmsTerminal = historyConfirmsTerminalRun(entry.sessionId, entry.runId)
             val endpointMatches = endpoint == null || mutableUiState.value.endpoint == endpoint
@@ -78,16 +78,16 @@ internal suspend fun EntryStateHolder.showRunReconciliationFailure(
     requestSessionGeneration: Long,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
+        run {
             if (
                 connectionGeneration != requestConnectionGeneration ||
                 sessionRequestGeneration != requestSessionGeneration
             ) {
-                return@synchronized
+                return@run
             }
-            val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
+            val (current, opened) = openedSessionFor(sessionId) ?: return@run
             if (observationStateFor(sessionId, runId)?.state?.isTerminal() == true) {
-                return@synchronized
+                return@run
             }
             val knownRun =
                 visibleSessionRuns(sessionId).lastOrNull { it.id == runId }

@@ -96,7 +96,7 @@ internal fun EntryStateHolder.markPendingCreateStarted(
     pendingCreate: PendingCreateState,
     expectedConnectionGeneration: Long,
 ): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         if (
             connectionGeneration != expectedConnectionGeneration ||
             pendingCreateSessions[key] != pendingCreate
@@ -112,7 +112,7 @@ internal fun EntryStateHolder.forgetPendingCreate(
     key: RecoverySessionKey,
     pendingCreate: PendingCreateState,
 ) {
-    synchronized(sessionRequestLock) {
+    run {
         if (pendingCreateSessions[key] == pendingCreate) {
             pendingCreateSessions.remove(key)
             pendingCreateStarted.remove(key)

@@ -5,8 +5,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 internal fun EntryStateHolder.releaseConnectionState(): ReleasedConnectionState =
-    synchronized(connectionPersistenceLock) {
-        synchronized(sessionRequestLock) {
+    run {
+        run {
             sessionRequestGeneration += 1
             connectionGeneration += 1
             sessionGateway = null
@@ -24,7 +24,7 @@ internal fun EntryStateHolder.releaseConnectionState(): ReleasedConnectionState 
                     connectionRecoveryJobs,
                 ).flatten()
             val observationsToClose = runObservations.values.toList()
-            val pendingCreates = pendingCreateSnapshotLocked()
+            val pendingCreates = pendingCreateSnapshot()
             clearSessionStateForClose()
             ReleasedConnectionState(
                 jobs = requestJobs + supersededJobs,
@@ -146,8 +146,8 @@ internal fun EntryStateHolder.updateBearerCredential(value: String) {
 internal fun EntryStateHolder.verifyConnection() {
     val verifier = verifyGatewayConnection ?: return
     val job =
-        synchronized(connectionPersistenceLock) {
-            synchronized(sessionRequestLock) {
+        run {
+            run {
                 val state = mutableUiState.value
                 if (state.blocksVerification()) {
                     null

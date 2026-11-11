@@ -29,6 +29,7 @@ import org.mercurio.client.feature.entry.presentation.EntryStateHolderDependenci
 import org.mercurio.client.feature.entry.presentation.LocalDiagnosticsPorts
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.ContinuationInterceptor
 
 object EntryWiring {
     fun createMessageImagePort(): MessageImagePort = HttpMessageImagePort(defaultMessageImageHttpTransport())
@@ -58,6 +59,7 @@ object EntryWiring {
             initialState = initialState,
             verifyGatewayConnection = verifyGatewayConnection,
             scope = entryScope(overrides.coroutineScope),
+            stateChangeDispatcher = stateChangeDispatcher(overrides.coroutineScope),
             sessionGatewayFactory = overrides.sessionGatewayFactory ?: ::newGatewayClient,
             runGatewayFactory = overrides.runGatewayFactory ?: ::newGatewayClient,
             dependencies =
@@ -124,6 +126,10 @@ object EntryWiring {
         coroutineScope: CoroutineScope?,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ): CoroutineScope = coroutineScope ?: CoroutineScope(SupervisorJob() + ioDispatcher)
+
+    private fun stateChangeDispatcher(coroutineScope: CoroutineScope?): CoroutineDispatcher =
+        coroutineScope?.coroutineContext?.get(ContinuationInterceptor) as? CoroutineDispatcher
+            ?: Dispatchers.IO.limitedParallelism(1)
 }
 
 private data class EntryStartup(

@@ -123,13 +123,13 @@ internal fun EntryStateHolder.persistBeforeApply(
     requestConnectionGeneration: Long,
 ): Boolean =
     run.isActive() &&
-        synchronized(sessionRequestLock) {
+        run {
             connectionGeneration == requestConnectionGeneration
         }
 
 internal suspend fun EntryStateHolder.applySubmitted(work: SubmittedRunApplication): SubmittedRunApplicationResult =
     applyStateChange {
-        synchronized(sessionRequestLock) {
+        run {
             if (connectionGeneration != work.requestConnectionGeneration) {
                 if (work.run.isActive()) {
                     rememberUnresolvedLocalRun(
@@ -139,7 +139,7 @@ internal suspend fun EntryStateHolder.applySubmitted(work: SubmittedRunApplicati
                         work.attemptId,
                     )
                 }
-                return@synchronized SubmittedRunApplicationResult(
+                return@run SubmittedRunApplicationResult(
                     applied = false,
                     persistAfterDisconnect = work.run.isActive(),
                 )

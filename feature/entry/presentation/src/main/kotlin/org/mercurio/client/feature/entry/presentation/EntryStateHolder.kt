@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -55,6 +56,7 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.ContinuationInterceptor
 
 sealed interface EntryUiEvent {
     sealed interface Intake : EntryUiEvent
@@ -472,6 +474,7 @@ class EntryStateHolder(
     initialState: EntryState,
     internal val verifyGatewayConnection: VerifyGatewayConnection? = null,
     internal val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    internal val stateChangeDispatcher: CoroutineDispatcher = scope.stateDispatcher(),
     internal val sessionGatewayFactory: ((endpoint: String, bearerCredential: String) -> SessionGatewayPort)? = null,
     internal val runGatewayFactory: ((endpoint: String, bearerCredential: String) -> RunGatewayPort)? = null,
     dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
@@ -546,9 +549,6 @@ class EntryStateHolder(
     internal var sessionGateway: SessionGatewayPort? = null
     internal var runGateway: RunGatewayPort? = null
     internal var catalogGateway: ModelGatewayPort? = null
-    internal val sessionRequestLock = Any()
-    internal val recoveryPersistenceLock = Any()
-    internal val connectionPersistenceLock = Any()
     internal val localDiagnosticsClearInFlight = AtomicBoolean(false)
     internal var sessionRequestGeneration = 0L
     internal var connectionGeneration = 0L
@@ -605,7 +605,7 @@ class EntryStateHolder(
     internal val stateChangeCommands = Channel<StateChangeCommand>(Channel.UNLIMITED)
 
     init {
-        scope.launch(StateChangeConsumerMarker()) { consumeStateChanges() }
+        scope.launch(StateChangeConsumerMarker() + stateChangeDispatcher) { consumeStateChanges() }
     }
 
     /**
@@ -757,6 +757,9 @@ class EntryStateHolder(
         scope.cancel()
     }
 }
+
+private fun CoroutineScope.stateDispatcher(): CoroutineDispatcher =
+    coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.IO
 
 internal data class OpenSessionOverlay(
     val composerText: String = "",
