@@ -60,6 +60,16 @@ State flows down and events flow up, and the shape is enforced by rules rather t
 
 The four rules share one deliberate blind spot: they read declarations and the source text of presentation's main sources, not dataflow. A write through a local alias of the state flow, and an event entry declared in another module, are outside what they can see; the shape they pin is the one this feature has.
 
+## State-holder confinement
+
+The state holder has one state-change lane, and the lane is background work:
+
+- **One entry, one queue.** `onEvent` enqueues a command through `submitStateChange`; `applyStateChange` enqueues one from a suspend caller. `consumeStateChanges` is the only consumer and applies the commands in FIFO order, and a command re-derives its guards from the current state because it runs after an unbounded number of earlier commands.
+- **One command at a time.** Production wiring launches the consumer on `Dispatchers.IO.limitedParallelism(1)`, so the lane applies one command at a time on the IO pool — a concurrency limit, not a pinned thread. Producers keep the holder's IO scope, so a slow Gateway call never runs on the event thread and never holds up the lane.
+- **No locks.** `state-holder/no-monitor-locks` rejects `synchronized`/`@Synchronized` in `EntryStateHolder*.kt`: a monitor there guards nothing the lane already serializes, and a path that writes outside the lane needs routing through the lane, not a lock.
+- **Blind spots, stated rather than implied.** The lane is not yet the only writer of `mutableUiState`. These paths write it directly from their IO coroutines: the uncertain-send retry path (`prepareRunSubmission`), connection verification, the model-catalog fetch, the inbound-link open-failure frame, the diagnostics surface (record-count refresh, export and clear completion frames) and the app-update path. Those writes are thread-safe on `MutableStateFlow` and put no storage on the event thread, but the lane does not order them; routing them through the consumer is outstanding. The rule's scope is the `EntryStateHolder*.kt` filename prefix, so `UncertaintyStoreState` and its process-wide `ProcessRunSubmissionUncertaintyStore` keep their own monitors outside the rule's reach.
+- **Blocking commits.** An applied state change may read or commit a small `SharedPreferences` record while the lane holds it. Those calls run on the background lane, never on the event thread, and delay later state changes rather than the event loop.
+
 ## Architecture checks
 
 The architecture rules are Konsist checks. `./gradlew architectureRuleTests` runs the rule suite and fails unless its executed evidence is complete, and every rule also runs against a synthetic scope that carries one deliberate violation, so a rule that stopped rejecting a violation fails the suite instead of passing it. The rules live in `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/ArchitectureCheckTest.kt` and are declared by name:
@@ -75,7 +85,7 @@ The architecture rules are Konsist checks. `./gradlew architectureRuleTests` run
 | `udf/one-state-writer` | a write to a declared state flow outside the state-holder files, a scope that declares no state flow, or a public mutable property on a state holder |
 | `udf/immutable-state-types` | a `*UiState` type with a mutable property or a mutable collection at any nesting depth |
 | `udf/one-event-entry` | a second function that is not private and takes the feature's UI event, or a settable function-typed property of that event |
-| `state-holder/no-monitor-locks` | a monitor lock (`synchronized`, `@Synchronized`) in a source named `EntryStateHolder*.kt`; state changes are serialized on the state-change lane, so a monitor lock guards nothing |
+| `state-holder/no-monitor-locks` | a monitor lock (`synchronized`, `@Synchronized`) in a source named `EntryStateHolder*.kt`; state changes submitted to the lane are serialized there, so a monitor lock guards nothing |
 
 The layer graph runs through the Konsist architecture assertion: domain depends on nothing, application and data depend only inward, and presentation and wiring stay inside the declared direction. The reference rules read the same scopes through Konsist's declaration model, because a fully qualified reference that carries no import is invisible to an import-based dependency assertion. The UDF rules read presentation's declarations the same way: the `@Composable` signatures, the state-holder and state-flow properties, the `*UiState` properties, and the functions and settable properties that carry the event type. The composable rule resolves over the whole production scope, because a port is only recognisable as an interface declared in another package, and narrows this judgement to presentation functions. The one-state-writer rule reads the source text as well, because an assignment inside a function body is not a declaration. Konsist parses Kotlin sources, not Gradle Kotlin scripts, so the module build scripts are the one medium the rule suite reads directly.
 
