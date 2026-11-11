@@ -102,7 +102,10 @@ REQUIRED_USER_GUIDE_STATEMENTS = (
     "Nightly",
     "community support only",
     "no service-level agreement",
-    "no network analytics, no product telemetry, and no third-party crash reporting",
+    "no network analytics, no product telemetry, no session replay, and no profiling",
+    "crash, error, and not-responding (ANR) reports",
+    "only after you accept on the first screen",
+    "Nothing is sent until you answer, and nothing is sent after you say no.",
     "not persisted on the device as an offline history",
     "terminal status only",
     "Hermes Run",
@@ -115,6 +118,10 @@ REQUIRED_USER_GUIDE_STATEMENTS = (
     "Authentication failed",
     "Required feature unavailable",
     "Gateway request failed",
+)
+
+FORBIDDEN_USER_GUIDE_STATEMENTS = (
+    "no third-party crash reporting",
 )
 
 REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS = (
@@ -268,6 +275,10 @@ def verify_required_statements(text, statements, document):
     return [f"{document} must state: {statement}" for statement in statements if statement not in text]
 
 
+def verify_forbidden_statements(text, statements, document):
+    return [f"{document} must not state: {statement}" for statement in statements if statement in text]
+
+
 def pinned_hermes_revision(root):
     text = read(root, PINNED_FIXTURE)
     for line in text.splitlines():
@@ -289,6 +300,9 @@ def verify_scope(root):
     if (root / DIAGNOSTICS_SURFACE).is_file():
         statements.extend(REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS)
     violations.extend(verify_required_statements(user_guide, statements, USER_GUIDE))
+    violations.extend(
+        verify_forbidden_statements(user_guide, FORBIDDEN_USER_GUIDE_STATEMENTS, USER_GUIDE)
+    )
     release_artifacts = read(root, RELEASE_ARTIFACTS)
     violations.extend(
         verify_required_statements(release_artifacts, REQUIRED_RELEASE_ARTIFACT_STATEMENTS, RELEASE_ARTIFACTS)

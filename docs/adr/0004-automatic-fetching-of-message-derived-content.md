@@ -2,7 +2,7 @@
 
 Status: accepted (2026-10-22)
 
-The client historically made exactly one kind of network call: requests to its connected Gateway. The published privacy boundary excludes analytics, telemetry, and third-party crash reporting, and Message content was never fetched from elsewhere. Rich Messages change that: images and link previews are resources addressed by URLs inside Message text, and one existing link path — a domain allowlist in front of the external browser — already failed silently with no feedback.
+The client historically made exactly one kind of network call: requests to its connected Gateway. The published privacy boundary excludes analytics, telemetry, session replay, and profiling; its one third-party reporting path is consent-gated crash, error, and not-responding reports to the project's error-reporting service, and Message content was never fetched from elsewhere. Rich Messages change that: images and link previews are resources addressed by URLs inside Message text, and one existing link path — a domain allowlist in front of the external browser — already failed silently with no feedback.
 
 Decision: the client automatically fetches HTTPS image resources and link-preview metadata named in Message content, and the domain allowlist is removed, so every HTTPS link is tappable and opens in the external browser. Guardrails bound the fetches: HTTPS only, redirects stay HTTPS, private/loopback/link-local addresses refused, content type checked before decode, bounded size and timeout, memory-only caches, and nothing fetched is persisted to disk or uploaded anywhere.
 
