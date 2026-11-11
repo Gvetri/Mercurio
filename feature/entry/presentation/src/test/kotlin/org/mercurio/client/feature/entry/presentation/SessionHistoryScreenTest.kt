@@ -172,7 +172,7 @@ class SessionHistoryScreenTest {
 
         composeTestRule.onNodeWithText(copy(MessageSendErrorCategory.UNCERTAIN.messageRes)).assertIsDisplayed()
         composeTestRule.onNodeWithText("Keep this draft").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Discard unsent record").assertIsDisplayed().assertIsEnabled()
+        composeTestRule.onNodeWithText("Clear send warning").assertIsDisplayed().assertIsEnabled()
     }
 
     @Test

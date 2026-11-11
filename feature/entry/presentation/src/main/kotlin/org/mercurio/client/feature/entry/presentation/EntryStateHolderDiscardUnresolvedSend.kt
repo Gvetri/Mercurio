@@ -1,9 +1,9 @@
 package org.mercurio.client.feature.entry.presentation
 
 /**
- * The failed-send recovery contract: an unresolved submission record stays until the
- * user resolves it by retrying, or explicitly discards it. Discarding removes only this
- * client's record; the composer text is kept so the user can resend or edit it.
+ * The failed-send recovery contract: an unresolved send stays marked until the user resolves it
+ * by retrying, or explicitly clears the local warning. Clearing removes only this device's
+ * warning; the composer text is kept so the user can resend or edit it.
  */
 internal fun EntryStateHolder.showDiscardUnresolvedSendConfirmation() {
     synchronized(sessionRequestLock) {

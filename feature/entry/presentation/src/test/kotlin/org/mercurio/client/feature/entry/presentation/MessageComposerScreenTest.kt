@@ -233,7 +233,7 @@ class MessageComposerScreenTest {
         composeTestRule
             .onNodeWithText(copy(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED.messageRes))
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Discard unsent record").assertHasClickAction().performClick()
+        composeTestRule.onNodeWithText("Clear send warning").assertHasClickAction().performClick()
 
         assertEquals(listOf(EntryUiEvent.DiscardUnresolvedSendClicked), events)
     }
