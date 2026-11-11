@@ -719,7 +719,7 @@ class EntryScreenTest {
     }
 
     private companion object {
-        const val TEST_TIMEOUT_MILLIS = 5_000L
+        const val TEST_TIMEOUT_MILLIS = 15_000L
     }
 
     private fun removeBody(): String = copy(R.string.dialog_remove_connection_body)

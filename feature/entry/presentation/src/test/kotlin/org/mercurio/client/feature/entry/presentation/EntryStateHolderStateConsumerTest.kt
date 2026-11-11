@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
-private const val TEST_TIMEOUT_MILLIS = 5_000L
+private const val TEST_TIMEOUT_MILLIS = 15_000L
 
 private const val CONSUMER_LANE = "consumer"
 

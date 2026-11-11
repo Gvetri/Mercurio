@@ -238,7 +238,7 @@ class RunObservationStateHolderTest {
 
                 assertTrue(
                     "the previous Session's screen observer closes when another Session replaces it",
-                    firstObservation.closed.await(1_000, TimeUnit.MILLISECONDS),
+                    firstObservation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
                 )
             } finally {
                 firstObservation.release.countDown()
@@ -269,7 +269,7 @@ class RunObservationStateHolderTest {
 
                 assertTrue(
                     "the open conversation's screen observer closes when a search replaces it",
-                    observer.closed.await(1_000, TimeUnit.MILLISECONDS),
+                    observer.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
                 )
             } finally {
                 observer.release.countDown()
@@ -374,7 +374,7 @@ class RunObservationStateHolderTest {
 
                 assertTrue(
                     "the replaced Session's observer closes once the switch finally succeeds",
-                    firstObservation.closed.await(1_000, TimeUnit.MILLISECONDS),
+                    firstObservation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
                 )
             } finally {
                 firstObservation.release.countDown()

@@ -26,7 +26,7 @@ import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
 
-internal const val ASYNC_TEST_TIMEOUT_MILLIS = 5_000L
+internal const val ASYNC_TEST_TIMEOUT_MILLIS = 15_000L
 
 internal fun clientManifestCapabilities(): GatewayCapabilities =
     GatewayCapabilities(

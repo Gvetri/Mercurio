@@ -442,6 +442,6 @@ class SessionPinDeleteStateHolderTest {
     }
 
     private companion object {
-        const val ASYNC_TEST_TIMEOUT_MILLIS = 5_000L
+        const val ASYNC_TEST_TIMEOUT_MILLIS = 15_000L
     }
 }

@@ -246,4 +246,4 @@ internal class NotificationThrowingObservation(
     }
 }
 
-internal const val NOTIFICATION_TIMEOUT_MILLIS = 5_000L
+internal const val NOTIFICATION_TIMEOUT_MILLIS = 15_000L

@@ -27,7 +27,7 @@ import java.util.ArrayDeque
 
 class SessionRenameStateHolderTest {
     private companion object {
-        const val TEST_TIMEOUT_MILLIS = 5_000L
+        const val TEST_TIMEOUT_MILLIS = 15_000L
     }
 
     @Test

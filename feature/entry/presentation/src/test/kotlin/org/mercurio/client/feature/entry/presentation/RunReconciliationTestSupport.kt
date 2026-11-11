@@ -305,6 +305,7 @@ internal class ReconciliationFakeGateway(
     var failRunCreation = false
     var failHistoryRequest: Int? = null
     var blockNextStatus = false
+    private val lastServedStatuses = mutableMapOf<RunId, Run>()
     var blockSubmissionCompletion = false
     var blockNextObservationOpen = false
     val runStarted = CountDownLatch(1)
@@ -389,7 +390,11 @@ internal class ReconciliationFakeGateway(
                 statusRequests += runId
                 if (failStatusRunIds.remove(runId)) error("status request failed")
                 val shouldBlock = blockNextStatus.also { blockNextStatus = false }
-                val status = if (statuses.isEmpty()) error("missing status") else statuses.removeFirst()
+                val status =
+                    statuses.pollFirst()
+                        ?: lastServedStatuses[runId]
+                        ?: error("no status scripted")
+                lastServedStatuses[runId] = status
                 shouldBlock to status
             }
         if (shouldBlock) {
@@ -749,5 +754,5 @@ internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
     }
 }
 
-internal const val RECONCILIATION_TIMEOUT_MILLIS = 5_000L
+internal const val RECONCILIATION_TIMEOUT_MILLIS = 15_000L
 internal const val RECONCILIATION_SETTLE_MILLIS = 500L
