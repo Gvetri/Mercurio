@@ -1239,7 +1239,7 @@ class ArchitectureCheckTest {
         const val eventEntryGuidance =
             "Events enter the feature at exactly one function that is not private, so no second path can mutate state behind the state holder."
         const val monitorLockGuidance =
-            "The holder's state changes are serialized on the state-change lane, so a monitor lock in a state-holder source guards nothing; route a shared mutation through that consumer or a concurrent structure instead."
+            "The rule scans EntryStateHolder*.kt sources: the holder's state changes are serialized on the state-change lane, so a monitor lock there guards nothing. Route a shared mutation through that consumer or a concurrent structure instead. A collaborator-owned store double is outside this file scope."
 
         const val composableAnnotation = "Composable"
         const val eventTypeName = "EntryUiEvent"

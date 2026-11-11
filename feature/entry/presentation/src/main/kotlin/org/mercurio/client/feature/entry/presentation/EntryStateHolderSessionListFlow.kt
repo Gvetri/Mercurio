@@ -61,9 +61,9 @@ internal fun EntryStateHolder.startFirstPageListLoad(
  * inside state-change commands. The initial load does not use this function:
  * `loadInitialSessions` routes its begin state through the consumer instead. The inbound
  * link open-failure path (`showUnknownInboundLink` via `showLinkedSessionOpenFailure`) also
- * reaches `refreshSessionList`, but from the IO open job; that failure frame and its direct
- * writes are a documented exception to be serialized in the follow-up slice that removes
- * the request locks. The load's asynchronous result is applied on the consumer via
+ * reaches `refreshSessionList`, from the IO open job, and its frames write the state flow
+ * directly; that path is not routed through the consumer and is a known gap outside this
+ * slice. The load's asynchronous result is applied on the consumer via
  * `updateCurrentSessionRequest`.
  */
 internal fun EntryStateHolder.createFirstPageLoadJob(
