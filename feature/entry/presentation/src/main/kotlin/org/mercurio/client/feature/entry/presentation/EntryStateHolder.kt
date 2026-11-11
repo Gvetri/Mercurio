@@ -56,7 +56,6 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.ContinuationInterceptor
 
 sealed interface EntryUiEvent {
     sealed interface Intake : EntryUiEvent
@@ -468,13 +467,13 @@ data class EntryStateHolderDependencies(
     val requestInstallPermissionSettings: (() -> Unit)? = null,
     val requestAppRestart: (() -> Unit)? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
+    val stateChangeDispatcher: CoroutineDispatcher? = null,
 )
 
 class EntryStateHolder(
     initialState: EntryState,
     internal val verifyGatewayConnection: VerifyGatewayConnection? = null,
     internal val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-    internal val stateChangeDispatcher: CoroutineDispatcher = scope.stateDispatcher(),
     internal val sessionGatewayFactory: ((endpoint: String, bearerCredential: String) -> SessionGatewayPort)? = null,
     internal val runGatewayFactory: ((endpoint: String, bearerCredential: String) -> RunGatewayPort)? = null,
     dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
@@ -506,6 +505,7 @@ class EntryStateHolder(
     internal val requestInstallPermissionSettings = dependencies.requestInstallPermissionSettings
     internal val requestAppRestart = dependencies.requestAppRestart
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
+    internal val stateChangeDispatcher = dependencies.stateChangeDispatcher
 
     private val storedErrorReportingConsent: ErrorReportingConsent? = errorReportingConsentStore?.read()
 
@@ -605,7 +605,9 @@ class EntryStateHolder(
     internal val stateChangeCommands = Channel<StateChangeCommand>(Channel.UNLIMITED)
 
     init {
-        scope.launch(StateChangeConsumerMarker() + stateChangeDispatcher) { consumeStateChanges() }
+        val marker = StateChangeConsumerMarker()
+        val stateChangeContext = stateChangeDispatcher?.let { dispatcher -> marker + dispatcher } ?: marker
+        scope.launch(stateChangeContext) { consumeStateChanges() }
     }
 
     /**
@@ -757,9 +759,6 @@ class EntryStateHolder(
         scope.cancel()
     }
 }
-
-private fun CoroutineScope.stateDispatcher(): CoroutineDispatcher =
-    coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.IO
 
 internal data class OpenSessionOverlay(
     val composerText: String = "",

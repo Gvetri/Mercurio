@@ -59,7 +59,6 @@ object EntryWiring {
             initialState = initialState,
             verifyGatewayConnection = verifyGatewayConnection,
             scope = entryScope(overrides.coroutineScope),
-            stateChangeDispatcher = stateChangeDispatcher(overrides.coroutineScope),
             sessionGatewayFactory = overrides.sessionGatewayFactory ?: ::newGatewayClient,
             runGatewayFactory = overrides.runGatewayFactory ?: ::newGatewayClient,
             dependencies =
@@ -102,6 +101,7 @@ object EntryWiring {
                     installNightlyUpdate = buildInstallNightlyUpdate(context, overrides),
                     requestInstallPermissionSettings = hostActions.requestInstallPermissionSettings,
                     requestAppRestart = hostActions.requestAppRestart,
+                    stateChangeDispatcher = stateChangeDispatcher(overrides.coroutineScope),
                 ),
         )
     }
@@ -127,9 +127,12 @@ object EntryWiring {
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ): CoroutineScope = coroutineScope ?: CoroutineScope(SupervisorJob() + ioDispatcher)
 
-    private fun stateChangeDispatcher(coroutineScope: CoroutineScope?): CoroutineDispatcher =
+    private fun stateChangeDispatcher(
+        coroutineScope: CoroutineScope?,
+        confinedDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
+    ): CoroutineDispatcher =
         coroutineScope?.coroutineContext?.get(ContinuationInterceptor) as? CoroutineDispatcher
-            ?: Dispatchers.IO.limitedParallelism(1)
+            ?: confinedDispatcher
 }
 
 private data class EntryStartup(

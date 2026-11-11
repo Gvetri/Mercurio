@@ -17,7 +17,7 @@ internal suspend fun EntryStateHolder.reconcileRunObservationCandidate(
     hasCandidate: Boolean,
 ): Run? {
     val run =
-        synchronized(sessionRequestLock) {
+        run {
             visibleSessionRuns(context.sessionId).lastOrNull { it.id == runId }
                 ?: observationStateFor(context.sessionId, runId)?.run
                 ?: unresolvedLocalRunIds[recoverySessionKey(context.sessionId)]
@@ -58,7 +58,7 @@ internal suspend fun EntryStateHolder.reconcileRun(
 ): AuthoritativeRunReconciliation? {
     val runGateway =
         if (beginReconciliation(sessionId, requestConnectionGeneration, requestSessionGeneration)) {
-            synchronized(sessionRequestLock) {
+            run {
                 runGateway?.takeIf {
                     connectionGeneration == requestConnectionGeneration &&
                         sessionRequestGeneration == requestSessionGeneration &&
@@ -98,7 +98,7 @@ internal fun EntryStateHolder.beginReconciliation(
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
 ): Boolean =
-    synchronized(sessionRequestLock) {
+    run {
         val opened = mutableUiState.value.sessionList?.openedSession
         val reconciliationIsSuperseded =
             connectionGeneration != requestConnectionGeneration ||
@@ -110,7 +110,7 @@ internal fun EntryStateHolder.beginReconciliation(
         } else {
             reconcilingSessions[sessionId] = requestSessionGeneration
             submitStateChange {
-                synchronized(sessionRequestLock) {
+                run {
                     if (
                         connectionGeneration != requestConnectionGeneration ||
                         sessionRequestGeneration != requestSessionGeneration ||
@@ -144,8 +144,8 @@ internal fun EntryStateHolder.beginReconciliation(
  * Releases the reconciliation claim and clears its visible in-progress state on the
  * state-change consumer.
  *
- * The claim bookkeeping is removed synchronously under `synchronized(sessionRequestLock)`
- * because it protects the claim round-trip itself, while the visible release is enqueued so
+ * The claim bookkeeping is removed synchronously on the state-change lane because it
+ * protects the claim round-trip itself, while the visible release is enqueued so
  * it cannot overtake a begin state that was queued before it: with both sides on the
  * consumer, a reconciliation attempt's set and release keep their submission order and a
  * later attempt's begin re-arms the flags after the earlier release applies. The release
@@ -160,13 +160,13 @@ internal fun EntryStateHolder.finishReconciliation(
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
 ) {
-    synchronized(sessionRequestLock) {
+    run {
         if (reconcilingSessions[sessionId] == requestSessionGeneration) {
             reconcilingSessions.remove(sessionId)
         }
     }
     submitStateChange {
-        synchronized(sessionRequestLock) {
+        run {
             if (
                 connectionGeneration != requestConnectionGeneration ||
                 sessionRequestGeneration != requestSessionGeneration
@@ -195,9 +195,9 @@ internal suspend fun EntryStateHolder.applyAuthoritativeRunReconciliation(
 ) {
     val application =
         applyStateChange {
-            applyReconciliationLocked(request, reconciliation)
+            applyReconciliation(request, reconciliation)
         }
-    synchronized(sessionRequestLock) {
+    run {
         val reconciledRun = reconciliation.run
         val runIsClaimed =
             recoveryClaims.keys.any { key ->

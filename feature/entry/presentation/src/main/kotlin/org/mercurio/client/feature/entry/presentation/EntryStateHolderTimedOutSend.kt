@@ -87,14 +87,14 @@ internal suspend fun EntryStateHolder.showTimedOutSendFailure(
     refusalCategory: MessageSendErrorCategory? = null,
 ) {
     applyStateChange {
-        synchronized(sessionRequestLock) {
+        run {
             if (
                 connectionGeneration != requestConnectionGeneration ||
                 sessionRequestGeneration != requestSessionGeneration
             ) {
-                return@synchronized
+                return@run
             }
-            val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
+            val (current, opened) = openedSessionFor(sessionId) ?: return@run
             val recoveryDraft = pendingTimedOutSends[sessionId]?.draft
             markTimedOutSendUncertain(
                 sessionId,
