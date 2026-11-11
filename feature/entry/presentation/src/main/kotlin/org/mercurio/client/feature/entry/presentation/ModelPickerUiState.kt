@@ -2,6 +2,7 @@ package org.mercurio.client.feature.entry.presentation
 
 import org.mercurio.client.feature.entry.domain.ModelCatalog
 import org.mercurio.client.feature.entry.domain.ModelCatalogEntry
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelSelection
 
 /**
@@ -15,7 +16,7 @@ import org.mercurio.client.feature.entry.domain.ModelSelection
  */
 data class ModelPickerUiState(
     val capabilityKnown: Boolean = false,
-    val capabilityAdvertised: Boolean = false,
+    val catalogSurface: ModelCatalogSurface? = null,
     val isFetchingCatalog: Boolean = false,
     val catalogFetchFailed: Boolean = false,
     val catalog: ModelCatalog? = null,
@@ -24,6 +25,10 @@ data class ModelPickerUiState(
     val recents: List<String> = emptyList(),
     val isPickerOpen: Boolean = false,
 ) {
+    /** True once the discovered capabilities advertise a catalog surface. */
+    val capabilityAdvertised: Boolean
+        get() = catalogSurface != null
+
     /** The selectable control exists only with an advertised row and a loaded catalog. */
     val showsSelectionControl: Boolean
         get() = capabilityAdvertised && catalog != null && !isFetchingCatalog

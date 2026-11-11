@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunSubmissionState
 
 /**
@@ -15,6 +16,17 @@ internal fun chatCanSubmit(detail: SessionDetailState): Boolean =
         activeRuns = detail.content.activeRuns,
         isSubmissionPending = detail.content.isSending || detail.listRequestActive,
     ).canSubmit
+
+/**
+ * The open Session's share of the submission gate. The holder projects every recovery flag it
+ * alone owns into these UI fields, so the composer and the submission path judge the same state.
+ */
+internal fun OpenSessionUiState.blocksRunSubmission(): Boolean =
+    latestRunState == RunPresentationState.UNCERTAIN ||
+        sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
+        hasUnresolvedSubmission ||
+        isRefreshing ||
+        isReconciliationInProgress
 
 internal fun OpenSessionUiState.chatMessageCount(): Int = messages.size + listOfNotNull(activeResponse).size
 

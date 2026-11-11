@@ -4,18 +4,11 @@ object PublicBetaGatewayCapabilityManifest {
     const val VERSION = 1
 
     /**
-     * The additive-optional `run_models` endpoint row a Gateway may advertise for the
-     * Run model catalog. It is deliberately not a requirement row: a missing or
-     * mismatched row makes the catalog unavailable and never fails connection
-     * verification.
+     * The additive-optional surfaces that may carry the Run model catalog, in preference order.
+     * None is a requirement row: a missing or mismatched surface makes the catalog unavailable
+     * and never fails connection verification.
      */
-    val modelCatalogEndpoint =
-        GatewayCapabilityRequirement(
-            endpoint = "run_models",
-            method = "GET",
-            path = "/api/models",
-            operation = GatewayContractOperation.MODEL_CATALOG,
-        )
+    val modelCatalogSurfaces: List<ModelCatalogSurface> = ModelCatalogSurface.entries
 
     val current =
         GatewayCapabilityManifest(

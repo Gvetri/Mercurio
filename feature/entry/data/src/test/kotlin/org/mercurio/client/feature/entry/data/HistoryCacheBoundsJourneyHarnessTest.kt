@@ -124,7 +124,9 @@ class HistoryCacheBoundsJourneyHarnessTest {
         const val REFRESH_SESSIONS = 20
     }
 
-    private class HarnessClock(initial: Instant) {
+    private class HarnessClock(
+        initial: Instant,
+    ) {
         private var current = initial
 
         fun instant(): Instant = current

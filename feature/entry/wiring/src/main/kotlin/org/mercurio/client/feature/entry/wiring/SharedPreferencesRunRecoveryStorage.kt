@@ -10,6 +10,7 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isValid
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Locale
 
 /** Android-only persistence bridge; registry behavior remains in the JVM data module. */
 class SharedPreferencesRunRecoveryStorage(
@@ -45,9 +46,8 @@ class SharedPreferencesRunRecoveryStorage(
         }
     }
 
-    private fun encode(entry: RunRecoveryEntry): String {
-        return "${encode(entry.sessionId.value)}.${encode(entry.runId.value)}"
-    }
+    private fun encode(entry: RunRecoveryEntry): String =
+        "${encode(entry.sessionId.value)}.${encode(entry.runId.value)}"
 
     private fun decode(value: String): RunRecoveryEntry? {
         val parts = value.split('.', limit = 2)
@@ -60,13 +60,11 @@ class SharedPreferencesRunRecoveryStorage(
         }.getOrNull()
     }
 
-    private fun encode(value: String): String {
-        return Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-    }
+    private fun encode(value: String): String =
+        Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
 
-    private fun decodePart(value: String): String {
-        return Base64.decode(value, Base64.NO_WRAP).toString(StandardCharsets.UTF_8)
-    }
+    private fun decodePart(value: String): String =
+        Base64.decode(value, Base64.NO_WRAP).toString(StandardCharsets.UTF_8)
 
     private fun entriesKey(): String = "$ENTRIES_KEY.${endpointNamespace(endpointProvider())}"
 
@@ -76,7 +74,7 @@ class SharedPreferencesRunRecoveryStorage(
         return MessageDigest
             .getInstance("SHA-256")
             .digest(canonicalValue.toByteArray(StandardCharsets.UTF_8))
-            .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+            .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
     }
 
     private companion object {

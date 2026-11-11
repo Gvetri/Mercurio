@@ -55,7 +55,10 @@ internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
                 synchronized(sessionRequestLock) {
                     !hasUnresolvedSubmission(sessionId)
                 }
-            if (canRetry) sendMessage()
+            if (canRetry) {
+                awaitStateChangesApplied()
+                sendMessage()
+            }
         }
     }
 }
@@ -132,8 +135,8 @@ internal fun EntryStateHolder.prepareRunSubmission(
         val opened = current.openedSession ?: return@synchronized null
         val sessionId = opened.session.id
         val requestConnectionGeneration = connectionGeneration
-        val (knownRuns, submissionState) = submissionRunsAndState(opened, sessionId)
-        if (!submissionState.canSubmit || current.hasPendingMutation || blocksRunSubmission(opened, sessionId)) {
+        val (knownRuns, _) = submissionRunsAndState(opened, sessionId)
+        if (blocksRunSubmissionNow(current, sessionId)) {
             return@synchronized null
         }
         mutableUiState.value =
@@ -180,9 +183,7 @@ internal fun EntryStateHolder.submissionPersisted(
     persistBeforeApply: Boolean,
     recoveryEntryPersisted: Boolean,
     submissionBindingSucceeded: Boolean,
-): Boolean {
-    return run.isActive() && persistBeforeApply && recoveryEntryPersisted && submissionBindingSucceeded
-}
+): Boolean = run.isActive() && persistBeforeApply && recoveryEntryPersisted && submissionBindingSucceeded
 
 internal fun EntryStateHolder.submissionRunsAndState(
     opened: OpenSessionUiState,
@@ -200,6 +201,18 @@ internal fun EntryStateHolder.submissionRunsAndState(
             isSubmissionPending = opened.isSending || runJobs.containsKey(sessionId),
         )
     return knownRuns to state
+}
+
+internal fun EntryStateHolder.blocksRunSubmissionNow(
+    current: SessionListUiState,
+    sessionId: SessionId,
+): Boolean {
+    val opened = current.openedSession?.takeIf { it.session.id == sessionId }
+    if (opened == null) return true
+    val (_, submissionState) = submissionRunsAndState(opened, sessionId)
+    return !submissionState.canSubmit ||
+        current.hasPendingMutation ||
+        blocksRunSubmission(opened, sessionId)
 }
 
 internal fun EntryStateHolder.recordSubmissionDraft(

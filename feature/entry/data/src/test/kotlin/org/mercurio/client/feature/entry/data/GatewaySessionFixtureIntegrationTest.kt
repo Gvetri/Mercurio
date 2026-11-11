@@ -398,13 +398,11 @@ class GatewaySessionFixtureIntegrationTest {
 internal class LoopbackFixtureTransport : GatewayTransport {
     private val delegate = OkHttpGatewayTransport()
 
-    override fun execute(request: GatewayHttpRequest): GatewayHttpResponse {
-        return delegate.execute(toLoopbackRequest(request))
-    }
+    override fun execute(request: GatewayHttpRequest): GatewayHttpResponse =
+        delegate.execute(toLoopbackRequest(request))
 
-    override fun openEventStream(request: GatewayHttpRequest): GatewayEventStream {
-        return delegate.openEventStream(toLoopbackRequest(request))
-    }
+    override fun openEventStream(request: GatewayHttpRequest): GatewayEventStream =
+        delegate.openEventStream(toLoopbackRequest(request))
 
     private fun toLoopbackRequest(request: GatewayHttpRequest): GatewayHttpRequest {
         val secureUrl = request.url.removePrefix("https://")

@@ -36,7 +36,7 @@ internal fun EntryStateHolder.releaseRecoveryClaim(claim: RecoveryClaim): Boolea
     return true
 }
 
-internal fun EntryStateHolder.startRunRecovery(expectedConnectionGeneration: Long) {
+internal suspend fun EntryStateHolder.startRunRecovery(expectedConnectionGeneration: Long) {
     val recovery = beginRunRecovery(expectedConnectionGeneration) ?: return
     val (registry, recoveryContext) = recovery
     if (!beginRecoveryLoad(expectedConnectionGeneration)) return
@@ -60,11 +60,10 @@ internal fun EntryStateHolder.startRunRecovery(expectedConnectionGeneration: Lon
     }
 }
 
-internal fun EntryStateHolder.beginRunRecovery(expectedConnectionGeneration: Long): RunRecoveryStart? {
-    return runRecoveryRegistry?.let { registry ->
+internal fun EntryStateHolder.beginRunRecovery(expectedConnectionGeneration: Long): RunRecoveryStart? =
+    runRecoveryRegistry?.let { registry ->
         recoveryGatewayContextFor(expectedConnectionGeneration)?.let { context -> registry to context }
     }
-}
 
 internal fun EntryStateHolder.recoveryGatewayContextFor(expectedConnectionGeneration: Long): RecoveryGatewayContext? =
     synchronized(sessionRequestLock) {
@@ -117,7 +116,7 @@ internal fun EntryStateHolder.claimRecoveryWorkItems(
         }
     }
 
-internal fun EntryStateHolder.startRecoveryWork(
+internal suspend fun EntryStateHolder.startRecoveryWork(
     workItems: List<RecoveryWorkItem>,
     recoveryContext: RecoveryGatewayContext,
     expectedConnectionGeneration: Long,
@@ -173,7 +172,7 @@ internal suspend fun EntryStateHolder.runRecoveryWorkItem(
         }
     }
     if (recoveredRun == null) {
-        markRecoveryFailure(entry.sessionId)
+        markRecoveryFailure(entry.sessionId, expectedConnectionGeneration)
     } else {
         recoveredRun.takeIf(Run::isActive)?.let { run ->
             startRunObservation(
@@ -196,6 +195,7 @@ internal fun EntryStateHolder.releaseRecoveryWork(
             workItems.forEach { workItem ->
                 if (releaseRecoveryClaim(workItem.claim)) {
                     val entry = workItem.entry
+                    recoveryReconciledRunIds.remove(entry.runId)
                     val remaining = (recoverySessionCounts[entry.sessionId] ?: 1) - 1
                     if (remaining > 0) {
                         recoverySessionCounts[entry.sessionId] = remaining

@@ -28,7 +28,7 @@ internal fun EntryStateHolder.recordTerminalPollReconciliation(
     updateVisibleRunState(sessionId)
 }
 
-internal fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunReconcileContext) {
+internal suspend fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunReconcileContext) {
     val recoveryEntries =
         try {
             runRecoveryRegistry?.load().orEmpty()
@@ -141,11 +141,23 @@ internal fun EntryStateHolder.reconciliationRunIds(
                     ?.id
                     ?.let(ids::add)
             }
+            ids.removeAll(unreconciledRecoveryRunIds(context.sessionId))
             ids.toList()
         }
     }
 
-internal fun EntryStateHolder.reconcileRunObservationCandidate(
+internal fun EntryStateHolder.unreconciledRecoveryRunIds(sessionId: SessionId): Set<RunId> {
+    val endpoint = mutableUiState.value.endpoint
+    return recoveryClaims.keys
+        .asSequence()
+        .filter { key ->
+            key.sessionId == sessionId &&
+                key.endpoint == endpoint &&
+                key.runId !in recoveryReconciledRunIds
+        }.mapTo(mutableSetOf()) { key -> key.runId }
+}
+
+internal suspend fun EntryStateHolder.reconcileRunObservationCandidate(
     context: OpenedRunReconcileContext,
     runId: RunId,
     hasCandidate: Boolean,
@@ -195,27 +207,37 @@ internal fun EntryStateHolder.markRecoveryUnavailable(
         ) {
             return@synchronized
         }
-        val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                isRefreshing = false,
-                                isStale = true,
-                                errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
-                                sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                hasUnresolvedSubmission = true,
-                                latestRunState = opened.latestRunState ?: RunPresentationState.UNCERTAIN,
-                                isReconciliationInProgress = false,
+        submitStateChange {
+            synchronized(sessionRequestLock) {
+                if (
+                    connectionGeneration != requestConnectionGeneration ||
+                    sessionRequestGeneration != requestSessionGeneration
+                ) {
+                    return@submitStateChange
+                }
+                val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                openedSession =
+                                    opened.copy(
+                                        isRefreshing = false,
+                                        isStale = true,
+                                        errorCategory = SessionHistoryErrorCategory.RECONCILIATION_FAILED,
+                                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                                        hasUnresolvedSubmission = true,
+                                        latestRunState = opened.latestRunState ?: RunPresentationState.UNCERTAIN,
+                                        isReconciliationInProgress = false,
+                                    ),
                             ),
-                    ),
-            )
+                    )
+            }
+        }
     }
 }
 
-internal fun EntryStateHolder.reconcileRun(
+internal suspend fun EntryStateHolder.reconcileRun(
     sessionId: SessionId,
     runId: RunId,
     requestConnectionGeneration: Long,
@@ -275,22 +297,52 @@ internal fun EntryStateHolder.beginReconciliation(
             false
         } else {
             reconcilingSessions[sessionId] = requestSessionGeneration
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        mutableUiState.value.sessionList?.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = true,
-                                    isReconciliationInProgress = true,
-                                    errorCategory = null,
+            submitStateChange {
+                synchronized(sessionRequestLock) {
+                    if (
+                        connectionGeneration != requestConnectionGeneration ||
+                        sessionRequestGeneration != requestSessionGeneration ||
+                        reconcilingSessions[sessionId] != requestSessionGeneration
+                    ) {
+                        return@submitStateChange
+                    }
+                    val current = mutableUiState.value.sessionList ?: return@submitStateChange
+                    val openedNow =
+                        current.openedSession?.takeIf { it.session.id == sessionId }
+                            ?: return@submitStateChange
+                    mutableUiState.value =
+                        mutableUiState.value.copy(
+                            sessionList =
+                                current.copy(
+                                    openedSession =
+                                        openedNow.copy(
+                                            isRefreshing = true,
+                                            isReconciliationInProgress = true,
+                                            errorCategory = null,
+                                        ),
                                 ),
-                        ),
-                )
+                        )
+                }
+            }
             true
         }
     }
 
+/**
+ * Releases the reconciliation claim and clears its visible in-progress state on the
+ * state-change consumer.
+ *
+ * The claim bookkeeping is removed synchronously under `synchronized(sessionRequestLock)`
+ * because it protects the claim round-trip itself, while the visible release is enqueued so
+ * it cannot overtake a begin state that was queued before it: with both sides on the
+ * consumer, a reconciliation attempt's set and release keep their submission order and a
+ * later attempt's begin re-arms the flags after the earlier release applies. The release
+ * re-derives the connection and request generations and the opened-session identity at
+ * application time; it does not re-check the claim, which was already removed as
+ * bookkeeping. `blocksRunSubmission` and the composer send state read the flags through the
+ * UI state flow, so a retry click observes the release once the consumer has drained the
+ * commands queued before it.
+ */
 internal fun EntryStateHolder.finishReconciliation(
     sessionId: SessionId,
     requestConnectionGeneration: Long,
@@ -300,32 +352,49 @@ internal fun EntryStateHolder.finishReconciliation(
         if (reconcilingSessions[sessionId] == requestSessionGeneration) {
             reconcilingSessions.remove(sessionId)
         }
-        if (
-            connectionGeneration != requestConnectionGeneration ||
-            sessionRequestGeneration != requestSessionGeneration
-        ) {
-            return@synchronized
+    }
+    submitStateChange {
+        synchronized(sessionRequestLock) {
+            if (
+                connectionGeneration != requestConnectionGeneration ||
+                sessionRequestGeneration != requestSessionGeneration
+            ) {
+                return@submitStateChange
+            }
+            val (current, opened) = openedSessionFor(sessionId) ?: return@submitStateChange
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            openedSession =
+                                opened.copy(
+                                    isRefreshing = false,
+                                    isReconciliationInProgress = false,
+                                ),
+                        ),
+                )
         }
-        val (current, opened) = openedSessionFor(sessionId) ?: return@synchronized
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                isRefreshing = false,
-                                isReconciliationInProgress = false,
-                            ),
-                    ),
-            )
     }
 }
 
-internal fun EntryStateHolder.applyAuthoritativeRunReconciliation(
+internal suspend fun EntryStateHolder.applyAuthoritativeRunReconciliation(
     request: AuthoritativeReconciliationRequest,
     reconciliation: AuthoritativeRunReconciliation,
 ) {
-    val application = applyReconciliationLocked(request, reconciliation)
+    val application =
+        applyStateChange {
+            applyReconciliationLocked(request, reconciliation)
+        }
+    synchronized(sessionRequestLock) {
+        val reconciledRun = reconciliation.run
+        val runIsClaimed =
+            recoveryClaims.keys.any { key ->
+                key.sessionId == request.sessionId && key.runId == reconciledRun.id
+            }
+        if (runIsClaimed) {
+            recoveryReconciledRunIds += reconciledRun.id
+        }
+    }
     application.observationToClose?.close()
     application.observationJobToCancel?.cancel()
     removeReconciledRecoveryEntry(

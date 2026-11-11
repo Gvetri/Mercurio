@@ -109,8 +109,8 @@ internal class RunReconciliationDiscoveryTest {
                 openReconciledSession(holder, gateway)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRun?.id == baselineRun.id &&
-                        !it.sessionList?.openedSession!!.isRefreshing &&
-                        !it.sessionList?.openedSession!!.isReconciliationInProgress
+                        !it.sessionList.openedSession.isRefreshing &&
+                        !it.sessionList.openedSession.isReconciliationInProgress
                 }
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Keep this draft"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
@@ -127,11 +127,11 @@ internal class RunReconciliationDiscoveryTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.latestRun?.id == unrelatedRun.id &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        it.sessionList?.openedSession?.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
-                        it.sessionList?.openedSession?.hasUnresolvedSubmission == true &&
-                        it.sessionList?.openedSession?.composerText == "Keep this draft"
+                        it.sessionList.openedSession.latestRun?.id == unrelatedRun.id &&
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED &&
+                        it.sessionList.openedSession.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
+                        it.sessionList.openedSession.hasUnresolvedSubmission == true &&
+                        it.sessionList.openedSession.composerText == "Keep this draft"
                 }
                 assertEquals(listOf(baselineRun.id), gateway.statusRequests)
             } finally {
@@ -183,9 +183,9 @@ internal class RunReconciliationDiscoveryTest {
                 gateway.releaseSubmissionCompletion.countDown()
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isSending == false &&
-                        it.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                        it.sessionList?.openedSession?.latestRun?.id == terminalRun.id &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED
+                        it.sessionList.openedSession.isReconciliationInProgress == false &&
+                        it.sessionList.openedSession.latestRun?.id == terminalRun.id &&
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED
                 }
                 assertEquals(listOf(terminalRun.id), gateway.statusRequests)
             } finally {
@@ -294,13 +294,13 @@ internal class RunReconciliationDiscoveryTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.UNCERTAIN
                 }
 
                 observation.release.countDown()
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        it.sessionList?.openedSession?.messages?.lastOrNull()?.content == "Confirmed after refresh"
+                        it.sessionList.openedSession.messages.lastOrNull()?.content == "Confirmed after refresh"
                 }
                 assertEquals(listOf(run.id, run.id), gateway.statusRequests)
                 assertEquals(4, gateway.historyRequests)
@@ -364,7 +364,7 @@ internal class RunReconciliationDiscoveryTest {
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
-                        it.sessionList?.openedSession?.messages?.lastOrNull()?.content == "reopen-open"
+                        it.sessionList.openedSession.messages.lastOrNull()?.content == "reopen-open"
                 }
                 assertTrue(secondObservation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 assertEquals(3, gateway.statusRequests.size)
@@ -423,7 +423,7 @@ internal class RunReconciliationDiscoveryTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        !it.sessionList!!.openedSession!!.isRefreshing
+                        !it.sessionList.openedSession.isRefreshing
                 }
                 assertTrue(firstObservation.closed.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
@@ -455,7 +455,7 @@ internal class RunReconciliationDiscoveryTest {
         awaitReconciliationState(holder) {
             gateway.staleHistoryLoaded.count == 0L &&
                 it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
-                it.sessionList?.openedSession?.messages?.lastOrNull()?.content == expectedContent
+                it.sessionList.openedSession.messages.lastOrNull()?.content == expectedContent
         }
     }
 

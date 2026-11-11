@@ -10,6 +10,14 @@ import org.mercurio.client.feature.entry.domain.GatewayErrorCategory
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.HistoryCacheKey
+import org.mercurio.client.feature.entry.domain.HistoryCacheStore
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticEventType
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticStatus
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticsExportResult
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticsExporter
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticsRecorder
+import org.mercurio.client.feature.entry.domain.LocalDiagnosticsStore
 import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
@@ -234,6 +242,92 @@ class HistoryCacheClearControlTest {
             assertTrue(holder.uiState.value.isClearHistoryCacheConfirmationOpen)
             holder.close()
         }
+
+    @Test
+    fun a_failed_history_cache_clear_records_one_local_diagnostics_event() =
+        runTest {
+            val diagnostics = RecordingLocalDiagnostics()
+            val holder =
+                diagnosticsSettingsHolder(FailingClearHistoryCacheStore(), diagnostics)
+
+            holder.onEvent(EntryUiEvent.ClearHistoryCacheClicked)
+            holder.onEvent(EntryUiEvent.ConfirmClearHistoryCacheClicked)
+
+            assertEquals(
+                listOf(
+                    LocalDiagnosticEvent(
+                        LocalDiagnosticEventType.HISTORY_CACHE_CLEAR,
+                        LocalDiagnosticStatus.FAILED,
+                    ),
+                ),
+                diagnostics.events.filter { it.eventType == LocalDiagnosticEventType.HISTORY_CACHE_CLEAR },
+            )
+            assertFalse(holder.uiState.value.isClearHistoryCacheConfirmationOpen)
+            holder.close()
+        }
+
+    @Test
+    fun a_successful_history_cache_clear_records_no_local_diagnostics_event() =
+        runTest {
+            val diagnostics = RecordingLocalDiagnostics()
+            val cache = RecordingHistoryCacheStore()
+            val holder = diagnosticsSettingsHolder(cache, diagnostics)
+
+            holder.onEvent(EntryUiEvent.ClearHistoryCacheClicked)
+            holder.onEvent(EntryUiEvent.ConfirmClearHistoryCacheClicked)
+
+            assertTrue(cache.operations.any { it == "clear" })
+            assertTrue(diagnostics.events.none { it.eventType == LocalDiagnosticEventType.HISTORY_CACHE_CLEAR })
+            holder.close()
+        }
+
+    private suspend fun diagnosticsSettingsHolder(
+        historyCacheStore: HistoryCacheStore,
+        diagnostics: RecordingLocalDiagnostics,
+    ): EntryStateHolder {
+        val gateway = FakeSessionGateway()
+        gateway.enqueueList(SessionPage(listOf(entrySession("session-live", "Live title")), null))
+        val holder =
+            holder(
+                repository = FakeGatewayConnectionRepository(),
+                verifier = { _, _ -> clientManifestCapabilities() },
+                gateway = gateway,
+                dependencies =
+                    EntryStateHolderDependencies(
+                        historyCacheStore = historyCacheStore,
+                        localDiagnostics = LocalDiagnosticsPorts(diagnostics, diagnostics, diagnostics),
+                    ),
+            )
+        verify(holder)
+        awaitSessions(holder, "session-live")
+        holder.onEvent(EntryUiEvent.OpenSettingsClicked)
+        return holder
+    }
+
+    private class FailingClearHistoryCacheStore : HistoryCacheStore by RecordingHistoryCacheStore() {
+        override fun clear() {
+            error("history cache storage unavailable")
+        }
+    }
+
+    private class RecordingLocalDiagnostics :
+        LocalDiagnosticsRecorder,
+        LocalDiagnosticsStore,
+        LocalDiagnosticsExporter {
+        val events = mutableListOf<LocalDiagnosticEvent>()
+
+        override fun record(event: LocalDiagnosticEvent) {
+            events += event
+        }
+
+        override fun recordCount(): Int = events.size
+
+        override fun clear() {
+            events.clear()
+        }
+
+        override fun export(): LocalDiagnosticsExportResult = LocalDiagnosticsExportResult.SHARED
+    }
 
     private suspend fun settingsOpenHolder(cache: RecordingHistoryCacheStore): EntryStateHolder {
         val holder = connectedClearHolder(cache)

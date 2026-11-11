@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -9,6 +11,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayConnection
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSecureSaveTest {
     @Test
@@ -52,26 +56,32 @@ class EntryStateHolderSecureSaveTest {
         runTest {
             val repository = FakeGatewayConnectionRepository()
             var verificationCalls = 0
+            val verifyStarted = CountDownLatch(1)
+            val verifyRelease = CountDownLatch(1)
             val holder =
                 holder(
                     repository = repository,
                     verifier = { _, _ ->
                         verificationCalls += 1
+                        verifyStarted.countDown()
+                        assertTrue(verifyRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                         clientManifestCapabilities()
                     },
-                    dispatcher = StandardTestDispatcher(testScheduler),
+                    dispatcher = Dispatchers.Default,
                 )
 
             holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("secure-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+            assertTrue(verifyStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertTrue(holder.uiState.value.isVerifying)
 
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+            runBlocking { holder.awaitStateChangesApplied() }
 
-            advanceUntilIdle()
+            verifyRelease.countDown()
             awaitState(holder, "connected") { it.isConnected }
 
             assertEquals(1, verificationCalls)

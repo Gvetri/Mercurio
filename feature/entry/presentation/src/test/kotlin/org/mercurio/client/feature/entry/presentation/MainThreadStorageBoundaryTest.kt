@@ -48,7 +48,8 @@ internal class MainThreadStorageBoundaryTest {
                 open(holder, gateway, session.id)
                 gateway.enqueueRun(activeRun())
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
-                recorder.assertOperationsRanOn(eventThread, "draft.write", "uncertainty.contains")
+                holder.awaitStateChangesApplied()
+                recorder.assertOperationsRanOffThread(eventThread, "draft.write", "uncertainty.contains")
                 recorder.reset()
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
@@ -219,17 +220,6 @@ private class StorageCallRecorder {
         }
     }
 
-    fun assertOperationsRanOn(
-        thread: Thread,
-        vararg operations: String,
-    ) {
-        operations.forEach { operation ->
-            val matching = calls.filter { it.operation == operation }
-            assertFalse("$operation never ran", matching.isEmpty())
-            assertTrue("$operation no longer runs on ${thread.name}", matching.any { it.thread === thread })
-        }
-    }
-
     fun assertOperationsNeverRan(vararg operations: String) {
         operations.forEach { operation ->
             val matching = calls.filter { it.operation == operation }
@@ -250,10 +240,15 @@ private class StorageCallRecorder {
         )
     }
 
-    private data class StorageCall(val operation: String, val thread: Thread)
+    private data class StorageCall(
+        val operation: String,
+        val thread: Thread,
+    )
 }
 
-private class RecordingDraftStore(private val recorder: StorageCallRecorder) : SessionDraftStore {
+private class RecordingDraftStore(
+    private val recorder: StorageCallRecorder,
+) : SessionDraftStore {
     private val drafts = mutableMapOf<SessionDraftKey, String>()
 
     override fun read(key: SessionDraftKey): String? {
@@ -280,7 +275,9 @@ private class RecordingDraftStore(private val recorder: StorageCallRecorder) : S
     }
 }
 
-private class RecordingModelSelectionStore(private val recorder: StorageCallRecorder) : ModelSelectionStore {
+private class RecordingModelSelectionStore(
+    private val recorder: StorageCallRecorder,
+) : ModelSelectionStore {
     private var selection: ModelSelection? = null
     val cleared = CountDownLatch(1)
 
@@ -334,7 +331,9 @@ private class RecordingModelSelectionStore(private val recorder: StorageCallReco
     }
 }
 
-private class RecordingUncertaintyStore(private val recorder: StorageCallRecorder) : RunSubmissionUncertaintyStore {
+private class RecordingUncertaintyStore(
+    private val recorder: StorageCallRecorder,
+) : RunSubmissionUncertaintyStore {
     private val keys = mutableSetOf<PendingRunSubmissionKey>()
     private val adds = CountDownLatch(SEND_CLAIM_AND_CLOSE_MARKER_ADDS)
 
@@ -372,7 +371,9 @@ private class RecordingUncertaintyStore(private val recorder: StorageCallRecorde
     override fun snapshot(key: PendingRunSubmissionKey): RunSubmissionUncertaintySnapshot? = null
 }
 
-private class RecordingConnectionRepository(private val recorder: StorageCallRecorder) : GatewayConnectionRepository {
+private class RecordingConnectionRepository(
+    private val recorder: StorageCallRecorder,
+) : GatewayConnectionRepository {
     private var saved: GatewayConnection? = null
 
     override fun load(): GatewayConnection? {

@@ -38,8 +38,11 @@ changes.
 The backend is inert until consent: without a stored `Granted` answer the Sentry SDK is not
 installed, no backend is initialised, and no report call is made. A user who declines sends
 nothing for as long as that answer stands, and a supplied DSN does not override it. The composition
-root reads the stored answer once, before the backend is built, so an answer changed while the app
-runs applies from the next process start.
+root reads the stored answer once, before the backend is built, and the Sentry SDK installs at most
+once per process, so an answer that turns reporting on while the app runs applies from the next
+process start; the declined sentence on the question states the consequence, because that screen
+shows once. An answer that turns reporting off stops every event at the next send, including crash
+and not-responding events, because the before-send hook reads the stored answer too.
 
 ### Checking the gate in the field
 

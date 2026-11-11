@@ -95,6 +95,20 @@ internal fun EntryStateHolder.persistDisconnectedRecoveryEntry(
 ): Boolean {
     val persisted = persistOrQueueRecoveryEntry(endpoint, entry)
     if (persisted) {
+        val reconcileNow =
+            synchronized(sessionRequestLock) {
+                mutableUiState.value.isConnected &&
+                    mutableUiState.value.endpoint == endpoint &&
+                    sessionGateway != null &&
+                    runGateway != null
+            }
+        if (!reconcileNow) {
+            synchronized(sessionRequestLock) {
+                pendingDisconnectedRecoveryEntries
+                    .getOrPut(endpoint, ::mutableSetOf)
+                    .add(entry)
+            }
+        }
         reconcilePersistedRecoveryEntryIfConnected(endpoint, entry)
     }
     return persisted
@@ -188,26 +202,34 @@ internal fun EntryStateHolder.beginRecoveryJob(
         connectionRecoverySessionCounts[entry.sessionId] =
             (connectionRecoverySessionCounts[entry.sessionId] ?: 0) + 1
         if (recoveryContext.updateVisibleUi) {
-            markRecoveryUiRefreshing(entry)
+            markRecoveryUiRefreshing(entry, recoveryContext)
         }
         val job = startRecoveryObservationJob(entry, recoveryContext, claim)
         connectionRecoveryJobs += job
         job
     }
 
-internal fun EntryStateHolder.markRecoveryUiRefreshing(entry: RunRecoveryEntry) {
-    val (current, opened) = openedSessionFor(entry.sessionId) ?: return
-    mutableUiState.value =
-        mutableUiState.value.copy(
-            sessionList =
-                current.copy(
-                    openedSession =
-                        opened.copy(
-                            isRefreshing = true,
-                            isReconciliationInProgress = true,
+internal fun EntryStateHolder.markRecoveryUiRefreshing(
+    entry: RunRecoveryEntry,
+    recoveryContext: RecoveryRunContext,
+) {
+    submitStateChange {
+        synchronized(sessionRequestLock) {
+            if (connectionGeneration != recoveryContext.connectionGeneration) return@synchronized
+            val (current, opened) = openedSessionFor(entry.sessionId) ?: return@synchronized
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            openedSession =
+                                opened.copy(
+                                    isRefreshing = true,
+                                    isReconciliationInProgress = true,
+                                ),
                         ),
-                ),
-        )
+                )
+        }
+    }
 }
 
 internal fun EntryStateHolder.startRecoveryObservationJob(
@@ -244,6 +266,7 @@ internal fun EntryStateHolder.startRecoveryObservationJob(
                         releaseRecoveryClaim(claim)
                     ) {
                         connectionRecoveryJobs.remove(job)
+                        recoveryReconciledRunIds.remove(entry.runId)
                         if (recoveryFinished) {
                             recoveryHandledEntries += claim.key
                         }

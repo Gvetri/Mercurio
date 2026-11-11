@@ -5,7 +5,9 @@ package org.mercurio.client.feature.entry.data
  * number, plus the raw skipping primitives for everything that is not a string literal, so
  * every lexer and parser above it reports the same coordinates.
  */
-internal class RegexSourceCursor(private val source: String) {
+internal class RegexSourceCursor(
+    private val source: String,
+) {
     private var position = 0
 
     var line = 1
@@ -76,7 +78,7 @@ internal class RegexSourceCursor(private val source: String) {
         var closed = false
         var unterminated = false
         while (!closed && !unterminated && !atEnd) {
-            when (val consumed = advance()) {
+            when (advance()) {
                 '\\' -> if (!atEnd) advance()
                 '\'' -> closed = true
                 '\n' -> unterminated = true

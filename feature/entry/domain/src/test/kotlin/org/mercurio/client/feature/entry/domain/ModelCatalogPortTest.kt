@@ -11,7 +11,7 @@ class ModelCatalogPortTest {
         val port = object : ModelGatewayPort {}
 
         try {
-            port.fetchModelCatalog()
+            port.fetchModelCatalog(ModelCatalogSurface.RUN_MODELS)
             fail("Expected an unimplemented catalog fetch to fail closed.")
         } catch (error: GatewayException) {
             assertEquals(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE, error.category)
@@ -22,7 +22,7 @@ class ModelCatalogPortTest {
     fun a_port_that_implements_the_catalog_fetch_returns_the_catalog() {
         val catalog =
             ModelCatalog(
-                discriminator = "hermes.api_server.run_models",
+                surface = ModelCatalogSurface.RUN_MODELS,
                 defaultModel = "deepseek-v4-flash",
                 entries =
                     listOf(
@@ -46,11 +46,11 @@ class ModelCatalogPortTest {
             )
         val port =
             object : ModelGatewayPort {
-                override fun fetchModelCatalog(): ModelCatalog = catalog
+                override fun fetchModelCatalog(surface: ModelCatalogSurface): ModelCatalog = catalog
             }
 
-        assertEquals(catalog, port.fetchModelCatalog())
-        assertEquals(2, port.fetchModelCatalog().entries.size)
-        assertTrue(port.fetchModelCatalog().entries.last().effort == null)
+        assertEquals(catalog, port.fetchModelCatalog(ModelCatalogSurface.RUN_MODELS))
+        assertEquals(2, port.fetchModelCatalog(ModelCatalogSurface.RUN_MODELS).entries.size)
+        assertTrue(port.fetchModelCatalog(ModelCatalogSurface.RUN_MODELS).entries.last().effort == null)
     }
 }

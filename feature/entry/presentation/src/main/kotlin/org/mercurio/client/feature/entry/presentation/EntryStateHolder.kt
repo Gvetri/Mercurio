@@ -5,14 +5,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.mercurio.client.feature.entry.application.CheckForNightlyUpdate
+import org.mercurio.client.feature.entry.application.DownloadNightlyUpdate
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.ErrorReporting
+import org.mercurio.client.feature.entry.application.InstallNightlyUpdate
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
+import org.mercurio.client.feature.entry.domain.AppLockEnrolment
+import org.mercurio.client.feature.entry.domain.AppLockSettingsStore
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsent
 import org.mercurio.client.feature.entry.domain.ErrorReportingConsentStore
 import org.mercurio.client.feature.entry.domain.HistoryCacheStore
@@ -21,9 +27,12 @@ import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsExporter
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsStore
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
 import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.ModelSelection
 import org.mercurio.client.feature.entry.domain.ModelSelectionStore
+import org.mercurio.client.feature.entry.domain.NightlyArtifact
+import org.mercurio.client.feature.entry.domain.NightlyUpdateOffer
 import org.mercurio.client.feature.entry.domain.NoOpHistoryCacheStore
 import org.mercurio.client.feature.entry.domain.NoOpModelSelectionStore
 import org.mercurio.client.feature.entry.domain.NoOpSessionDraftStore
@@ -48,9 +57,20 @@ import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface EntryUiEvent {
+    sealed interface Intake : EntryUiEvent
+
     data class InboundUri(
         val rawUri: String?,
-    ) : EntryUiEvent
+    ) : Intake
+
+    data class SharedText(
+        val mimeType: String?,
+        val text: String?,
+        val hasStream: Boolean,
+        val isMultiple: Boolean,
+    ) : Intake
+
+    data object SharedTextDismissed : Intake
 
     sealed interface Connection : EntryUiEvent
 
@@ -59,6 +79,8 @@ sealed interface EntryUiEvent {
     data object ChangeGatewayCredentialClicked : Connection
 
     data object CancelGatewayCredentialChangeClicked : Connection
+
+    data object CloseGatewayConnectionSetupClicked : Connection
 
     data class EndpointChanged(
         val value: String,
@@ -190,9 +212,29 @@ sealed interface EntryUiEvent {
         val favorite: Boolean,
     ) : ModelPicker
 
+    sealed interface AppLock : EntryUiEvent
+
+    data object AppLockToggleClicked : AppLock
+
+    data object AppUnlockRequested : AppLock
+
+    data class AppLockAuthenticationResult(
+        val authenticated: Boolean,
+    ) : AppLock
+
     sealed interface Settings : EntryUiEvent
 
     data object OpenSettingsClicked : Settings
+
+    data object CheckForUpdatesClicked : Settings
+
+    data object DownloadUpdateClicked : Settings
+
+    data object CancelUpdateDownloadClicked : Settings
+
+    data object OpenInstallPermissionSettingsClicked : Settings
+
+    data object RestartToFinishClicked : Settings
 
     data object CloseSettingsClicked : Settings
 
@@ -216,9 +258,24 @@ sealed interface EntryUiEvent {
 
     data object CancelClearDiagnosticsClicked : Diagnostics
 
-    data object ErrorReportingConsentGranted : EntryUiEvent
+    sealed interface ErrorReportingConsentEvent : EntryUiEvent {
+        val decision: ErrorReportingConsent
+    }
 
-    data object ErrorReportingConsentDeclined : EntryUiEvent
+    data object ErrorReportingConsentGranted : ErrorReportingConsentEvent {
+        override val decision: ErrorReportingConsent = ErrorReportingConsent.Granted
+    }
+
+    data object ErrorReportingConsentDeclined : ErrorReportingConsentEvent {
+        override val decision: ErrorReportingConsent = ErrorReportingConsent.Declined
+    }
+
+    data class ErrorReportingConsentToggleClicked(
+        val granted: Boolean,
+    ) : ErrorReportingConsentEvent {
+        override val decision: ErrorReportingConsent
+            get() = if (granted) ErrorReportingConsent.Granted else ErrorReportingConsent.Declined
+    }
 
     sealed interface AppLifecycle : EntryUiEvent
 
@@ -288,13 +345,18 @@ data class EntryUiState(
     val clientVersion: String = "unknown",
     val buildNumber: Long? = null,
     val installSource: InstallSource = InstallSource.OTHER_SOURCE,
+    val appUpdates: AppUpdatesUiState = AppUpdatesUiState(),
     val sessionList: SessionListUiState? = null,
     val runStatusNotifications: RunStatusNotificationsUiState = RunStatusNotificationsUiState(),
     val autoLoadImages: Boolean = true,
     val localDiagnostics: LocalDiagnosticsUiState = LocalDiagnosticsUiState(),
     val isGatewayConnectionConfigured: Boolean = false,
+    val gatewayFacts: UiText? = null,
     val inboundLinkNotice: InboundLinkNoticeCategory? = null,
     val isErrorReportingConsentRequired: Boolean = false,
+    val errorReportingConsent: ErrorReportingConsent = ErrorReportingConsent.Undecided,
+    val isErrorReportingConfigured: Boolean = false,
+    val appLock: AppLockUiState = AppLockUiState(),
 )
 
 /**
@@ -319,6 +381,16 @@ data class LocalDiagnosticsUiState(
 }
 
 /**
+ * The device-bound parts of the app-lock gate: its persisted switch, the device's enrolment, and
+ * the request that shows the system prompt.
+ */
+data class AppLockPorts(
+    val settingsStore: AppLockSettingsStore,
+    val enrolment: AppLockEnrolment,
+    val requestUnlock: () -> Unit,
+)
+
+/**
  * The ports the Local diagnostics surface needs, grouped so one buffer collection
  * serves all of them: the recorder appends approved events, the store reports and
  * clears them, and the exporter shares a snapshot of what the buffer holds.
@@ -340,6 +412,19 @@ data class RunStatusNotificationsUiState(
     val enabled: Boolean = false,
     val explanation: RunStatusNotificationExplanation? = null,
 )
+
+/**
+ * The app-lock gate: the persisted switch, whether this device can prove the user's identity at
+ * all, and whether the current foreground visit still waits for that proof.
+ */
+data class AppLockUiState(
+    val isEnabled: Boolean = false,
+    val isAvailable: Boolean = false,
+    val isLocked: Boolean = false,
+) {
+    val isUnlockRequired: Boolean
+        get() = isEnabled && isLocked
+}
 
 enum class RunStatusNotificationExplanation(
     val messageRes: Int,
@@ -373,6 +458,13 @@ data class EntryStateHolderDependencies(
     val localDiagnostics: LocalDiagnosticsPorts? = null,
     val errorReporting: ErrorReporting? = null,
     val errorReportingConsentStore: ErrorReportingConsentStore? = null,
+    val isErrorReportingConfigured: Boolean = false,
+    val appLock: AppLockPorts? = null,
+    val checkForNightlyUpdate: CheckForNightlyUpdate? = null,
+    val downloadNightlyUpdate: DownloadNightlyUpdate? = null,
+    val installNightlyUpdate: InstallNightlyUpdate? = null,
+    val requestInstallPermissionSettings: (() -> Unit)? = null,
+    val requestAppRestart: (() -> Unit)? = null,
     val sendTimeoutMillis: Long = DEFAULT_SEND_TIMEOUT_MILLIS,
 )
 
@@ -403,7 +495,16 @@ class EntryStateHolder(
     internal val localDiagnostics = dependencies.localDiagnostics
     internal val errorReporting = dependencies.errorReporting
     internal val errorReportingConsentStore = dependencies.errorReportingConsentStore
+    internal val isErrorReportingConfigured = dependencies.isErrorReportingConfigured
+    internal val appLock = dependencies.appLock
+    internal val checkForNightlyUpdate = dependencies.checkForNightlyUpdate
+    internal val downloadNightlyUpdate = dependencies.downloadNightlyUpdate
+    internal val installNightlyUpdate = dependencies.installNightlyUpdate
+    internal val requestInstallPermissionSettings = dependencies.requestInstallPermissionSettings
+    internal val requestAppRestart = dependencies.requestAppRestart
     internal val sendTimeoutMillis = dependencies.sendTimeoutMillis
+
+    private val storedErrorReportingConsent: ErrorReportingConsent? = errorReportingConsentStore?.read()
 
     init {
         require(sendTimeoutMillis > 0) { "sendTimeoutMillis must be positive." }
@@ -416,13 +517,27 @@ class EntryStateHolder(
                 .copy(
                     runStatusNotifications = restoredRunStatusNotificationState(),
                     autoLoadImages = imageLoadingSettingsStore?.loadEnabled() ?: true,
-                    isErrorReportingConsentRequired = restoredErrorReportingConsentRequired(),
+                    isErrorReportingConsentRequired = storedErrorReportingConsent == ErrorReportingConsent.Undecided,
+                    errorReportingConsent = storedErrorReportingConsent ?: ErrorReportingConsent.Undecided,
+                    isErrorReportingConfigured = isErrorReportingConfigured,
+                    appLock = restoredAppLockState(),
                 ),
         )
     val uiState: StateFlow<EntryUiState> = mutableUiState.asStateFlow()
 
     internal val persistenceScope: CoroutineScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
     internal var verificationJob: Job? = null
+    internal var updateCheckJob: Job? = null
+    internal var updateDownloadJob: Job? = null
+    internal var updateDownloadOffer: NightlyUpdateOffer? = null
+    internal var updateInstallArtifact: NightlyArtifact? = null
+
+    @Volatile
+    internal var updateDownloadGeneration = 0L
+
+    @Volatile
+    internal var updateCheckGeneration = 0L
+    internal var credentialBeforeRotation: String? = null
 
     @Volatile
     internal var pendingRemovalJob: Job? = null
@@ -442,6 +557,7 @@ class EntryStateHolder(
     internal val mutationOwners = mutableMapOf<SessionId, SessionMutationRequest>()
     internal val runJobs = mutableMapOf<SessionId, Job>()
     internal val sessionDrafts = mutableMapOf<SessionId, String>()
+    internal var pendingSharedText: String? = null
     internal val sessionDraftRevisions = mutableMapOf<SessionId, Long>()
     internal val sessionSendErrors = mutableMapOf<SessionId, MessageSendErrorCategory>()
     internal val pendingRunDrafts = mutableMapOf<SessionId, PendingDraft>()
@@ -454,7 +570,9 @@ class EntryStateHolder(
     internal var nextComposerFocusRequestId = 0L
     internal var inboundLinkListRequestInterrupted = false
     internal var isForeground = false
+    internal var isUnlockPromptPending = false
     internal val recoveryClaims = mutableMapOf<RecoveryEntryKey, RecoveryClaim>()
+    internal val recoveryReconciledRunIds = mutableSetOf<RunId>()
     internal val recoveryHandledEntries = mutableSetOf<RecoveryEntryKey>()
     internal var recoveryLoadPending = false
     internal var recoveryLoadFailed = false
@@ -484,22 +602,34 @@ class EntryStateHolder(
     internal val reconcilingSessions = mutableMapOf<SessionId, Long>()
     internal val notifiedTerminalRunIds = mutableSetOf<RunId>()
 
+    internal val stateChangeCommands = Channel<StateChangeCommand>(Channel.UNLIMITED)
+
+    init {
+        scope.launch(StateChangeConsumerMarker()) { consumeStateChanges() }
+    }
+
+    /**
+     * Enqueues the event on the state-change consumer. The consumer applies the event in order
+     * with every other queued state change, so UI events cannot race an in-flight asynchronous
+     * result application.
+     */
     fun onEvent(event: EntryUiEvent) {
-        when (event) {
-            is EntryUiEvent.InboundUri -> handleInboundUri(event.rawUri)
-            is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
-            is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
-            is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
-            is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
-            is EntryUiEvent.Run -> dispatchRunEvent(event)
-            is EntryUiEvent.ModelPicker -> scope.launch { handleModelPickerEvent(event) }
-            is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
-            is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
-            is EntryUiEvent.ErrorReportingConsentGranted ->
-                recordErrorReportingConsent(ErrorReportingConsent.Granted)
-            is EntryUiEvent.ErrorReportingConsentDeclined ->
-                recordErrorReportingConsent(ErrorReportingConsent.Declined)
-            is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
+        submitStateChange {
+            when (event) {
+                is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
+                is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
+                is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
+                is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
+                is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
+                is EntryUiEvent.Run -> dispatchRunEvent(event)
+                is EntryUiEvent.ModelPicker -> handleModelPickerEvent(event)
+                is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
+                is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
+                is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
+                is EntryUiEvent.ErrorReportingConsentEvent ->
+                    recordErrorReportingConsent(event.decision)
+                is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
+            }
         }
     }
 
@@ -508,10 +638,12 @@ class EntryStateHolder(
             is EntryUiEvent.AddGatewayConnectionClicked -> showConnectionSetup()
             is EntryUiEvent.ChangeGatewayCredentialClicked -> showCredentialRotation()
             is EntryUiEvent.CancelGatewayCredentialChangeClicked -> cancelCredentialRotation()
+            is EntryUiEvent.CloseGatewayConnectionSetupClicked -> closeGatewayConnectionSetup()
             is EntryUiEvent.EndpointChanged -> updateEndpoint(event.value)
             is EntryUiEvent.BearerCredentialChanged -> updateBearerCredential(event.value)
-            is EntryUiEvent.VerifyGatewayConnectionClicked -> verifyConnection()
-            is EntryUiEvent.TryAgainClicked -> verifyConnection()
+            is EntryUiEvent.VerifyGatewayConnectionClicked,
+            is EntryUiEvent.TryAgainClicked,
+            -> verifyConnection()
             is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
             is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
             is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
@@ -569,6 +701,11 @@ class EntryStateHolder(
     private fun dispatchSettingsEvent(event: EntryUiEvent.Settings) {
         when (event) {
             is EntryUiEvent.OpenSettingsClicked -> openSettings()
+            is EntryUiEvent.CheckForUpdatesClicked -> checkForUpdates()
+            is EntryUiEvent.DownloadUpdateClicked -> downloadUpdate()
+            is EntryUiEvent.CancelUpdateDownloadClicked -> cancelUpdateDownload()
+            is EntryUiEvent.OpenInstallPermissionSettingsClicked -> openInstallPermissionSettings()
+            is EntryUiEvent.RestartToFinishClicked -> restartToFinish()
             is EntryUiEvent.CloseSettingsClicked -> closeSettings()
             is EntryUiEvent.ClearHistoryCacheClicked -> requestClearHistoryCache()
             is EntryUiEvent.ConfirmClearHistoryCacheClicked -> confirmClearHistoryCache()
@@ -602,10 +739,16 @@ class EntryStateHolder(
     }
 
     /**
-     * Releases the connection state and clears the removal confirmation so a closed holder never
-     * reports an open dialog.
+     * Enqueues the holder teardown behind the commands already queued. The consumer applies
+     * every event enqueued before this call, then releases the connection state, clears the
+     * removal confirmation so a closed holder never reports an open dialog, and cancels the
+     * holder scope.
      */
     fun close() {
+        submitStateChange { releaseForClose() }
+    }
+
+    private fun releaseForClose() {
         mutableUiState.value = mutableUiState.value.copy(isRemoveConfirmationOpen = false)
         val released = releaseConnectionState()
         released.jobs.forEach(Job::cancel)
@@ -732,6 +875,7 @@ internal data class RunSubmissionWork(
 internal data class ModelCatalogFetchRequest(
     val port: ModelGatewayPort,
     val endpoint: String,
+    val surface: ModelCatalogSurface,
     val connectionGeneration: Long,
 )
 
@@ -866,6 +1010,7 @@ internal fun EntryState.toUiState(): EntryUiState =
             endpoint = configuredEndpoint.orEmpty(),
             bearerCredential = configuredCredential.orEmpty(),
             isGatewayConnectionConfigured = true,
+            gatewayFacts = UiText.Resource(R.string.gateway_facts_saved),
             clientVersion = clientVersion,
             buildNumber = buildNumber,
             installSource = installSource,

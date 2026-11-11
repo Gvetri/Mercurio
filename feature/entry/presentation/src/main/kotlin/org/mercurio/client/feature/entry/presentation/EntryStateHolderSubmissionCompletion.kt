@@ -30,19 +30,21 @@ internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
                 uncertainSendDrafts[work.sessionId] = draft
             }
             sessionSendErrors[work.sessionId] = MessageSendErrorCategory.UNCERTAIN
-            val (current, opened) = openedSessionFor(work.sessionId) ?: return@synchronized
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isSending = false,
-                                    sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
-                                    hasUnresolvedSubmission = true,
-                                ),
-                        ),
-                )
+            submitStateChange {
+                val (current, opened) = openedSessionFor(work.sessionId) ?: return@submitStateChange
+                mutableUiState.value =
+                    mutableUiState.value.copy(
+                        sessionList =
+                            current.copy(
+                                openedSession =
+                                    opened.copy(
+                                        isSending = false,
+                                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                                        hasUnresolvedSubmission = true,
+                                    ),
+                            ),
+                    )
+            }
         }
     }
 }
@@ -123,7 +125,7 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
     }
 }
 
-internal fun EntryStateHolder.completeSuccessfulSubmission(
+internal suspend fun EntryStateHolder.completeSuccessfulSubmission(
     work: RunSubmissionWork,
     run: Run,
 ): Boolean {
@@ -178,7 +180,7 @@ internal suspend fun EntryStateHolder.reportUncertainRunSubmission(
     )
 }
 
-internal fun EntryStateHolder.reconcileInactiveSubmittedRun(
+internal suspend fun EntryStateHolder.reconcileInactiveSubmittedRun(
     sessionId: SessionId,
     runId: RunId,
     requestConnectionGeneration: Long,
@@ -202,8 +204,8 @@ internal fun EntryStateHolder.reconcileInactiveSubmittedRun(
     }
 }
 
-internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: SessionId): TimedOutSendRecovery? {
-    return synchronized(sessionRequestLock) {
+internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: SessionId): TimedOutSendRecovery? =
+    synchronized(sessionRequestLock) {
         val key = pendingRunSubmissionKey(sessionId)
         if (
             !runSubmissionUncertaintyStore.contains(key) ||
@@ -223,4 +225,3 @@ internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: Sessio
             ).also { pendingTimedOutSends[sessionId] = it }
         }
     }
-}

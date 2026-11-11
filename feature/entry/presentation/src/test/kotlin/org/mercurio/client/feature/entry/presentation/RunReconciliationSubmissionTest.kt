@@ -26,13 +26,7 @@ class RunReconciliationSubmissionTest {
             val run = Run(RunId("overlapping-run"), session.id, "running")
             val registry = ReconciliationBlockingRecoveryRegistry()
             val dispatcher = ReconciliationPausingDispatcher(Dispatchers.Default)
-            val gateway =
-                ReconciliationFakeGateway(session).apply {
-                    runs.add(run)
-                    statuses.add(run)
-                    statuses.add(run)
-                    observation = recoveredDeltaObservation(run)
-                }
+            val gateway = recoverySubmissionGateway(session, run)
             val holder =
                 reconciliationHolder(
                     gateway,
@@ -57,16 +51,20 @@ class RunReconciliationSubmissionTest {
 
                 dispatcher.paused = true
                 registry.releaseLoad.countDown()
-                awaitReconciliationCondition { dispatcher.queuedCount == 1 }
+                dispatcher.settleUntil {
+                    holder.uiState.value.sessionList?.openedSession?.latestRun?.id == run.id &&
+                        (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+                }
                 assertEquals(run.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
                 assertTrue(registry.load().isEmpty())
                 assertTrue(gateway.observedRunIds.isEmpty())
                 registry.releaseSave.countDown()
+                dispatcher.settleUntil { gateway.submissionCompleted.count == 0L }
                 assertTrue(gateway.submissionCompleted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 dispatcher.drain()
 
-                assertEquals(listOf(run.id), gateway.observedRunIds)
+                assertEquals(listOf(run.id, run.id), gateway.observedRunIds)
                 assertEquals(
                     "Recovered observation",
                     holder.uiState.value.sessionList?.openedSession?.activeResponse?.content,
@@ -150,7 +148,11 @@ class RunReconciliationSubmissionTest {
                     holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                     holder.onEvent(EntryUiEvent.SendMessageClicked)
                     dispatcher.runNext()
-                    assertEquals(1, dispatcher.queuedCount)
+                    dispatcher.settleUntil {
+                        holder.uiState.value.sessionList?.openedSession?.latestRun?.id == run.id &&
+                            (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+                    }
+                    assertEquals(2, dispatcher.queuedCount)
 
                     val removalEvent = EntryUiEvent.ConfirmRemoveGatewayConnectionClicked
                     if (closeHolder) holder.close() else holder.onEvent(removalEvent)
@@ -213,6 +215,7 @@ class RunReconciliationSubmissionTest {
 
             try {
                 openReconciledSession(holder, gateway)
+                awaitRunSubmissionAllowed(holder, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 assertTrue(gateway.observationOpenStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
@@ -220,9 +223,10 @@ class RunReconciliationSubmissionTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        !it.sessionList!!.openedSession!!.isRefreshing
+                        !it.sessionList.openedSession.isRefreshing
                 }
 
+                awaitRunSubmissionAllowed(holder, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 assertFalse(gateway.secondObservationRequested.await(100, TimeUnit.MILLISECONDS))
@@ -398,6 +402,7 @@ class RunReconciliationSubmissionTest {
                 awaitReconciliationState(holder) { it.sessionList?.openedSession == null }
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder, reopenedAfterTimeoutState(otherRun))
+                awaitReconciliationCondition { gateway.historyRequests == 4 }
                 assertEquals(4, gateway.historyRequests)
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitReconciliationCondition { gateway.historyRequests == 5 }
@@ -504,18 +509,18 @@ class RunReconciliationSubmissionTest {
     private fun reopenedAfterTimeoutState(otherRun: Run): (EntryUiState) -> Boolean =
         { state ->
             state.sessionList?.openedSession?.isRefreshing == false &&
-                state.sessionList?.openedSession?.latestRun?.id == otherRun.id &&
-                state.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                state.sessionList?.openedSession?.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
-                state.sessionList?.openedSession?.hasUnresolvedSubmission == true &&
-                state.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                state.sessionList?.openedSession?.composerText == "Edited after timeout"
+                state.sessionList.openedSession.latestRun?.id == otherRun.id &&
+                state.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED &&
+                state.sessionList.openedSession.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
+                state.sessionList.openedSession.hasUnresolvedSubmission == true &&
+                state.sessionList.openedSession.isReconciliationInProgress == false &&
+                state.sessionList.openedSession.composerText == "Edited after timeout"
         }
 
     private fun sendAfterTimeoutState(): (EntryUiState) -> Boolean =
         { state ->
             state.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                state.sessionList?.openedSession?.hasUnresolvedSubmission == true
+                state.sessionList.openedSession.hasUnresolvedSubmission == true
         }
 
     private fun assertTimedOutSendKeptDraft(
@@ -552,4 +557,15 @@ class RunReconciliationSubmissionTest {
         assertTrue(gateway.observedRunIds.isEmpty())
         assertEquals(5, gateway.historyRequests)
     }
+
+    private fun recoverySubmissionGateway(
+        session: Session,
+        run: Run,
+    ): ReconciliationFakeGateway =
+        ReconciliationFakeGateway(session).apply {
+            runs.add(run)
+            statuses.add(run)
+            statuses.add(run)
+            observation = recoveredDeltaObservation(run)
+        }
 }

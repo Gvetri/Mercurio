@@ -17,11 +17,15 @@ import org.mercurio.client.feature.entry.domain.ModelGatewayPort
 import org.mercurio.client.feature.entry.domain.RunEventObservation
 import org.mercurio.client.feature.entry.domain.RunGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
-import org.mercurio.client.feature.entry.domain.supportsModelCatalog
+import org.mercurio.client.feature.entry.domain.modelCatalogSurface
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-internal fun EntryUiState.blocksVerification(): Boolean {
-    return !connectionSetupRequested || isVerifying || isSaving || (isConnected && !isChangingCredential)
-}
+private val GATEWAY_FACTS_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
+
+internal fun EntryUiState.blocksVerification(): Boolean =
+    !connectionSetupRequested || isVerifying || isSaving || (isConnected && !isChangingCredential)
 
 internal suspend fun EntryStateHolder.runVerification(
     verifier: VerifyGatewayConnection,
@@ -115,6 +119,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                     state.bearerCredential,
                 ) ?: (gateway as? RunGatewayPort)
             catalogGateway = (runGateway as? ModelGatewayPort) ?: (gateway as? ModelGatewayPort)
+            credentialBeforeRotation = null
             mutableUiState.value =
                 mutableUiState.value.copy(
                     endpoint = normalizedEndpoint,
@@ -126,6 +131,11 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                     isSaving = false,
                     isConnected = true,
                     isGatewayConnectionConfigured = true,
+                    gatewayFacts =
+                        UiText.Resource(
+                            R.string.gateway_facts_verified,
+                            listOf(LocalTime.now().format(GATEWAY_FACTS_TIME_FORMAT)),
+                        ),
                     errorCategory = null,
                     inboundLinkNotice = null,
                     sessionList =
@@ -136,7 +146,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
                                 modelPicker =
                                     ModelPickerUiState(
                                         capabilityKnown = true,
-                                        capabilityAdvertised = capabilities.supportsModelCatalog(),
+                                        catalogSurface = capabilities.modelCatalogSurface(),
                                     ),
                             )
                         },
@@ -173,6 +183,7 @@ internal fun EntryStateHolder.removeGatewayConnection() {
 
 internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionState {
     val endpoint = mutableUiState.value.endpoint
+    credentialBeforeRotation = null
     val released =
         synchronized(connectionPersistenceLock) {
             val releasedState = releaseGatewayConnectionLocked()
@@ -187,6 +198,7 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
                         installSource = current.installSource,
                         autoLoadImages = current.autoLoadImages,
                         runStatusNotifications = current.runStatusNotifications,
+                        appLock = current.appLock,
                     )
             releasedState
         }

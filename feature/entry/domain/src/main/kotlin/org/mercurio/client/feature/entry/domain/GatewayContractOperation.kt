@@ -12,5 +12,4 @@ enum class GatewayContractOperation {
     RUN_CREATE,
     RUN_STATUS,
     RUN_SSE,
-    MODEL_CATALOG,
 }

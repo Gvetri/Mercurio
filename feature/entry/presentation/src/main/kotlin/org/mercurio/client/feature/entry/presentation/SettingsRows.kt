@@ -37,6 +37,7 @@ internal fun SettingsSectionHeader(label: String) {
 internal fun SettingsValueRow(
     label: String,
     value: String,
+    detail: String? = null,
 ) {
     Row(
         modifier =
@@ -53,6 +54,13 @@ internal fun SettingsValueRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            detail?.let { supporting ->
+                Text(
+                    text = supporting,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -122,6 +130,7 @@ internal fun SettingsSwitchRow(
         Switch(
             checked = model.checked,
             onCheckedChange = onCheckedChange,
+            enabled = model.enabled,
             modifier =
                 Modifier
                     .semantics { this.contentDescription = switchDescription },
@@ -134,6 +143,7 @@ internal data class SettingsSwitchRowModel(
     val supporting: String,
     val checked: Boolean,
     val description: String,
+    val enabled: Boolean = true,
     val errorText: String? = null,
 )
 

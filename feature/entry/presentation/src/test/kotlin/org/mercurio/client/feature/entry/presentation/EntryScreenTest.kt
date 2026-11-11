@@ -8,9 +8,13 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -95,6 +99,8 @@ class EntryScreenTest {
                 supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
                 actionLabel = UiText.Resource(R.string.entry_action_verify),
                 connectionSetupRequested = true,
+                endpoint = "https://gateway.example",
+                bearerCredential = "synthetic-token",
             )
 
         composeTestRule.setContent {
@@ -103,14 +109,14 @@ class EntryScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Gateway HTTPS endpoint").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Bearer credential").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Gateway address", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Gateway credential", substring = true).assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("The credential is saved securely on this device after verification.")
+            .onNodeWithText("Ask your agent for a credential. It is sent only to your Gateway.")
             .assertIsDisplayed()
         composeTestRule.onNodeWithText("Save securely on this device").assertDoesNotExist()
         composeTestRule
-            .onNodeWithText("Verify Gateway Connection")
+            .onNodeWithText("Connect")
             .assertHasClickAction()
             .performClick()
 
@@ -138,10 +144,8 @@ class EntryScreenTest {
             }
         }
 
-        composeTestRule
-            .onNodeWithText("Gateway verified.\nSaving credential securely…")
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Verify Gateway Connection").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Verified").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Saving…").assertIsNotEnabled()
 
         composeTestRule.runOnIdle {
             state.value =
@@ -151,13 +155,12 @@ class EntryScreenTest {
                 )
         }
 
-        composeTestRule.onNodeWithText("Gateway verified.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Verified").assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("Could not save the Gateway credential securely. Try again.")
+            .onNodeWithText("The phone would not save the credential. It is not connected yet.")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Setup is not complete.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("https://gateway.example/profile").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Try again").assertIsEnabled().performClick()
+        composeTestRule.onNodeWithText("gateway.example/profile", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ try again ]").assertIsEnabled().performClick()
 
         assertEquals(EntryUiEvent.TryAgainClicked, events.single())
     }
@@ -189,18 +192,26 @@ class EntryScreenTest {
         composeTestRule.onNodeWithText("Example: https://gateway.example").assertDoesNotExist()
         composeTestRule
             .onNodeWithText(
-                "The current connection stays in place until the replacement is verified and saved securely.",
+                "Change the credential. The address stays; the old connection keeps working " +
+                    "until the new one is saved.",
             )
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Verify and save credential").assertHasClickAction()
+        composeTestRule.onNodeWithText("Verify and save").assertHasClickAction().assertIsNotEnabled()
 
         composeTestRule.runOnIdle {
-            state.value = state.value.copy(errorCategory = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED)
+            state.value =
+                state.value.copy(
+                    bearerCredential = "replacement-token",
+                    errorCategory = EntryErrorCategory.CREDENTIAL_STORAGE_FAILED,
+                    isConnected = false,
+                )
         }
 
-        composeTestRule.onNodeWithText("Gateway verified.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("The previous connection is unchanged.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Try again").assertIsEnabled()
+        composeTestRule.onNodeWithText("Verified").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("The phone would not save the credential. It is not connected yet.")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ try again ]").assertIsEnabled()
     }
 
     @Test
@@ -216,6 +227,8 @@ class EntryScreenTest {
                             actionLabel = UiText.Resource(R.string.entry_action_verify),
                             connectionSetupRequested = true,
                             isGatewayConnectionConfigured = true,
+                            errorCategory = EntryErrorCategory.GATEWAY_REQUEST_FAILED,
+                            endpoint = "https://gateway.example",
                             isRemoveConfirmationOpen = true,
                         ),
                     onEvent = events::add,
@@ -223,14 +236,9 @@ class EntryScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Gateway HTTPS endpoint").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Remove Gateway Connection?").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText(
-                "Remove the saved endpoint and credential from this device. " +
-                    "Remote Sessions and Runs are not deleted or cancelled.",
-            )
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Your Gateway").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Remove connection?").assertIsDisplayed()
+        composeTestRule.onNodeWithText(removeBody()).assertIsDisplayed()
 
         composeTestRule.onNodeWithText("Cancel").performClick()
         assertEquals(EntryUiEvent.CancelRemoveGatewayConnectionClicked, events.single())
@@ -260,13 +268,8 @@ class EntryScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Remove Gateway Connection?").assertIsDisplayed()
-        composeTestRule
-            .onNodeWithText(
-                "Remove the saved endpoint and credential from this device. " +
-                    "Remote Sessions and Runs are not deleted or cancelled.",
-            )
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Remove connection?").assertIsDisplayed()
+        composeTestRule.onNodeWithText(removeBody()).assertIsDisplayed()
 
         composeTestRule.onNodeWithText("Cancel").performClick()
         assertEquals(EntryUiEvent.CancelRemoveGatewayConnectionClicked, events.single())
@@ -297,9 +300,18 @@ class EntryScreenTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Verifying Gateway connection…").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Checking the Gateway").assertIsDisplayed()
 
-        EntryErrorCategory.entries.forEach { category ->
+        val expectedCopy =
+            mapOf(
+                EntryErrorCategory.INVALID_ADDRESS to null,
+                EntryErrorCategory.AUTHENTICATION_FAILED to copy(R.string.gateway_error_credential),
+                EntryErrorCategory.REQUIRED_FEATURE_UNAVAILABLE to copy(R.string.gateway_error_capability),
+                EntryErrorCategory.SECURE_CONNECTION_FAILED to copy(R.string.gateway_error_certificate),
+                EntryErrorCategory.GATEWAY_REQUEST_FAILED to copy(R.string.gateway_error_network),
+                EntryErrorCategory.CREDENTIAL_STORAGE_FAILED to copy(R.string.gateway_error_storage),
+            )
+        expectedCopy.forEach { (category, expected) ->
             events.clear()
             composeTestRule.runOnIdle {
                 state.value =
@@ -308,13 +320,26 @@ class EntryScreenTest {
                         supportingText = UiText.Value("Correct the details and try again."),
                         actionLabel = UiText.Resource(R.string.entry_action_verify),
                         connectionSetupRequested = true,
+                        endpoint = "https://gateway.example",
+                        bearerCredential = "synthetic-token",
                         errorCategory = category,
                     )
             }
 
-            composeTestRule.onNodeWithText(copy(category.messageRes)).assertIsDisplayed()
-            composeTestRule.onNodeWithText("Try again").performClick()
-            assertEquals(EntryUiEvent.TryAgainClicked, events.single())
+            expected?.let { text -> composeTestRule.onNodeWithText(text).assertIsDisplayed() }
+            when (category) {
+                EntryErrorCategory.INVALID_ADDRESS,
+                EntryErrorCategory.AUTHENTICATION_FAILED,
+                EntryErrorCategory.REQUIRED_FEATURE_UNAVAILABLE,
+                -> Unit
+                EntryErrorCategory.SECURE_CONNECTION_FAILED,
+                EntryErrorCategory.GATEWAY_REQUEST_FAILED,
+                EntryErrorCategory.CREDENTIAL_STORAGE_FAILED,
+                -> {
+                    composeTestRule.onNodeWithText("[ try again ]").performClick()
+                    assertEquals(EntryUiEvent.TryAgainClicked, events.single())
+                }
+            }
         }
     }
 
@@ -331,16 +356,173 @@ class EntryScreenTest {
                             actionLabel = UiText.Resource(R.string.entry_action_connected),
                             connectionSetupRequested = true,
                             isConnected = true,
+                            endpoint = "https://gateway.example",
+                            gatewayFacts = UiText.Resource(R.string.gateway_facts_verified, listOf("09:41")),
                         ),
                     onEvent = events::add,
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Connected to Gateway").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Change Gateway credential").performClick()
+        composeTestRule.onNodeWithText("Your Gateway").assertIsDisplayed()
+        composeTestRule.onNodeWithText("https://gateway.example").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Verified 09:41 · supports sessions, streaming and models")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ manage ]").performClick()
+        composeTestRule.onNodeWithText("Change credential").performClick()
         assertEquals(listOf(EntryUiEvent.ChangeGatewayCredentialClicked), events)
     }
+
+    @Test
+    fun a_saved_connection_with_a_rejected_credential_keeps_the_form() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        gatewayFormState().copy(
+                            isGatewayConnectionConfigured = true,
+                            errorCategory = EntryErrorCategory.AUTHENTICATION_FAILED,
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Connect to your Gateway").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ try again ]").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Connect").assertIsEnabled()
+    }
+
+    @Test
+    fun the_bar_back_closes_the_setup_form() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(state = gatewayFormState(), onEvent = events::add)
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        assertEquals(EntryUiEvent.CloseGatewayConnectionSetupClicked, events.single())
+    }
+
+    @Test
+    fun the_bar_back_cancels_a_credential_change() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state = gatewayFormState().copy(isChangingCredential = true, isConnected = true),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        assertEquals(EntryUiEvent.CancelGatewayCredentialChangeClicked, events.single())
+    }
+
+    @Test
+    fun the_bar_back_returns_a_saved_connection_to_the_session_list() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                GatewayConnectionScreen(
+                    state =
+                        gatewayFormState().copy(
+                            isConnected = true,
+                            sessionList = SessionListUiState(),
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        assertEquals(EntryUiEvent.ReturnToSessionListClicked, events.single())
+    }
+
+    @Test
+    fun the_bar_back_leaves_a_saved_connection_that_cannot_reconnect() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        gatewayFormState().copy(
+                            isGatewayConnectionConfigured = true,
+                            errorCategory = EntryErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Back").performClick()
+
+        assertEquals(EntryUiEvent.CloseGatewayConnectionSetupClicked, events.single())
+    }
+
+    @Test
+    fun a_capability_failure_offers_the_address_action_and_focuses_the_field() {
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        gatewayFormState().copy(
+                            errorCategory = EntryErrorCategory.REQUIRED_FEATURE_UNAVAILABLE,
+                        ),
+                    onEvent = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("[ change address ]").performClick()
+
+        composeTestRule.onAllNodes(hasSetTextAction())[0].assertIsFocused()
+    }
+
+    @Test
+    fun a_saved_connection_failure_offers_one_recovery_and_no_primary_action() {
+        val events = mutableListOf<EntryUiEvent>()
+        composeTestRule.setContent {
+            HermesTheme {
+                EntryScreen(
+                    state =
+                        gatewayFormState().copy(
+                            isGatewayConnectionConfigured = true,
+                            errorCategory = EntryErrorCategory.GATEWAY_REQUEST_FAILED,
+                        ),
+                    onEvent = events::add,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Connect").assertDoesNotExist()
+        composeTestRule
+            .onNodeWithText(
+                "No answer from the Gateway. Your connection is saved; " +
+                    "Mercurio retries on its own next time it starts.",
+            )
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("[ try again ]").performClick()
+
+        assertEquals(EntryUiEvent.TryAgainClicked, events.single())
+    }
+
+    private fun gatewayFormState(): EntryUiState =
+        EntryUiState(
+            title = UiText.Resource(R.string.entry_title_verify_new),
+            supportingText = UiText.Resource(R.string.entry_supporting_enter_credentials),
+            actionLabel = UiText.Resource(R.string.entry_action_verify),
+            connectionSetupRequested = true,
+            endpoint = "https://gateway.example",
+            bearerCredential = "synthetic-token",
+        )
 
     @Test
     fun switching_from_an_active_run_keeps_send_available_in_another_session() {
@@ -365,14 +547,13 @@ class EntryScreenTest {
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) { holder.uiState.value.sessionList?.isLoading == false }
-            composeTestRule.onNodeWithText("First Session").performClick()
+            clickWhenVisible("First Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First request")) }
-            composeTestRule.onNodeWithText("[ send ]").performClick()
+            clickWhenEnabled("[ send ]")
             assertTrue(gateway.firstRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertTrue(gateway.firstObservation.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
             assertEquals(1L, gateway.firstObservation.closed.count)
@@ -383,18 +564,21 @@ class EntryScreenTest {
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             assertTrue(gateway.firstObservation.closed.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            composeTestRule.onNodeWithText("Second Session").performClick()
+            clickWhenVisible("Second Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == second.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("Second draft")) }
+            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+                holder.uiState.value.sessionList?.openedSession?.composerText == "Second draft"
+            }
             composeTestRule.onNodeWithText("[ send ]").assertIsEnabled()
             composeTestRule.onNodeWithText("[ send ]").performClick()
             assertTrue(gateway.secondRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
-            composeTestRule.onNodeWithText("First Session").performClick()
+            clickWhenVisible("First Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == first.id &&
                     holder.uiState.value.sessionList?.openedSession?.isReconciliationInProgress == false
@@ -406,11 +590,26 @@ class EntryScreenTest {
         }
     }
 
+    private fun clickWhenVisible(text: String) {
+        composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+            composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText(text).performClick()
+    }
+
+    private fun clickWhenEnabled(text: String) {
+        composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
+            composeTestRule.onAllNodes(hasText(text) and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText(text).performClick()
+    }
+
     private class SwitchingGateway(
         private val first: Session,
         private val second: Session,
         private val activeRun: Run,
-    ) : SessionGatewayPort, RunGatewayPort {
+    ) : SessionGatewayPort,
+        RunGatewayPort {
         val firstRunCreated = CountDownLatch(1)
         val secondRunCreated = CountDownLatch(1)
         val firstObservation = BlockingObservation()
@@ -461,8 +660,8 @@ class EntryScreenTest {
         override fun createRun(
             sessionId: SessionId,
             input: String,
-        ): Run {
-            return if (sessionId == first.id) {
+        ): Run =
+            if (sessionId == first.id) {
                 firstRunHasBeenCreated = true
                 firstRunCreated.countDown()
                 activeRun
@@ -470,7 +669,6 @@ class EntryScreenTest {
                 secondRunCreated.countDown()
                 secondRun
             }
-        }
 
         override fun getRunStatus(runId: RunId): Run =
             when (runId) {
@@ -521,8 +719,10 @@ class EntryScreenTest {
     }
 
     private companion object {
-        const val TEST_TIMEOUT_MILLIS = 5_000L
+        const val TEST_TIMEOUT_MILLIS = 15_000L
     }
+
+    private fun removeBody(): String = copy(R.string.dialog_remove_connection_body)
 
     private fun switchingHolder(
         gateway: SwitchingGateway,

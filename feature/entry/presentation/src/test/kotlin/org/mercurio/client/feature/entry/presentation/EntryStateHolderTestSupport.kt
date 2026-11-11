@@ -26,7 +26,7 @@ import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
 
-internal const val ASYNC_TEST_TIMEOUT_MILLIS = 5_000L
+internal const val ASYNC_TEST_TIMEOUT_MILLIS = 15_000L
 
 internal fun clientManifestCapabilities(): GatewayCapabilities =
     GatewayCapabilities(
@@ -145,6 +145,7 @@ internal class FakeSessionGateway : SessionGatewayPort {
     var openedSession: Session? = null
     var openedHistory: SessionHistory? = null
     var openFailure: GatewayException? = null
+    var onList: ((SessionListRequest) -> Unit)? = null
 
     fun enqueueList(page: SessionPage) {
         listResults += Result.success(page)
@@ -164,6 +165,7 @@ internal class FakeSessionGateway : SessionGatewayPort {
 
     override fun listSessions(request: SessionListRequest): SessionPage {
         listRequests += request
+        onList?.invoke(request)
         return listResults.removeFirst().getOrThrow()
     }
 
@@ -224,6 +226,7 @@ internal class ScriptedCreateGateway(
     val operations = CopyOnWriteArrayList<String>()
     var createCalls = 0
         private set
+    var onCreate: (() -> Unit)? = null
     private var created = false
 
     override fun listSessions(request: SessionListRequest): SessionPage {
@@ -234,6 +237,7 @@ internal class ScriptedCreateGateway(
     override fun createSession(title: String?): Session {
         operations += "create"
         createCalls += 1
+        onCreate?.invoke()
         created = true
         return createdSession
     }

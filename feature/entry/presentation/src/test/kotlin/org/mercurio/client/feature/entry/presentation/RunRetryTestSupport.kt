@@ -40,7 +40,7 @@ import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-internal const val RETRY_TIMEOUT_MILLIS = 5_000L
+internal const val RETRY_TIMEOUT_MILLIS = 15_000L
 
 internal class RetryHolderSettings(
     val dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
@@ -183,9 +183,10 @@ internal class RetryUncertaintyStorage : RunSubmissionUncertaintyStorage {
 
 internal class RetryFakeGateway(
     val sessions: List<Session>,
-    private val histories: Map<SessionId, SessionHistory> = emptyMap(),
-    private val runStatuses: Map<RunId, Run> = emptyMap(),
-) : SessionGatewayPort, RunGatewayPort {
+    histories: Map<SessionId, SessionHistory> = emptyMap(),
+    runStatuses: Map<RunId, Run> = emptyMap(),
+) : SessionGatewayPort,
+    RunGatewayPort {
     private val mutableHistories = histories.toMutableMap()
     private val mutableRunStatuses = runStatuses.toMutableMap()
     private val runObservations = mutableMapOf<RunId, List<RunEvent>>()

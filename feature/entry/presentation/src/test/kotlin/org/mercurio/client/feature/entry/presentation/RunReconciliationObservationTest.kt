@@ -12,6 +12,7 @@ import org.mercurio.client.feature.entry.domain.RunEvent
 import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
+import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import java.util.concurrent.TimeUnit
@@ -119,8 +120,8 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
-                        it.sessionList?.openedSession?.activeResponse?.content == "Partial"
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.UNCERTAIN &&
+                        it.sessionList.openedSession.activeResponse?.content == "Partial"
                 }
             } finally {
                 observation.release.countDown()
@@ -208,8 +209,8 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isReconciliationInProgress == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
-                        it.sessionList?.openedSession?.activeResponse == null
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.SUCCEEDED &&
+                        it.sessionList.openedSession.activeResponse == null
                 }
                 assertEquals(listOf(terminalRun.id), gateway.statusRequests)
                 assertEquals(2, gateway.historyRequests)
@@ -305,10 +306,10 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isSending == false &&
-                        it.sessionList?.openedSession?.latestRun == null &&
-                        it.sessionList?.openedSession?.latestRunState == null &&
-                        it.sessionList?.openedSession?.hasUnresolvedSubmission == true &&
-                        it.sessionList?.openedSession?.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN
+                        it.sessionList.openedSession.latestRun == null &&
+                        it.sessionList.openedSession.latestRunState == null &&
+                        it.sessionList.openedSession.hasUnresolvedSubmission == true &&
+                        it.sessionList.openedSession.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN
                 }
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
@@ -403,8 +404,8 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
-                        it.sessionList?.openedSession?.activeResponse?.content == "Partial"
+                        it.sessionList.openedSession.latestRunState == RunPresentationState.UNCERTAIN &&
+                        it.sessionList.openedSession.activeResponse?.content == "Partial"
                 }
 
                 assertEquals(listOf(run.id), gateway.observedRunIds)
@@ -462,7 +463,7 @@ class RunReconciliationObservationTest {
                 assertTrue(firstObservation.closed.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isRefreshing == false &&
-                        it.sessionList?.openedSession?.isReconciliationInProgress == false
+                        it.sessionList.openedSession.isReconciliationInProgress == false
                 }
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
@@ -483,25 +484,7 @@ class RunReconciliationObservationTest {
             val firstRun = Run(RunId("queued-run"), session.id, "running")
             val nextRun = Run(RunId("next-run"), session.id, "running")
             val dispatcher = ReconciliationPausingDispatcher()
-            val gateway =
-                ReconciliationFakeGateway(session).apply {
-                    runs.add(firstRun)
-                    runs.add(nextRun)
-                    statuses.add(firstRun.copy(status = "succeeded"))
-                    statuses.add(nextRun)
-                    observation =
-                        ReconciliationScriptedObservation(
-                            listOf(
-                                RunEvent(
-                                    RunEventType.MESSAGE_DELTA,
-                                    nextRun.id,
-                                    "running",
-                                    "Replacement event",
-                                    "delta",
-                                ),
-                            ),
-                        )
-                }
+            val gateway = queuedHandoffGateway(session, firstRun, nextRun)
             val holder =
                 reconciliationHolder(
                     gateway,
@@ -514,26 +497,37 @@ class RunReconciliationObservationTest {
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 dispatcher.runNext()
+                dispatcher.settleUntil {
+                    holder.uiState.value.sessionList?.openedSession?.latestRun?.id == firstRun.id &&
+                        (privateField(holder, "runObservationJobs") as Map<*, *>).isNotEmpty()
+                }
                 assertEquals(firstRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
-                assertEquals(1, dispatcher.queuedCount)
+                assertEquals(2, dispatcher.queuedCount)
                 assertTrue(gateway.observedRunIds.isEmpty())
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                dispatcher.runLast()
+                dispatcher.settleUntil {
+                    val opened = holder.uiState.value.sessionList?.openedSession
+                    opened?.latestRunState == RunPresentationState.SUCCEEDED &&
+                        !opened.isReconciliationInProgress
+                }
                 assertEquals(
                     RunPresentationState.SUCCEEDED,
                     holder.uiState.value.sessionList?.openedSession?.latestRunState,
                 )
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                dispatcher.runLast()
+                dispatcher.settleUntil {
+                    gateway.runRequests.size == 2 &&
+                        holder.uiState.value.sessionList?.openedSession?.latestRun?.id == nextRun.id
+                }
                 assertEquals(nextRun.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
                 assertEquals(2, gateway.runRequests.size)
-                assertTrue(gateway.observedRunIds.isEmpty())
+                assertTrue(gateway.observedRunIds.all { it == firstRun.id })
 
                 dispatcher.drain()
 
-                assertEquals(listOf(nextRun.id), gateway.observedRunIds)
+                assertEquals(listOf(firstRun.id, nextRun.id), gateway.observedRunIds)
                 val activeResponse = holder.uiState.value.sessionList?.openedSession?.activeResponse
                 assertEquals("Replacement event", activeResponse?.content)
             } finally {
@@ -583,5 +577,29 @@ class RunReconciliationObservationTest {
             } finally {
                 holder.close()
             }
+        }
+
+    private fun queuedHandoffGateway(
+        session: Session,
+        firstRun: Run,
+        nextRun: Run,
+    ): ReconciliationFakeGateway =
+        ReconciliationFakeGateway(session).apply {
+            runs.add(firstRun)
+            runs.add(nextRun)
+            statuses.add(firstRun.copy(status = "succeeded"))
+            statuses.add(nextRun)
+            observation =
+                ReconciliationScriptedObservation(
+                    listOf(
+                        RunEvent(
+                            RunEventType.MESSAGE_DELTA,
+                            nextRun.id,
+                            "running",
+                            "Replacement event",
+                            "delta",
+                        ),
+                    ),
+                )
         }
 }

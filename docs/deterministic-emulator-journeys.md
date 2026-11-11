@@ -18,9 +18,10 @@ public-network dependency, real provider credentials, or live model execution.
 | CI lane | `maestro_journeys` in `.github/workflows/quality-gate.yml` | GitHub-hosted emulator execution of every journey against the exact candidate APK |
 
 The lane runs on the nightly schedule and on manual dispatch. A ready in-repository pull request
-runs it only when the head carries the `run-maestro` label: the job then waits for a passing
-`api24-instrumentation` run, so a build or device-suite failure never reaches the journey lane. A
-changed UI path starts `api24-instrumentation` on its own and never the journey lane.
+runs it only when the head carries the `run-maestro` label: its three shards then start in parallel
+with `api24-instrumentation` instead of waiting for it, and the shard aggregate still requires a
+passing device check, so a build or device-suite failure still fails the lane. A changed UI path
+starts `api24-instrumentation` on its own and never the journey lane.
 
 ## Requesting the journey lane
 
@@ -43,7 +44,9 @@ areas, add the label: the nightly schedule runs the whole suite against `main` e
 
 The lane runs as three parallel shard jobs. Each shard invokes
 `.github/scripts/journey-run.sh <shard> 3` and runs only the journeys whose pinned position
-belongs to it, so a failing journey stops its own shard and no other shard sees it.
+belongs to it, so a failing journey stops its own shard and no other shard sees it. The shards
+start in parallel with `api24-instrumentation`; the aggregate still requires the device check to
+pass, and a failed device check therefore fails the lane after the shards finish.
 
 Before each journey the runner probes `GET /v1/capabilities` and sends the credential the
 scenario declares in `require_bearer_credential`, or no authorization header when the scenario
@@ -175,6 +178,54 @@ in order. The pinned Maestro archive is restored from the GitHub Actions
 cache; the pinned download runs only on a cache miss, so the layer adds no
 steady-state public-network dependency beyond CI itself.
 
+### One journey against a supplied APK
+
+`.github/scripts/journey-run.sh --flow <journey> --apk <path>` runs exactly one
+pinned journey against a caller-supplied APK, for example:
+
+```text
+GITHUB_WORKSPACE="$(pwd)" MAESTRO_CLI_VERSION=2.10.0 \
+  .github/scripts/journey-run.sh --flow terminal-success --apk \
+  app/build/outputs/apk/release/app-release.apk
+```
+
+The runner reads `GITHUB_WORKSPACE` and the pinned `MAESTRO_CLI_VERSION`
+(`2.10.0`) exactly as the CI job does. `--flow` alone runs one journey on the
+debug APK; `--apk` alone runs the full pinned list against the supplied APK.
+Either way the run keeps the same fake Gateway, TLS fixture, evidence
+directory, and per-journey verification as the full lane. An unknown flow name,
+an empty value, or a missing APK fails before any device work, with a message
+that names the bad value. Without these options the runner keeps its pinned
+list and its `<shard> <total>` invocation unchanged.
+
+## Nightly signed-APK smoke
+
+The Nightly runs one journey against the exact signed release artifact before it
+publishes. The invocation reuses this runner rather than a second harness:
+
+```text
+.github/scripts/journey-run.sh --apk signed/mercurio.apk --flow terminal-success --arm-translation
+```
+
+The supplied APK is the signed `arm64-v8a` release build. It runs on the
+`google_apis` API 30 `x86_64` image with `-writable-system`: Android 11 translates
+the ARM64 application ABI on an x86_64 host, and the fixture CA still goes to the
+live `/system/etc/security/cacerts` system store, so the release build trusts the
+loopback Gateway without a debug-only network security config. API 30 is the
+lowest level that both translates the ARM64 ABI and exposes that live system
+store. The smoke passes `--arm-translation`, which enables the no-reboot
+trust-store fallback below; without that option the runner keeps its strict
+remount-and-push failure, so the scheduled and pull-request journey lanes are
+unchanged. The emulator must expose a root adbd; the runner's `adb root` and
+`require_root_adb` sequence already fail closed when it does not.
+
+The flow is `terminal-success`, unchanged: it connects, opens a Session, sends one
+synthetic message, and asserts the conversation surface and the terminal label. The
+Nightly job bounds the whole smoke at 15 minutes and fails closed, including
+emulator or Gateway startup failures. A failed smoke publishes nothing and files
+the release-failure issue; redacted logs and screenshots are retained in the
+`nightly-smoke-evidence-<run>-<attempt>` artifact.
+
 ## Runner platform notes
 
 The runner installs the exact candidate APK with `adb install --no-streaming`:
@@ -192,10 +243,14 @@ only once `adb shell id -u` reports `0`. The emulator action reports the
 device as booted before adbd accepts connections on a cold boot, so an
 unguarded first `adb root` fails with `adb: unable to connect for root:
 closed`. The sequence then remounts `/system`, pushes the CA, and verifies the
-file on the live system partition. It does not restart the guest: the app is
-installed after this step, so its first process reads the live trust store,
-and a restart with the writable-system overlay active can leave the emulator
-unreachable. A device that never reaches a root shell fails the job with the
+file on the live system partition. When the image refuses the runtime remount
+(Android 11 and newer write an overlay that needs a restart), the runner instead
+stages a writable copy of the system CA directory and bind-mounts it over the
+live store in init's mount namespace. That fallback needs no guest restart,
+which matters because a restart with the writable-system overlay active can
+leave the emulator unreachable. It does not restart the guest: the app is
+installed after this step, so its first process reads the live trust store.
+A device that never reaches a root shell fails the job with the
 current `adb devices` state instead of waiting out the job timeout.
 
 Before any flow starts, the runner probes `/health` directly — it is not a

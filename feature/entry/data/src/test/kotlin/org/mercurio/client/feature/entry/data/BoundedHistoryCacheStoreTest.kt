@@ -12,6 +12,7 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 import javax.crypto.spec.SecretKeySpec
 
 class BoundedHistoryCacheStoreTest {
@@ -193,9 +194,11 @@ class BoundedHistoryCacheStoreTest {
 
     private fun hexEncode(value: String): String =
         value.toByteArray(StandardCharsets.UTF_8)
-            .joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and BYTE_MASK) }
+            .joinToString(separator = "") { byte -> "%02x".format(Locale.ROOT, byte.toInt() and BYTE_MASK) }
 
-    private class MutableClock(initial: Instant) {
+    private class MutableClock(
+        initial: Instant,
+    ) {
         var instantValue: Instant = initial
             private set
 

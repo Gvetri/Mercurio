@@ -21,7 +21,9 @@ internal const val REGEX_PATTERN_DYNAMIC_HOLE = '\u0000'
  * and escaped or raw string literals with their `$` templates. Everything it returns is
  * already decoded, so the guard checks the pattern text the regex engine will actually see.
  */
-internal class RegexSourceLexing(private val cursor: RegexSourceCursor) {
+internal class RegexSourceLexing(
+    private val cursor: RegexSourceCursor,
+) {
     fun skipTrivia() {
         while (!cursor.atEnd) {
             when {

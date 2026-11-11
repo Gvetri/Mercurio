@@ -27,5 +27,16 @@ cd "$repository_root"
 
 ./gradlew "$module:ktlintFormat" --no-daemon
 ./gradlew "$module:test" --no-daemon
+
+if [[ "$module" == ":feature:entry:presentation" ]]; then
+  ./gradlew "$module:verifyRoborazziBaselineManifest" "$module:verifyRoborazziDebug" --no-daemon --console=plain
+fi
+
+if [[ "$module" == ":app" ]]; then
+  ./gradlew "$module:lintDebug" "$module:assembleDebug" "$module:assembleRelease" --no-daemon --console=plain
+fi
+
 ./gradlew "$module:ktlintMainSourceSetCheck" "$module:ktlintTestSourceSetCheck" --no-daemon
+./gradlew commentPolicyVerify --no-daemon --console=plain
 ./gradlew "$module:detektMain" "$module:detektTest" detektVerify --no-daemon --console=plain
+./gradlew architectureRuleTests verifyNoMocks verifyDeterministicFakes --no-daemon --console=plain

@@ -9,11 +9,13 @@ internal fun EntryStateHolder.clearRecoveryState() {
     connectionRecoveryFailedSessions.clear()
     recoverySessionCounts.clear()
     recoveryClaims.clear()
+    recoveryReconciledRunIds.clear()
     recoveryHandledEntries.clear()
 }
 
 internal fun EntryStateHolder.clearSessionDraftAndRunState() {
     sessionDrafts.clear()
+    pendingSharedText = null
     sessionDraftRevisions.clear()
     sessionSendErrors.clear()
     pendingRunDrafts.clear()
@@ -67,7 +69,7 @@ internal fun EntryStateHolder.releaseRecoverySessionCount(
             sessionRequestGeneration == recoveryContext.sessionGeneration
         ) {
             if (recoveryFailed) {
-                markRecoveryFailure(entry.sessionId)
+                markRecoveryFailure(entry.sessionId, recoveryContext.connectionGeneration)
             } else {
                 clearRecoveryUiIfIdle(entry.sessionId)
             }

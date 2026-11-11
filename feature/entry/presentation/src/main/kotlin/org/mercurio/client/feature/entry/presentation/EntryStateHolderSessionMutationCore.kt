@@ -106,13 +106,20 @@ internal fun EntryStateHolder.createRunJob(
                 synchronized(sessionRequestLock) {
                     if (runJobs[sessionId] === job) {
                         runJobs.remove(sessionId)
-                        val current = mutableUiState.value.sessionList
-                        val opened = current?.openedSession?.takeIf { it.session.id == sessionId }
-                        if (current != null && opened?.isSending == true) {
-                            mutableUiState.value =
-                                mutableUiState.value.copy(
-                                    sessionList = current.copy(openedSession = opened.copy(isSending = false)),
-                                )
+                        submitStateChange {
+                            synchronized(sessionRequestLock) {
+                                if (runJobs[sessionId] != null) return@submitStateChange
+                                val current = mutableUiState.value.sessionList ?: return@submitStateChange
+                                val opened =
+                                    current.openedSession?.takeIf { it.session.id == sessionId }
+                                        ?: return@submitStateChange
+                                if (opened.isSending) {
+                                    mutableUiState.value =
+                                        mutableUiState.value.copy(
+                                            sessionList = current.copy(openedSession = opened.copy(isSending = false)),
+                                        )
+                                }
+                            }
                         }
                     }
                 }
@@ -124,32 +131,35 @@ internal fun EntryStateHolder.createRunJob(
     return job
 }
 
-internal fun EntryStateHolder.applyConfirmedSession(
+internal suspend fun EntryStateHolder.applyConfirmedSession(
     session: Session,
     request: SessionMutationRequest,
 ) {
-    synchronized(sessionRequestLock) {
-        if (!isCurrentSessionMutation(request)) return
-        val current =
-            mutableUiState.value.sessionList?.takeIf { it.sessionForMutation(session.id) != null } ?: return
-        val updated = session.toSessionItemUiState()
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        sessions =
-                            current.sessions
-                                .map { item -> if (item.id == session.id) updated else item }
-                                .orderedSessions(),
-                        openedSession =
-                            current.openedSession
-                                ?.takeIf { it.session.id == session.id }
-                                ?.copy(session = updated)
-                                ?: current.openedSession,
-                        sessionMutations = current.sessionMutations - session.id,
-                    ),
-            )
-        unresolvedSessionMutations.remove(recoverySessionKey(session.id))
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            if (!isCurrentSessionMutation(request)) return@synchronized
+            val current =
+                mutableUiState.value.sessionList?.takeIf { it.sessionForMutation(session.id) != null }
+                    ?: return@synchronized
+            val updated = session.toSessionItemUiState()
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    sessionList =
+                        current.copy(
+                            sessions =
+                                current.sessions
+                                    .map { item -> if (item.id == session.id) updated else item }
+                                    .orderedSessions(),
+                            openedSession =
+                                current.openedSession
+                                    ?.takeIf { it.session.id == session.id }
+                                    ?.copy(session = updated)
+                                    ?: current.openedSession,
+                            sessionMutations = current.sessionMutations - session.id,
+                        ),
+                )
+            unresolvedSessionMutations.remove(recoverySessionKey(session.id))
+        }
     }
 }
 
@@ -157,6 +167,5 @@ internal fun EntryStateHolder.mutationMapAfter(
     sessionId: SessionId,
     mutation: SessionMutationUiState,
     mutations: Map<SessionId, SessionMutationUiState>,
-): Map<SessionId, SessionMutationUiState> {
-    return if (mutation.hasNoPendingWork()) mutations - sessionId else mutations + (sessionId to mutation)
-}
+): Map<SessionId, SessionMutationUiState> =
+    if (mutation.hasNoPendingWork()) mutations - sessionId else mutations + (sessionId to mutation)

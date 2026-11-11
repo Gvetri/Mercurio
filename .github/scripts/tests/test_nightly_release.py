@@ -1,7 +1,9 @@
 """Provider-free Nightly policy and workflow regression tests."""
+from datetime import datetime, timezone
 from pathlib import Path
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import tempfile
@@ -53,10 +55,11 @@ class NightlyWorkflowTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
         self.assertIn("\n  report_release_failure:\n", workflow)
         reporter = job_block(workflow, "report_release_failure")
-        self.assertIn("needs: [prepare, sign, publish]", reporter)
+        self.assertIn("needs: [prepare, sign, smoke, publish]", reporter)
         for name in ("source_sha", "version_code"):
             self.assertIn(f"RELEASE_{name.upper()}: ${{{{ needs.prepare.outputs.{name} }}}}", reporter)
-        for condition in ("always()", "needs.sign.result == 'failure'", "needs.publish.result == 'failure'"):
+        for condition in ("always()", "needs.sign.result == 'failure'", "needs.smoke.result == 'failure'",
+                          "needs.publish.result == 'failure'"):
             self.assertIn(condition, job_key(reporter, "if"))
         self.assertIn("contents: read", reporter)
         self.assertIn("actions: read", reporter)
@@ -101,7 +104,7 @@ class NightlyWorkflowTest(unittest.TestCase):
             self.assertIn(f"{name}:", signer)
         publisher = job_block(workflow, "publish")
         self.assertNotIn("secrets.", publisher)
-        self.assertIn("needs: [prepare, sign]", publisher)
+        self.assertIn("needs: [prepare, sign, smoke]", publisher)
         self.assertIn("contents: write", publisher)
         self.assertNotIn("environment:", publisher)
         self.assertNotIn("contents: write", workflow.split("  publish:", 1)[0])
@@ -112,6 +115,27 @@ class NightlyWorkflowTest(unittest.TestCase):
         signing_prepare = job_block(signing_workflow, "prepare")
         self.assertIn("RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}", signing_prepare)
         self.assertIn("RELEASE_VALIDATION_RUN_ATTEMPT: ${{ inputs.validation_run_attempt }}", signing_prepare)
+
+    def test_signed_apk_smoke_runs_after_signing_and_before_publishing(self):
+        workflow = (ROOT / ".github/workflows/nightly-release.yml").read_text()
+        smoke = job_block(workflow, "smoke")
+        self.assertLess(workflow.index("\n  sign:\n"), workflow.index("\n  smoke:\n"))
+        self.assertLess(workflow.index("\n  smoke:\n"), workflow.index("\n  publish:\n"))
+        self.assertEqual("[prepare, sign]", job_key(smoke, "needs"))
+        self.assertIn("needs.prepare.outputs.publish == 'true'", job_key(smoke, "if") or "")
+        self.assertEqual("15", job_key(smoke, "timeout-minutes"))
+        self.assertIn("    permissions:\n      contents: read\n      actions: read\n", smoke)
+        self.assertNotIn("secrets.", smoke)
+        self.assertIn("artifact-ids: ${{ needs.sign.outputs.signed_artifact_id }}", smoke)
+        self.assertIn("python3 .github/scripts/nightly-release.py verify-smoke signed .github/release-certificate.sha256", smoke)
+        for value in ("api-level: 30", "target: google_apis", "arch: x86_64", "-writable-system"):
+            self.assertIn(value, smoke)
+        self.assertIn(".github/scripts/journey-run.sh --apk signed/mercurio.apk --flow terminal-success --arm-translation", smoke)
+        self.assertIn("continue-on-error: true", smoke)
+        self.assertIn("steps.smoke.outcome != 'success'", smoke)
+        self.assertIn("nightly-smoke-evidence-${{ github.run_id }}-${{ github.run_attempt }}", smoke)
+        publisher = job_block(workflow, "publish")
+        self.assertIn("needs.smoke.result == 'success'", job_key(publisher, "if") or "")
 
 
 class NightlyPreparationTest(unittest.TestCase):
@@ -177,6 +201,173 @@ class NightlyPreparationTest(unittest.TestCase):
         )
         values = dict(line.split("=", 1) for line in output.read_text().splitlines()) if output.exists() else {}
         return result, values
+
+    def add_reusable_run(self, run_id=124, jobs=None, **overrides):
+        run = {
+            **self.selected_run, "id": run_id, "event": "schedule",
+            "created_at": "2026-01-01T00:00:00Z", **overrides,
+        }
+        self.runs.append(run)
+        prefix = f"/repos/{self.repository}"
+        attempt = run["run_attempt"]
+        selected_jobs = self.jobs if jobs is None else jobs
+        self.routes[f"{prefix}/actions/runs/{run_id}"] = run
+        self.routes[f"{prefix}/actions/runs/{run_id}/attempts/{attempt}"] = run
+        self.routes[f"{prefix}/actions/runs/{run_id}/attempts/{attempt}/jobs"] = {
+            "total_count": len(selected_jobs), "jobs": selected_jobs,
+        }
+        return run
+
+    def test_reuses_the_newest_full_gate_already_green_on_the_exact_tip(self):
+        self.add_reusable_run(124)
+        self.add_reusable_run(125, event="workflow_dispatch", created_at="2026-01-01T01:00:00Z")
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("true", values["publish"])
+        self.assertEqual("125", values["validation_run_id"])
+        self.assertEqual("1", values["validation_run_attempt"])
+        self.assertEqual(self.selected, values["source_sha"])
+        self.assertEqual([], self.api.posts)
+        self.assertIn("Reusing full green gate", result.stdout)
+
+    def test_a_qualifying_manual_dispatch_gate_is_reused_without_a_new_dispatch(self):
+        self.add_reusable_run(124, event="workflow_dispatch")
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("124", values["validation_run_id"])
+        self.assertEqual([], self.api.posts)
+
+    def test_nonqualifying_runs_fall_back_to_the_dispatch(self):
+        cases = {
+            "another tip": {"head_sha": self.old},
+            "pull request": {"event": "pull_request"},
+            "push only": {"event": "push"},
+            "incomplete": {"status": "in_progress", "conclusion": None},
+        }
+        for name, overrides in cases.items():
+            with self.subTest(case=name):
+                self.runs.clear()
+                self.api.posts.clear()
+                self.add_reusable_run(124, **overrides)
+                result, values = self.prepare()
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("123", values["validation_run_id"])
+                self.assertEqual(1, len(self.api.posts))
+
+    def test_a_run_missing_one_required_stage_falls_back_to_the_dispatch(self):
+        self.add_reusable_run(124, jobs=[job for job in self.jobs if job["name"] != "formatting"])
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual(1, len(self.api.posts))
+
+    def test_a_failed_aggregate_falls_back_to_the_dispatch(self):
+        jobs = [{**job, "conclusion": "failure"} if job["name"] == "quality-gate" else job
+                for job in self.jobs]
+        self.add_reusable_run(124, jobs=jobs)
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual(1, len(self.api.posts))
+
+    def test_an_unavailable_reuse_lookup_refuses_without_dispatching(self):
+        self.routes[f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"] = (
+            500, {"message": "unavailable"},
+        )
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Required GitHub evidence is unavailable", result.stderr)
+        self.assertEqual({}, values)
+        self.assertEqual([], self.api.posts)
+
+    def test_an_existing_nightly_outranks_a_qualifying_gate(self):
+        self.add_reusable_run(124)
+        self.releases.append({
+            "id": 1, "tag_name": f"nightly-6001-{self.selected}", "name": "Nightly",
+            "prerelease": True, "draft": False, "target_commitish": self.selected,
+        })
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("false", values["publish"])
+        self.assertEqual([], self.api.posts)
+
+    def test_the_version_code_sequence_outranks_a_qualifying_gate(self):
+        self.add_reusable_run(124)
+        self.releases.append({"id": 1, "tag_name": f"nightly-8001-{self.old}"})
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("not newer", result.stderr)
+        self.assertEqual({}, values)
+        self.assertEqual([], self.api.posts)
+
+    def test_reused_gate_identity_reaches_signing_metadata_and_release_body(self):
+        self.add_reusable_run(124, run_attempt=2)
+        self.signed_publication_fixture(validation_run_id="124", validation_run_attempt="2")
+        result = self.publish()
+        self.assertEqual(0, result.returncode, result.stderr)
+        metadata = json.loads((self.signed / "signing-metadata.json").read_text())
+        self.assertEqual(124, metadata["validation_run_id"])
+        self.assertEqual(2, metadata["validation_run_attempt"])
+        self.assertEqual({
+            "source_sha", "validation_run_id", "validation_run_attempt", "signing_run_id",
+            "signing_run_attempt", "version_code", "version_name", "native_abis", "apk_sha256",
+            "certificate_sha256",
+        }, set(metadata))
+        body = json.loads(self.release_file.read_text())["body"]
+        self.assertIn("/actions/runs/124 (attempt 2)", body)
+        self.assertIn("- Signed-APK smoke: https://github.com/Gvetri/Mercurio/actions/runs/456 (attempt 2)", body)
+
+    def test_publish_refuses_when_the_signed_apk_smoke_has_not_passed(self):
+        self.add_reusable_run(124, run_attempt=2)
+        self.signed_publication_fixture(validation_run_id="124", validation_run_attempt="2")
+        route = f"/repos/{self.repository}/actions/runs/456/attempts/2/jobs"
+        job = next(entry for entry in self.routes[route]["jobs"] if entry["name"] == "smoke")
+        job["conclusion"] = "failure"
+        result = self.publish()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("signed-APK smoke has not passed", result.stderr)
+        self.assertFalse(self.release_file.exists())
+        self.assertEqual([], self.api.posts)
+
+    def test_publish_refuses_when_the_smoke_job_is_missing(self):
+        self.signed_publication_fixture()
+        route = f"/repos/{self.repository}/actions/runs/456/attempts/2/jobs"
+        route_jobs = [entry for entry in self.routes[route]["jobs"] if entry["name"] != "smoke"]
+        self.routes[route] = {"total_count": len(route_jobs), "jobs": route_jobs}
+        result = self.publish()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Missing or duplicate signed-APK smoke job", result.stderr)
+        self.assertFalse(self.release_file.exists())
+
+    def test_verify_smoke_accepts_the_release_variant_and_refuses_a_debuggable_apk(self):
+        self.signed_publication_fixture()
+        result = self.verify_smoke(self.signed, self.certificate)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("Signed-APK smoke artifact verified", result.stdout)
+        root = Path(self.directory.name)
+        debug = make_signing_fixture(root / "debuggable", 7002, "nightly-7002-bbbbbbbbbbbb", debuggable=True)
+        debug_environment = {
+            **self.environment, **debug.environment, "HOME": str(root),
+            "RELEASE_SOURCE_SHA": self.selected, "RELEASE_VERSION_CODE": "7002",
+            "RELEASE_VALIDATION_RUN_ID": "123", "RELEASE_VALIDATION_RUN_ATTEMPT": "1",
+            "GITHUB_RUN_ATTEMPT": "2",
+        }
+        signed = root / "signed-debuggable"
+        result = subprocess.run([
+            "python3", str(ROOT / ".github/scripts/sign-release-apk.py"), str(debug.apk),
+            str(signed), str(debug.certificate_file),
+        ], env=debug_environment, capture_output=True, text=True, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+        result = self.verify_smoke(signed, debug.certificate_file)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("release variant", result.stderr)
+
+    def verify_smoke(self, directory, certificate):
+        return subprocess.run([
+            "python3", str(ROOT / ".github/scripts/nightly-release.py"), "verify-smoke",
+            str(directory), str(certificate),
+        ], env={**self.environment, "JAVA_HOME": os.environ["JAVA_HOME"], "ANDROID_HOME": os.environ["ANDROID_HOME"]},
+            capture_output=True, text=True, check=False)
 
     def test_unknown_terminal_conclusion_is_not_printed_or_accepted(self):
         self.selected_run["conclusion"] = "untrusted-api-value-must-not-appear"
@@ -506,7 +697,14 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertFalse(any("/commits/" in path for path in self.api.requests))
         queries = [parse_qs(urlsplit(path).query) for path in self.api.requests if "quality-gate.yml/runs?" in path]
         self.assertTrue(queries)
-        for query in queries:
+        reuse = [query for query in queries if "created" not in query]
+        self.assertTrue(reuse)
+        for query in reuse:
+            self.assertEqual(["main"], query["branch"])
+            self.assertEqual([self.selected], query["head_sha"])
+        dispatched = [query for query in queries if "created" in query]
+        self.assertTrue(dispatched)
+        for query in dispatched:
             self.assertEqual(["workflow_dispatch"], query["event"])
             self.assertEqual(["main"], query["branch"])
             self.assertEqual([self.selected], query["head_sha"])
@@ -669,19 +867,25 @@ class NightlyPreparationTest(unittest.TestCase):
 
     def test_waits_for_delayed_discovery(self):
         endpoint = f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"
-        responses = [[], [], [self.selected_run]]
+        responses = [[], [], [], [self.selected_run]]
         self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0) if len(responses) > 1 else responses[0]}
         result, values = self.prepare()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("123", values["validation_run_id"])
 
-    def test_historical_runs_are_not_substitutes_for_the_dispatch(self):
+    def test_a_qualifying_historical_run_is_reused_but_a_nonqualifying_one_is_not(self):
         historical = {**self.selected_run, "created_at": "2026-01-01T00:00:00Z"}
         self.runs.append(historical)
         result, values = self.prepare()
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("did not appear", result.stderr)
-        self.assertEqual({}, values)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual([], self.api.posts)
+        self.runs[:] = [{**historical, "id": 124, "event": "push"}]
+        self.api.posts.clear()
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual(1, len(self.api.posts))
 
     def twin_dispatch(self, twin):
         prefix = f"/repos/{self.repository}"
@@ -730,16 +934,20 @@ class NightlyPreparationTest(unittest.TestCase):
             "failed_validation_run_attempt": "1", "failed_validation_sha": self.selected,
         }, values)
 
-    def test_old_creation_time_or_moved_dispatch_source_cannot_match(self):
+    def test_reuse_ignores_creation_time_but_a_moved_source_does_not_qualify(self):
+        self.runs.append({**self.selected_run, "event": "schedule", "created_at": "2025-12-31T23:59:59Z"})
+        result, values = self.prepare()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("123", values["validation_run_id"])
+        self.assertEqual([], self.api.posts)
+        self.runs.clear()
         endpoint = f"/repos/{self.repository}/actions/workflows/quality-gate.yml/runs"
-        for changed in ({"created_at": "2025-12-31T23:59:59Z"}, {"head_sha": self.old}):
-            with self.subTest(changed=changed):
-                responses = [[], [{**self.selected_run, "created_at": "2026-01-01T00:00:00Z", **changed}]]
-                self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0) if len(responses) > 1 else responses[0]}
-                result, values = self.prepare()
-                self.assertNotEqual(0, result.returncode)
-                self.assertIn("did not appear", result.stderr)
-                self.assertEqual({}, values)
+        responses = [[], [{**self.selected_run, "created_at": "2026-01-01T00:00:00Z", "head_sha": self.old}]]
+        self.routes[endpoint] = lambda: {"total_count": len(responses[0]), "workflow_runs": responses.pop(0) if len(responses) > 1 else responses[0]}
+        result, values = self.prepare()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("did not appear", result.stderr)
+        self.assertEqual({}, values)
 
     def test_a_newer_main_tip_during_validation_does_not_change_the_release_source(self):
         def dispatch(payload):
@@ -786,14 +994,14 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertEqual([], self.api.patches)
         self.assertEqual([], self.api.deletes)
 
-    def signed_publication_fixture(self):
+    def signed_publication_fixture(self, validation_run_id="123", validation_run_attempt="1"):
         root = Path(self.directory.name)
         fixture = make_signing_fixture(root / "signing", 7002, "nightly-7002-bbbbbbbbbbbb")
         signing_environment = {
             **fixture.environment, **self.environment, "HOME": str(root),
             "RELEASE_SOURCE_SHA": self.selected, "RELEASE_VERSION_CODE": "7002",
-            "RELEASE_GENERATION_ATTEMPT": "2", "RELEASE_VALIDATION_RUN_ID": "123",
-            "RELEASE_VALIDATION_RUN_ATTEMPT": "1",
+            "RELEASE_GENERATION_ATTEMPT": "2", "RELEASE_VALIDATION_RUN_ID": validation_run_id,
+            "RELEASE_VALIDATION_RUN_ATTEMPT": validation_run_attempt,
         }
         self.signed = root / "signed"
         result = subprocess.run([
@@ -827,6 +1035,11 @@ class NightlyPreparationTest(unittest.TestCase):
             },
             f"{prefix}/environments/nightly/deployment-branch-policies": {"total_count": 1, "branch_policies": [{"name": "main", "type": "branch"}]},
             f"{prefix}/actions/runs/456/approvals": [],
+            f"{prefix}/actions/runs/456/attempts/2/jobs": {"total_count": 3, "jobs": [
+                {"id": 40, "name": "sign / prepare", "head_sha": self.new, "status": "completed", "conclusion": "success"},
+                {"id": 41, "name": "smoke", "head_sha": self.new, "status": "completed", "conclusion": "success"},
+                {"id": 42, "name": "publish", "head_sha": self.new, "status": "completed", "conclusion": "success"},
+            ]},
         })
 
     def publish(self):
@@ -851,7 +1064,8 @@ class NightlyPreparationTest(unittest.TestCase):
         }
         self.report_jobs = [
             {"id": 20, "name": "sign / prepare", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "sign" else "success"},
-            {"id": 21, "name": "publish", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "publish" else "skipped"},
+            {"id": 21, "name": "smoke", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "smoke" else "success"},
+            {"id": 22, "name": "publish", "head_sha": self.new, "status": "completed", "conclusion": "failure" if failure == "publish" else "skipped"},
         ]
         prefix = f"/repos/{self.repository}"
         self.report_run = {
@@ -898,7 +1112,7 @@ class NightlyPreparationTest(unittest.TestCase):
 
     def test_known_terminal_release_stage_failures_file_exactly_one_issue(self):
         self.report_fixture(observation=False)
-        for name in ("publish", "sign / prepare"):
+        for name in ("publish", "sign / prepare", "smoke"):
             for conclusion in ("failure", "timed_out", "startup_failure", "action_required", "stale", "neutral"):
                 with self.subTest(stage=name, conclusion=conclusion):
                     for job in self.report_jobs:
@@ -976,7 +1190,7 @@ class NightlyPreparationTest(unittest.TestCase):
             self.report_jobs[0]["conclusion"] = conclusion
             result = self.report()
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("No failed signing or publication", result.stderr)
+            self.assertIn("No failed smoke, signing, or publication", result.stderr)
             self.assertFalse((self.report_store / "issue.json").exists())
         self.report_jobs[0]["conclusion"] = "failure"
         self.report_run["path"] = ".github/workflows/quality-gate.yml"
@@ -1174,6 +1388,8 @@ class NightlyPreparationTest(unittest.TestCase):
         ], env=retry_environment, capture_output=True, text=True, check=False)
         self.assertEqual(0, result.returncode, result.stderr)
         self.environment = {key: value for key, value in retry_environment.items() if not key.startswith("ANDROID_RELEASE_KEYSTORE_")}
+        self.routes[f"/repos/{self.repository}/actions/runs/456/attempts/3/jobs"] = \
+            self.routes[f"/repos/{self.repository}/actions/runs/456/attempts/2/jobs"]
         self.certificate = retry.certificate_file
         retry_tag = f"nightly-7003-{self.selected}"
         self.routes[f"/repos/{self.repository}/git/matching-refs/tags/{retry_tag}"] = []
@@ -1255,6 +1471,55 @@ class NightlyPreparationTest(unittest.TestCase):
         self.assertIn("Tag exists: `yes`", body)
         self.assertIn("Orphan tag: `unknown`", body)
         self.assertFalse((self.provider / "operations").exists())
+
+
+class NightlyReuseWindowTest(unittest.TestCase):
+    def test_a_slow_reuse_sweep_keeps_the_dispatch_discovery_window(self):
+        module = runpy.run_path(str(ROOT / ".github/scripts/nightly-release.py"))
+        sha = "b" * 40
+
+        class Clock:
+            elapsed = 0
+
+            def time(self):
+                return datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp() + self.elapsed
+
+            def monotonic(self):
+                return self.elapsed
+
+            def sleep(self, seconds):
+                self.elapsed += seconds
+
+        clock = Clock()
+        calls = []
+
+        def pages(path, key=None, deadline=None, clock_value=None):
+            assert isinstance(deadline, (int, float)) and clock.elapsed <= deadline
+            calls.append(path)
+            if len(calls) == 1:
+                clock.elapsed += 301
+                return []
+            if len(calls) == 2:
+                return []
+            return [{"id": 123, "event": "workflow_dispatch", "head_branch": "main",
+                     "head_sha": sha, "run_attempt": 1, "status": "completed",
+                     "conclusion": "success", "created_at": "2026-01-01T00:10:00Z"}]
+
+        run = {"id": 123, "run_attempt": 1, "head_sha": sha, "head_branch": "main",
+               "event": "workflow_dispatch", "status": "completed", "conclusion": "success",
+               "created_at": "2026-01-01T00:10:00Z"}
+        policy = dict(module["POLICY"])
+        policy["verify_source"] = lambda: {"source_sha": sha, "validation_run_id": 123,
+                                           "validation_run_attempt": 1}
+        namespace = module["validate_tip"].__globals__
+        namespace.update(pages=pages, api_get=lambda path: run, dispatch_validation=lambda: None,
+                         POLICY=policy)
+        for name in ("RELEASE_SOURCE_SHA", "RELEASE_VALIDATION_RUN_ID", "RELEASE_VALIDATION_RUN_ATTEMPT"):
+            self.addCleanup(os.environ.pop, name, None)
+        evidence = module["validate_tip"](sha, clock)
+        self.assertEqual({"source_sha": sha, "validation_run_id": 123,
+                          "validation_run_attempt": 1}, evidence)
+        self.assertGreaterEqual(len(calls), 3)
 
 
 class NightlyGenerationTest(unittest.TestCase):

@@ -63,21 +63,22 @@ never more permissive than the gate it mirrors.
 | Run | Checks that execute | Checks that stay skipped |
 | --- | --- | --- |
 | Ready in-repository pull request | The complete gate: `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `api24-instrumentation` unless the pull request carries the `run-maestro` label or modifies a declared UI path, `maestro-journeys` unless it carries the label (next row), and `coverage-mutation` on every pull request; `buildsrc-contracts` unless the head changes `.github/**` or `buildSrc/**` files |
-| Ready in-repository pull request labeled `run-maestro`, or modifying a declared UI path | The complete gate plus `api24-instrumentation`; `maestro-journeys` only when the label is present, and only after `api24-instrumentation` passes; `buildsrc-contracts` when the head changes `.github/**` or `buildSrc/**` files | `buildsrc-contracts` otherwise, `maestro-journeys` on a head that modifies a declared UI path without the label, and `coverage-mutation` on every pull request |
+| Ready in-repository pull request labeled `run-maestro`, or modifying a declared UI path | The complete gate plus `api24-instrumentation`; `maestro-journeys` only when the label is present, with its three shards starting in parallel with `api24-instrumentation` while its aggregate still requires the device check to pass; `buildsrc-contracts` when the head changes `.github/**` or `buildSrc/**` files | `buildsrc-contracts` otherwise, `maestro-journeys` on a head that modifies a declared UI path without the label, and `coverage-mutation` on every pull request |
 | Ready in-repository pull request whose every changed file is documentation | `draft-validation`, `conformance`, `commit-message`, `fork-guard`, `ui-paths` | Every heavy check, both emulator suites, and `buildsrc-contracts` (a documentation head changes no CI or build-logic file), unless the pull request carries the `run-maestro` label, which starts the heavy checks and the emulator suites but not `buildsrc-contracts` |
 | Ready in-repository pull request whose every changed file is a build or dependency file (`gradle/**`, any `*.gradle.kts`, `gradle.properties`, `gradle/libs.versions.toml`) | `formatting`, `static-analysis`, `detekt`, `unit-tests`, `fixture-descriptor`, `fixture-lifecycle`, `fixture-contract`, `android-build`, `architecture-check`, `compose-jvm-tests`, `conformance`, `commit-message`, `draft-validation`, `fork-guard`, `ui-paths` | `coverage-mutation`, `buildsrc-contracts`, and both emulator suites, unless the pull request carries the `run-maestro` label, which starts the emulator suites but never `coverage-mutation` or `buildsrc-contracts` on a dependency-only head |
 | Draft in-repository pull request | `draft-validation` (`formatCheck` and `:app:lintDebug` only), `fork-guard`, `ui-paths` | Every other check |
 | External-fork pull request | `fork-guard`, `ui-paths` | Every other check |
-| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `buildsrc-contracts` runs the buildSrc self-test contracts; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
-| Nightly validation, manual validation | The complete gate plus `api24-instrumentation` and, only after it passes, `maestro-journeys` | `draft-validation`, `commit-message`, `fork-guard` |
+| Push to `main` | JVM, static detekt, fixture, architecture, coverage/mutation and conformance validation; `ui-paths` classifies the pushed range; `buildsrc-contracts` aggregates three parallel buildSrc self-test shards when the pushed range changes a `.github/**` or `buildSrc/**` file, and an app-only push skips it; `android-build` compiles debug/release Kotlin without packaging the application | `api24-instrumentation`, `maestro-journeys`, `draft-validation`, `commit-message`, `fork-guard` |
+| Nightly validation, manual validation | The complete gate plus `api24-instrumentation`, which runs in parallel with the `maestro-journeys` shards; the journey aggregate requires the device check to pass | `draft-validation`, `commit-message`, `fork-guard` |
 
 The emulator suites are opt-in on pull requests, and the journey suite is opt-in by label alone. A
 ready in-repository pull request runs `api24-instrumentation` when the `run-maestro` label is present
 or when the `ui-paths` detector reports that the head modifies a declared UI path
 (`app/src/main/**`, `feature/entry/presentation/**`, `feature/entry/wiring/src/main/res/**`,
-`fixtures/mercurio/journey/**`). `maestro-journeys` starts only when the label is present, and only
-after `api24-instrumentation` passes, so a build or device-suite failure never reaches the journey
-lane. A pull request without the label reports `maestro-journeys` as `skipped` even when it modifies a
+`fixtures/mercurio/journey/**`). `maestro-journeys` starts only when the label is present; its three
+shards start in parallel with `api24-instrumentation` and do not wait for it, while the journey
+aggregate still requires the device check to pass, so a build or device-suite failure still fails the
+gate. A pull request without the label reports `maestro-journeys` as `skipped` even when it modifies a
 declared UI path, and the aggregate requires exactly that routing; the label on a draft or an
 external-fork pull request starts no validation, and its aggregate still reports the decision that
 exact head holds. [The journey suite](deterministic-emulator-journeys.md#requesting-the-journey-lane)
@@ -95,10 +96,13 @@ changed-file answer shows that every changed file of the head is a Markdown file
 or a file under `docs/**`, the heavy lanes report `skipped` and the aggregate requires exactly that
 routing; the `run-maestro` label keeps precedence and starts the heavy and emulator lanes on a
 documentation-only head too. `coverage-mutation` reports `skipped` on every pull request regardless. The classification is deliberately conservative — code, resources,
-build files, and especially `.github/**` route the full gate — and a push, a nightly schedule, and a
+build files, and especially `.github/**` route the full gate. A push consults the decision only for
+the `buildsrc-contracts` lane: a push that changes a `.github/**` or `buildSrc/**` file runs the
+buildSrc self-test, and an app-only push skips it. A nightly schedule and a
 manual dispatch never consult the decision, so the Nightly signing chain always validates the exact
-`main` tip with the complete gate. An unreadable changed-file answer fails closed: the detector job
-fails, the heavy lanes run, and the aggregate reports the failure.
+`main` tip with the complete gate. An unreadable changed-file answer fails closed: on a pull request
+the detector job fails, the heavy lanes run, and the aggregate reports the failure; on a push,
+an unreadable changed-file answer runs it, so the self-test still observes the pushed range.
 
 On the nightly schedule, when `unit-tests`, `compose-jvm-tests`, `api24-instrumentation`,
 `maestro-journeys`, or `coverage-mutation` does not succeed, the `create-nightly-failure-issue` job
@@ -193,6 +197,8 @@ read-only token scope, and the absence of secrets.
 `buildSrc/src/test/kotlin/org/mercurio/client/buildlogic/QualityGateConfigurationTest.kt` pins
 the workflow contracts, and `.github/scripts/tests/test_protected_main.py` and
 `.github/scripts/tests/test_test_jobs.py` pin the routing, the aggregate gate, the commit-message
-check, and the conformance check. The workflow-contract suite runs in the `buildsrc-contracts` job,
-so a change to the workflow that contradicts a documented rule fails the gate. See
-[Quality gates](quality-gates.md) for the declared checks and thresholds.
+check, and the conformance check. The workflow-contract suite runs as three parallel shards
+behind the `buildsrc-contracts` umbrella job, so a change to the workflow that contradicts a
+documented rule fails the gate; the umbrella fails when any shard fails, and the critical-path
+target is 12 minutes or less. See [Quality gates](quality-gates.md) for the declared checks and
+thresholds.

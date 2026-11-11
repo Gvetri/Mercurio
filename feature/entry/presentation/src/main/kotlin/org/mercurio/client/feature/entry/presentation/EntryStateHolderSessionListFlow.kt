@@ -53,6 +53,19 @@ internal fun EntryStateHolder.startFirstPageListLoad(
         )
     }
 
+/**
+ * Begins the first-page session-list load and applies its visible begin state directly.
+ *
+ * Most callers are synchronous session-list event paths (`RefreshSessionsClicked`,
+ * `RefreshSessionListClicked`, foreground resume) or pin/delete refreshes that already run
+ * inside state-change commands. The initial load does not use this function:
+ * `loadInitialSessions` routes its begin state through the consumer instead. The inbound
+ * link open-failure path (`showUnknownInboundLink` via `showLinkedSessionOpenFailure`) also
+ * reaches `refreshSessionList`, but from the IO open job; that failure frame and its direct
+ * writes are a documented exception to be serialized in the follow-up slice that removes
+ * the request locks. The load's asynchronous result is applied on the consumer via
+ * `updateCurrentSessionRequest`.
+ */
 internal fun EntryStateHolder.createFirstPageLoadJob(
     gateway: SessionGatewayPort,
     query: String,
@@ -93,7 +106,7 @@ internal fun EntryStateHolder.createFirstPageLoadJob(
         }
     }
 
-internal fun EntryStateHolder.loadFirstPage(
+internal suspend fun EntryStateHolder.loadFirstPage(
     gateway: SessionGatewayPort,
     request: SessionRequestContext,
     preserveSessions: Boolean,
@@ -150,36 +163,37 @@ internal fun EntryStateHolder.sessionListRequest(offset: Int?): SessionListReque
         offset = offset ?: 0,
     )
 
-internal fun EntryStateHolder.beginSessionRequest(): Long {
-    return synchronized(sessionRequestLock) {
+internal fun EntryStateHolder.beginSessionRequest(): Long =
+    synchronized(sessionRequestLock) {
         sessionRequestGeneration += 1
         sessionJob?.cancel()
         sessionRequestGeneration
     }
-}
 
 internal fun EntryStateHolder.createSessionJob(block: suspend CoroutineScope.() -> Unit): Job =
     synchronized(sessionRequestLock) {
         scope.launch(start = CoroutineStart.LAZY, block = block).also { sessionJob = it }
     }
 
-internal fun EntryStateHolder.updateCurrentSessionRequest(
+internal suspend fun EntryStateHolder.updateCurrentSessionRequest(
     requestGeneration: Long,
     offset: Int? = null,
     transform: (SessionListUiState) -> SessionListUiState,
 ): Boolean =
-    synchronized(sessionRequestLock) {
-        val current = mutableUiState.value.sessionList ?: return@synchronized false
-        val offsetIsStale = offset != null && current.nextOffset != offset
-        if (requestGeneration != sessionRequestGeneration || offsetIsStale) {
-            false
-        } else {
-            mutableUiState.value = mutableUiState.value.copy(sessionList = transform(current))
-            true
+    applyStateChange {
+        synchronized(sessionRequestLock) {
+            val current = mutableUiState.value.sessionList ?: return@synchronized false
+            val offsetIsStale = offset != null && current.nextOffset != offset
+            if (requestGeneration != sessionRequestGeneration || offsetIsStale) {
+                false
+            } else {
+                mutableUiState.value = mutableUiState.value.copy(sessionList = transform(current))
+                true
+            }
         }
     }
 
-internal fun EntryStateHolder.showSessionListFailure(
+internal suspend fun EntryStateHolder.showSessionListFailure(
     requestGeneration: Long,
     offset: Int?,
     preserveSessions: Boolean,

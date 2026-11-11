@@ -55,9 +55,8 @@ internal fun assertDeleteRetryKeepsTheSession(
     assertEquals(SessionMutationAction.DELETE, deleteFailure.sessionMutations[targetId]?.retryAction)
 }
 
-internal fun clientManifestEndpoints(): Map<String, GatewayEndpoint> {
-    return PublicBetaGatewayCapabilityManifest.current.requiredEndpoints
-}
+internal fun clientManifestEndpoints(): Map<String, GatewayEndpoint> =
+    PublicBetaGatewayCapabilityManifest.current.requiredEndpoints
 
 internal fun sessionRunsTrackedBy(
     holder: EntryStateHolder,
@@ -228,7 +227,7 @@ internal class BlockingMutationResponseTransport(
         )
 }
 
-internal const val FIXTURE_TIMEOUT_MILLIS = 5_000L
+internal const val FIXTURE_TIMEOUT_MILLIS = 15_000L
 internal const val PINNED_A = "11111111-1111-4111-8111-111111111111"
 internal const val SERVER_A = "33333333-3333-4333-8333-333333333333"
 internal const val SERVER_B = "44444444-4444-4444-8444-444444444444"

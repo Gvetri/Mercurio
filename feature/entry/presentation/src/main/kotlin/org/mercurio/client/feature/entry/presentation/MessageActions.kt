@@ -15,8 +15,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,15 +41,20 @@ internal data class MessageActions(
 internal fun rememberMessageActions(): MessageActions {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
-    return remember(clipboard, context) {
+    val haptics = LocalHapticFeedback.current
+    return remember(clipboard, context, haptics) {
         MessageActions(
             openLink = { destination ->
                 externalBrowserIntent(destination)?.let { intent ->
                     runCatching { context.startActivity(intent) }
                 }
             },
-            copy = { text -> clipboard.setText(AnnotatedString(text)) },
+            copy = { text ->
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                clipboard.setText(AnnotatedString(text))
+            },
             share = { text ->
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 runCatching {
                     context.startActivity(
                         messageShareIntent(text, context.getString(R.string.chat_share_message)),

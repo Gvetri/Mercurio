@@ -53,7 +53,7 @@ thresholds.
 
 | Rule | What fails when it is broken |
 | --- | --- |
-| **Comments policy** ([above](#comments-policy)) | `formatting` check (`commentPolicyVerify`) — a line or block comment in a hand-maintained file fails with its file, line, and remedy, and a file class the verifier does not know fails rather than passing. detekt additionally reports a comment attached to a private declaration (`CommentOverPrivateFunction`, `CommentOverPrivateProperty`) and a comment containing a forbidden marker (`ForbiddenComment`: `TODO:`, `FIXME:`, `STOPSHIP:`) |
+| **Comments policy** ([above](#comments-policy)) | `formatting` check (`commentPolicyVerify`) — a line or block comment in a hand-maintained file fails with its file, line, and remedy, and a file class the verifier does not know fails rather than passing. detekt additionally reports a comment attached to a private declaration (`DocumentationOverPrivateFunction`, `DocumentationOverPrivateProperty`) and a comment containing a forbidden marker (`ForbiddenComment`: `TODO:`, `FIXME:`, `STOPSHIP:`) |
 | **Formatting** — Kotlin sources stay formatted | `formatting` check |
 | **Static analysis** — the pinned detekt configuration reports no finding and Android lint reports no error | `detekt` check; `static-analysis` check |
 | **Architecture boundaries** — feature-first modules with inward dependencies ([architecture](architecture.md)) | `architecture-check` check |

@@ -1,0 +1,151 @@
+{
+  "hermes_revision": "d9833c5615b80e199a174cd67d90ab430695a972",
+  "response": {
+    "status": 200,
+    "body": {
+      "providers": [
+        {
+          "slug": "opencode-go",
+          "name": "OpenCode Go",
+          "is_current": true,
+          "is_user_defined": false,
+          "models": [
+            "step-5-preview",
+            "qwen3.8-max",
+            "qwen3.8-flash",
+            "longcat-2.0"
+          ],
+          "total_models": 50,
+          "source": "built-in",
+          "authenticated": true,
+          "capabilities": {
+            "step-5-preview": {
+              "fast": false,
+              "reasoning": true
+            },
+            "qwen3.8-max": {
+              "fast": false,
+              "reasoning": true
+            },
+            "qwen3.8-flash": {
+              "fast": false,
+              "reasoning": true
+            },
+            "longcat-2.0": {
+              "fast": false,
+              "reasoning": true
+            }
+          },
+          "featured_models": [],
+          "limit": {
+            "scope": "account",
+            "resets_at": "2026-11-09T00:00:00.865416+00:00"
+          },
+          "usage": {
+            "accounts": [
+              {
+                "id": "fp:e2fe3c7db3e5c647",
+                "label": "OPENCODE_GO_API_KEY",
+                "windows": [],
+                "state": "limited",
+                "resets_at": "2026-11-09T00:00:00.865416+00:00"
+              }
+            ]
+          }
+        },
+        {
+          "slug": "commandcode",
+          "name": "CommandCode",
+          "is_current": false,
+          "is_user_defined": false,
+          "models": [
+            "deepseek/deepseek-v4-pro",
+            "deepseek/deepseek-v4-flash",
+            "Qwen/Qwen3.7-Max",
+            "Qwen/Qwen3.6-Plus"
+          ],
+          "total_models": 11,
+          "source": "hermes",
+          "authenticated": true,
+          "capabilities": {
+            "deepseek/deepseek-v4-pro": {
+              "fast": false,
+              "reasoning": true
+            },
+            "deepseek/deepseek-v4-flash": {
+              "fast": false,
+              "reasoning": true
+            },
+            "Qwen/Qwen3.7-Max": {
+              "fast": false,
+              "reasoning": true
+            },
+            "Qwen/Qwen3.6-Plus": {
+              "fast": false,
+              "reasoning": true
+            }
+          },
+          "featured_models": []
+        },
+        {
+          "slug": "nous",
+          "name": "Nous Portal",
+          "is_current": false,
+          "is_user_defined": false,
+          "models": [
+            "anthropic/claude-fable-5.1",
+            "anthropic/claude-fable-5",
+            "anthropic/claude-opus-5.5",
+            "anthropic/claude-opus-5"
+          ],
+          "total_models": 69,
+          "source": "hermes",
+          "authenticated": true,
+          "free_tier": false,
+          "pricing_pending": true,
+          "unavailable_models": [],
+          "capabilities": {
+            "anthropic/claude-fable-5.1": {
+              "fast": false,
+              "reasoning": true,
+              "can_disable_reasoning": false
+            },
+            "anthropic/claude-fable-5": {
+              "fast": false,
+              "reasoning": true,
+              "can_disable_reasoning": false
+            },
+            "anthropic/claude-opus-5.5": {
+              "fast": false,
+              "reasoning": true,
+              "can_disable_reasoning": false
+            },
+            "anthropic/claude-opus-5": {
+              "fast": false,
+              "reasoning": true,
+              "can_disable_reasoning": true
+            }
+          },
+          "featured_models": []
+        },
+        {
+          "slug": "fireworks",
+          "name": "Fireworks AI",
+          "is_current": false,
+          "is_user_defined": false,
+          "models": [],
+          "total_models": 0,
+          "source": "canonical",
+          "authenticated": false,
+          "auth_type": "api_key",
+          "key_env": "FIREWORKS_API_KEY",
+          "warning": "paste FIREWORKS_API_KEY to activate",
+          "capabilities": {},
+          "featured_models": []
+        }
+      ],
+      "model": "step-5-preview",
+      "provider": "opencode-go"
+    }
+  }
+}

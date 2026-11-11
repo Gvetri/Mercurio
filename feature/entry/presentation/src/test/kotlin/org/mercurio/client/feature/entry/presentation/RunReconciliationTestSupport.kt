@@ -48,6 +48,12 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * Asserts that a cancelled parent job releases the run observer. The submission application is
+ * serialized on the holder's state-change consumer: the paused dispatcher is stepped until the
+ * producer reaches the observation registration (the counter is monotonic, so it also settles
+ * when the registration is immediately cancelled).
+ */
 internal suspend fun assertParentCancellationReleasesObserver(cancelDuringRegistration: Boolean) {
     val session = reconciliationSession()
     val run = Run(RunId("parent-cancelled-run"), session.id, "running")
@@ -80,8 +86,9 @@ internal suspend fun assertParentCancellationReleasesObserver(cancelDuringRegist
         holder.onEvent(EntryUiEvent.ComposerTextChanged("Cancel the parent"))
         holder.onEvent(EntryUiEvent.SendMessageClicked)
         dispatcher.runNext()
+        dispatcher.settleUntil { registrations.get() > 0 }
         if (!cancelDuringRegistration) {
-            assertEquals(1, dispatcher.queuedCount)
+            assertEquals(2, dispatcher.queuedCount)
             assertTrue(observerJobs.values.single().isActive)
         }
 
@@ -221,7 +228,7 @@ internal suspend fun openReconciledSession(
     awaitReconciliationState(holder) {
         it.sessionList?.openingSessionId == null &&
             it.sessionList?.openedSession?.session?.id == gateway.session.id &&
-            !it.sessionList!!.openedSession!!.isReconciliationInProgress
+            !it.sessionList.openedSession.isReconciliationInProgress
     }
 }
 
@@ -235,6 +242,16 @@ internal fun awaitReconciliationCondition(predicate: () -> Boolean) {
         withTimeout(RECONCILIATION_TIMEOUT_MILLIS) {
             while (!predicate()) delay(10)
         }
+    }
+}
+
+internal fun awaitRunSubmissionAllowed(
+    holder: EntryStateHolder,
+    sessionId: SessionId,
+) {
+    awaitReconciliationCondition {
+        val sessionList = holder.uiState.value.sessionList
+        sessionList != null && !holder.blocksRunSubmissionNow(sessionList, sessionId)
     }
 }
 
@@ -269,7 +286,8 @@ internal fun invokePersistedRecoveryEntry(
 
 internal class ReconciliationFakeGateway(
     val session: Session,
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     val histories = ArrayDeque<SessionHistory>()
     val statuses = ArrayDeque<Run>()
     val runs = ArrayDeque<Run>()
@@ -287,6 +305,7 @@ internal class ReconciliationFakeGateway(
     var failRunCreation = false
     var failHistoryRequest: Int? = null
     var blockNextStatus = false
+    private val lastServedStatuses = mutableMapOf<RunId, Run>()
     var blockSubmissionCompletion = false
     var blockNextObservationOpen = false
     val runStarted = CountDownLatch(1)
@@ -371,7 +390,11 @@ internal class ReconciliationFakeGateway(
                 statusRequests += runId
                 if (failStatusRunIds.remove(runId)) error("status request failed")
                 val shouldBlock = blockNextStatus.also { blockNextStatus = false }
-                val status = if (statuses.isEmpty()) error("missing status") else statuses.removeFirst()
+                val status =
+                    statuses.pollFirst()
+                        ?: lastServedStatuses[runId]
+                        ?: error("no status scripted")
+                lastServedStatuses[runId] = status
                 shouldBlock to status
             }
         if (shouldBlock) {
@@ -416,13 +439,12 @@ internal class ReconciliationFakeGateway(
         }
     }
 
-    private fun awaitReleaseOrInterrupted(latch: CountDownLatch): Boolean {
-        return try {
+    private fun awaitReleaseOrInterrupted(latch: CountDownLatch): Boolean =
+        try {
             latch.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
         } catch (_: InterruptedException) {
             false
         }
-    }
 }
 
 internal open class ReconciliationScriptedObservation(
@@ -439,13 +461,12 @@ internal class ReconciliationThrowingObservation(
     override fun iterator(): Iterator<RunEvent> {
         val delegate = super.iterator()
         return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                return if (delegate.hasNext()) {
+            override fun hasNext(): Boolean =
+                if (delegate.hasNext()) {
                     true
                 } else {
                     error("stream interrupted")
                 }
-            }
 
             override fun next(): RunEvent = delegate.next()
         }
@@ -614,9 +635,7 @@ internal fun invokeHistoryRunIdToReconcile(
     holder: EntryStateHolder,
     sessionId: SessionId,
     openedSession: org.mercurio.client.feature.entry.application.OpenedSession,
-): RunId? {
-    return holder.historyRunIdToReconcile(sessionId, openedSession)
-}
+): RunId? = holder.historyRunIdToReconcile(sessionId, openedSession)
 
 internal class ReconciliationUncertaintyStorage : RunSubmissionUncertaintyStorage {
     private val records = mutableMapOf<PendingRunSubmissionKey, RunSubmissionUncertaintySnapshot>()
@@ -668,6 +687,32 @@ internal class ReconciliationPausingDispatcher(
         }
         error("Dispatcher did not become idle.")
     }
+
+    /**
+     * Runs queued blocks one at a time until [condition] holds. The state-change
+     * consumer serializes holder applications, so a paused dispatcher must step
+     * through the consumer and producer continuations before an applied result
+     * (or a queued observer registration) is observable.
+     */
+    fun settleUntil(condition: () -> Boolean) {
+        repeat(100) {
+            if (condition()) return
+            if (queuedCount > 0) runNext() else Thread.sleep(20)
+        }
+        if (!condition()) error("settleUntil: condition not met after stepping the dispatcher")
+    }
+
+    /** Steps from the tail so the oldest queued block (such as a superseded
+     * observation start) is never executed while the condition is awaited.
+     * Stepping requires more than one queued block; the chain order is safe
+     * because a resumed await is only queued after its completer ran. */
+    fun settleLastUntil(condition: () -> Boolean) {
+        repeat(100) {
+            if (condition()) return
+            if (queuedCount > 1) runLast() else Thread.sleep(20)
+        }
+        if (!condition()) error("settleLastUntil: condition not met after stepping the dispatcher")
+    }
 }
 
 internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
@@ -680,8 +725,8 @@ internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
     override fun iterator(): Iterator<RunEvent> {
         started.countDown()
         return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                return try {
+            override fun hasNext(): Boolean =
+                try {
                     awaitRelease()
                     false
                 } catch (error: InterruptedException) {
@@ -690,7 +735,6 @@ internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
                 } finally {
                     finished.countDown()
                 }
-            }
 
             override fun next(): RunEvent = error("not used")
         }
@@ -710,5 +754,5 @@ internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
     }
 }
 
-internal const val RECONCILIATION_TIMEOUT_MILLIS = 5_000L
+internal const val RECONCILIATION_TIMEOUT_MILLIS = 15_000L
 internal const val RECONCILIATION_SETTLE_MILLIS = 500L

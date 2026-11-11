@@ -150,7 +150,7 @@ internal fun EntryStateHolder.startNewRunObservation(
     run: Run,
     current: SessionListUiState,
 ): RunObservationStart {
-    val opened = current.openedSession ?: return RunObservationStart()
+    if (current.openedSession == null) return RunObservationStart()
     pendingRunObservationRequests.remove(sessionId)
     val state =
         observationStateFor(sessionId, run.id)
@@ -168,18 +168,24 @@ internal fun EntryStateHolder.startNewRunObservation(
             ?: state
                 .takeIf { latestRun == null || latestRun.id == run.id }
                 ?.let { observedMessageUiState(it) }
-    mutableUiState.value =
-        mutableUiState.value.copy(
-            sessionList =
-                current.copy(
-                    openedSession =
-                        opened.copy(
-                            latestRunState = latestState,
-                            latestRunRetryAvailable = latestRunRetryAvailable(knownRuns, latestState),
-                            activeResponse = latestResponse,
-                        ),
-                ),
-        )
+    submitStateChange {
+        val currentNow = mutableUiState.value.sessionList ?: return@submitStateChange
+        val openedNow =
+            currentNow.openedSession?.takeIf { it.session.id == sessionId }
+                ?: return@submitStateChange
+        mutableUiState.value =
+            mutableUiState.value.copy(
+                sessionList =
+                    currentNow.copy(
+                        openedSession =
+                            openedNow.copy(
+                                latestRunState = latestState,
+                                latestRunRetryAvailable = latestRunRetryAvailable(knownRuns, latestState),
+                                activeResponse = latestResponse,
+                            ),
+                    ),
+            )
+    }
     val observationJob =
         scope.launch(start = CoroutineStart.LAZY) {
             observeRun(

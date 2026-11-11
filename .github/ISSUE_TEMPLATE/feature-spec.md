@@ -2,7 +2,6 @@
 name: Feature spec
 about: Specify one screen or component change and its design and code issues
 title: "Spec: "
-labels: enhancement
 ---
 
 # Spec: <surface>

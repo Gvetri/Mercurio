@@ -16,9 +16,14 @@ internal fun EntryStateHolder.applyAppLifecycleEvent(event: EntryUiEvent.AppLife
 internal fun EntryStateHolder.enterForeground() {
     if (isForeground) return
     isForeground = true
+    refreshAppLockAvailability()
+    if (!isUnlockPromptPending) requestAppUnlock()
     refreshSessions()
+    resumeInstallAfterPermission()
 }
 
 internal fun EntryStateHolder.leaveForeground() {
     isForeground = false
+    lockAppOnBackground()
+    discardSharedText()
 }

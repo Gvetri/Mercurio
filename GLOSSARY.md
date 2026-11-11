@@ -63,3 +63,7 @@ _Avoid_: gallery, photo browser
 **Installed build**:
 The client's own package on the device: its version code, its version name, and the source that installed it (Google Play or another source). Every build shares one climbing version-code sequence.
 _Avoid_: app version, build identity
+
+**Update check**:
+One manual query of the published Nightly release listing, followed by one request for the newest candidate's signing metadata. The result is up to date, an offered build, or a named refusal. Nothing is downloaded.
+_Avoid_: update scan, version probe

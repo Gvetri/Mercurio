@@ -2,10 +2,11 @@ package org.mercurio.client.feature.entry.domain
 
 interface ErrorReportingConsentStore {
     /**
-     * Returns the stored decision. The composition root reads it once for the reporting backend, and
-     * the entry surface reads it to decide whether the question is still due; the SDK installs at
-     * most once per process, so a decision stored after the backend read applies from the next
-     * process start and never to the running one.
+     * Returns the stored decision. The entry surface reads it to decide whether the question is
+     * still due, and the Settings row reads it to state the current answer. The reporting gate reads
+     * it for every report, so a decision that revokes consent stops the next report at once; a
+     * decision that grants consent takes effect at the next process start, because the reporting
+     * SDK installs at most once per process.
      */
     fun read(): ErrorReportingConsent
 

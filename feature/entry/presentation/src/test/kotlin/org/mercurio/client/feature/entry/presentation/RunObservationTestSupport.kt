@@ -62,6 +62,11 @@ internal fun observationHolder(
     )
 }
 
+/**
+ * Opens [sessionId] and waits for the settled open. The open applies in two stages (metadata,
+ * then full result); the second stage runs on the state-change consumer, so the caller must
+ * not observe (or mutate) before both have applied.
+ */
 internal suspend fun openObservedSession(
     holder: EntryStateHolder,
     gateway: ObservationScriptedGateway,
@@ -73,7 +78,10 @@ internal suspend fun openObservedSession(
     holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
     awaitObservationState(holder) { it.sessionList?.sessions == listOf(gateway.session.toSessionItemUiState()) }
     holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-    awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
+    awaitObservationState(holder) {
+        val opened = it.sessionList?.openedSession
+        opened?.session?.id == sessionId && !opened.isRefreshing
+    }
 }
 
 internal suspend fun awaitObservationState(
@@ -100,7 +108,8 @@ internal fun observationSession(id: String): Session =
 internal class ObservationScriptedGateway(
     val session: Session,
     private val additionalSessions: List<Session> = emptyList(),
-) : SessionGatewayPort, RunGatewayPort {
+) : SessionGatewayPort,
+    RunGatewayPort {
     private val runResults = ArrayDeque<Run>()
     private val historyResults = ArrayDeque<SessionHistory>()
     private val statusResults = ArrayDeque<Run>()
@@ -326,4 +335,4 @@ internal class ObservationFailingRemoveRunRecoveryRegistry(
     override fun remove(entry: RunRecoveryEntry): Unit = error("recovery cleanup unavailable")
 }
 
-internal const val OBSERVATION_TIMEOUT_MILLIS = 5_000L
+internal const val OBSERVATION_TIMEOUT_MILLIS = 15_000L

@@ -67,6 +67,13 @@ class EntryStateHolderFailedSendRecoveryTest {
                         opened.composerText == FAILED_SEND_DRAFT
                 }
                 assertEquals(1, gateway.runRequests.size)
+                awaitReconciliationCondition {
+                    val opened = holder.uiState.value.sessionList?.openedSession
+                    opened != null &&
+                        !opened.isSending &&
+                        !opened.isReconciliationInProgress &&
+                        !opened.isRefreshing
+                }
 
                 arrangeGatewayRecovery(gateway, recoveryRun)
                 holder.onEvent(EntryUiEvent.SendMessageClicked)

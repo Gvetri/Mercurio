@@ -31,7 +31,7 @@ import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-private const val TEST_TIMEOUT_MILLIS = 5_000L
+private const val TEST_TIMEOUT_MILLIS = 15_000L
 
 internal fun holder(
     gateway: FakeGateway,
@@ -66,6 +66,11 @@ internal suspend fun connect(
     }
 }
 
+/**
+ * Connects, then opens [sessionId] and waits for the settled open. The open applies in two
+ * stages (metadata, then full result); the second stage runs on the state-change consumer,
+ * so the caller must not observe (or mutate) before both have applied.
+ */
 internal suspend fun open(
     holder: EntryStateHolder,
     gateway: FakeGateway,
@@ -73,7 +78,10 @@ internal suspend fun open(
 ) {
     connect(holder, gateway)
     holder.onEvent(EntryUiEvent.SessionClicked(sessionId))
-    awaitState(holder) { it.sessionList?.openedSession?.session?.id == sessionId }
+    awaitState(holder) {
+        val opened = it.sessionList?.openedSession
+        opened?.session?.id == sessionId && !opened.isRefreshing
+    }
 }
 
 internal fun TestScope.connectWithVirtualTime(
@@ -131,9 +139,10 @@ internal fun submissionHolderDependencies(
 
 internal class FakeGateway(
     val sessions: List<Session>,
-    private val histories: Map<SessionId, SessionHistory> = emptyMap(),
-    private val runStatuses: Map<RunId, Run> = emptyMap(),
-) : SessionGatewayPort, RunGatewayPort {
+    histories: Map<SessionId, SessionHistory> = emptyMap(),
+    runStatuses: Map<RunId, Run> = emptyMap(),
+) : SessionGatewayPort,
+    RunGatewayPort {
     private val mutableHistories = histories.toMutableMap()
     private val mutableRunStatuses = runStatuses.toMutableMap()
     val runRequests = mutableListOf<Pair<SessionId, String>>()

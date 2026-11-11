@@ -6,7 +6,9 @@ internal sealed interface PatternChainToken {
         val line: Int,
     ) : PatternChainToken
 
-    data class Reference(val name: String) : PatternChainToken
+    data class Reference(
+        val name: String,
+    ) : PatternChainToken
 }
 
 internal data class RegexCallSite(

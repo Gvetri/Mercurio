@@ -152,6 +152,49 @@ class RunObservationRecoveryTest {
         }
 
     @Test
+    fun a_create_result_persisted_before_reconnect_reconciles_when_the_connection_returns() =
+        runTest {
+            val session = observationSession("disconnect-persist-before-connect")
+            val run = Run(RunId("run-persist-before-connect"), session.id, "running")
+            val gateway =
+                ObservationScriptedGateway(session).apply {
+                    enqueueRun(run)
+                    statusByRun[run.id] = run
+                    blockCreate = true
+                }
+            val persisted = CopyOnWriteArrayList<Pair<String, RunRecoveryEntry>>()
+            val holder =
+                observationHolder(
+                    gateway = gateway,
+                    dispatcher = Dispatchers.Default,
+                    persistRunRecoveryEntry = { endpoint, entry -> persisted += endpoint to entry },
+                )
+
+            try {
+                openObservedSession(holder, gateway, session.id)
+                holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
+                holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertTrue(gateway.createStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+
+                holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+                awaitObservationState(holder) { it.sessionList == null }
+                gateway.createRelease.countDown()
+                awaitObservationCondition { persisted.isNotEmpty() }
+                assertTrue(gateway.statusRequests.isEmpty())
+
+                holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
+                holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
+                holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+
+                awaitObservationCondition { gateway.statusRequests.contains(run.id) }
+            } finally {
+                gateway.createRelease.countDown()
+                holder.close()
+            }
+        }
+
+    @Test
     fun recovery_persistence_failure_keeps_the_created_run_and_marks_its_outcome_uncertain() =
         runTest {
             val session = observationSession("session-1")

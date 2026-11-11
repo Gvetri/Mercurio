@@ -66,6 +66,12 @@ object QualityPolicy {
         BoundaryDoubleRequirement("SessionDraftStore", "repository"),
         BoundaryDoubleRequirement("InstalledBuildProvider", "datasource"),
         BoundaryDoubleRequirement("ErrorReportingConsentStore", "repository"),
+        BoundaryDoubleRequirement("AppLockSettingsStore", "repository"),
+        BoundaryDoubleRequirement("AppLockEnrolment", "datasource"),
+        BoundaryDoubleRequirement("NightlyUpdateFeed", "repository"),
+        BoundaryDoubleRequirement("NightlyApkDownload", "datasource"),
+        BoundaryDoubleRequirement("NightlyApkEvidenceSource", "datasource"),
+        BoundaryDoubleRequirement("NightlyInstaller", "datasource"),
     )
 
     /**

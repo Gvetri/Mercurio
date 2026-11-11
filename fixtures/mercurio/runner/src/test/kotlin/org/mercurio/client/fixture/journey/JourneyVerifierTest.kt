@@ -178,8 +178,7 @@ class JourneyVerifierTest {
             JourneyInvariants.verify("session-lifecycle", lifecycleTelemetry(lifecycleRequests.dropLast(1)))
         }
         val wrongTarget =
-            lifecycleRequests.map {
-                    (method, path) ->
+            lifecycleRequests.map { (method, path) ->
                 method to path.replace("synthetic-created-session-1", "session-alpha")
             }
         assertThrows(IllegalStateException::class.java) {

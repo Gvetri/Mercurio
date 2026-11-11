@@ -40,8 +40,8 @@ internal fun EntryStateHolder.observedMessageUiState(observation: RunObservation
         )
     }
 
-internal fun EntryStateHolder.toMessageUiStates(history: SessionHistory): List<SessionMessageUiState> {
-    return history.messages.map { message ->
+internal fun EntryStateHolder.toMessageUiStates(history: SessionHistory): List<SessionMessageUiState> =
+    history.messages.map { message ->
         val original =
             message.runId?.let { id ->
                 submittedRunInputs[id]
@@ -55,11 +55,11 @@ internal fun EntryStateHolder.toMessageUiStates(history: SessionHistory): List<S
             modelSelection = message.runId?.let(submittedRunModelSelections::get),
         )
     }.chronological()
-}
 
-internal fun List<SessionItemUiState>.orderedSessions(): List<SessionItemUiState> {
-    return filter { it.pinned } + filterNot { it.pinned }
-}
+internal fun List<SessionItemUiState>.orderedSessions(): List<SessionItemUiState> =
+    filter {
+        it.pinned
+    } + filterNot { it.pinned }
 
 internal fun List<SessionItemUiState>.mergeAuthoritative(session: Session): List<SessionItemUiState> {
     val authoritative = session.toSessionItemUiState()

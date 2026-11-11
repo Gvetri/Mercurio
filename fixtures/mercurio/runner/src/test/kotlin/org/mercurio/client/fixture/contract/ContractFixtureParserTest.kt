@@ -7,9 +7,16 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import org.mercurio.client.feature.entry.domain.GatewayCapabilities
+import org.mercurio.client.feature.entry.domain.GatewayEndpoint
+import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
+import org.mercurio.client.feature.entry.domain.PublicBetaGatewayCapabilityManifest
+import org.mercurio.client.feature.entry.domain.modelCatalogSurface
+import org.mercurio.client.feature.entry.domain.satisfies
 import org.mercurio.client.fixture.PinnedFixtureDescriptor
 import java.io.File
 
@@ -82,6 +89,48 @@ class ContractFixtureParserTest {
         }
         assertTrue(additiveEndpoints.containsKey("gateway_future_endpoint"))
         assertEquals("additive-value", additive.requiredString("future_additive_field"))
+    }
+
+    @Test
+    fun the_captured_live_capabilities_advertise_the_deployed_catalog_surface_and_no_run_models_row() {
+        val captured = parseJson("capabilities/captured-live.json")
+        val endpoints = captured.requiredObject("response.body.endpoints")
+        val advertised =
+            endpoints.mapValues { (_, value) ->
+                GatewayEndpoint(
+                    method = value.jsonObject.getValue("method").jsonPrimitive.content,
+                    path = value.jsonObject.getValue("path").jsonPrimitive.content,
+                )
+            }
+
+        SupportedGatewayCapabilities.required.forEach { endpoint ->
+            assertTrue("Captured payload dropped required endpoint '$endpoint'", endpoints.containsKey(endpoint))
+        }
+        assertFalse("The captured payload advertises the pinned forward row", endpoints.containsKey("run_models"))
+        assertEquals(GatewayEndpoint("GET", "/api/model/options"), advertised["model_options"])
+        assertTrue(GatewayCapabilities(advertised).satisfies(PublicBetaGatewayCapabilityManifest.current))
+        assertSame(ModelCatalogSurface.MODEL_OPTIONS, GatewayCapabilities(advertised).modelCatalogSurface())
+    }
+
+    @Test
+    fun the_deployed_model_options_fixture_carries_a_provider_grouped_inventory() {
+        val successful = parseJson("models/options-success.json")
+
+        assertEquals(200, successful.requiredInt("response.status"))
+        val providers = successful.requiredArray("response.body.providers")
+        assertTrue(providers.isNotEmpty())
+        assertEquals("step-5-preview", successful.requiredString("response.body.model"))
+        val authenticated =
+            providers.map { it.jsonObject }.filter { provider ->
+                provider.getValue("authenticated").jsonPrimitive.content.toBooleanStrict()
+            }
+        assertTrue(authenticated.isNotEmpty())
+        assertTrue(
+            authenticated.any { provider ->
+                provider.getValue("models").jsonArray.isNotEmpty() &&
+                    provider.getValue("slug").jsonPrimitive.content.isNotBlank()
+            },
+        )
     }
 
     @Test

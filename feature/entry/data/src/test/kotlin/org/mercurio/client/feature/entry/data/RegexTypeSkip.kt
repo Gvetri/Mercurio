@@ -74,7 +74,8 @@ internal class RegexTypeSkip(
     private fun consumeTypeTail(): Boolean {
         val current = cursor.current()
         val boundary =
-            angleDepth == 0 && parenDepth == 0 &&
+            angleDepth == 0 &&
+                parenDepth == 0 &&
                 (current in BOUNDARY_CHARS || current == '>')
         if (!boundary) cursor.advance()
         return !boundary

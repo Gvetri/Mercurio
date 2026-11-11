@@ -1,7 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -10,6 +9,7 @@ import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionId
+import java.util.concurrent.TimeUnit
 
 class MessageSubmissionInFlightDraftTest {
     @Test
@@ -20,18 +20,19 @@ class MessageSubmissionInFlightDraftTest {
             val gateway =
                 ObservationScriptedGateway(session).apply {
                     enqueueRun(run)
+                    blockCreate = true
                 }
-            val holder = observationHolder(gateway, StandardTestDispatcher(testScheduler))
+            val holder = observationHolder(gateway, Dispatchers.Default)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
+                assertTrue(gateway.createStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 assertTrue(requireNotNull(holder.uiState.value.sessionList?.openedSession).isSending)
-                assertEquals(0, gateway.createRunCount.get())
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
-                advanceUntilIdle()
+                gateway.createRelease.countDown()
                 awaitObservationState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened?.latestRun?.id == run.id && !opened.isSending
@@ -39,7 +40,9 @@ class MessageSubmissionInFlightDraftTest {
 
                 val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
                 assertEquals("", opened.composerText)
+                assertEquals(1, gateway.createRunCount.get())
             } finally {
+                gateway.createRelease.countDown()
                 holder.close()
             }
         }

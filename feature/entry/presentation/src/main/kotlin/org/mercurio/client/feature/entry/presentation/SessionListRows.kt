@@ -24,7 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +36,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -102,6 +104,11 @@ private fun SessionRowContent(
     onEvent: (EntryUiEvent) -> Unit,
 ) {
     val tokens = LocalHermesDesignTokens.current
+    val haptics = LocalHapticFeedback.current
+    val openActions = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onLongPress()
+    }
     val component = tokens.componentColors
     val showActionsLabel = stringResource(R.string.sessions_show_actions)
     val selected = row.selected || inlineRename
@@ -120,7 +127,7 @@ private fun SessionRowContent(
                 .combinedClickable(
                     enabled = row.enabled && row.mutation?.pendingAction == null && !inlineRename,
                     onClick = row.onClick,
-                    onLongClick = onLongPress,
+                    onLongClick = openActions,
                 )
                 .semantics {
                     this.selected = row.selected
@@ -250,11 +257,20 @@ private fun RenameSessionField(
     val tokens = LocalHermesDesignTokens.current
     val focusRequester = remember { FocusRequester() }
     val sessionTitleDescription = stringResource(R.string.sessions_title_field)
-    LaunchedEffect(session.id) { focusRequester.requestFocus() }
+    val focusRequest = remember(session.id) { RenameFocusRequest() }
+    SideEffect {
+        if (!focusRequest.requested) {
+            focusRequest.requested = true
+            focusRequester.requestFocus()
+        }
+    }
     Column(modifier = Modifier.fillMaxWidth()) {
+        val title = rememberEchoSafeTextFieldBuffer(state.titleDraft, session.id)
         BasicTextField(
-            value = state.titleDraft,
-            onValueChange = { onEvent(EntryUiEvent.RenameSessionTitleChanged(session.id, it)) },
+            value = title.value,
+            onValueChange = { change ->
+                if (title.onUserChange(change)) onEvent(EntryUiEvent.RenameSessionTitleChanged(session.id, change.text))
+            },
             enabled = enabled && !state.isSubmitting,
             singleLine = true,
             textStyle =
@@ -409,6 +425,10 @@ internal fun SessionMutationAction.pendingLabelRes(): Int =
         SessionMutationAction.UNPIN -> R.string.sessions_unpinning
         SessionMutationAction.DELETE -> R.string.sessions_deleting
     }
+
+private class RenameFocusRequest {
+    var requested: Boolean = false
+}
 
 private val SESSION_ROW_MIN_HEIGHT = 56.dp
 private val SESSION_TIME_COLUMN = 44.dp

@@ -153,7 +153,9 @@ class HistoryCacheSessionListStoreTest {
             )
         }
 
-    private class MutableClock(initial: Instant) {
+    private class MutableClock(
+        initial: Instant,
+    ) {
         var instantValue: Instant = initial
             private set
 

@@ -112,7 +112,7 @@ internal suspend fun EntryStateHolder.openSessionJob(
     }
 }
 
-private fun EntryStateHolder.showOpenFailure(
+private suspend fun EntryStateHolder.showOpenFailure(
     requestGeneration: Long,
     sessionId: SessionId,
     openedSessionToRestore: OpenSessionUiState?,
@@ -148,7 +148,7 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
             openedSession.toOpenSessionUiState(
                 OpenSessionOverlay(
                     messages = toMessageUiStates(openedSession.history),
-                    composerText = restoredSessionDraft(sessionId),
+                    composerText = sessionDraftForOpenedSession(sessionId),
                     sendErrorCategory = sendErrorCategoryFor(sessionId),
                     hasUnresolvedSubmission =
                         hasUnresolvedSubmission(sessionId) || recoveryLoadBlocksSession,
@@ -192,7 +192,7 @@ internal fun EntryStateHolder.applyOpenedSessionMetadata(
             sessionWithoutHistory.toOpenSessionUiState(
                 OpenSessionOverlay(
                     messages = emptyList(),
-                    composerText = restoredSessionDraft(sessionId),
+                    composerText = sessionDraftForOpenedSession(sessionId),
                     sendErrorCategory = sendErrorCategoryFor(sessionId),
                     hasUnresolvedSubmission = hasUnresolvedSubmission(sessionId) || recoveryLoadBlocksSession,
                     isSending = runJobs.containsKey(sessionId),
@@ -224,7 +224,7 @@ internal suspend fun EntryStateHolder.applyOpenedSessionOutcome(
     )
 }
 
-internal fun EntryStateHolder.showSessionOpenFailure(
+internal suspend fun EntryStateHolder.showSessionOpenFailure(
     requestGeneration: Long,
     sessionId: SessionId,
     openedSessionToRestore: OpenSessionUiState?,

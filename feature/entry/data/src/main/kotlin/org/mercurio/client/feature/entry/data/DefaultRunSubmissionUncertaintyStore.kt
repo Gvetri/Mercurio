@@ -45,9 +45,10 @@ class DefaultRunSubmissionUncertaintyStore(
             true
         }
 
-    override fun contains(key: PendingRunSubmissionKey): Boolean {
-        return synchronized(submissionUncertaintyLock) { storage.read(key) != null }
-    }
+    override fun contains(key: PendingRunSubmissionKey): Boolean =
+        synchronized(submissionUncertaintyLock) {
+            storage.read(key) != null
+        }
 
     override fun clearEndpoint(endpoint: String) {
         synchronized(submissionUncertaintyLock) {
@@ -115,24 +116,26 @@ class DefaultRunSubmissionUncertaintyStore(
 private class RunSubmissionUncertaintyReads(
     private val storage: RunSubmissionUncertaintyStorage,
 ) : RunSubmissionUncertaintyReader {
-    override fun knownRunIds(key: PendingRunSubmissionKey): Set<RunId> {
-        return synchronized(submissionUncertaintyLock) { storage.read(key)?.knownRunIds.orEmpty() }
-    }
+    override fun knownRunIds(key: PendingRunSubmissionKey): Set<RunId> =
+        synchronized(submissionUncertaintyLock) { storage.read(key)?.knownRunIds.orEmpty() }
 
-    override fun attemptId(key: PendingRunSubmissionKey): String? {
-        return synchronized(submissionUncertaintyLock) { storage.read(key)?.attemptId }
-    }
+    override fun attemptId(key: PendingRunSubmissionKey): String? =
+        synchronized(submissionUncertaintyLock) {
+            storage.read(key)?.attemptId
+        }
 
-    override fun snapshot(key: PendingRunSubmissionKey): RunSubmissionUncertaintySnapshot? {
-        return synchronized(submissionUncertaintyLock) { storage.read(key) }
-    }
+    override fun snapshot(key: PendingRunSubmissionKey): RunSubmissionUncertaintySnapshot? =
+        synchronized(submissionUncertaintyLock) {
+            storage.read(key)
+        }
 
     override fun boundRunId(key: PendingRunSubmissionKey): RunId? =
         synchronized(submissionUncertaintyLock) { storage.read(key)?.boundRunId }
 
-    override fun isSettled(key: PendingRunSubmissionKey): Boolean {
-        return synchronized(submissionUncertaintyLock) { storage.read(key)?.settled == true }
-    }
+    override fun isSettled(key: PendingRunSubmissionKey): Boolean =
+        synchronized(submissionUncertaintyLock) {
+            storage.read(key)?.settled == true
+        }
 
     override fun requiresRunMatch(key: PendingRunSubmissionKey): Boolean =
         synchronized(submissionUncertaintyLock) { storage.read(key)?.requiresRunMatch == true }

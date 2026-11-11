@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -28,6 +29,7 @@ class ErrorReportingConsentStateHolderTest {
 
         try {
             holder.onEvent(EntryUiEvent.ErrorReportingConsentGranted)
+            runBlocking { holder.awaitStateChangesApplied() }
 
             assertEquals(ErrorReportingConsent.Granted, store.read())
             assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
@@ -43,6 +45,7 @@ class ErrorReportingConsentStateHolderTest {
 
         try {
             holder.onEvent(EntryUiEvent.ErrorReportingConsentDeclined)
+            runBlocking { holder.awaitStateChangesApplied() }
 
             assertEquals(ErrorReportingConsent.Declined, store.read())
             assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
@@ -66,10 +69,72 @@ class ErrorReportingConsentStateHolderTest {
         }
     }
 
-    private fun consentHolder(store: ErrorReportingConsentStore): EntryStateHolder =
+    @Test
+    fun an_unbound_store_never_asks_the_question() {
+        val holder =
+            EntryStateHolder(
+                initialState = EntryState(isGatewayConnectionConfigured = false),
+                dependencies = EntryStateHolderDependencies(),
+            )
+
+        try {
+            assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
+            assertEquals(ErrorReportingConsent.Undecided, holder.uiState.value.errorReportingConsent)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun the_settings_row_reads_the_stored_answer() {
+        val holder =
+            consentHolder(
+                InMemoryConsentStore(ErrorReportingConsent.Granted),
+                isErrorReportingConfigured = true,
+            )
+
+        try {
+            assertEquals(ErrorReportingConsent.Granted, holder.uiState.value.errorReportingConsent)
+            assertTrue(holder.uiState.value.isErrorReportingConfigured)
+        } finally {
+            holder.close()
+        }
+    }
+
+    @Test
+    fun the_settings_toggle_writes_the_same_stored_decision() {
+        val store = InMemoryConsentStore(ErrorReportingConsent.Granted)
+        val holder = consentHolder(store, isErrorReportingConfigured = true)
+
+        try {
+            holder.onEvent(EntryUiEvent.ErrorReportingConsentToggleClicked(granted = false))
+            runBlocking { holder.awaitStateChangesApplied() }
+
+            assertEquals(ErrorReportingConsent.Declined, store.read())
+            assertEquals(ErrorReportingConsent.Declined, holder.uiState.value.errorReportingConsent)
+            assertFalse(holder.uiState.value.isErrorReportingConsentRequired)
+
+            holder.onEvent(EntryUiEvent.ErrorReportingConsentToggleClicked(granted = true))
+            runBlocking { holder.awaitStateChangesApplied() }
+
+            assertEquals(ErrorReportingConsent.Granted, store.read())
+            assertEquals(ErrorReportingConsent.Granted, holder.uiState.value.errorReportingConsent)
+        } finally {
+            holder.close()
+        }
+    }
+
+    private fun consentHolder(
+        store: ErrorReportingConsentStore,
+        isErrorReportingConfigured: Boolean = false,
+    ): EntryStateHolder =
         EntryStateHolder(
             initialState = EntryState(isGatewayConnectionConfigured = false),
-            dependencies = EntryStateHolderDependencies(errorReportingConsentStore = store),
+            dependencies =
+                EntryStateHolderDependencies(
+                    errorReportingConsentStore = store,
+                    isErrorReportingConfigured = isErrorReportingConfigured,
+                ),
         )
 }
 

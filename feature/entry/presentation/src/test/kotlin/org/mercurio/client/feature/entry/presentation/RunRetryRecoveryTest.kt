@@ -77,6 +77,12 @@ class RunRetryRecoveryTest {
 
             try {
                 openRetrySession(holder, gateway, session.id)
+                awaitRetryState(holder) {
+                    val opened = it.sessionList?.openedSession
+                    opened?.session?.id == session.id &&
+                        !opened.isRefreshing &&
+                        !opened.isReconciliationInProgress
+                }
                 gateway.setHistory(
                     retryHistory(
                         session.id,
@@ -171,6 +177,7 @@ class RunRetryRecoveryTest {
                 connectRetryGateway(holder, gateway)
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitRetryState(holder) { it.sessionList?.openedSession?.session?.id == session.id }
+                awaitRunSubmissionAllowed(holder, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("OLD SECRET"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 assertTrue(gateway.runStarted.await(RETRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))

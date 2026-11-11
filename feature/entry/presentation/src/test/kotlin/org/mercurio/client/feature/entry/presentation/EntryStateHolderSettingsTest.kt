@@ -1,7 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,6 +11,8 @@ import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionPage
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSettingsTest {
     @Test
@@ -98,19 +100,28 @@ class EntryStateHolderSettingsTest {
     fun opening_settings_is_rejected_while_creation_is_submitting() =
         runTest {
             val created = entrySession("created", title = "Created")
+            val createStarted = CountDownLatch(1)
+            val createRelease = CountDownLatch(1)
             val gateway = ScriptedCreateGateway(entrySession("session-one", title = "Listed title"), created)
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
+            gateway.onCreate = {
+                createStarted.countDown()
+                assertTrue(createRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            }
+            val holder = scriptedHolder(gateway, Dispatchers.Default)
 
             try {
                 verifyScripted(holder)
-                advanceUntilIdle()
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
+                assertTrue(createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession != null)
 
                 holder.onEvent(EntryUiEvent.OpenSettingsClicked)
+                runBlocking { holder.awaitStateChangesApplied() }
 
                 assertFalse(holder.uiState.value.isSettingsOpen)
             } finally {
+                gateway.onCreate = null
+                createRelease.countDown()
                 holder.close()
             }
         }
@@ -149,6 +160,7 @@ class EntryStateHolderSettingsTest {
 
         try {
             holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            runBlocking { holder.awaitStateChangesApplied() }
             assertFalse(holder.uiState.value.autoLoadImages)
 
             holder.releaseGatewayConnection()
@@ -174,9 +186,11 @@ class EntryStateHolderSettingsTest {
         try {
             assertFalse(holder.uiState.value.autoLoadImages)
             holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            runBlocking { holder.awaitStateChangesApplied() }
             assertTrue(holder.uiState.value.autoLoadImages)
             assertTrue(store.loadEnabled())
             holder.onEvent(EntryUiEvent.AutoLoadImagesToggleClicked)
+            runBlocking { holder.awaitStateChangesApplied() }
             assertFalse(holder.uiState.value.autoLoadImages)
             assertFalse(store.loadEnabled())
         } finally {

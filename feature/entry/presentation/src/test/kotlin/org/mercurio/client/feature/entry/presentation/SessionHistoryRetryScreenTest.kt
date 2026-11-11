@@ -202,9 +202,8 @@ class SessionHistoryRetryScreenTest {
             ),
         )
 
-    private fun transcriptMessage(index: Int): SessionMessageUiState {
-        return message("message-$index", "user", "Transcript message $index")
-    }
+    private fun transcriptMessage(index: Int): SessionMessageUiState =
+        message("message-$index", "user", "Transcript message $index")
 
     private fun failedTurnState(
         failedRunId: RunId,
@@ -301,7 +300,7 @@ class SessionHistoryRetryScreenTest {
             sessionList =
                 state.sessionList?.copy(
                     openedSession =
-                        state.sessionList!!.openedSession?.copy(
+                        state.sessionList.openedSession?.copy(
                             messages =
                                 listOf(
                                     SessionMessageUiState(

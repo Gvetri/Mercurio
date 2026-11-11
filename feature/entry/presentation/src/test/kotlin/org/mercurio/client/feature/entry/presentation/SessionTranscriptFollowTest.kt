@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -109,6 +110,48 @@ class SessionTranscriptFollowTest {
             state.value = streamingState(activeResponse = streamedResponse(transcriptBody(36)))
         }
         composeTestRule.onNodeWithText("Paragraph 36").assertIsDisplayed()
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun an_opened_session_is_settled_on_the_first_frame_that_draws_it() {
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            HermesTheme {
+                Box(Modifier.height(240.dp)) {
+                    EntryScreen(
+                        state = streamingState(activeResponse = streamedResponse(transcriptBody(40))),
+                        onEvent = {},
+                    )
+                }
+            }
+        }
+
+        awaitFirstLaidOutFrame("Paragraph 40")
+        composeTestRule.onNodeWithText("Paragraph 40").assertIsDisplayed()
+    }
+
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun a_streamed_chunk_is_already_settled_on_the_first_frame_that_draws_it() {
+        composeTestRule.mainClock.autoAdvance = false
+        val state = mutableStateOf(streamingState(activeResponse = streamedResponse(transcriptBody(40))))
+        composeTestRule.setContent {
+            HermesTheme {
+                Box(Modifier.height(240.dp)) {
+                    EntryScreen(state = state.value, onEvent = {})
+                }
+            }
+        }
+        repeat(SETTLED_FRAMES) { composeTestRule.mainClock.advanceTimeByFrame() }
+        composeTestRule.onNodeWithText("Paragraph 40").assertIsDisplayed()
+
+        composeTestRule.runOnUiThread {
+            state.value = streamingState(activeResponse = streamedResponse(transcriptBody(52)))
+        }
+
+        awaitFirstLaidOutFrame("Paragraph 52")
+        composeTestRule.onNodeWithText("Paragraph 52").assertIsDisplayed()
     }
 
     @Test
@@ -221,6 +264,14 @@ class SessionTranscriptFollowTest {
         composeTestRule.onNodeWithText("The message was not sent.").performScrollTo().assertIsDisplayed()
     }
 
+    private fun awaitFirstLaidOutFrame(text: String) {
+        repeat(MAX_SETTLE_FRAMES) {
+            composeTestRule.mainClock.advanceTimeByFrame()
+            if (composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()) return
+        }
+        throw AssertionError("The transcript never laid out $text")
+    }
+
     private fun setTranscriptContent(state: () -> EntryUiState) {
         composeTestRule.setContent {
             HermesTheme {
@@ -270,14 +321,18 @@ class SessionTranscriptFollowTest {
             isStreaming = true,
         )
 
-    private fun transcriptMessage(index: Int): SessionMessageUiState {
-        return message("message-$index", "user", "Transcript message $index")
-    }
+    private fun transcriptMessage(index: Int): SessionMessageUiState =
+        message("message-$index", "user", "Transcript message $index")
 
     private fun transcriptBody(paragraphCount: Int): String =
         (1..paragraphCount).joinToString(separator = "\n\n") { number -> "Paragraph $number" }
 
-    private fun longBody(lineCount: Int): String {
-        return (1..lineCount).joinToString(separator = "\n\n") { number -> "Long line $number" }
-    }
+    private fun longBody(lineCount: Int): String =
+        (1..lineCount).joinToString(separator = "\n\n") { number ->
+            "Long line $number"
+        }
 }
+
+private const val SETTLED_FRAMES = 4
+
+private const val MAX_SETTLE_FRAMES = 8

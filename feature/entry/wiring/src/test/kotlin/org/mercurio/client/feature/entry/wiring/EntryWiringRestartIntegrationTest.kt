@@ -454,7 +454,11 @@ class EntryWiringRestartIntegrationTest {
                 holder.close()
 
                 assertTrue(dispatcher.queuedCount > 0)
-                dispatcher.drain()
+                var steps = 0
+                while (dispatcher.queuedCount > 0 && steps < 50) {
+                    dispatcher.runNext()
+                    steps += 1
+                }
                 assertTrue(SharedPreferencesRunSubmissionUncertaintyStore(context).isSettled(uncertaintyKey))
                 assertTrue(gateway.runRequests.isEmpty())
             } finally {
@@ -576,6 +580,10 @@ class EntryWiringRestartIntegrationTest {
         awaitComposerReady(holder)
         holder.onEvent(EntryUiEvent.ComposerTextChanged(text))
         holder.onEvent(EntryUiEvent.SendMessageClicked)
+        awaitState(holder) {
+            val opened = it.sessionList?.openedSession
+            opened != null && (opened.isSending || gateway.runRequests.isNotEmpty())
+        }
         val opened = requireNotNull(holder.uiState.value.sessionList?.openedSession)
         assertTrue(
             "The submission was dropped before it reached the Gateway.",
@@ -641,7 +649,9 @@ class EntryWiringRestartIntegrationTest {
         }
     }
 
-    private class RestartGateway : SessionGatewayPort, RunGatewayPort {
+    private class RestartGateway :
+        SessionGatewayPort,
+        RunGatewayPort {
         companion object {
             val SESSION_ID = SessionId("wiring-session")
         }
@@ -771,9 +781,10 @@ class EntryWiringRestartIntegrationTest {
             return statusByRun[runId] ?: if (terminal) activeRun.copy(status = "succeeded") else activeRun
         }
 
-        override fun observeRun(runId: RunId): RunEventObservation {
-            return BlockingObservation(observationStarted).also { observations += it }
-        }
+        override fun observeRun(runId: RunId): RunEventObservation =
+            BlockingObservation(observationStarted).also {
+                observations += it
+            }
     }
 
     private class BlockingObservation(
@@ -821,6 +832,11 @@ class EntryWiringRestartIntegrationTest {
                 val next = synchronized(queued) { queued.removeFirstOrNull() } ?: return
                 next.run()
             }
+        }
+
+        fun runNext() {
+            val next = synchronized(queued) { queued.removeFirstOrNull() } ?: return
+            next.run()
         }
 
         override fun dispatch(
