@@ -1,7 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-internal enum class GatewayStatus { READY, WAITING, OFFLINE }
-
 internal data class SessionListStatusUiState(
     val segments: List<UiText>,
     val gateway: UiText,

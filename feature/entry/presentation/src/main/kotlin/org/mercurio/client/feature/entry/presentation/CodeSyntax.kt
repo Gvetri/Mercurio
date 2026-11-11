@@ -1,19 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-internal enum class CodeTokenKind {
-    Keyword,
-    String,
-    Number,
-    Comment,
-    Function,
-}
-
-internal data class CodeToken(
-    val start: Int,
-    val end: Int,
-    val kind: CodeTokenKind,
-)
-
 internal fun highlightCode(
     language: String,
     code: String,
