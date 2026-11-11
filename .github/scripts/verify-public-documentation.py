@@ -120,6 +120,10 @@ REQUIRED_USER_GUIDE_STATEMENTS = (
     "Gateway request failed",
 )
 
+FORBIDDEN_USER_GUIDE_STATEMENTS = (
+    "no third-party crash reporting",
+)
+
 REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS = (
     "Local diagnostics",
     "Export diagnostics",
@@ -271,6 +275,10 @@ def verify_required_statements(text, statements, document):
     return [f"{document} must state: {statement}" for statement in statements if statement not in text]
 
 
+def verify_forbidden_statements(text, statements, document):
+    return [f"{document} must not state: {statement}" for statement in statements if statement in text]
+
+
 def pinned_hermes_revision(root):
     text = read(root, PINNED_FIXTURE)
     for line in text.splitlines():
@@ -292,6 +300,9 @@ def verify_scope(root):
     if (root / DIAGNOSTICS_SURFACE).is_file():
         statements.extend(REQUIRED_LOCAL_DIAGNOSTICS_STATEMENTS)
     violations.extend(verify_required_statements(user_guide, statements, USER_GUIDE))
+    violations.extend(
+        verify_forbidden_statements(user_guide, FORBIDDEN_USER_GUIDE_STATEMENTS, USER_GUIDE)
+    )
     release_artifacts = read(root, RELEASE_ARTIFACTS)
     violations.extend(
         verify_required_statements(release_artifacts, REQUIRED_RELEASE_ARTIFACT_STATEMENTS, RELEASE_ARTIFACTS)

@@ -106,13 +106,17 @@ class PublishedDocumentationTest(unittest.TestCase):
         self.replace_once(USER_GUIDE, "arm64-v8a", "arm64")
         self.assert_rejected(run_check(self.root), "must state: arm64-v8a")
 
-    def test_the_old_blanket_crash_reporting_claim_is_rejected(self):
+    def test_the_new_crash_reporting_scope_statement_is_required(self):
         self.replace_once(
             USER_GUIDE,
             "no network analytics, no product telemetry, no session replay, and no profiling",
             "no network analytics, no product telemetry, and no third-party crash reporting",
         )
         self.assert_rejected(run_check(self.root), "must state: no network analytics")
+
+    def test_the_old_blanket_crash_reporting_claim_is_rejected_beside_the_new_text(self):
+        self.append(USER_GUIDE, "\nThere is no third-party crash reporting.\n")
+        self.assert_rejected(run_check(self.root), "must not state: no third-party crash reporting")
 
     def test_the_declined_behaviour_must_be_stated(self):
         self.replace_once(

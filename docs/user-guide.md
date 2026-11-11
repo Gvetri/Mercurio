@@ -142,7 +142,8 @@ Android settings.
   client sends crash, error, and not-responding (ANR) reports to Sentry, the project's
   error-reporting service, and only after you accept on the first screen.
 - Nothing is sent until you answer, and nothing is sent after you say no. **Settings › Diagnostics**
-  carries the same answer as a switch; a change there applies from the next process start.
+  carries the same answer as a switch. Turning reports on there applies from the next process start;
+  turning them off stops the next report.
 - Conversation content is not persisted on the device as an offline history. The open Session's
   content is held for display and re-read from the Gateway.
 - A Run status notification carries terminal status only; it does not carry conversation content.
