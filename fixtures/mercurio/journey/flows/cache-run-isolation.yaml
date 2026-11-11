@@ -59,6 +59,6 @@ name: cache-run-isolation
     visible: "Offline send recovered"
     timeout: 30000
 - assertVisible: "Offline send recovered"
-- assertNotVisible: "Discard unsent record"
+- assertNotVisible: "Clear send warning"
 - assertNotVisible: "cached · unavailable"
 - takeScreenshot: cache-run-isolation-recovered

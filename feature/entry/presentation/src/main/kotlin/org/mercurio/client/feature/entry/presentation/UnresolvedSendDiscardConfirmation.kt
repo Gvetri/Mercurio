@@ -7,9 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 
 /**
- * The failed-send discard confirmation: dismissal or Back keeps the unresolved
- * submission record, and only an explicit confirm removes this client's record.
- * The composer text is never removed by this dialog.
+ * The failed-send warning confirmation: dismissal or Back keeps the unresolved-send marker,
+ * and only an explicit confirm clears this device's warning. The composer text is never
+ * removed by this dialog.
  */
 @Composable
 internal fun UnresolvedSendDiscardConfirmation(onEvent: (EntryUiEvent) -> Unit) {
@@ -21,7 +21,7 @@ internal fun UnresolvedSendDiscardConfirmation(onEvent: (EntryUiEvent) -> Unit) 
         },
         confirmButton = {
             TextButton(onClick = { onEvent(EntryUiEvent.ConfirmDiscardUnresolvedSendClicked) }) {
-                Text(text = stringResource(R.string.action_discard))
+                Text(text = stringResource(R.string.action_clear))
             }
         },
         dismissButton = {

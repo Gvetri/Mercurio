@@ -222,6 +222,92 @@ class ChatModelTest {
         assertNull(composer.reason)
     }
 
+    @Test
+    fun the_composer_disables_send_while_the_holder_refuses_an_unresolved_submission() {
+        val composer =
+            chatComposerState(
+                detail(
+                    content(
+                        messages = listOf(message("message-1", "user", "Earlier question")),
+                        composerText = "Draft",
+                        hasUnresolvedSubmission = true,
+                    ),
+                ),
+            )
+
+        assertTrue(composer.fieldEnabled)
+        assertFalse(composer.sendEnabled)
+        assertEquals(UiText.Resource(R.string.chat_reason_stale_run), composer.reason)
+    }
+
+    @Test
+    fun the_composer_disables_send_while_the_history_refreshes_with_held_messages() {
+        val composer =
+            chatComposerState(
+                detail(
+                    content(
+                        messages = listOf(message("message-1", "user", "Earlier question")),
+                        composerText = "Draft",
+                        isRefreshing = true,
+                    ),
+                ),
+            )
+
+        assertTrue(composer.fieldEnabled)
+        assertFalse(composer.sendEnabled)
+        assertEquals(UiText.Resource(R.string.chat_reason_refreshing), composer.reason)
+    }
+
+    @Test
+    fun the_composer_disables_send_while_an_uncertain_send_is_unresolved() {
+        val composer =
+            chatComposerState(
+                detail(
+                    content(
+                        composerText = "Draft",
+                        latestRun = Run(RunId("run-1"), SessionId("session"), "completed"),
+                        latestRunState = RunPresentationState.SUCCEEDED,
+                        sendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
+                    ),
+                ),
+            )
+
+        assertTrue(composer.fieldEnabled)
+        assertFalse(composer.sendEnabled)
+        assertEquals(UiText.Resource(R.string.error_message_uncertain), composer.reason)
+    }
+
+    @Test
+    fun the_composer_disables_send_when_the_run_state_is_uncertain_without_a_run() {
+        val composer =
+            chatComposerState(
+                detail(
+                    content(
+                        composerText = "Draft",
+                        latestRunState = RunPresentationState.UNCERTAIN,
+                    ),
+                ),
+            )
+
+        assertFalse(composer.sendEnabled)
+        assertEquals(UiText.Resource(R.string.chat_reason_stale_run), composer.reason)
+    }
+
+    @Test
+    fun the_composer_offers_send_again_once_the_warning_is_cleared() {
+        val composer =
+            chatComposerState(
+                detail(
+                    content(
+                        messages = listOf(message("message-1", "user", "Earlier question")),
+                        composerText = "Draft",
+                    ),
+                ),
+            )
+
+        assertTrue(composer.sendEnabled)
+    }
+
     private fun message(
         id: String,
         role: String,
@@ -241,6 +327,8 @@ class ChatModelTest {
         latestRunState: RunPresentationState? = null,
         activeResponse: SessionMessageUiState? = null,
         isReconciliationInProgress: Boolean = false,
+        hasUnresolvedSubmission: Boolean = false,
+        sendErrorCategory: MessageSendErrorCategory? = null,
     ): OpenSessionUiState =
         OpenSessionUiState(
             session = SessionItemUiState(SessionId("session"), "Session", null, false),
@@ -254,6 +342,8 @@ class ChatModelTest {
             latestRunState = latestRunState,
             activeResponse = activeResponse,
             isReconciliationInProgress = isReconciliationInProgress,
+            hasUnresolvedSubmission = hasUnresolvedSubmission,
+            sendErrorCategory = sendErrorCategory,
         )
 
     private fun detail(content: OpenSessionUiState): SessionDetailState =

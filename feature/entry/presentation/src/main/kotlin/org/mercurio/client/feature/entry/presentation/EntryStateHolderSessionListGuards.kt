@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun SessionListUiState.blocksFirstPageLoad(): Boolean =
@@ -61,11 +60,7 @@ internal fun EntryStateHolder.blocksRunSubmission(
     opened: OpenSessionUiState,
     sessionId: SessionId,
 ): Boolean =
-    opened.latestRunState == RunPresentationState.UNCERTAIN ||
-        opened.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN ||
-        opened.hasUnresolvedSubmission ||
-        opened.isRefreshing ||
-        opened.isReconciliationInProgress ||
+    opened.blocksRunSubmission() ||
         sessionId in connectionRecoverySessionCounts ||
         sessionId in recoverySessionCounts ||
         recoveryLoadPending ||
