@@ -21,7 +21,7 @@ internal fun EntryStateHolder.claimRecoveryEntry(
     val canClaim =
         connectionGeneration == expectedConnectionGeneration &&
             key !in recoveryHandledEntries &&
-            key !in recoveryClaims
+            !recoveryClaims.containsKey(key)
     if (!canClaim) return null
     return RecoveryClaim(
         key = key,
@@ -109,8 +109,7 @@ internal fun EntryStateHolder.claimRecoveryWorkItems(
                     run = Run(entry.runId, entry.sessionId, RECOVERY_PENDING_STATUS),
                     updateVisibleState = false,
                 )
-                recoverySessionCounts[entry.sessionId] =
-                    (recoverySessionCounts[entry.sessionId] ?: 0) + 1
+                recoverySessionCounts.merge(entry.sessionId, 1, Int::plus)
                 RecoveryWorkItem(entry, claim)
             }
         }
@@ -150,9 +149,7 @@ internal suspend fun EntryStateHolder.runRecoveryWorkItem(
     val entry = workItem.entry
     currentCoroutineContext().ensureActive()
     val expectedHistoryGeneration =
-        run {
-            authoritativeSessionHistoryGenerations[entry.sessionId] ?: 0L
-        }
+        authoritativeSessionHistoryGenerations[entry.sessionId] ?: 0L
     val recoveredRun =
         recoverRun(
             entry = entry,
@@ -193,11 +190,9 @@ internal fun EntryStateHolder.releaseRecoveryWork(
             if (releaseRecoveryClaim(workItem.claim)) {
                 val entry = workItem.entry
                 recoveryReconciledRunIds.remove(entry.runId)
-                val remaining = (recoverySessionCounts[entry.sessionId] ?: 1) - 1
-                if (remaining > 0) {
-                    recoverySessionCounts[entry.sessionId] = remaining
-                } else {
-                    recoverySessionCounts.remove(entry.sessionId)
+                recoverySessionCounts.compute(entry.sessionId) { _, count ->
+                    val remaining = (count ?: 1) - 1
+                    remaining.takeIf { it > 0 }
                 }
                 clearRecoveryUiIfIdle(entry.sessionId)
             }

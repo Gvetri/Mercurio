@@ -1274,6 +1274,7 @@ class QualityGateConfigurationTest {
             "udf/one-state-writer",
             "udf/immutable-state-types",
             "udf/one-event-entry",
+            "state-holder/no-monitor-locks",
         ).forEach { rule ->
             assertTrue("The rule suite must name the $rule rule.", ruleSuite.contains(rule))
         }
@@ -1310,6 +1311,9 @@ class QualityGateConfigurationTest {
             "rejects_a_state_type_with_a_nested_mutable_collection",
             "rejects_a_second_public_event_entry",
             "rejects_an_event_callback_property",
+            "state_holder_sources_carry_no_monitor_lock",
+            "rejects_a_monitor_lock_in_a_state_holder_source",
+            "accepts_a_state_holder_source_without_a_monitor_lock",
         ).forEach { test ->
             assertTrue("The rule suite must declare the $test evidence.", ruleSuite.contains(test))
         }

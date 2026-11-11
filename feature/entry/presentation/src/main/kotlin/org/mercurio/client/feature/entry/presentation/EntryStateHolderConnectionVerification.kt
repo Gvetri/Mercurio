@@ -81,9 +81,7 @@ internal fun EntryStateHolder.persistVerifiedCredential(
     if (!canPersist) return false
     return run {
         val stillCurrent =
-            run {
-                connectionGeneration == requestConnectionGeneration
-            }
+            connectionGeneration == requestConnectionGeneration
         if (!stillCurrent) {
             false
         } else {

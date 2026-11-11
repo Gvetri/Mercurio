@@ -171,9 +171,7 @@ internal fun EntryStateHolder.beginSessionRequest(): Long =
     }
 
 internal fun EntryStateHolder.createSessionJob(block: suspend CoroutineScope.() -> Unit): Job =
-    run {
-        scope.launch(start = CoroutineStart.LAZY, block = block).also { sessionJob = it }
-    }
+    scope.launch(start = CoroutineStart.LAZY, block = block).also { sessionJob = it }
 
 internal suspend fun EntryStateHolder.updateCurrentSessionRequest(
     requestGeneration: Long,

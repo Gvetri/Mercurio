@@ -123,9 +123,7 @@ internal fun EntryStateHolder.persistBeforeApply(
     requestConnectionGeneration: Long,
 ): Boolean =
     run.isActive() &&
-        run {
-            connectionGeneration == requestConnectionGeneration
-        }
+        connectionGeneration == requestConnectionGeneration
 
 internal suspend fun EntryStateHolder.applySubmitted(work: SubmittedRunApplication): SubmittedRunApplicationResult =
     applyStateChange {

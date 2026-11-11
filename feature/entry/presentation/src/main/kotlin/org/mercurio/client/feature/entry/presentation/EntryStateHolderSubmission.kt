@@ -52,9 +52,7 @@ internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
             )
         if (reconciled) {
             val canRetry =
-                run {
-                    !hasUnresolvedSubmission(sessionId)
-                }
+                !hasUnresolvedSubmission(sessionId)
             if (canRetry) {
                 awaitStateChangesApplied()
                 sendMessage()
@@ -73,9 +71,7 @@ internal fun EntryStateHolder.sendMessage() {
 
 internal fun EntryStateHolder.dispatchSendMessage() {
     val retryPending =
-        run {
-            mutableUiState.value.sessionList?.openedSession?.hasUnresolvedSubmission == true
-        }
+        mutableUiState.value.sessionList?.openedSession?.hasUnresolvedSubmission == true
     if (retryPending) {
         scope.launch { retryUncertainSubmissionOrSend() }
     } else {

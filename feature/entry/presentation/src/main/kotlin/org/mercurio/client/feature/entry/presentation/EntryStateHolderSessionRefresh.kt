@@ -127,9 +127,7 @@ internal suspend fun EntryStateHolder.continueSessionRecovery(
 ) {
     val sessionId = openedSession.session.id
     val pendingTimeoutRecovery =
-        run {
-            pendingTimedOutSends[sessionId]
-        }
+        pendingTimedOutSends[sessionId]
     val pendingSettledRecovery =
         if (pendingTimeoutRecovery == null) {
             prepareSettledSubmissionRecovery(sessionId)

@@ -136,7 +136,7 @@ internal fun EntryStateHolder.applyOpenedSessionResult(
         recoveryLoadPending ||
             recoveryLoadFailed ||
             sessionId in connectionRecoverySessionCounts ||
-            sessionId in recoverySessionCounts
+            recoverySessionCounts.containsKey(sessionId)
     return current.copy(
         sessions =
             current.sessions.mergeAuthoritative(openedSession.session),
@@ -179,7 +179,7 @@ internal fun EntryStateHolder.applyOpenedSessionMetadata(
         recoveryLoadPending ||
             recoveryLoadFailed ||
             sessionId in connectionRecoverySessionCounts ||
-            sessionId in recoverySessionCounts
+            recoverySessionCounts.containsKey(sessionId)
     val sessionWithoutHistory =
         OpenedSession(session = session, history = SessionHistory(sessionId, emptyList()))
     return current.copy(

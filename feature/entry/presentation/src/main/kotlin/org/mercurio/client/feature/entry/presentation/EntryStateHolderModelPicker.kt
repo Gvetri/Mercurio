@@ -20,16 +20,12 @@ internal fun EntryStateHolder.handleModelPickerEvent(event: EntryUiEvent.ModelPi
     }
 }
 
-private fun EntryStateHolder.openModelPicker() =
-    run {
-        refreshModelPickerFromStore()
-        updateModelPicker { it.copy(isPickerOpen = true) }
-    }
+private fun EntryStateHolder.openModelPicker() {
+    refreshModelPickerFromStore()
+    updateModelPicker { it.copy(isPickerOpen = true) }
+}
 
-private fun EntryStateHolder.closeModelPicker() =
-    run {
-        updateModelPicker { it.copy(isPickerOpen = false) }
-    }
+private fun EntryStateHolder.closeModelPicker() = updateModelPicker { it.copy(isPickerOpen = false) }
 
 private fun EntryStateHolder.selectModel(modelId: String) {
     val endpoint = mutableUiState.value.endpoint

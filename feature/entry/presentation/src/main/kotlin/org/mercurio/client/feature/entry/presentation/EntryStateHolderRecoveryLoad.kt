@@ -50,9 +50,7 @@ internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
 
 internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
     val entries =
-        run {
-            pendingDisconnectedRecoveryEntries.remove(endpoint).orEmpty().toList()
-        }
+        pendingDisconnectedRecoveryEntries.remove(endpoint).orEmpty().toList()
     entries.forEach { entry ->
         if (persistOrQueueRecoveryEntry(endpoint, entry)) {
             reconcilePersistedRecoveryEntryIfConnected(endpoint, entry)
@@ -65,9 +63,7 @@ internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
     entry: RunRecoveryEntry,
 ): Boolean {
     val persistence =
-        run {
-            persistRunRecoveryEntry to runRecoveryRegistry
-        }
+        persistRunRecoveryEntry to runRecoveryRegistry
     if (persistence.first == null && persistence.second == null) return true
     return try {
         persistence.first?.invoke(endpoint, entry)
@@ -155,7 +151,7 @@ internal suspend fun EntryStateHolder.finishRecoveryLoad(
             val recoveryInProgress =
                 sessionId in recoveredSessionIds ||
                     sessionId in connectionRecoverySessionCounts ||
-                    sessionId in recoverySessionCounts ||
+                    recoverySessionCounts.containsKey(sessionId) ||
                     sessionId in reconcilingSessions
             mutableUiState.value =
                 mutableUiState.value.copy(
@@ -210,7 +206,7 @@ internal fun EntryStateHolder.markRecoveryFailure(
 
 internal fun EntryStateHolder.hasPendingRecoveryWork(sessionId: SessionId): Boolean =
     sessionId in connectionRecoverySessionCounts ||
-        sessionId in recoverySessionCounts ||
+        recoverySessionCounts.containsKey(sessionId) ||
         sessionId in reconcilingSessions ||
         recoveryLoadPending
 

@@ -197,8 +197,9 @@ runs through the Konsist architecture assertion, and the reference and unidirect
 read the declared scopes through Konsist's declaration model. The declared rules are `architecture/layer-boundaries`,
 `architecture/domain-application-references`, `architecture/presentation-untrusted-content`,
 `architecture/app-external-file-boundary`, `architecture/module-dependency-declarations`,
-`udf/composables-take-state-and-events`, `udf/one-state-writer`, `udf/immutable-state-types`, and
-`udf/one-event-entry`; see [Architecture boundaries](architecture.md) for what each one rejects.
+`udf/composables-take-state-and-events`, `udf/one-state-writer`, `udf/immutable-state-types`,
+`udf/one-event-entry`, and `state-holder/no-monitor-locks`; see [Architecture boundaries](architecture.md)
+for what each one rejects.
 
 Every rule also runs against a synthetic scope that carries one deliberate violation, and the suite
 asserts that the rule names itself and reports the violation, so a rule that stopped rejecting a
@@ -211,7 +212,7 @@ rule suite's test classpath. Konsist parses Kotlin sources, not Gradle Kotlin sc
 build scripts are read directly by the one rule that owns them.
 
 `QualityGateConfigurationTest` pins the wiring: the pinned Konsist version, the test-classpath
-declaration, the entry point the `architecture-check` job runs, the nine rule names, and the
+declaration, the entry point the `architecture-check` job runs, the ten rule names, and the
 deliberate-violation evidence of every rule.
 
 ### Detekt
