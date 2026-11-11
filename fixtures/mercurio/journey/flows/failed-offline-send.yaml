@@ -33,7 +33,7 @@ name: failed-offline-send
     visible: "Message was not sent. Your draft is preserved. Try again."
     timeout: 30000
 - assertVisible: "Recover this offline draft"
-- assertVisible: "Discard unsent record"
+- assertVisible: "Clear send warning"
 - takeScreenshot: failed-offline-send-unresolved
 - launchApp:
     clearState: false
@@ -55,4 +55,4 @@ name: failed-offline-send
     visible: "Offline send recovered"
     timeout: 30000
 - assertVisible: "Offline send recovered"
-- assertNotVisible: "Discard unsent record"
+- assertNotVisible: "Clear send warning"

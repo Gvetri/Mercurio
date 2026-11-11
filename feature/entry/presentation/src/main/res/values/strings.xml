@@ -119,8 +119,8 @@
     <string name="dialog_clear_history_cache_body">Remove the cached conversations stored on this device. Remote Sessions and Runs are not deleted or changed. Diagnostic files you already exported are not removed.</string>
     <string name="dialog_remove_connection_title">Remove connection?</string>
     <string name="dialog_remove_connection_body">This deletes the saved credential and the Gateway address. Your sessions stay on the Gateway.</string>
-    <string name="dialog_discard_unsent_title">Discard the unsent message record?</string>
-    <string name="dialog_discard_unsent_body">Discarding clears this client\'s record of the failed send. The Gateway may still have received the message, so sending the draft again could create a duplicate. Your draft stays in the composer.</string>
+    <string name="dialog_discard_unsent_title">Clear the send warning?</string>
+    <string name="dialog_discard_unsent_body">This removes the local warning on this device that the message may have been sent. The Gateway may still have received it, so sending the draft again could create a duplicate. Your draft stays in the composer.</string>
     <string name="dialog_delete_session_title">Delete “%1$s”?</string>
     <string name="dialog_delete_session_body">The session and its transcript are removed from this client. This cannot be undone here.</string>
 
@@ -241,7 +241,7 @@
     <string name="chat_show_more">[ show more ]</string>
     <string name="chat_show_less">[ show less ]</string>
     <string name="chat_session_menu">Session menu</string>
-    <string name="chat_discard_unsent_record">Discard unsent record</string>
+    <string name="chat_discard_unsent_record">Clear send warning</string>
     <string name="chat_attach_unavailable">Attach a file, not available</string>
     <string name="chat_voice_unavailable">Voice note, not available</string>
     <string name="chat_open_editor">Open the editor</string>
