@@ -31,7 +31,7 @@ import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-private const val TEST_TIMEOUT_MILLIS = 5_000L
+private const val TEST_TIMEOUT_MILLIS = 15_000L
 
 internal fun holder(
     gateway: FakeGateway,

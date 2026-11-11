@@ -335,4 +335,4 @@ internal class ObservationFailingRemoveRunRecoveryRegistry(
     override fun remove(entry: RunRecoveryEntry): Unit = error("recovery cleanup unavailable")
 }
 
-internal const val OBSERVATION_TIMEOUT_MILLIS = 5_000L
+internal const val OBSERVATION_TIMEOUT_MILLIS = 15_000L

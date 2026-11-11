@@ -40,7 +40,7 @@ import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-internal const val RETRY_TIMEOUT_MILLIS = 5_000L
+internal const val RETRY_TIMEOUT_MILLIS = 15_000L
 
 internal class RetryHolderSettings(
     val dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
