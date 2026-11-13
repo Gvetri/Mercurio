@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.data.InMemoryRunRecoveryRegistry
@@ -189,7 +190,8 @@ class RunObservationStateHolderTest {
 
                 awaitObservationState(holder) {
                     val opened = it.sessionList?.openedSession
-                    gateway.statusRequests == listOf(localRun.id) &&
+                    gateway.statusRequests.size <= 4 &&
+                        gateway.statusRequests.distinct() == listOf(localRun.id) &&
                         opened?.activeRuns?.any { run -> run.id == localRun.id } == true &&
                         opened.latestRun?.id == localRun.id &&
                         opened.messages.map { message -> message.runId } == listOf(null) &&
@@ -415,4 +417,39 @@ class RunObservationStateHolderTest {
                 holder.close()
             }
         }
+
+    @Test
+    fun the_gateway_double_repeats_a_created_runs_last_served_status() {
+        val session = observationSession("session-status-double")
+        val createdRun = Run(RunId("run-created"), session.id, "running")
+        val terminalRun = createdRun.copy(status = "succeeded")
+        val gateway =
+            ObservationScriptedGateway(session).apply {
+                enqueueRun(createdRun)
+            }
+
+        val created = gateway.createRun(session.id, "Run this")
+
+        assertEquals(createdRun, gateway.getRunStatus(created.id))
+        assertEquals(createdRun, gateway.getRunStatus(created.id))
+        gateway.enqueueStatus(terminalRun)
+        assertEquals(terminalRun, gateway.getRunStatus(created.id))
+        assertEquals(terminalRun, gateway.getRunStatus(created.id))
+        assertEquals(
+            listOf(created.id, created.id, created.id, created.id),
+            gateway.statusRequests,
+        )
+    }
+
+    @Test
+    fun the_gateway_double_rejects_a_status_for_an_unknown_run() {
+        val gateway = ObservationScriptedGateway(observationSession("session-status-unknown"))
+
+        val failure =
+            assertThrows(IllegalStateException::class.java) {
+                gateway.getRunStatus(RunId("run-unknown"))
+            }
+
+        assertEquals("no status scripted", failure.message)
+    }
 }
