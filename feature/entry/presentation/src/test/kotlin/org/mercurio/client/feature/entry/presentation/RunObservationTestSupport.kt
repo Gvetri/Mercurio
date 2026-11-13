@@ -120,6 +120,7 @@ internal class ObservationScriptedGateway(
     val statusRequests = CopyOnWriteArrayList<RunId>()
     val cancelledRunIds = CopyOnWriteArrayList<RunId>()
     val createRunCount = AtomicInteger(0)
+    private val lastServedStatuses = ConcurrentHashMap<RunId, Run>()
     var blockCreate = false
     val createStarted = CountDownLatch(1)
     val createRelease = CountDownLatch(1)
@@ -188,7 +189,7 @@ internal class ObservationScriptedGateway(
             createStarted.countDown()
             createRelease.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
         }
-        return runResults.removeFirst()
+        return runResults.removeFirst().also { run -> lastServedStatuses[run.id] = run }
     }
 
     override fun getRunStatus(runId: RunId): Run {
@@ -197,12 +198,13 @@ internal class ObservationScriptedGateway(
             statusStarted.countDown()
             statusRelease.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
         }
-        return statusByRun[runId]
-            ?: if (statusResults.isEmpty()) {
-                error("not used")
-            } else {
-                statusResults.removeFirst()
-            }
+        val status =
+            statusByRun[runId]
+                ?: statusResults.pollFirst()
+                ?: lastServedStatuses[runId]
+                ?: error("no status scripted")
+        if (status.id == runId) lastServedStatuses[runId] = status
+        return status
     }
 
     override fun observeRun(runId: RunId): RunEventObservation {
