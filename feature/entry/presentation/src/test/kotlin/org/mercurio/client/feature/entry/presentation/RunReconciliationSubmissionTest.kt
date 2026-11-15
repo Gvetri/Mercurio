@@ -350,9 +350,9 @@ class RunReconciliationSubmissionTest {
                 awaitReconciliationState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened?.latestRun?.id == run.id &&
-                        opened.latestRunState == RunPresentationState.UNCERTAIN &&
-                        gateway.statusRequests.size >= 2
+                        opened.latestRunState == RunPresentationState.UNCERTAIN
                 }
+                awaitReconciliationCondition { gateway.statusRequests.size >= 2 }
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 assertEquals(1, gateway.runRequests.size)
 
