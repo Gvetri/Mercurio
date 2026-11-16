@@ -133,6 +133,7 @@ class RunObservationRecoveryTest {
                 assertTrue(gateway.createStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+                awaitObservationState(holder) { it.sessionList == null }
                 holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
                 holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
                 holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
