@@ -195,11 +195,12 @@ internal fun EntryStateHolder.beginRecoveryJob(
             run = Run(entry.runId, entry.sessionId, RECOVERY_PENDING_STATUS),
             updateVisibleState = false,
         )
-        if (connectionRecoverySessionCounts[entry.sessionId] == null) {
-            connectionRecoveryFailedSessions.remove(entry.sessionId)
+        connectionRecoverySessionCounts.compute(entry.sessionId) { _, count ->
+            if (count == null) {
+                connectionRecoveryFailedSessions.remove(entry.sessionId)
+            }
+            (count ?: 0) + 1
         }
-        connectionRecoverySessionCounts[entry.sessionId] =
-            (connectionRecoverySessionCounts[entry.sessionId] ?: 0) + 1
         if (recoveryContext.updateVisibleUi) {
             markRecoveryUiRefreshing(entry, recoveryContext)
         }

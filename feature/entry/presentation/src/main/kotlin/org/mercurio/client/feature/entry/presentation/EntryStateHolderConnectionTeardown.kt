@@ -58,21 +58,20 @@ internal fun EntryStateHolder.releaseRecoverySessionCount(
     entry: RunRecoveryEntry,
     recoveryContext: RecoveryRunContext,
 ) {
-    val remaining = (connectionRecoverySessionCounts[entry.sessionId] ?: 1) - 1
-    if (remaining > 0) {
-        connectionRecoverySessionCounts[entry.sessionId] = remaining
-    } else {
-        connectionRecoverySessionCounts.remove(entry.sessionId)
-        val recoveryFailed = connectionRecoveryFailedSessions.remove(entry.sessionId)
-        if (
-            recoveryContext.updateVisibleUi &&
-            sessionRequestGeneration == recoveryContext.sessionGeneration
-        ) {
-            if (recoveryFailed) {
-                markRecoveryFailure(entry.sessionId, recoveryContext.connectionGeneration)
-            } else {
-                clearRecoveryUiIfIdle(entry.sessionId)
-            }
+    val remaining =
+        connectionRecoverySessionCounts.compute(entry.sessionId) { _, count ->
+            ((count ?: 1) - 1).takeIf { it > 0 }
+        }
+    if (remaining != null) return
+    val recoveryFailed = connectionRecoveryFailedSessions.remove(entry.sessionId)
+    if (
+        recoveryContext.updateVisibleUi &&
+        sessionRequestGeneration == recoveryContext.sessionGeneration
+    ) {
+        if (recoveryFailed) {
+            markRecoveryFailure(entry.sessionId, recoveryContext.connectionGeneration)
+        } else {
+            clearRecoveryUiIfIdle(entry.sessionId)
         }
     }
 }
