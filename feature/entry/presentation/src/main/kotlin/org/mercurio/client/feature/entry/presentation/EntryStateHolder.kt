@@ -563,9 +563,9 @@ class EntryStateHolder(
     internal val sessionSendErrors = mutableMapOf<SessionId, MessageSendErrorCategory>()
     internal val pendingRunDrafts = mutableMapOf<SessionId, PendingDraft>()
     internal val pendingDisconnectedRecoveryEntries = ConcurrentHashMap<String, MutableSet<RunRecoveryEntry>>()
-    internal val connectionRecoveryJobs = mutableSetOf<Job>()
-    internal val connectionRecoverySessionCounts = mutableMapOf<SessionId, Int>()
-    internal val connectionRecoveryFailedSessions = mutableSetOf<SessionId>()
+    internal val connectionRecoveryJobs: MutableSet<Job> = ConcurrentHashMap.newKeySet()
+    internal val connectionRecoverySessionCounts: MutableMap<SessionId, Int> = ConcurrentHashMap()
+    internal val connectionRecoveryFailedSessions: MutableSet<SessionId> = ConcurrentHashMap.newKeySet()
     internal val recoverySessionCounts = ConcurrentHashMap<SessionId, Int>()
     internal var nextRecoveryClaimId = 0L
     internal var nextComposerFocusRequestId = 0L
@@ -573,7 +573,7 @@ class EntryStateHolder(
     internal var isForeground = false
     internal var isUnlockPromptPending = false
     internal val recoveryClaims = ConcurrentHashMap<RecoveryEntryKey, RecoveryClaim>()
-    internal val recoveryReconciledRunIds = mutableSetOf<RunId>()
+    internal val recoveryReconciledRunIds: MutableSet<RunId> = ConcurrentHashMap.newKeySet()
     internal val recoveryHandledEntries: MutableSet<RecoveryEntryKey> = ConcurrentHashMap.newKeySet()
     internal var recoveryLoadPending = false
     internal var recoveryLoadFailed = false

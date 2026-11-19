@@ -43,10 +43,13 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.BiFunction
 
 /**
  * Asserts that a cancelled parent job releases the run observer. The submission application is
@@ -565,6 +568,43 @@ internal class ReconciliationBlockingContainsMap<K, V>(
             "Blocked map lookup was not released."
         }
         return delegate.containsKey(key)
+    }
+}
+
+internal class ReconciliationRacingCountMap : ConcurrentHashMap<SessionId, Int>() {
+    val entered = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    private val blocked = AtomicBoolean(false)
+
+    @Volatile
+    private var armedThread: Thread? = null
+
+    fun armForCurrentThread() {
+        armedThread = Thread.currentThread()
+    }
+
+    override fun put(
+        key: SessionId,
+        value: Int,
+    ): Int? {
+        blockArmedThread()
+        return super.put(key, value)
+    }
+
+    override fun compute(
+        key: SessionId,
+        remappingFunction: BiFunction<in SessionId, in Int?, out Int?>,
+    ): Int? {
+        blockArmedThread()
+        return super.compute(key, remappingFunction)
+    }
+
+    private fun blockArmedThread() {
+        if (Thread.currentThread() !== armedThread || !blocked.compareAndSet(false, true)) return
+        entered.countDown()
+        check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+            "The racing count write was not released."
+        }
     }
 }
 
