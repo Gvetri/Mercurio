@@ -39,6 +39,7 @@ internal fun holder(
     repository: GatewayConnectionRepository =
         DefaultGatewayConnectionRepository(InMemoryGatewayConnectionDataSource()),
     uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
+    onRunSubmissionSettled: (() -> Unit)? = null,
 ): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
@@ -49,7 +50,15 @@ internal fun holder(
         scope = CoroutineScope(SupervisorJob() + dispatcher),
         sessionGatewayFactory = { _, _ -> gateway },
         runGatewayFactory = { _, _ -> gateway },
-        dependencies = submissionHolderDependencies(repository, uncertaintyStore, gateway.runFinished::countDown),
+        dependencies =
+            submissionHolderDependencies(
+                repository,
+                uncertaintyStore,
+                onRunSubmissionSettled = {
+                    gateway.runFinished.countDown()
+                    onRunSubmissionSettled?.invoke()
+                },
+            ),
     )
 
 internal suspend fun connect(
