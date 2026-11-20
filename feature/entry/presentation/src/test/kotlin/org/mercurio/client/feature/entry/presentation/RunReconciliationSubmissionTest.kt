@@ -376,7 +376,9 @@ class RunReconciliationSubmissionTest {
             val gateway =
                 ReconciliationFakeGateway(session).apply {
                     histories.add(SessionHistory(session.id, emptyList()))
-                    repeat(4) { histories.add(otherHistory) }
+                    histories.add(otherHistory)
+                    histories.add(refreshedRunHistory(session, otherRun))
+                    repeat(2) { histories.add(otherHistory) }
                     repeat(2) { statuses.add(otherRun) }
                     blockRunCreation = true
                 }
@@ -393,11 +395,11 @@ class RunReconciliationSubmissionTest {
                 assertTrue(gateway.runStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
 
                 awaitReconciliationState(holder, timedOutSendResolvedState(otherRun))
-                val opened = assertTimedOutSendKeptDraft(holder, gateway, session, otherRun)
+                assertTimedOutSendKeptDraft(holder, gateway, session, otherRun)
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Edited after timeout"))
-                holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                awaitReconciliationState(holder, refreshedAfterTimeoutState(opened, otherRun))
+                acceptRefreshAfterTimeout(holder, gateway)
+                awaitReconciliationState(holder, refreshedAfterTimeoutState(otherRun))
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
                 awaitReconciliationState(holder) { it.sessionList?.openedSession == null }
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
@@ -475,6 +477,44 @@ class RunReconciliationSubmissionTest {
             ),
         )
 
+    private fun refreshedRunHistory(
+        session: Session,
+        otherRun: Run,
+    ): SessionHistory =
+        SessionHistory(
+            session.id,
+            listOf(
+                GatewayHistoryMessage(
+                    "refreshed",
+                    "assistant",
+                    "Refreshed result",
+                    otherRun.id,
+                    "succeeded",
+                    "Refreshed result",
+                    "2026-09-08T21:30:00Z",
+                ),
+            ),
+        )
+
+    private suspend fun acceptRefreshAfterTimeout(
+        holder: EntryStateHolder,
+        gateway: ReconciliationFakeGateway,
+    ) {
+        awaitReconciliationState(holder) { state ->
+            val list = state.sessionList
+            val opened = list?.openedSession
+            list != null &&
+                opened != null &&
+                !list.hasActiveRequest &&
+                !opened.isRefreshing &&
+                !opened.isReconciliationInProgress
+        }
+        holder.awaitStateChangesApplied()
+        val beforeRefresh = gateway.historyRequests
+        holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
+        awaitReconciliationCondition { gateway.historyRequests == beforeRefresh + 1 }
+    }
+
     private fun timedOutSendResolvedState(otherRun: Run): (EntryUiState) -> Boolean =
         { state ->
             val opened = state.sessionList?.openedSession
@@ -489,10 +529,7 @@ class RunReconciliationSubmissionTest {
                 opened.composerText == "Keep this draft"
         }
 
-    private fun refreshedAfterTimeoutState(
-        opened: OpenSessionUiState,
-        otherRun: Run,
-    ): (EntryUiState) -> Boolean =
+    private fun refreshedAfterTimeoutState(otherRun: Run): (EntryUiState) -> Boolean =
         { state ->
             val refreshed = state.sessionList?.openedSession
             refreshed?.isRefreshing == false &&
@@ -501,9 +538,9 @@ class RunReconciliationSubmissionTest {
                 refreshed.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
                 refreshed.hasUnresolvedSubmission &&
                 refreshed.composerText == "Edited after timeout" &&
-                opened.messages.map { message -> message.id } == listOf("other") &&
-                opened.messages.single().runResult == "External result" &&
-                opened.messages.single().timestamp?.toString() == "2026-09-08T21:00:00Z"
+                refreshed.messages.map { message -> message.id } == listOf("refreshed") &&
+                refreshed.messages.single().runResult == "Refreshed result" &&
+                refreshed.messages.single().timestamp?.toString() == "2026-09-08T21:30:00Z"
         }
 
     private fun reopenedAfterTimeoutState(otherRun: Run): (EntryUiState) -> Boolean =
@@ -514,7 +551,10 @@ class RunReconciliationSubmissionTest {
                 state.sessionList.openedSession.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN &&
                 state.sessionList.openedSession.hasUnresolvedSubmission == true &&
                 state.sessionList.openedSession.isReconciliationInProgress == false &&
-                state.sessionList.openedSession.composerText == "Edited after timeout"
+                state.sessionList.openedSession.composerText == "Edited after timeout" &&
+                state.sessionList.openedSession.messages.map { message -> message.id } == listOf("other") &&
+                state.sessionList.openedSession.messages.single().runResult == "External result" &&
+                state.sessionList.openedSession.messages.single().timestamp?.toString() == "2026-09-08T21:00:00Z"
         }
 
     private fun sendAfterTimeoutState(): (EntryUiState) -> Boolean =
