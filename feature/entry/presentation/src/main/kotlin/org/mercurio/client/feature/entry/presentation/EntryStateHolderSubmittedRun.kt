@@ -238,7 +238,6 @@ internal fun EntryStateHolder.updateSubmittedRunUi(
                             composerText = sessionDrafts[application.sessionId].orEmpty(),
                             latestRun = knownRuns.latestRun() ?: application.run,
                             activeRuns = knownRuns.activeRuns(),
-                            isSending = false,
                             sendErrorCategory =
                                 if (application.recoveryPersistenceFailed) {
                                     MessageSendErrorCategory.UNCERTAIN
