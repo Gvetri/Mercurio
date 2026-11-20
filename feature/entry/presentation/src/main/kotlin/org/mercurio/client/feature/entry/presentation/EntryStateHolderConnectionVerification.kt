@@ -63,14 +63,14 @@ internal suspend fun EntryStateHolder.runVerification(
     }
 }
 
-internal fun EntryStateHolder.persistVerifiedCredential(
+internal suspend fun EntryStateHolder.persistVerifiedCredential(
     verifier: VerifyGatewayConnection,
     state: EntryUiState,
     requestConnectionGeneration: Long,
     normalizedEndpoint: String,
 ): Boolean {
     val canPersist =
-        run {
+        applyStateChange {
             if (connectionGeneration == requestConnectionGeneration) {
                 mutableUiState.value = mutableUiState.value.copy(isVerifying = false, isSaving = true)
                 true
@@ -94,13 +94,13 @@ internal fun EntryStateHolder.persistVerifiedCredential(
     }
 }
 
-internal fun EntryStateHolder.connectVerifiedGateway(
+internal suspend fun EntryStateHolder.connectVerifiedGateway(
     state: EntryUiState,
     normalizedEndpoint: String,
     requestConnectionGeneration: Long,
     capabilities: GatewayCapabilities,
 ): SessionGatewayPort? =
-    run {
+    applyStateChange {
         if (connectionGeneration != requestConnectionGeneration) {
             null
         } else {
@@ -153,7 +153,7 @@ internal fun EntryStateHolder.connectVerifiedGateway(
         }
     }
 
-internal fun EntryStateHolder.showFailure(
+internal suspend fun EntryStateHolder.showFailure(
     category: EntryErrorCategory,
     requestConnectionGeneration: Long,
 ) {
@@ -161,13 +161,15 @@ internal fun EntryStateHolder.showFailure(
         LocalDiagnosticEventType.GATEWAY_CONNECTION_VERIFICATION,
         LocalDiagnosticStatus.FAILED,
     )
-    if (connectionGeneration == requestConnectionGeneration) {
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                isVerifying = false,
-                isSaving = false,
-                errorCategory = category,
-            )
+    applyStateChange {
+        if (connectionGeneration == requestConnectionGeneration) {
+            mutableUiState.value =
+                mutableUiState.value.copy(
+                    isVerifying = false,
+                    isSaving = false,
+                    errorCategory = category,
+                )
+        }
     }
 }
 

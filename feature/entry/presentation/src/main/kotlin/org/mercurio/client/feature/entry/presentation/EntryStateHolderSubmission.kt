@@ -34,7 +34,7 @@ internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
             }
         }
     if (retryContext == null) {
-        sendMessage()
+        submitStateChange { sendMessage() }
         return
     }
     val (sessionId, requestConnectionGeneration, recovery) = retryContext
@@ -55,7 +55,7 @@ internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
                 !hasUnresolvedSubmission(sessionId)
             if (canRetry) {
                 awaitStateChangesApplied()
-                sendMessage()
+                submitStateChange { sendMessage() }
             }
         }
     }
@@ -120,6 +120,11 @@ internal fun EntryStateHolder.launchRunSubmission(
     prepareRunSubmission(gateway, input, recordDraft, rejectRunId)?.start()
 }
 
+/**
+ * Prepares and starts a Run submission on the state-change lane. The guard, the `isSending` write
+ * and the job start share one command, so no other command can observe a half-started submission.
+ * The uncertain-send retry enqueues this function, because it runs on the retry coroutine.
+ */
 internal fun EntryStateHolder.prepareRunSubmission(
     gateway: RunGatewayPort,
     input: String,

@@ -3,7 +3,6 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.mercurio.client.feature.entry.application.NightlyDownloadOutcome
 import org.mercurio.client.feature.entry.application.NightlyUpdateCheck
@@ -34,7 +33,7 @@ internal fun EntryStateHolder.checkForUpdates() {
                 }
             ensureActive()
             if (updateCheckGeneration != generation) return@launch
-            setUpdateStatus(status)
+            setUpdateStatus(status) { updateCheckGeneration == generation }
         }
 }
 
@@ -63,16 +62,21 @@ internal fun EntryStateHolder.downloadUpdate() {
                 }
             ensureActive()
             if (updateDownloadGeneration != generation) return@launch
+            val stillCurrent = { updateDownloadGeneration == generation }
             when (outcome) {
-                null -> setUpdateStatus(AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE))
+                null -> setUpdateStatus(AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE), stillCurrent)
                 is NightlyDownloadOutcome.Verified -> {
                     updateInstallArtifact = outcome.artifact
-                    setUpdateStatus(AppUpdateStatus.Verified(outcome.verifiedAt))
+                    setUpdateStatus(AppUpdateStatus.Verified(outcome.verifiedAt), stillCurrent)
                     continueInstall(offer, generation)
                 }
                 is NightlyDownloadOutcome.Refused ->
-                    setUpdateStatus(AppUpdateStatus.DownloadRefused(outcome.reason))
-                is NightlyDownloadOutcome.Failed -> setUpdateStatus(AppUpdateStatus.Failed(outcome.reason))
+                    setUpdateStatus(AppUpdateStatus.DownloadRefused(outcome.reason), stillCurrent)
+                is NightlyDownloadOutcome.Failed ->
+                    setUpdateStatus(
+                        AppUpdateStatus.Failed(outcome.reason),
+                        stillCurrent,
+                    )
             }
         }
 }
@@ -95,17 +99,18 @@ internal suspend fun EntryStateHolder.continueInstall(
         }
     currentCoroutineContext().ensureActive()
     if (updateDownloadGeneration != generation) return
+    val stillCurrent = { updateDownloadGeneration == generation }
     when (outcome) {
-        null -> setUpdateStatus(AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE))
+        null -> setUpdateStatus(AppUpdateStatus.Failed(NightlyUpdateFailure.SERVICE_UNAVAILABLE), stillCurrent)
         NightlyInstallOutcome.PermissionRequired ->
-            setUpdateStatus(AppUpdateStatus.PermissionRequired(offer.versionName, offer.versionCode))
+            setUpdateStatus(AppUpdateStatus.PermissionRequired(offer.versionName, offer.versionCode), stillCurrent)
         NightlyInstallOutcome.Installed -> {
             discardInstallArtifact()
-            setUpdateStatus(AppUpdateStatus.Installed(offer.versionName, offer.versionCode))
+            setUpdateStatus(AppUpdateStatus.Installed(offer.versionName, offer.versionCode), stillCurrent)
         }
         is NightlyInstallOutcome.Refused -> {
             discardInstallArtifact()
-            setUpdateStatus(AppUpdateStatus.InstallRefused(outcome.reason))
+            setUpdateStatus(AppUpdateStatus.InstallRefused(outcome.reason), stillCurrent)
         }
     }
 }
@@ -115,7 +120,7 @@ internal fun EntryStateHolder.reportDownloadProgress(
     progress: NightlyDownloadProgress,
 ) {
     if (updateDownloadGeneration != generation) return
-    setUpdateStatus(AppUpdateStatus.Downloading(progress))
+    setUpdateStatus(AppUpdateStatus.Downloading(progress)) { updateDownloadGeneration == generation }
 }
 
 internal fun EntryStateHolder.cancelUpdateDownload() {
@@ -124,9 +129,15 @@ internal fun EntryStateHolder.cancelUpdateDownload() {
     setUpdateStatus(AppUpdateStatus.Offered(offer))
 }
 
-internal fun EntryStateHolder.setUpdateStatus(status: AppUpdateStatus) {
-    mutableUiState.update { current ->
-        current.copy(appUpdates = current.appUpdates.copy(status = status))
+internal fun EntryStateHolder.setUpdateStatus(
+    status: AppUpdateStatus,
+    ifCurrent: () -> Boolean = { true },
+) {
+    submitStateChange {
+        if (ifCurrent()) {
+            mutableUiState.value =
+                mutableUiState.value.copy(appUpdates = mutableUiState.value.appUpdates.copy(status = status))
+        }
     }
 }
 

@@ -12,9 +12,9 @@ import org.mercurio.client.feature.entry.domain.ModelCatalogSurface
  * re-verified connection re-arms it — and any failure lands as
  * [ModelPickerUiState.catalogFetchFailed] — control hidden, connection untouched.
  */
-internal fun EntryStateHolder.maybeFetchModelCatalog() {
+internal suspend fun EntryStateHolder.maybeFetchModelCatalog() {
     val request =
-        run {
+        applyStateChange {
             val state = mutableUiState.value
             val picker = state.sessionList?.modelPicker
             val surface = picker?.catalogSurface
@@ -42,7 +42,7 @@ private fun EntryStateHolder.claimModelCatalogFetch(
     return ModelCatalogFetchRequest(port, endpoint, surface, connectionGeneration)
 }
 
-internal fun EntryStateHolder.runModelCatalogFetch(request: ModelCatalogFetchRequest) {
+internal suspend fun EntryStateHolder.runModelCatalogFetch(request: ModelCatalogFetchRequest) {
     val catalog =
         try {
             request.port.fetchModelCatalog(request.surface)
@@ -56,29 +56,32 @@ internal fun EntryStateHolder.runModelCatalogFetch(request: ModelCatalogFetchReq
     applyModelCatalogResult(request, catalog)
 }
 
-internal fun EntryStateHolder.applyModelCatalogResult(
+internal suspend fun EntryStateHolder.applyModelCatalogResult(
     request: ModelCatalogFetchRequest,
     catalog: ModelCatalog?,
 ) {
-    val state = mutableUiState.value
-    if (connectionGeneration == request.connectionGeneration && state.endpoint == request.endpoint) {
-        updateModelPicker {
-            ModelPickerUiState(
-                capabilityKnown = true,
-                catalogSurface = request.surface,
-                catalog = catalog,
-                catalogFetchFailed = catalog == null,
-                selection = modelSelectionStore.read(request.endpoint),
-                favorites = modelSelectionStore.favorites(request.endpoint),
-                recents = modelSelectionStore.recents(request.endpoint),
-            )
+    applyStateChange {
+        val state = mutableUiState.value
+        if (connectionGeneration == request.connectionGeneration && state.endpoint == request.endpoint) {
+            updateModelPicker {
+                ModelPickerUiState(
+                    capabilityKnown = true,
+                    catalogSurface = request.surface,
+                    catalog = catalog,
+                    catalogFetchFailed = catalog == null,
+                    selection = modelSelectionStore.read(request.endpoint),
+                    favorites = modelSelectionStore.favorites(request.endpoint),
+                    recents = modelSelectionStore.recents(request.endpoint),
+                )
+            }
         }
     }
 }
 
 /**
- * Applies a picker-state transform. Callers run on the state-change lane, or arrive through
- * the catalog fetch path, which re-checks the connection generation before applying.
+ * Applies a picker-state transform. Every caller runs on the state-change lane: the picker events
+ * arrive through `onEvent`, and the catalog-fetch path claims and applies its result inside
+ * `applyStateChange`.
  */
 internal fun EntryStateHolder.updateModelPicker(transform: (ModelPickerUiState) -> ModelPickerUiState) {
     val state = mutableUiState.value

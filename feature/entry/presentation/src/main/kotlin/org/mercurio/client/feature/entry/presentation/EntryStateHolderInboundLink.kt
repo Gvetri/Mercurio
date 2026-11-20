@@ -107,9 +107,10 @@ internal fun EntryStateHolder.applyInboundLink(link: EntryLink) {
     }
 }
 
-internal fun EntryStateHolder.showLinkedSessionOpenFailure(requestGeneration: Long) {
-    val isCurrent =
-        requestGeneration == sessionRequestGeneration
-    if (!isCurrent) return
-    showUnknownInboundLink()
+internal suspend fun EntryStateHolder.showLinkedSessionOpenFailure(requestGeneration: Long) {
+    applyStateChange {
+        if (requestGeneration == sessionRequestGeneration) {
+            showUnknownInboundLink()
+        }
+    }
 }

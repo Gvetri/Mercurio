@@ -34,19 +34,21 @@ internal fun EntryStateHolder.exportLocalDiagnostics() {
         val result =
             runCatching { exporter.export() }
                 .getOrDefault(LocalDiagnosticsExportResult.FAILED)
-        mutableUiState.update { state ->
-            state.copy(
-                localDiagnostics =
-                    state.localDiagnostics.copy(
-                        isExporting = false,
-                        exportFailure =
-                            if (result == LocalDiagnosticsExportResult.FAILED) {
-                                LocalDiagnosticsExportFailure.EXPORT_FAILED
-                            } else {
-                                null
-                            },
-                    ),
-            )
+        applyStateChange {
+            mutableUiState.update { state ->
+                state.copy(
+                    localDiagnostics =
+                        state.localDiagnostics.copy(
+                            isExporting = false,
+                            exportFailure =
+                                if (result == LocalDiagnosticsExportResult.FAILED) {
+                                    LocalDiagnosticsExportFailure.EXPORT_FAILED
+                                } else {
+                                    null
+                                },
+                        ),
+                )
+            }
         }
         applyLocalDiagnosticsRecordCount()
     }
@@ -81,18 +83,20 @@ internal fun EntryStateHolder.confirmClearLocalDiagnostics() {
     scope.launch {
         try {
             val cleared = runCatching { store.clear() }.isSuccess
-            mutableUiState.update { state ->
-                if (!state.localDiagnostics.isOpen) {
-                    state
-                } else {
-                    state.copy(
-                        localDiagnostics =
-                            if (cleared) {
-                                state.localDiagnostics.copy(isClearConfirmationOpen = false, recordCount = 0)
-                            } else {
-                                state.localDiagnostics
-                            },
-                    )
+            applyStateChange {
+                mutableUiState.update { state ->
+                    if (!state.localDiagnostics.isOpen) {
+                        state
+                    } else {
+                        state.copy(
+                            localDiagnostics =
+                                if (cleared) {
+                                    state.localDiagnostics.copy(isClearConfirmationOpen = false, recordCount = 0)
+                                } else {
+                                    state.localDiagnostics
+                                },
+                        )
+                    }
                 }
             }
         } finally {
@@ -106,16 +110,20 @@ internal fun EntryStateHolder.localDiagnosticsRecordCount(): Int =
         ?.let { ports -> runCatching { ports.store.recordCount() }.getOrNull() }
         ?: 0
 
-internal fun EntryStateHolder.applyLocalDiagnosticsRecordCount() {
-    val recordCount = localDiagnosticsRecordCount()
-    mutableUiState.update { state ->
-        if (!state.localDiagnostics.isOpen) {
-            state
-        } else {
-            state.copy(
-                localDiagnostics =
-                    state.localDiagnostics.copy(isLoadingRecords = false, recordCount = recordCount),
-            )
+internal suspend fun EntryStateHolder.applyLocalDiagnosticsRecordCount() {
+    applyStateChange {
+        mutableUiState.update { state ->
+            if (!state.localDiagnostics.isOpen) {
+                state
+            } else {
+                state.copy(
+                    localDiagnostics =
+                        state.localDiagnostics.copy(
+                            isLoadingRecords = false,
+                            recordCount = localDiagnosticsRecordCount(),
+                        ),
+                )
+            }
         }
     }
 }
