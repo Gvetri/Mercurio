@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
 import org.mercurio.client.feature.entry.domain.isValid
@@ -11,17 +13,19 @@ class InMemoryRunRecoveryRegistry(
         linkedSetOf<RunRecoveryEntry>().apply {
             addAll(initialEntries.filter(RunRecoveryEntry::isValid))
         }
+    private val mutex = Mutex()
 
-    @Synchronized
-    override fun load(): List<RunRecoveryEntry> = entries.toList()
+    override suspend fun load(): List<RunRecoveryEntry> = mutex.withLock { entries.toList() }
 
-    @Synchronized
-    override fun save(entry: RunRecoveryEntry) {
-        if (entry.isValid()) entries += entry
+    override suspend fun save(entry: RunRecoveryEntry) {
+        mutex.withLock {
+            if (entry.isValid()) entries += entry
+        }
     }
 
-    @Synchronized
-    override fun remove(entry: RunRecoveryEntry) {
-        entries -= entry
+    override suspend fun remove(entry: RunRecoveryEntry) {
+        mutex.withLock {
+            entries -= entry
+        }
     }
 }

@@ -24,8 +24,8 @@ import org.mercurio.client.feature.entry.domain.SessionDraftStore
 data class EntryStateHolderDependencies(
     val runRecoveryRegistry: RunRecoveryRegistry? = null,
     val updateRunRecoveryEndpoint: ((String?) -> Unit)? = null,
-    val persistRunRecoveryEntry: ((String, RunRecoveryEntry) -> Unit)? = null,
-    val removeRunRecoveryEntry: ((String, RunRecoveryEntry) -> Unit)? = null,
+    val persistRunRecoveryEntry: (suspend (String, RunRecoveryEntry) -> Unit)? = null,
+    val removeRunRecoveryEntry: (suspend (String, RunRecoveryEntry) -> Unit)? = null,
     val removeGatewayConnectionUseCase: RemoveGatewayConnection? = null,
     val runSubmissionUncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
     val sessionDraftStore: SessionDraftStore = NoOpSessionDraftStore,

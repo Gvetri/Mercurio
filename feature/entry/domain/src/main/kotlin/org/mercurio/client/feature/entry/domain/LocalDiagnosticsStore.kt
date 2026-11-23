@@ -6,5 +6,5 @@ interface LocalDiagnosticsStore {
     fun recordCount(): Int
 
     /** Discards every retained record; collection stays ready for new records. */
-    fun clear()
+    suspend fun clear()
 }

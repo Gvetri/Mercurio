@@ -77,10 +77,10 @@ object EntryWiring {
                             runRecoveryRegistry,
                             localDiagnosticsBuffer,
                         ) { endpoint ->
-                            endpoint?.let(runSubmissionUncertaintyStore::clearEndpoint)
+                            endpoint?.let { runSubmissionUncertaintyStore.clearEndpoint(it) }
                             endpoint?.let(sessionDraftStore::clearEndpoint)
                             endpoint?.let(modelSelectionStore::clearEndpoint)
-                            endpoint?.let(historyCacheStore::clearEndpoint)
+                            endpoint?.let { historyCacheStore.clearEndpoint(it) }
                         },
                     localDiagnostics = buildDiagnosticsPorts(context, localDiagnosticsBuffer, clientVersion),
                     errorReporting = buildErrorReporting(context, overrides, clientVersion, errorReportingConsentStore),
@@ -214,7 +214,7 @@ private fun buildConnectionRemovalUseCase(
     repository: GatewayConnectionRepository,
     runRecoveryRegistry: EndpointScopedRunRecoveryRegistry,
     localDiagnosticsBuffer: RollingLocalDiagnosticsBuffer,
-    onEndpointRemoved: (String?) -> Unit,
+    onEndpointRemoved: suspend (String?) -> Unit,
 ): RemoveGatewayConnection =
     RemoveGatewayConnection(repository) { endpoint ->
         runRecoveryRegistry.clearForEndpoint(endpoint)

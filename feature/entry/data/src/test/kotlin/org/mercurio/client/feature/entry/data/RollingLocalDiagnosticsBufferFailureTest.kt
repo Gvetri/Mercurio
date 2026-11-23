@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,47 +19,49 @@ import java.time.Instant
  */
 class RollingLocalDiagnosticsBufferFailureTest {
     @Test
-    fun a_recording_failure_is_surfaced_once_with_its_cause_and_a_later_attempt_still_records() {
-        val storage = FailingLocalDiagnosticsStorage(failuresBeforeSuccess = 1)
-        val failures = mutableListOf<Throwable>()
-        val buffer =
-            RollingLocalDiagnosticsBuffer(
-                storage,
-                clock = { FIXED_INSTANT },
-                onRecordFailure = failures::add,
-            )
+    fun a_recording_failure_is_surfaced_once_with_its_cause_and_a_later_attempt_still_records() =
+        runBlocking<Unit> {
+            val storage = FailingLocalDiagnosticsStorage(failuresBeforeSuccess = 1)
+            val failures = mutableListOf<Throwable>()
+            val buffer =
+                RollingLocalDiagnosticsBuffer(
+                    storage,
+                    clock = { FIXED_INSTANT },
+                    onRecordFailure = failures::add,
+                )
 
-        buffer.record(EXECUTED_EVENT)
+            buffer.record(EXECUTED_EVENT)
 
-        assertEquals(1, failures.size)
-        assertTrue(failures.single() is IllegalStateException)
+            assertEquals(1, failures.size)
+            assertTrue(failures.single() is IllegalStateException)
 
-        buffer.record(EXECUTED_EVENT)
+            buffer.record(EXECUTED_EVENT)
 
-        assertEquals(1, buffer.recordCount())
-        val expected = requireNotNull(LocalDiagnosticsRecords.encodeEventRecord(EXECUTED_EVENT, FIXED_INSTANT))
-        assertEquals(listOf(expected), storage.read())
-    }
+            assertEquals(1, buffer.recordCount())
+            val expected = requireNotNull(LocalDiagnosticsRecords.encodeEventRecord(EXECUTED_EVENT, FIXED_INSTANT))
+            assertEquals(listOf(expected), storage.read())
+        }
 
     @Test
-    fun only_the_first_recording_failure_is_surfaced() {
-        val storage = FailingLocalDiagnosticsStorage(failuresBeforeSuccess = 3)
-        val failures = mutableListOf<Throwable>()
-        val buffer =
-            RollingLocalDiagnosticsBuffer(
-                storage,
-                clock = { FIXED_INSTANT },
-                onRecordFailure = failures::add,
-            )
+    fun only_the_first_recording_failure_is_surfaced() =
+        runBlocking<Unit> {
+            val storage = FailingLocalDiagnosticsStorage(failuresBeforeSuccess = 3)
+            val failures = mutableListOf<Throwable>()
+            val buffer =
+                RollingLocalDiagnosticsBuffer(
+                    storage,
+                    clock = { FIXED_INSTANT },
+                    onRecordFailure = failures::add,
+                )
 
-        buffer.record(EXECUTED_EVENT)
-        buffer.record(EXECUTED_EVENT)
-        buffer.record(EXECUTED_EVENT)
-        buffer.record(EXECUTED_EVENT)
+            buffer.record(EXECUTED_EVENT)
+            buffer.record(EXECUTED_EVENT)
+            buffer.record(EXECUTED_EVENT)
+            buffer.record(EXECUTED_EVENT)
 
-        assertEquals(1, failures.size)
-        assertEquals(1, buffer.recordCount())
-    }
+            assertEquals(1, failures.size)
+            assertEquals(1, buffer.recordCount())
+        }
 
     private companion object {
         val FIXED_INSTANT: Instant = Instant.parse("2026-09-28T10:15:30Z")

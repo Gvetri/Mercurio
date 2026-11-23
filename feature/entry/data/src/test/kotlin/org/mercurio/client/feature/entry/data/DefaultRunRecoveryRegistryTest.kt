@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.RunId
@@ -11,39 +12,40 @@ import java.util.concurrent.TimeUnit
 
 class DefaultRunRecoveryRegistryTest {
     @Test
-    fun separate_registries_serialize_read_modify_write_transactions() {
-        val first = RunRecoveryEntry(SessionId("session-1"), RunId("run-1"))
-        val second = RunRecoveryEntry(SessionId("session-2"), RunId("run-2"))
-        val storage = DelayedRunRecoveryStorage()
-        val firstRegistry = DefaultRunRecoveryRegistry(storage)
-        val secondRegistry = DefaultRunRecoveryRegistry(storage)
-        val ready = CountDownLatch(2)
-        val start = CountDownLatch(1)
-        val executor = Executors.newFixedThreadPool(2)
+    fun separate_registries_serialize_read_modify_write_transactions() =
+        runBlocking<Unit> {
+            val first = RunRecoveryEntry(SessionId("session-1"), RunId("run-1"))
+            val second = RunRecoveryEntry(SessionId("session-2"), RunId("run-2"))
+            val storage = DelayedRunRecoveryStorage()
+            val firstRegistry = DefaultRunRecoveryRegistry(storage)
+            val secondRegistry = DefaultRunRecoveryRegistry(storage)
+            val ready = CountDownLatch(2)
+            val start = CountDownLatch(1)
+            val executor = Executors.newFixedThreadPool(2)
 
-        try {
-            val firstTask =
-                executor.submit {
-                    ready.countDown()
-                    start.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-                    firstRegistry.save(first)
-                }
-            val secondTask =
-                executor.submit {
-                    ready.countDown()
-                    start.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-                    secondRegistry.save(second)
-                }
-            assertEquals(true, ready.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            start.countDown()
-            firstTask.get(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-            secondTask.get(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            try {
+                val firstTask =
+                    executor.submit {
+                        ready.countDown()
+                        start.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                        runBlocking { firstRegistry.save(first) }
+                    }
+                val secondTask =
+                    executor.submit {
+                        ready.countDown()
+                        start.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                        runBlocking { secondRegistry.save(second) }
+                    }
+                assertEquals(true, ready.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                start.countDown()
+                firstTask.get(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                secondTask.get(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
 
-            assertEquals(listOf(first, second), firstRegistry.load())
-        } finally {
-            executor.shutdownNow()
+                assertEquals(listOf(first, second), firstRegistry.load())
+            } finally {
+                executor.shutdownNow()
+            }
         }
-    }
 
     private class DelayedRunRecoveryStorage : RunRecoveryStorage {
         private var entries = emptySet<RunRecoveryEntry>()

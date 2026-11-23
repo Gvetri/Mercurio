@@ -81,7 +81,7 @@ internal suspend fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunRecon
     }
 }
 
-internal fun EntryStateHolder.reconciliationRunIds(
+internal suspend fun EntryStateHolder.reconciliationRunIds(
     context: OpenedRunReconcileContext,
     sessionRecoveryEntries: List<RunRecoveryEntry>,
     recoveryEntriesLoadFailed: Boolean,

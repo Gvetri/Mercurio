@@ -1,5 +1,7 @@
 package org.mercurio.client
 
+import kotlinx.coroutines.runBlocking
+
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import androidx.annotation.XmlRes
@@ -34,16 +36,16 @@ class SecureHistoryCacheStorageTest {
 
     @Before
     fun clearBeforeTest() {
-        buildHistoryCacheStore(context).clear()
+        runBlocking { buildHistoryCacheStore(context).clear() }
     }
 
     @After
     fun clearAfterTest() {
-        buildHistoryCacheStore(context).clear()
+        runBlocking { buildHistoryCacheStore(context).clear() }
     }
 
     @Test
-    fun secure_default_storage_round_trips_only_ciphertext_in_no_backup_and_keystore() {
+    fun secure_default_storage_round_trips_only_ciphertext_in_no_backup_and_keystore() = runBlocking<Unit> {
         val store = buildHistoryCacheStore(context)
 
         store.write(cacheKey, listOf(message("fixture-secret-transcript")))
@@ -63,7 +65,7 @@ class SecureHistoryCacheStorageTest {
     }
 
     @Test
-    fun wholesale_clearing_the_history_cache_removes_ciphertext_and_keystore_key() {
+    fun wholesale_clearing_the_history_cache_removes_ciphertext_and_keystore_key() = runBlocking<Unit> {
         val store = buildHistoryCacheStore(context)
         store.write(cacheKey, listOf(message("fixture-secret-transcript")))
 
@@ -77,7 +79,7 @@ class SecureHistoryCacheStorageTest {
     }
 
     @Test
-    fun a_cleared_cache_re_populates_from_later_writes_through_a_fresh_key() {
+    fun a_cleared_cache_re_populates_from_later_writes_through_a_fresh_key() = runBlocking<Unit> {
         val store = buildHistoryCacheStore(context)
         store.write(cacheKey, listOf(message("fixture-secret-transcript")))
         store.clear()
@@ -88,7 +90,7 @@ class SecureHistoryCacheStorageTest {
     }
 
     @Test
-    fun a_missing_keystore_key_makes_cached_content_unreadable_until_the_next_write() {
+    fun a_missing_keystore_key_makes_cached_content_unreadable_until_the_next_write() = runBlocking<Unit> {
         val store = buildHistoryCacheStore(context)
         store.write(cacheKey, listOf(message("fixture-secret-transcript")))
         KeyStore.getInstance(ANDROID_KEYSTORE).apply {
@@ -104,14 +106,14 @@ class SecureHistoryCacheStorageTest {
     }
 
     @Test
-    fun backup_rules_exclude_the_history_cache_record_location() {
+    fun backup_rules_exclude_the_history_cache_record_location() = runBlocking<Unit> {
         val exclusions = declaredExclusions(R.xml.backup_rules)
 
         assertTrue(exclusions.contains("full-backup-content:root:no_backup/"))
     }
 
     @Test
-    fun cloud_backup_and_device_transfer_rules_exclude_the_history_cache_record_location() {
+    fun cloud_backup_and_device_transfer_rules_exclude_the_history_cache_record_location() = runBlocking<Unit> {
         val exclusions = declaredExclusions(R.xml.data_extraction_rules)
 
         assertTrue(exclusions.contains("cloud-backup:root:no_backup/"))

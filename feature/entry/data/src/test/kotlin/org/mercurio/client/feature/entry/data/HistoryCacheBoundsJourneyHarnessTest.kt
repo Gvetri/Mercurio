@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,58 +32,61 @@ class HistoryCacheBoundsJourneyHarnessTest {
         )
 
     @Test
-    fun a_journey_sized_multi_session_history_sequence_never_exceeds_the_message_bound() {
-        var peak = 0
-        repeat(PAGES) { page ->
-            store.writeSessionList(ENDPOINT, sessionPage(page))
-            peak = maxOf(peak, persistedMessageCount())
-        }
-        for (index in 1..SESSIONS) {
-            store.write(transcriptKey(index), transcript(index))
-            peak = maxOf(peak, persistedMessageCount())
-        }
+    fun a_journey_sized_multi_session_history_sequence_never_exceeds_the_message_bound() =
+        runBlocking<Unit> {
+            var peak = 0
+            repeat(PAGES) { page ->
+                store.writeSessionList(ENDPOINT, sessionPage(page))
+                peak = maxOf(peak, persistedMessageCount())
+            }
+            for (index in 1..SESSIONS) {
+                store.write(transcriptKey(index), transcript(index))
+                peak = maxOf(peak, persistedMessageCount())
+            }
 
-        assertTrue(
-            "the journey scale must overflow the fixed bound",
-            JOURNEY_MESSAGES > HISTORY_CACHE_MAX_MESSAGES,
-        )
-        assertEquals(HISTORY_CACHE_MAX_MESSAGES, persistedMessageCount())
-        assertTrue(peak <= HISTORY_CACHE_MAX_MESSAGES)
-        assertEquals(transcript(SESSIONS), store.read(transcriptKey(SESSIONS)))
-        assertTrue(store.read(transcriptKey(1)).isEmpty())
-        assertEquals(SESSIONS, store.readSessionList(ENDPOINT).size)
-    }
+            assertTrue(
+                "the journey scale must overflow the fixed bound",
+                JOURNEY_MESSAGES > HISTORY_CACHE_MAX_MESSAGES,
+            )
+            assertEquals(HISTORY_CACHE_MAX_MESSAGES, persistedMessageCount())
+            assertTrue(peak <= HISTORY_CACHE_MAX_MESSAGES)
+            assertEquals(transcript(SESSIONS), store.read(transcriptKey(SESSIONS)))
+            assertTrue(store.read(transcriptKey(1)).isEmpty())
+            assertEquals(SESSIONS, store.readSessionList(ENDPOINT).size)
+        }
 
     @Test
-    fun refreshed_transcripts_replaced_through_a_journey_never_double_count() {
-        for (index in 1..REFRESH_SESSIONS) {
-            store.writeSessionList(ENDPOINT, sessionPage(0))
-            store.write(transcriptKey(index), transcript(index))
-            store.write(transcriptKey(index), transcript(index))
-        }
+    fun refreshed_transcripts_replaced_through_a_journey_never_double_count() =
+        runBlocking<Unit> {
+            for (index in 1..REFRESH_SESSIONS) {
+                store.writeSessionList(ENDPOINT, sessionPage(0))
+                store.write(transcriptKey(index), transcript(index))
+                store.write(transcriptKey(index), transcript(index))
+            }
 
-        assertEquals(REFRESH_SESSIONS * MESSAGES_PER_SESSION, persistedMessageCount())
-        assertEquals(transcript(REFRESH_SESSIONS), store.read(transcriptKey(REFRESH_SESSIONS)))
-    }
+            assertEquals(REFRESH_SESSIONS * MESSAGES_PER_SESSION, persistedMessageCount())
+            assertEquals(transcript(REFRESH_SESSIONS), store.read(transcriptKey(REFRESH_SESSIONS)))
+        }
 
     @Test
-    fun journey_content_older_than_the_age_bound_is_not_served_and_a_new_journey_purges_it() {
-        for (index in 1..REFRESH_SESSIONS) {
+    fun journey_content_older_than_the_age_bound_is_not_served_and_a_new_journey_purges_it() =
+        runBlocking<Unit> {
+            for (index in 1..REFRESH_SESSIONS) {
+                store.writeSessionList(ENDPOINT, sessionPage(0))
+                store.write(transcriptKey(index), transcript(index))
+            }
+
+            clock.advance(Duration.ofDays(HISTORY_CACHE_MAX_AGE_DAYS.toLong()).plusSeconds(1))
+
+            (1..REFRESH_SESSIONS).forEach { index -> assertTrue(store.read(transcriptKey(index)).isEmpty()) }
+            assertTrue(store.readSessionList(ENDPOINT).isEmpty())
+
             store.writeSessionList(ENDPOINT, sessionPage(0))
-            store.write(transcriptKey(index), transcript(index))
+            store.write(transcriptKey(1), transcript(1))
+
+            assertEquals(MESSAGES_PER_SESSION, persistedMessageCount())
+            assertEquals(1, persistedRecords().count { it.sessionList.isNotEmpty() })
         }
-
-        clock.advance(Duration.ofDays(HISTORY_CACHE_MAX_AGE_DAYS.toLong()).plusSeconds(1))
-
-        (1..REFRESH_SESSIONS).forEach { index -> assertTrue(store.read(transcriptKey(index)).isEmpty()) }
-        assertTrue(store.readSessionList(ENDPOINT).isEmpty())
-
-        store.writeSessionList(ENDPOINT, sessionPage(0))
-        store.write(transcriptKey(1), transcript(1))
-
-        assertEquals(MESSAGES_PER_SESSION, persistedMessageCount())
-        assertEquals(1, persistedRecords().count { it.sessionList.isNotEmpty() })
-    }
 
     private fun persistedRecords(): List<CachedHistoryRecord> {
         val bytes = requireNotNull(storage.bytes)

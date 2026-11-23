@@ -14,5 +14,5 @@ interface LocalDiagnosticsRecorder {
      * entirely: the buffer never retains, truncates, or repairs a partial
      * record. Recording must never surface a failure to the caller.
      */
-    fun record(event: LocalDiagnosticEvent)
+    suspend fun record(event: LocalDiagnosticEvent)
 }

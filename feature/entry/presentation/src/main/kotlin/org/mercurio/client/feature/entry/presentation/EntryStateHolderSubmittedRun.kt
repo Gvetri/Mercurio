@@ -1,7 +1,9 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEventStateTransition
@@ -26,7 +28,10 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
     requestEndpoint: String,
     attemptId: String,
 ): Boolean {
-    val preparation = prepareSubmittedRun(sessionId, run, requestConnectionGeneration, requestEndpoint, attemptId)
+    val preparation =
+        withContext(NonCancellable) {
+            prepareSubmittedRun(sessionId, run, requestConnectionGeneration, requestEndpoint, attemptId)
+        }
     val result =
         try {
             applySubmitted(
@@ -42,7 +47,9 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
                 ),
             )
         } catch (error: CancellationException) {
-            runNotAppliedObligations(preparation, sessionId, run, requestEndpoint, attemptId)
+            withContext(NonCancellable) {
+                runNotAppliedObligations(preparation, sessionId, run, requestEndpoint, attemptId)
+            }
             throw error
         }
     if (!result.applied && result.persistAfterDisconnect && !preparation.persistBeforeApply) {
@@ -61,7 +68,7 @@ internal suspend fun EntryStateHolder.applySubmittedRun(
     return result.applied
 }
 
-private fun EntryStateHolder.runNotAppliedObligations(
+private suspend fun EntryStateHolder.runNotAppliedObligations(
     preparation: SubmittedRunPreparation,
     sessionId: SessionId,
     run: Run,
@@ -80,7 +87,7 @@ private fun EntryStateHolder.runNotAppliedObligations(
     }
 }
 
-internal fun EntryStateHolder.prepareSubmittedRun(
+internal suspend fun EntryStateHolder.prepareSubmittedRun(
     sessionId: SessionId,
     run: Run,
     requestConnectionGeneration: Long,
@@ -112,7 +119,7 @@ internal fun EntryStateHolder.prepareSubmittedRun(
     )
 }
 
-internal fun EntryStateHolder.bindSubmittedRun(
+internal suspend fun EntryStateHolder.bindSubmittedRun(
     pendingKey: PendingRunSubmissionKey,
     runId: RunId,
     attemptId: String,
@@ -154,7 +161,7 @@ internal suspend fun EntryStateHolder.applySubmitted(work: SubmittedRunApplicati
         )
     }
 
-internal fun EntryStateHolder.recordSubmittedRunState(application: SubmittedRunApplication) {
+internal suspend fun EntryStateHolder.recordSubmittedRunState(application: SubmittedRunApplication) {
     if (application.recoveryPersistenceFailed) {
         runCatching {
             runSubmissionUncertaintyStore.markAmbiguous(application.pendingKey, application.attemptId)

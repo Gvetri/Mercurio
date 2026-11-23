@@ -22,7 +22,7 @@ internal fun EntryStateHolder.cancelClearHistoryCache() {
  * state without a restart. Authoritative content is left untouched. A failed clear
  * records one local-diagnostics event; a successful clear records none.
  */
-internal fun EntryStateHolder.confirmClearHistoryCache() {
+internal suspend fun EntryStateHolder.confirmClearHistoryCache() {
     if (!mutableUiState.value.isClearHistoryCacheConfirmationOpen) return
     val cleared = runCatching { historyCacheStore.clear() }.isSuccess
     if (!cleared) {

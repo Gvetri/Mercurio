@@ -47,8 +47,8 @@ internal class RetryHolderSettings(
     val onRunSubmissionSettled: (() -> Unit)? = null,
     val recoveryRegistry: RunRecoveryRegistry? = null,
     val uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
-    val persistRunRecoveryEntry: ((String, RunRecoveryEntry) -> Unit)? = null,
-    val removeRunRecoveryEntry: ((String, RunRecoveryEntry) -> Unit)? = null,
+    val persistRunRecoveryEntry: (suspend (String, RunRecoveryEntry) -> Unit)? = null,
+    val removeRunRecoveryEntry: (suspend (String, RunRecoveryEntry) -> Unit)? = null,
 )
 
 internal fun retryHolder(

@@ -350,8 +350,8 @@ class EntryWiringRestartIntegrationTest {
         gateway.statusByRun[knownRun.id] = knownRun
         gateway.statusByRun[submittedRun.id] = submittedRun
         SharedPreferencesRunSubmissionUncertaintyStore(context).remove(uncertaintyKey)
-        SharedPreferencesRunSubmissionUncertaintyStore(context).add(uncertaintyKey, setOf(knownRun.id))
-        SharedPreferencesRunSubmissionUncertaintyStore(context).markSettled(uncertaintyKey)
+        runBlocking { SharedPreferencesRunSubmissionUncertaintyStore(context).add(uncertaintyKey, setOf(knownRun.id)) }
+        runBlocking { SharedPreferencesRunSubmissionUncertaintyStore(context).markSettled(uncertaintyKey) }
         try {
             val holder = createHolder(context, gateway)
             try {
@@ -495,7 +495,7 @@ class EntryWiringRestartIntegrationTest {
         val key = PendingRunSubmissionKey("https://gateway.example/profile", RestartGateway.SESSION_ID)
         val store = SharedPreferencesRunSubmissionUncertaintyStore(context)
         store.remove(key)
-        store.add(key, emptySet(), "leftover-attempt")
+        runBlocking { store.add(key, emptySet(), "leftover-attempt") }
         clearSharedSubmissionState()
         val gateway = RestartGateway()
         val holder = createHolder(context, gateway)
@@ -857,7 +857,7 @@ class EntryWiringRestartIntegrationTest {
 
         override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> = transcripts[key].orEmpty()
 
-        override fun write(
+        override suspend fun write(
             key: HistoryCacheKey,
             messages: List<GatewayHistoryMessage>,
         ) {
@@ -866,19 +866,19 @@ class EntryWiringRestartIntegrationTest {
 
         override fun readSessionList(endpoint: String): List<Session> = sessionLists[endpoint].orEmpty()
 
-        override fun writeSessionList(
+        override suspend fun writeSessionList(
             endpoint: String,
             sessions: List<Session>,
         ) {
             sessionLists[endpoint] = sessions
         }
 
-        override fun clearEndpoint(endpoint: String) {
+        override suspend fun clearEndpoint(endpoint: String) {
             sessionLists.remove(endpoint)
             transcripts.keys.removeAll { it.endpoint == endpoint }
         }
 
-        override fun clear() {
+        override suspend fun clear() {
             transcripts.clear()
             sessionLists.clear()
         }

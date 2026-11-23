@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.HISTORY_CACHE_MAX_AGE_DAYS
 import org.mercurio.client.feature.entry.domain.HISTORY_CACHE_MAX_MESSAGES
@@ -23,6 +25,10 @@ import java.time.Instant
  * here. The supplied [endpointNamespace] must be fixed-length and injective: the
  * prefix-based [clearEndpoint] purge is collision-safe only under that contract, and
  * the wiring SHA-256 hex namespace satisfies it.
+ *
+ * Mutations serialize through one [Mutex] across a suspend boundary because each one rewrites the
+ * whole record set. Reads take no lock: the storage replaces one immutable blob atomically, so a
+ * concurrent read observes either the previous record or the next complete one.
  */
 class BoundedHistoryCacheStore(
     private val storage: HistoryCacheStorage,
@@ -30,20 +36,19 @@ class BoundedHistoryCacheStore(
     private val endpointNamespace: (String) -> String,
     private val clock: () -> Instant = Instant::now,
 ) : HistoryCacheStore {
-    private val lock = Any()
+    private val writeMutex = Mutex()
     private val recordKeys = HistoryCacheRecordKeys(endpointNamespace)
 
-    override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> =
-        synchronized(lock) {
-            val sessionKey = recordKeys.transcript(key)
-            load().filter { it.key == sessionKey }.mapNotNull(CachedHistoryRecord::message)
-        }
+    override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> {
+        val sessionKey = recordKeys.transcript(key)
+        return load().filter { it.key == sessionKey }.mapNotNull(CachedHistoryRecord::message)
+    }
 
-    override fun write(
+    override suspend fun write(
         key: HistoryCacheKey,
         messages: List<GatewayHistoryMessage>,
     ) {
-        synchronized(lock) {
+        writeMutex.withLock {
             val sessionKey = recordKeys.transcript(key)
             val cachedAt = clock()
             val retained =
@@ -54,15 +59,13 @@ class BoundedHistoryCacheStore(
     }
 
     override fun readSessionList(endpoint: String): List<Session> =
-        synchronized(lock) {
-            load().firstOrNull { it.key == recordKeys.sessionList(endpoint) }?.sessionList.orEmpty()
-        }
+        load().firstOrNull { it.key == recordKeys.sessionList(endpoint) }?.sessionList.orEmpty()
 
-    override fun writeSessionList(
+    override suspend fun writeSessionList(
         endpoint: String,
         sessions: List<Session>,
     ) {
-        synchronized(lock) {
+        writeMutex.withLock {
             val listKey = recordKeys.sessionList(endpoint)
             val retained = load().filterNot { it.key == listKey }
             val withList =
@@ -75,15 +78,15 @@ class BoundedHistoryCacheStore(
         }
     }
 
-    override fun clearEndpoint(endpoint: String) {
-        synchronized(lock) {
+    override suspend fun clearEndpoint(endpoint: String) {
+        writeMutex.withLock {
             val prefix = "${endpointNamespace(endpoint)}."
             persist(load().filterNot { it.key.startsWith(prefix) })
         }
     }
 
-    override fun clear() {
-        synchronized(lock) {
+    override suspend fun clear() {
+        writeMutex.withLock {
             storage.clear()
         }
     }

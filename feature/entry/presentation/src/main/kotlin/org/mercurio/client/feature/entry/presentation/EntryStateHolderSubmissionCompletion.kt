@@ -47,7 +47,7 @@ internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
     }
 }
 
-internal fun EntryStateHolder.prepareClaimedSubmission(work: RunSubmissionWork): RunSubmissionWork? {
+internal suspend fun EntryStateHolder.prepareClaimedSubmission(work: RunSubmissionWork): RunSubmissionWork? {
     if (work.recordDraft) {
         runCatching { sessionDraftStore.write(sessionDraftKey(work.sessionId, work.requestEndpoint), work.input) }
     }

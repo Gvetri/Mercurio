@@ -1,87 +1,101 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
 
-/** Shares endpoint-scoped registries so every holder uses the same storage transactions. */
+/**
+ * Shares endpoint-scoped registries so every holder uses the same storage transactions.
+ *
+ * The registry map and the fallback entries serialize through one [Mutex]; each registry's own
+ * read-modify-write serializes through the shared storage-transaction [Mutex] that every registry
+ * instance takes. Loads and removals of a registry delegate to those same methods, so no path
+ * takes a transaction lock twice.
+ */
 class EndpointScopedRunRecoveryRegistry(
     private val endpointProvider: () -> String?,
     private val storageForEndpoint: (String?) -> RunRecoveryStorage,
 ) : RunRecoveryRegistry {
     private val registries = mutableMapOf<String?, DefaultRunRecoveryRegistry>()
     private val endpointViews = mutableMapOf<String, RunRecoveryRegistry>()
-    private val registryLock = RunRecoveryStorageTransactions.lock
+    private val registryMutex = Mutex()
 
-    override fun load(): List<RunRecoveryEntry> = loadForEndpoint(endpointProvider())
+    override suspend fun load(): List<RunRecoveryEntry> = loadForEndpoint(endpointProvider())
 
-    override fun save(entry: RunRecoveryEntry) {
+    override suspend fun save(entry: RunRecoveryEntry) {
         saveForEndpoint(endpointProvider(), entry)
     }
 
-    fun saveForEndpoint(
+    suspend fun saveForEndpoint(
         endpoint: String?,
         entry: RunRecoveryEntry,
     ) {
         try {
-            synchronized(RunRecoveryStorageTransactions.lock) {
-                registry(endpoint).save(entry)
+            registry(endpoint).save(entry)
+            registryMutex.withLock {
                 FallbackRecoveryEntries.remove(endpoint, entry)
             }
         } catch (expectedError: Exception) {
-            synchronized(RunRecoveryStorageTransactions.lock) {
+            registryMutex.withLock {
                 FallbackRecoveryEntries.forEndpoint(endpoint).add(entry)
             }
             throw expectedError
         }
     }
 
-    override fun remove(entry: RunRecoveryEntry) {
+    override suspend fun remove(entry: RunRecoveryEntry) {
         removeForEndpoint(endpointProvider(), entry)
     }
 
-    fun removeForEndpoint(
+    suspend fun removeForEndpoint(
         endpoint: String?,
         entry: RunRecoveryEntry,
     ) {
-        synchronized(RunRecoveryStorageTransactions.lock) {
-            registry(endpoint).remove(entry)
+        registry(endpoint).remove(entry)
+        registryMutex.withLock {
             FallbackRecoveryEntries.remove(endpoint, entry)
         }
     }
 
-    fun clearForEndpoint(endpoint: String?) {
-        synchronized(RunRecoveryStorageTransactions.lock) {
-            registry(endpoint).clear()
+    suspend fun clearForEndpoint(endpoint: String?) {
+        registry(endpoint).clear()
+        registryMutex.withLock {
             FallbackRecoveryEntries.clear(endpoint)
         }
     }
 
-    fun registryForEndpoint(endpoint: String): RunRecoveryRegistry =
-        synchronized(registryLock) {
+    suspend fun registryForEndpoint(endpoint: String): RunRecoveryRegistry =
+        registryMutex.withLock {
             endpointViews.getOrPut(endpoint) {
                 object : RunRecoveryRegistry {
-                    override fun load(): List<RunRecoveryEntry> = loadForEndpoint(endpoint)
+                    override suspend fun load(): List<RunRecoveryEntry> = loadForEndpoint(endpoint)
 
-                    override fun save(entry: RunRecoveryEntry) {
+                    override suspend fun save(entry: RunRecoveryEntry) {
                         saveForEndpoint(endpoint, entry)
                     }
 
-                    override fun remove(entry: RunRecoveryEntry) {
+                    override suspend fun remove(entry: RunRecoveryEntry) {
                         removeForEndpoint(endpoint, entry)
                     }
                 }
             }
         }
 
-    private fun loadForEndpoint(endpoint: String?): List<RunRecoveryEntry> =
-        synchronized(RunRecoveryStorageTransactions.lock) {
-            (registry(endpoint).load() + FallbackRecoveryEntries.forEndpoint(endpoint))
+    private suspend fun loadForEndpoint(endpoint: String?): List<RunRecoveryEntry> =
+        RunRecoveryStorageTransactions.mutex.withLock {
+            val durable = registry(endpoint).load()
+            val fallback =
+                registryMutex.withLock {
+                    FallbackRecoveryEntries.forEndpoint(endpoint).toList()
+                }
+            (durable + fallback)
                 .distinct()
                 .sortedWith(compareBy({ it.sessionId.value }, { it.runId.value }))
         }
 
-    private fun registry(endpoint: String?): DefaultRunRecoveryRegistry =
-        synchronized(registryLock) {
+    private suspend fun registry(endpoint: String?): DefaultRunRecoveryRegistry =
+        registryMutex.withLock {
             registries.getOrPut(endpoint) {
                 DefaultRunRecoveryRegistry(storageForEndpoint(endpoint))
             }

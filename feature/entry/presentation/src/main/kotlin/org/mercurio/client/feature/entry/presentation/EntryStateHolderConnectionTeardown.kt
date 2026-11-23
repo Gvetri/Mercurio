@@ -26,7 +26,7 @@ internal fun EntryStateHolder.clearSessionDraftAndRunState() {
     authoritativeSessionRuns.clear()
 }
 
-internal fun EntryStateHolder.clearEndpointStores(endpoint: String) {
+internal suspend fun EntryStateHolder.clearEndpointStores(endpoint: String) {
     sessionDraftStore.clearEndpoint(endpoint)
     modelSelectionStore.clearEndpoint(endpoint)
     historyCacheStore.clearEndpoint(endpoint)

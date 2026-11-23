@@ -4,9 +4,9 @@ import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
 
 class RemoveGatewayConnection(
     private val gatewayConnectionRepository: GatewayConnectionRepository,
-    private val clearConnectionSpecificData: (String?) -> Unit = {},
+    private val clearConnectionSpecificData: suspend (String?) -> Unit = {},
 ) {
-    fun execute() {
+    suspend fun execute() {
         var failure: Exception? = null
         val endpoint =
             try {

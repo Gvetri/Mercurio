@@ -128,7 +128,7 @@ internal suspend fun EntryStateHolder.applyLocalDiagnosticsRecordCount() {
     }
 }
 
-internal fun EntryStateHolder.recordDiagnostic(
+internal suspend fun EntryStateHolder.recordDiagnostic(
     eventType: LocalDiagnosticEventType,
     status: LocalDiagnosticStatus? = null,
 ) {

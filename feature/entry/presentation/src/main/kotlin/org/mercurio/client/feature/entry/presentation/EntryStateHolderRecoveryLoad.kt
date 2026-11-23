@@ -48,7 +48,7 @@ internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
     }.start()
 }
 
-internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
+internal suspend fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
     val entries =
         pendingDisconnectedRecoveryEntries.remove(endpoint).orEmpty().toList()
     entries.forEach { entry ->
@@ -58,7 +58,7 @@ internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
     }
 }
 
-internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
+internal suspend fun EntryStateHolder.persistOrQueueRecoveryEntry(
     endpoint: String,
     entry: RunRecoveryEntry,
 ): Boolean {
@@ -80,7 +80,7 @@ internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
     }
 }
 
-internal fun EntryStateHolder.removeRecoveryEntry(
+internal suspend fun EntryStateHolder.removeRecoveryEntry(
     endpoint: String?,
     entry: RunRecoveryEntry,
 ): Boolean =

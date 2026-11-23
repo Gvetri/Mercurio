@@ -8,6 +8,7 @@ import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,212 +56,222 @@ class LocalDiagnosticsWiringTest {
     }
 
     @Test
-    fun records_are_kept_in_the_no_backup_directory_only() {
-        val buffer = buffer()
-        buffer.record(event())
+    fun records_are_kept_in_the_no_backup_directory_only() =
+        runBlocking<Unit> {
+            val buffer = buffer()
+            buffer.record(event())
 
-        val file = storedFile()
-        assertNotNull(file)
-        assertEquals(context.noBackupFilesDir, requireNotNull(file).parentFile)
-        assertFalse(requireNotNull(file).path.startsWith(context.filesDir.path))
+            val file = storedFile()
+            assertNotNull(file)
+            assertEquals(context.noBackupFilesDir, requireNotNull(file).parentFile)
+            assertFalse(requireNotNull(file).path.startsWith(context.filesDir.path))
 
-        assertEquals(1, buffer().recordCount())
-    }
+            assertEquals(1, buffer().recordCount())
+        }
 
     @Test
-    fun only_newline_terminated_records_are_read_back() {
-        val complete =
-            requireNotNull(
-                LocalDiagnosticsRecords.encodeEventRecord(event(), Instant.parse("2026-09-28T10:15:30Z")),
+    fun only_newline_terminated_records_are_read_back() =
+        runBlocking<Unit> {
+            val complete =
+                requireNotNull(
+                    LocalDiagnosticsRecords.encodeEventRecord(event(), Instant.parse("2026-09-28T10:15:30Z")),
+                )
+            val storage = FileLocalDiagnosticsStorage(context)
+            storedFile(create = true)?.writeText("$complete\n$complete".dropLast(10))
+
+            assertEquals(listOf(complete), storage.read())
+        }
+
+    @Test
+    fun clearing_diagnostics_removes_the_stored_records() =
+        runBlocking<Unit> {
+            val buffer = buffer()
+            buffer.record(event())
+
+            buffer.clear()
+
+            assertNull(storedFile())
+            assertEquals(0, buffer.recordCount())
+        }
+
+    @Test
+    fun export_writes_a_jsonl_snapshot_and_offers_it_through_the_sharesheet() =
+        runBlocking<Unit> {
+            val buffer = buffer()
+            buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
+            buffer.record(event(LocalDiagnosticStatus.FAILED))
+            val exporter =
+                AndroidLocalDiagnosticsExporter(
+                    context = context,
+                    buffer = buffer,
+                    clientVersion = "0.1.0",
+                    clock = { Instant.parse("2026-09-28T11:00:00Z") },
+                )
+
+            assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
+
+            val snapshot = exportedSnapshots().single()
+            assertTrue(snapshot.name.endsWith(".jsonl"))
+            assertEquals(context.cacheDir.path, snapshot.parentFile?.parentFile?.path)
+            val lines = snapshot.readText().trimEnd('\n').split("\n")
+            assertEquals(3, lines.size)
+            assertEquals(
+                """{"schema_version":1,"record_type":"metadata","client_version":"0.1.0",""" +
+                    """"exported_at":"2026-09-28T11:00:00Z"}""",
+                lines.first(),
             )
-        val storage = FileLocalDiagnosticsStorage(context)
-        storedFile(create = true)?.writeText("$complete\n$complete".dropLast(10))
+            assertEquals(buffer.records(), lines.drop(1))
+            assertTrue(lines.all(LocalDiagnosticsRecords::isValidRecord))
 
-        assertEquals(listOf(complete), storage.read())
-    }
+            assertEquals(2, buffer.recordCount())
+            assertEquals(buffer.records(), FileLocalDiagnosticsStorage(context).read())
 
-    @Test
-    fun clearing_diagnostics_removes_the_stored_records() {
-        val buffer = buffer()
-        buffer.record(event())
-
-        buffer.clear()
-
-        assertNull(storedFile())
-        assertEquals(0, buffer.recordCount())
-    }
-
-    @Test
-    fun export_writes_a_jsonl_snapshot_and_offers_it_through_the_sharesheet() {
-        val buffer = buffer()
-        buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
-        buffer.record(event(LocalDiagnosticStatus.FAILED))
-        val exporter =
-            AndroidLocalDiagnosticsExporter(
-                context = context,
-                buffer = buffer,
-                clientVersion = "0.1.0",
-                clock = { Instant.parse("2026-09-28T11:00:00Z") },
+            val chooser = shadowOf(context).nextStartedActivity
+            assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+            assertEquals(
+                RuntimeEnvironment.getApplication().getString(R.string.diagnostics_export_chooser),
+                chooser.getCharSequenceExtra(Intent.EXTRA_TITLE),
             )
-
-        assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
-
-        val snapshot = exportedSnapshots().single()
-        assertTrue(snapshot.name.endsWith(".jsonl"))
-        assertEquals(context.cacheDir.path, snapshot.parentFile?.parentFile?.path)
-        val lines = snapshot.readText().trimEnd('\n').split("\n")
-        assertEquals(3, lines.size)
-        assertEquals(
-            """{"schema_version":1,"record_type":"metadata","client_version":"0.1.0",""" +
-                """"exported_at":"2026-09-28T11:00:00Z"}""",
-            lines.first(),
-        )
-        assertEquals(buffer.records(), lines.drop(1))
-        assertTrue(lines.all(LocalDiagnosticsRecords::isValidRecord))
-
-        assertEquals(2, buffer.recordCount())
-        assertEquals(buffer.records(), FileLocalDiagnosticsStorage(context).read())
-
-        val chooser = shadowOf(context).nextStartedActivity
-        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
-        assertEquals(
-            RuntimeEnvironment.getApplication().getString(R.string.diagnostics_export_chooser),
-            chooser.getCharSequenceExtra(Intent.EXTRA_TITLE),
-        )
-        val share = requireNotNull(chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java))
-        assertEquals(Intent.ACTION_SEND, share.action)
-        val uri = requireNotNull(share.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
-        assertEquals("content", uri.scheme)
-        assertTrue(requireNotNull(uri.authority).endsWith(".diagnostics"))
-        assertTrue(share.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
-    }
+            val share = requireNotNull(chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java))
+            assertEquals(Intent.ACTION_SEND, share.action)
+            val uri = requireNotNull(share.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
+            assertEquals("content", uri.scheme)
+            assertTrue(requireNotNull(uri.authority).endsWith(".diagnostics"))
+            assertTrue(share.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        }
 
     @Test
-    fun export_of_an_empty_buffer_creates_no_file_and_opens_no_sharesheet() {
-        val buffer = buffer()
-        val exporter = AndroidLocalDiagnosticsExporter(context, buffer, "0.1.0")
+    fun export_of_an_empty_buffer_creates_no_file_and_opens_no_sharesheet() =
+        runBlocking<Unit> {
+            val buffer = buffer()
+            val exporter = AndroidLocalDiagnosticsExporter(context, buffer, "0.1.0")
 
-        assertEquals(LocalDiagnosticsExportResult.EMPTY, exporter.export())
+            assertEquals(LocalDiagnosticsExportResult.EMPTY, exporter.export())
 
-        assertEquals(emptyList<File>(), exportedSnapshots())
-        assertNull(shadowOf(context).nextStartedActivity)
-    }
-
-    @Test
-    fun failed_export_preserves_the_buffer_for_another_attempt() {
-        val buffer = buffer()
-        buffer.record(event())
-        val exporter = AndroidLocalDiagnosticsExporter(context, buffer, clientVersion = "0.1.0 build")
-
-        assertEquals(LocalDiagnosticsExportResult.FAILED, exporter.export())
-
-        assertEquals(emptyList<File>(), exportedSnapshots())
-        assertNull(shadowOf(context).nextStartedActivity)
-        assertEquals(1, buffer.recordCount())
-
-        buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
-        assertEquals(
-            LocalDiagnosticsExportResult.SHARED,
-            AndroidLocalDiagnosticsExporter(context, buffer, "0.1.0").export(),
-        )
-        assertEquals(2, buffer.recordCount())
-    }
+            assertEquals(emptyList<File>(), exportedSnapshots())
+            assertNull(shadowOf(context).nextStartedActivity)
+        }
 
     @Test
-    fun exporting_reclaims_snapshots_past_their_retention() {
-        val buffer = buffer()
-        buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
-        val exportedAt = Instant.parse("2026-09-28T11:00:00Z")
-        val staleSnapshot = writtenSnapshot("hermes-diagnostics-20260926T110000Z.jsonl")
-        assertTrue(staleSnapshot.setLastModified(exportedAt.minus(Duration.ofDays(2)).toEpochMilli()))
-        val recentSnapshot = writtenSnapshot("hermes-diagnostics-20260928T100000Z.jsonl")
-        assertTrue(recentSnapshot.setLastModified(exportedAt.minus(Duration.ofHours(1)).toEpochMilli()))
+    fun failed_export_preserves_the_buffer_for_another_attempt() =
+        runBlocking<Unit> {
+            val buffer = buffer()
+            buffer.record(event())
+            val exporter = AndroidLocalDiagnosticsExporter(context, buffer, clientVersion = "0.1.0 build")
 
-        val exporter =
-            AndroidLocalDiagnosticsExporter(
-                context = context,
-                buffer = buffer,
-                clientVersion = "0.1.0",
-                clock = { exportedAt },
+            assertEquals(LocalDiagnosticsExportResult.FAILED, exporter.export())
+
+            assertEquals(emptyList<File>(), exportedSnapshots())
+            assertNull(shadowOf(context).nextStartedActivity)
+            assertEquals(1, buffer.recordCount())
+
+            buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
+            assertEquals(
+                LocalDiagnosticsExportResult.SHARED,
+                AndroidLocalDiagnosticsExporter(context, buffer, "0.1.0").export(),
             )
-        assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
-
-        assertFalse(staleSnapshot.exists())
-        assertTrue(recentSnapshot.exists())
-        assertEquals(
-            setOf(
-                "hermes-diagnostics-20260928T100000Z.jsonl",
-                "hermes-diagnostics-20260928T110000Z.jsonl",
-            ),
-            exportedSnapshots().map(File::getName).toSet(),
-        )
-    }
+            assertEquals(2, buffer.recordCount())
+        }
 
     @Test
-    fun two_exports_in_the_same_second_keep_their_own_snapshot_files() {
-        val buffer = buffer()
-        buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
-        val exporter =
-            AndroidLocalDiagnosticsExporter(
-                context = context,
-                buffer = buffer,
-                clientVersion = "0.1.0",
-                clock = { Instant.parse("2026-09-28T11:00:00Z") },
+    fun exporting_reclaims_snapshots_past_their_retention() =
+        runBlocking<Unit> {
+            val buffer = buffer()
+            buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
+            val exportedAt = Instant.parse("2026-09-28T11:00:00Z")
+            val staleSnapshot = writtenSnapshot("hermes-diagnostics-20260926T110000Z.jsonl")
+            assertTrue(staleSnapshot.setLastModified(exportedAt.minus(Duration.ofDays(2)).toEpochMilli()))
+            val recentSnapshot = writtenSnapshot("hermes-diagnostics-20260928T100000Z.jsonl")
+            assertTrue(recentSnapshot.setLastModified(exportedAt.minus(Duration.ofHours(1)).toEpochMilli()))
+
+            val exporter =
+                AndroidLocalDiagnosticsExporter(
+                    context = context,
+                    buffer = buffer,
+                    clientVersion = "0.1.0",
+                    clock = { exportedAt },
+                )
+            assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
+
+            assertFalse(staleSnapshot.exists())
+            assertTrue(recentSnapshot.exists())
+            assertEquals(
+                setOf(
+                    "hermes-diagnostics-20260928T100000Z.jsonl",
+                    "hermes-diagnostics-20260928T110000Z.jsonl",
+                ),
+                exportedSnapshots().map(File::getName).toSet(),
             )
-
-        assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
-        val firstSnapshot = exportedSnapshots().single()
-        val firstContent = firstSnapshot.readText()
-
-        assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
-
-        val snapshots = exportedSnapshots()
-        assertEquals(2, snapshots.size)
-        assertEquals(
-            setOf(
-                "hermes-diagnostics-20260928T110000Z.jsonl",
-                "hermes-diagnostics-20260928T110000Z-2.jsonl",
-            ),
-            snapshots.map(File::getName).toSet(),
-        )
-        assertEquals(firstContent, firstSnapshot.readText())
-    }
+        }
 
     @Test
-    fun removing_the_gateway_connection_removes_its_diagnostics() {
-        buffer().record(event())
-        assertEquals(1, buffer().recordCount())
+    fun two_exports_in_the_same_second_keep_their_own_snapshot_files() =
+        runBlocking<Unit> {
+            val buffer = buffer()
+            buffer.record(event(LocalDiagnosticStatus.SUCCEEDED))
+            val exporter =
+                AndroidLocalDiagnosticsExporter(
+                    context = context,
+                    buffer = buffer,
+                    clientVersion = "0.1.0",
+                    clock = { Instant.parse("2026-09-28T11:00:00Z") },
+                )
 
-        val holder =
-            EntryWiring.createEntryStateHolder(
-                context = context,
-                overrides =
-                    EntryWiringOverrides(
-                        coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
-                        historyCacheStore = NoOpHistoryCacheStore,
-                    ),
+            assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
+            val firstSnapshot = exportedSnapshots().single()
+            val firstContent = firstSnapshot.readText()
+
+            assertEquals(LocalDiagnosticsExportResult.SHARED, exporter.export())
+
+            val snapshots = exportedSnapshots()
+            assertEquals(2, snapshots.size)
+            assertEquals(
+                setOf(
+                    "hermes-diagnostics-20260928T110000Z.jsonl",
+                    "hermes-diagnostics-20260928T110000Z-2.jsonl",
+                ),
+                snapshots.map(File::getName).toSet(),
             )
-        holders += holder
-        holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-
-        assertEquals(0, buffer().recordCount())
-        assertNull(storedFile())
-    }
+            assertEquals(firstContent, firstSnapshot.readText())
+        }
 
     @Test
-    fun reads_the_installed_build_from_this_installations_package_metadata() {
-        val installedBuild = AndroidInstalledBuildProvider(context).installedBuild()
-        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+    fun removing_the_gateway_connection_removes_its_diagnostics() =
+        runBlocking<Unit> {
+            buffer().record(event())
+            assertEquals(1, buffer().recordCount())
 
-        assertEquals(PackageInfoCompat.getLongVersionCode(packageInfo), installedBuild.versionCode)
-        assertEquals(packageInfo.versionName.orEmpty(), installedBuild.versionName)
-        assertEquals(InstallSource.OTHER_SOURCE, installedBuild.installSource)
-        assertTrue(
-            LocalDiagnosticsRecords.isSafeFieldValue(
-                installedBuild.versionNameOr(UNKNOWN_CLIENT_VERSION),
-            ),
-        )
-    }
+            val holder =
+                EntryWiring.createEntryStateHolder(
+                    context = context,
+                    overrides =
+                        EntryWiringOverrides(
+                            coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+                            historyCacheStore = NoOpHistoryCacheStore,
+                        ),
+                )
+            holders += holder
+            holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
+
+            assertEquals(0, buffer().recordCount())
+            assertNull(storedFile())
+        }
+
+    @Test
+    fun reads_the_installed_build_from_this_installations_package_metadata() =
+        runBlocking<Unit> {
+            val installedBuild = AndroidInstalledBuildProvider(context).installedBuild()
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+
+            assertEquals(PackageInfoCompat.getLongVersionCode(packageInfo), installedBuild.versionCode)
+            assertEquals(packageInfo.versionName.orEmpty(), installedBuild.versionName)
+            assertEquals(InstallSource.OTHER_SOURCE, installedBuild.installSource)
+            assertTrue(
+                LocalDiagnosticsRecords.isSafeFieldValue(
+                    installedBuild.versionNameOr(UNKNOWN_CLIENT_VERSION),
+                ),
+            )
+        }
 
     private fun buffer(): RollingLocalDiagnosticsBuffer =
         RollingLocalDiagnosticsBuffer(FileLocalDiagnosticsStorage(context))

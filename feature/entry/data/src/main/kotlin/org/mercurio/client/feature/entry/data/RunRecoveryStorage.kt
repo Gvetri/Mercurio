@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.sync.Mutex
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 
 interface RunRecoveryStorage {
@@ -13,5 +14,5 @@ interface RunRecoveryStorage {
 }
 
 internal object RunRecoveryStorageTransactions {
-    val lock = Any()
+    val mutex = Mutex()
 }

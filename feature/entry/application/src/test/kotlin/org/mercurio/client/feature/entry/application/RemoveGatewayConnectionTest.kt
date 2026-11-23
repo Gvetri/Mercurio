@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.application
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -13,7 +14,7 @@ class RemoveGatewayConnectionTest {
         val repository = FakeGatewayConnectionRepository(GatewayConnection("https://gateway.example", "token"))
         var clearedEndpoint: String? = null
 
-        RemoveGatewayConnection(repository) { endpoint -> clearedEndpoint = endpoint }.execute()
+        runBlocking { RemoveGatewayConnection(repository) { endpoint -> clearedEndpoint = endpoint }.execute() }
 
         assertEquals("https://gateway.example", clearedEndpoint)
         assertNull(repository.load())
@@ -28,10 +29,12 @@ class RemoveGatewayConnectionTest {
 
         val failure =
             runCatching {
-                RemoveGatewayConnection(repository) { endpoint ->
-                    clearedEndpoint = endpoint
-                    clearedConnectionSpecificData = true
-                }.execute()
+                runBlocking {
+                    RemoveGatewayConnection(repository) { endpoint ->
+                        clearedEndpoint = endpoint
+                        clearedConnectionSpecificData = true
+                    }.execute()
+                }
             }.exceptionOrNull()
 
         assertTrue(failure != null)

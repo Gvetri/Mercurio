@@ -305,7 +305,7 @@ class HistoryCacheClearControlTest {
     }
 
     private class FailingClearHistoryCacheStore : HistoryCacheStore by RecordingHistoryCacheStore() {
-        override fun clear() {
+        override suspend fun clear() {
             error("history cache storage unavailable")
         }
     }
@@ -316,13 +316,13 @@ class HistoryCacheClearControlTest {
         LocalDiagnosticsExporter {
         val events = mutableListOf<LocalDiagnosticEvent>()
 
-        override fun record(event: LocalDiagnosticEvent) {
+        override suspend fun record(event: LocalDiagnosticEvent) {
             events += event
         }
 
         override fun recordCount(): Int = events.size
 
-        override fun clear() {
+        override suspend fun clear() {
             events.clear()
         }
 
@@ -389,7 +389,7 @@ class HistoryCacheClearControlTest {
     private class RecordingUncertaintyStore : RunSubmissionUncertaintyStore {
         val operations = mutableListOf<String>()
 
-        override fun add(
+        override suspend fun add(
             key: PendingRunSubmissionKey,
             knownRunIds: Set<RunId>,
             attemptId: String?,
@@ -408,7 +408,7 @@ class HistoryCacheClearControlTest {
 
         override fun contains(key: PendingRunSubmissionKey): Boolean = false
 
-        override fun clearEndpoint(endpoint: String) {
+        override suspend fun clearEndpoint(endpoint: String) {
             operations += "clearEndpoint"
         }
     }
@@ -417,14 +417,14 @@ class HistoryCacheClearControlTest {
         val operations = mutableListOf<String>()
         private val entries = mutableListOf<RunRecoveryEntry>()
 
-        override fun load(): List<RunRecoveryEntry> = entries.toList()
+        override suspend fun load(): List<RunRecoveryEntry> = entries.toList()
 
-        override fun save(entry: RunRecoveryEntry) {
+        override suspend fun save(entry: RunRecoveryEntry) {
             operations += "save"
             entries += entry
         }
 
-        override fun remove(entry: RunRecoveryEntry) {
+        override suspend fun remove(entry: RunRecoveryEntry) {
             operations += "remove"
             entries.remove(entry)
         }

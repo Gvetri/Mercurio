@@ -154,7 +154,7 @@ internal class ReconciliationArmingRegistry(
     @Volatile
     var armed = false
 
-    override fun load(): List<RunRecoveryEntry> {
+    override suspend fun load(): List<RunRecoveryEntry> {
         if (!armed) return emptyList()
         entered.countDown()
         check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) { "recovery load was not released." }
@@ -162,9 +162,9 @@ internal class ReconciliationArmingRegistry(
         return emptyList()
     }
 
-    override fun save(entry: RunRecoveryEntry) = Unit
+    override suspend fun save(entry: RunRecoveryEntry) = Unit
 
-    override fun remove(entry: RunRecoveryEntry) = Unit
+    override suspend fun remove(entry: RunRecoveryEntry) = Unit
 }
 
 internal class ReconciliationHolderSettings(
@@ -243,7 +243,7 @@ internal suspend fun awaitReconciliationState(
     predicate: (EntryUiState) -> Boolean,
 ) = holder.awaitUiState("the reconciliation state", predicate)
 
-internal fun awaitReconciliationCondition(predicate: () -> Boolean) {
+internal fun awaitReconciliationCondition(predicate: suspend () -> Boolean) {
     runBlocking {
         withTimeout(RECONCILIATION_TIMEOUT_MILLIS) {
             while (!predicate()) delay(10)
@@ -282,7 +282,7 @@ internal fun reconciliationSession(): Session =
         pinned = false,
     )
 
-internal fun invokePersistedRecoveryEntry(
+internal suspend fun invokePersistedRecoveryEntry(
     holder: EntryStateHolder,
     endpoint: String,
     entry: RunRecoveryEntry,
@@ -629,7 +629,7 @@ internal class ReconciliationBlockingRecoveryRegistry : RunRecoveryRegistry {
     val effectiveRemovals = AtomicInteger(0)
     val releaseRemove = CountDownLatch(1)
 
-    override fun load(): List<RunRecoveryEntry> {
+    override suspend fun load(): List<RunRecoveryEntry> {
         val shouldSignalCompletion = blockLoads
         if (shouldSignalCompletion) {
             loadStarted.countDown()
@@ -642,7 +642,7 @@ internal class ReconciliationBlockingRecoveryRegistry : RunRecoveryRegistry {
         }
     }
 
-    override fun save(entry: RunRecoveryEntry) {
+    override suspend fun save(entry: RunRecoveryEntry) {
         if (blockSaves) {
             saveStarted.countDown()
             check(releaseSave.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
@@ -654,7 +654,7 @@ internal class ReconciliationBlockingRecoveryRegistry : RunRecoveryRegistry {
         }
     }
 
-    override fun remove(entry: RunRecoveryEntry) {
+    override suspend fun remove(entry: RunRecoveryEntry) {
         removeRequests.incrementAndGet()
         if (blockRemovals) {
             check(releaseRemove.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {

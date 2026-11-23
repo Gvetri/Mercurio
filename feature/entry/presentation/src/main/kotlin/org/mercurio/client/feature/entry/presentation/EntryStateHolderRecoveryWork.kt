@@ -84,14 +84,14 @@ internal fun EntryStateHolder.recoveryGatewayContextFor(expectedConnectionGenera
         }
     }
 
-internal fun EntryStateHolder.loadRecoveryEntries(registry: RunRecoveryRegistry): List<RunRecoveryEntry>? =
+internal suspend fun EntryStateHolder.loadRecoveryEntries(registry: RunRecoveryRegistry): List<RunRecoveryEntry>? =
     try {
         registry.load().filter(RunRecoveryEntry::isValid)
     } catch (_: Exception) {
         null
     }
 
-internal fun EntryStateHolder.claimRecoveryWorkItems(
+internal suspend fun EntryStateHolder.claimRecoveryWorkItems(
     entries: List<RunRecoveryEntry>,
     recoveryContext: RecoveryGatewayContext,
     expectedConnectionGeneration: Long,

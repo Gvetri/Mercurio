@@ -178,7 +178,7 @@ internal class MainThreadStorageBoundaryTest {
                 EntryStateHolderDependencies(
                     removeGatewayConnectionUseCase =
                         RemoveGatewayConnection(repository) { endpoint ->
-                            endpoint?.let(uncertaintyStore::clearEndpoint)
+                            endpoint?.let { value -> uncertaintyStore.clearEndpoint(value) }
                             endpoint?.let(draftStore::clearEndpoint)
                             endpoint?.let(selectionStore::clearEndpoint)
                         },
@@ -339,7 +339,7 @@ private class RecordingUncertaintyStore(
 
     fun awaitAdds(): Boolean = adds.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
 
-    override fun add(
+    override suspend fun add(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
@@ -363,7 +363,7 @@ private class RecordingUncertaintyStore(
         return synchronized(keys) { key in keys }
     }
 
-    override fun clearEndpoint(endpoint: String) {
+    override suspend fun clearEndpoint(endpoint: String) {
         recorder.record("uncertainty.clearEndpoint")
         synchronized(keys) { keys.removeAll { key -> key.endpoint == endpoint } }
     }

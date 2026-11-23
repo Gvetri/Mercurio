@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,151 +23,168 @@ class BoundedHistoryCacheStoreTest {
     private val store = newStore()
 
     @Test
-    fun messages_written_to_a_session_are_read_back_oldest_cached_first() {
-        val messages = historyMessages("alpha", 3)
+    fun messages_written_to_a_session_are_read_back_oldest_cached_first() =
+        runBlocking<Unit> {
+            val messages = historyMessages("alpha", 3)
 
-        store.write(SessionKeyA, messages)
+            store.write(SessionKeyA, messages)
 
-        assertEquals(messages, store.read(SessionKeyA))
-        assertTrue(store.read(SessionKeyB).isEmpty())
-    }
-
-    @Test
-    fun a_restarted_store_reads_the_same_cached_messages() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
-
-        val restored = newStore()
-
-        assertEquals(historyMessages("alpha", 2), restored.read(SessionKeyA))
-    }
+            assertEquals(messages, store.read(SessionKeyA))
+            assertTrue(store.read(SessionKeyB).isEmpty())
+        }
 
     @Test
-    fun writing_a_session_again_replaces_its_cached_messages() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
+    fun a_restarted_store_reads_the_same_cached_messages() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
 
-        store.write(SessionKeyA, historyMessages("beta", 1))
+            val restored = newStore()
 
-        assertEquals(historyMessages("beta", 1), store.read(SessionKeyA))
-    }
-
-    @Test
-    fun nullable_message_fields_round_trip_through_the_cache_record_format() {
-        val sparse = listOf(GatewayHistoryMessage(id = "m1", role = null, content = null))
-
-        store.write(SessionKeyA, sparse)
-
-        assertEquals(sparse, store.read(SessionKeyA))
-    }
+            assertEquals(historyMessages("alpha", 2), restored.read(SessionKeyA))
+        }
 
     @Test
-    fun sessions_are_namespaced_per_endpoint_and_never_readable_as_another_endpoints() {
-        val otherEndpointKey = HistoryCacheKey("https://gateway.example/b", SessionId("session-1"))
+    fun writing_a_session_again_replaces_its_cached_messages() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
 
-        store.write(SessionKeyA, historyMessages("alpha", 2))
+            store.write(SessionKeyA, historyMessages("beta", 1))
 
-        assertEquals(historyMessages("alpha", 2), store.read(EndpointAliasKey))
-        assertTrue(store.read(otherEndpointKey).isEmpty())
-    }
-
-    @Test
-    fun clearing_one_endpoint_purges_only_that_endpoints_records() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
-        store.write(OtherEndpointKey, historyMessages("gamma", 2))
-
-        store.clearEndpoint("https://gateway.example/a")
-
-        assertTrue(store.read(SessionKeyA).isEmpty())
-        assertTrue(store.read(EndpointAliasKey).isEmpty())
-        assertEquals(historyMessages("gamma", 2), store.read(OtherEndpointKey))
-    }
+            assertEquals(historyMessages("beta", 1), store.read(SessionKeyA))
+        }
 
     @Test
-    fun the_store_never_keeps_more_than_the_fixed_message_bound() {
-        store.write(SessionKeyA, historyMessages("alpha", HISTORY_CACHE_MAX_MESSAGES - 1_000))
-        store.write(SessionKeyB, historyMessages("beta", 2_000))
+    fun nullable_message_fields_round_trip_through_the_cache_record_format() =
+        runBlocking<Unit> {
+            val sparse = listOf(GatewayHistoryMessage(id = "m1", role = null, content = null))
 
-        val retained = store.read(SessionKeyA).size + store.read(SessionKeyB).size
-        assertEquals(HISTORY_CACHE_MAX_MESSAGES, retained)
-    }
+            store.write(SessionKeyA, sparse)
 
-    @Test
-    fun overflow_evicts_the_oldest_cached_messages_first_deterministically() {
-        store.write(SessionKeyA, historyMessages("alpha", HISTORY_CACHE_MAX_MESSAGES - 1_000))
-        store.write(SessionKeyB, historyMessages("beta", 2_000))
-
-        val survivors = store.read(SessionKeyA) + store.read(SessionKeyB)
-        assertEquals(HISTORY_CACHE_MAX_MESSAGES, survivors.size)
-        assertEquals(historyMessages("alpha", HISTORY_CACHE_MAX_MESSAGES - 1_000).drop(1_000), survivors.take(3_000))
-        assertEquals(historyMessages("beta", 2_000), survivors.takeLast(2_000))
-    }
+            assertEquals(sparse, store.read(SessionKeyA))
+        }
 
     @Test
-    fun cached_content_older_than_the_age_bound_is_not_returned() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
+    fun sessions_are_namespaced_per_endpoint_and_never_readable_as_another_endpoints() =
+        runBlocking<Unit> {
+            val otherEndpointKey = HistoryCacheKey("https://gateway.example/b", SessionId("session-1"))
 
-        clock.advance(Duration.ofDays(7).plusSeconds(1))
+            store.write(SessionKeyA, historyMessages("alpha", 2))
 
-        assertTrue(store.read(SessionKeyA).isEmpty())
-    }
-
-    @Test
-    fun content_exactly_at_the_age_bound_is_still_returned() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
-
-        clock.advance(Duration.ofDays(7))
-
-        assertEquals(historyMessages("alpha", 2), store.read(SessionKeyA))
-    }
+            assertEquals(historyMessages("alpha", 2), store.read(EndpointAliasKey))
+            assertTrue(store.read(otherEndpointKey).isEmpty())
+        }
 
     @Test
-    fun expired_records_leave_the_store_on_the_next_write() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
-        clock.advance(Duration.ofDays(7).plusSeconds(1))
+    fun clearing_one_endpoint_purges_only_that_endpoints_records() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
+            store.write(OtherEndpointKey, historyMessages("gamma", 2))
 
-        store.write(SessionKeyB, historyMessages("beta", 1))
+            store.clearEndpoint("https://gateway.example/a")
 
-        assertEquals(historyMessages("beta", 1), store.read(SessionKeyB))
-        assertTrue(store.read(SessionKeyA).isEmpty())
-        val record = EncryptedHistoryCacheRecord.decode(requireNotNull(storage.bytes))
-        val persisted = HistoryCacheRecords.decode(cipher().decrypt(record))
-        assertTrue(persisted.none { it.key.contains(hexEncode(SessionKeyA.sessionId.value)) })
-    }
-
-    @Test
-    fun a_cleared_store_holds_nothing_and_re_populates_from_later_writes() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
-
-        store.clear()
-
-        assertTrue(storage.cleared)
-        assertTrue(store.read(SessionKeyA).isEmpty())
-
-        store.write(SessionKeyA, historyMessages("beta", 1))
-
-        assertEquals(historyMessages("beta", 1), store.read(SessionKeyA))
-    }
+            assertTrue(store.read(SessionKeyA).isEmpty())
+            assertTrue(store.read(EndpointAliasKey).isEmpty())
+            assertEquals(historyMessages("gamma", 2), store.read(OtherEndpointKey))
+        }
 
     @Test
-    fun stored_bytes_never_contain_plaintext_content() {
-        store.write(SessionKeyA, historyMessages("alpha", 2))
+    fun the_store_never_keeps_more_than_the_fixed_message_bound() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", HISTORY_CACHE_MAX_MESSAGES - 1_000))
+            store.write(SessionKeyB, historyMessages("beta", 2_000))
 
-        val raw = requireNotNull(storage.bytes).toString(StandardCharsets.ISO_8859_1)
-        assertFalse(raw.contains("alpha transcript"))
-        assertFalse(raw.contains("alpha-message-1"))
-        assertTrue(raw.isNotEmpty())
-    }
+            val retained = store.read(SessionKeyA).size + store.read(SessionKeyB).size
+            assertEquals(HISTORY_CACHE_MAX_MESSAGES, retained)
+        }
 
     @Test
-    fun corrupted_or_foreign_storage_content_reads_as_empty_and_the_store_recovers() {
-        val foreign = AesGcmGatewayCredentialCipher { key }.encrypt("not a cache record").encode()
-        storage.bytes = foreign
-        val reader = newStore()
-        assertTrue(reader.read(SessionKeyA).isEmpty())
+    fun overflow_evicts_the_oldest_cached_messages_first_deterministically() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", HISTORY_CACHE_MAX_MESSAGES - 1_000))
+            store.write(SessionKeyB, historyMessages("beta", 2_000))
 
-        reader.write(SessionKeyA, historyMessages("alpha", 1))
+            val survivors = store.read(SessionKeyA) + store.read(SessionKeyB)
+            assertEquals(HISTORY_CACHE_MAX_MESSAGES, survivors.size)
+            assertEquals(
+                historyMessages("alpha", HISTORY_CACHE_MAX_MESSAGES - 1_000).drop(1_000),
+                survivors.take(3_000),
+            )
+            assertEquals(historyMessages("beta", 2_000), survivors.takeLast(2_000))
+        }
 
-        assertEquals(historyMessages("alpha", 1), newStore().read(SessionKeyA))
-    }
+    @Test
+    fun cached_content_older_than_the_age_bound_is_not_returned() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
+
+            clock.advance(Duration.ofDays(7).plusSeconds(1))
+
+            assertTrue(store.read(SessionKeyA).isEmpty())
+        }
+
+    @Test
+    fun content_exactly_at_the_age_bound_is_still_returned() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
+
+            clock.advance(Duration.ofDays(7))
+
+            assertEquals(historyMessages("alpha", 2), store.read(SessionKeyA))
+        }
+
+    @Test
+    fun expired_records_leave_the_store_on_the_next_write() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
+            clock.advance(Duration.ofDays(7).plusSeconds(1))
+
+            store.write(SessionKeyB, historyMessages("beta", 1))
+
+            assertEquals(historyMessages("beta", 1), store.read(SessionKeyB))
+            assertTrue(store.read(SessionKeyA).isEmpty())
+            val record = EncryptedHistoryCacheRecord.decode(requireNotNull(storage.bytes))
+            val persisted = HistoryCacheRecords.decode(cipher().decrypt(record))
+            assertTrue(persisted.none { it.key.contains(hexEncode(SessionKeyA.sessionId.value)) })
+        }
+
+    @Test
+    fun a_cleared_store_holds_nothing_and_re_populates_from_later_writes() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
+
+            store.clear()
+
+            assertTrue(storage.cleared)
+            assertTrue(store.read(SessionKeyA).isEmpty())
+
+            store.write(SessionKeyA, historyMessages("beta", 1))
+
+            assertEquals(historyMessages("beta", 1), store.read(SessionKeyA))
+        }
+
+    @Test
+    fun stored_bytes_never_contain_plaintext_content() =
+        runBlocking<Unit> {
+            store.write(SessionKeyA, historyMessages("alpha", 2))
+
+            val raw = requireNotNull(storage.bytes).toString(StandardCharsets.ISO_8859_1)
+            assertFalse(raw.contains("alpha transcript"))
+            assertFalse(raw.contains("alpha-message-1"))
+            assertTrue(raw.isNotEmpty())
+        }
+
+    @Test
+    fun corrupted_or_foreign_storage_content_reads_as_empty_and_the_store_recovers() =
+        runBlocking<Unit> {
+            val foreign = AesGcmGatewayCredentialCipher { key }.encrypt("not a cache record").encode()
+            storage.bytes = foreign
+            val reader = newStore()
+            assertTrue(reader.read(SessionKeyA).isEmpty())
+
+            reader.write(SessionKeyA, historyMessages("alpha", 1))
+
+            assertEquals(historyMessages("alpha", 1), newStore().read(SessionKeyA))
+        }
 
     private fun cipher(): AesGcmHistoryCacheCipher = AesGcmHistoryCacheCipher { key }
 

@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -91,7 +92,7 @@ class EntryStateHolderRunHistoryFixtureTest {
                 try {
                     assertEquals(
                         listOf(RunRecoveryEntry(scenario.session, scenario.localRun.id)),
-                        scenario.recoveryRegistry.load(),
+                        runBlocking { scenario.recoveryRegistry.load() },
                     )
                     connect(holder)
                     awaitFixtureState(holder) { state ->
@@ -108,7 +109,7 @@ class EntryStateHolderRunHistoryFixtureTest {
                             !opened.isReconciliationInProgress &&
                             scenario.runGateway.statusRequests == listOf(scenario.localRun.id, scenario.localRun.id)
                     }
-                    assertTrue(scenario.recoveryRegistry.load().isEmpty())
+                    assertTrue(runBlocking { scenario.recoveryRegistry.load() }.isEmpty())
                 } finally {
                     holder.close()
                 }
