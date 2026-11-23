@@ -65,7 +65,7 @@ internal suspend fun EntryStateHolder.uncertaintyCanBeRemoved(
 ): Boolean =
     !canResolveUncertainty ||
         !runSubmissionUncertaintyStore.contains(pendingKey) ||
-        runCatching {
+        runCatchingSuspend {
             uncertaintySnapshot != null &&
                 runSubmissionUncertaintyStore.removeIfSnapshotMatches(pendingKey, uncertaintySnapshot)
         }.getOrDefault(false)

@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -87,6 +88,8 @@ internal fun EntryStateHolder.recoveryGatewayContextFor(expectedConnectionGenera
 internal suspend fun EntryStateHolder.loadRecoveryEntries(registry: RunRecoveryRegistry): List<RunRecoveryEntry>? =
     try {
         registry.load().filter(RunRecoveryEntry::isValid)
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         null
     }

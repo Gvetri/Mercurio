@@ -209,7 +209,7 @@ internal suspend fun EntryStateHolder.resolveBoundSubmission(
         !isBoundSubmission ||
             run.isActive() ||
             uncertaintySnapshot == null ||
-            runCatching {
+            runCatchingSuspend {
                 runSubmissionUncertaintyStore.removeIfSnapshotMatches(pendingKey, uncertaintySnapshot)
             }.getOrDefault(false)
     return isBoundSubmission && uncertaintyRemoved

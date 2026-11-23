@@ -12,6 +12,10 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
  * read-modify-write serializes through the shared storage-transaction [Mutex] that every registry
  * instance takes. Loads and removals of a registry delegate to those same methods, so no path
  * takes a transaction lock twice.
+ *
+ * A load reads the fallback entries before the durable ones. A save writes durable first and then
+ * drops the fallback copy; with that order a load that races a save reports the entry from at
+ * least one side, so an entry is never observed as missing.
  */
 class EndpointScopedRunRecoveryRegistry(
     private val endpointProvider: () -> String?,
@@ -82,17 +86,16 @@ class EndpointScopedRunRecoveryRegistry(
             }
         }
 
-    private suspend fun loadForEndpoint(endpoint: String?): List<RunRecoveryEntry> =
-        RunRecoveryStorageTransactions.mutex.withLock {
-            val durable = registry(endpoint).load()
-            val fallback =
-                registryMutex.withLock {
-                    FallbackRecoveryEntries.forEndpoint(endpoint).toList()
-                }
-            (durable + fallback)
-                .distinct()
-                .sortedWith(compareBy({ it.sessionId.value }, { it.runId.value }))
-        }
+    private suspend fun loadForEndpoint(endpoint: String?): List<RunRecoveryEntry> {
+        val fallback =
+            registryMutex.withLock {
+                FallbackRecoveryEntries.forEndpoint(endpoint).toList()
+            }
+        val durable = RunRecoveryStorageTransactions.mutex.withLock { registry(endpoint).load() }
+        return (durable + fallback)
+            .distinct()
+            .sortedWith(compareBy({ it.sessionId.value }, { it.runId.value }))
+    }
 
     private suspend fun registry(endpoint: String?): DefaultRunRecoveryRegistry =
         registryMutex.withLock {

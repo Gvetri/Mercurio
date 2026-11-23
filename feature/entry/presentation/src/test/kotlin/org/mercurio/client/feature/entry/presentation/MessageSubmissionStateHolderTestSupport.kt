@@ -231,7 +231,7 @@ internal class FailingShutdownUncertaintyStore : RunSubmissionUncertaintyStore {
         return true
     }
 
-    override fun remove(
+    override suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ): Boolean = true

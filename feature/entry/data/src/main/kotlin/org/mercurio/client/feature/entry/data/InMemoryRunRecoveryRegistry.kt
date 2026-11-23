@@ -6,6 +6,13 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
 import org.mercurio.client.feature.entry.domain.isValid
 
+/**
+ * In-memory registry for previews and tests.
+ *
+ * One [Mutex] covers the entry set, so every read and every mutation observes one consistent
+ * snapshot. The registry holds no state outside this instance, so the lock does not need to span
+ * instances the way the durable registries do.
+ */
 class InMemoryRunRecoveryRegistry(
     initialEntries: Iterable<RunRecoveryEntry> = emptyList(),
 ) : RunRecoveryRegistry {

@@ -96,7 +96,7 @@ private class LaneRecordingUncertaintyStore(
         return true
     }
 
-    override fun remove(
+    override suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ): Boolean {

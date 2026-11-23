@@ -63,7 +63,7 @@ internal suspend fun EntryStateHolder.rememberRecoveredRun(
             }
             unresolvedSubmissionSessions += entry.sessionId
             ambiguousSubmissionSessions += entry.sessionId
-            runCatching {
+            runCatchingSuspend {
                 runSubmissionUncertaintyStore.markAmbiguous(
                     pendingKey,
                     uncertaintySnapshot.attemptId,

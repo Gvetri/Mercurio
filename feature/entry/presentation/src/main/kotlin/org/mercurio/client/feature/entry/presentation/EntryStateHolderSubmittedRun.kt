@@ -80,7 +80,7 @@ private suspend fun EntryStateHolder.runNotAppliedObligations(
     if (run.isActive()) {
         val persisted = persistDisconnectedRecoveryEntry(endpoint = requestEndpoint, entry = entry)
         if (persisted) {
-            runCatching { runSubmissionUncertaintyStore.remove(preparation.pendingKey, attemptId) }
+            runCatchingSuspend { runSubmissionUncertaintyStore.remove(preparation.pendingKey, attemptId) }
         }
     } else {
         reconcilePersistedRecoveryEntryIfConnected(requestEndpoint, entry)
@@ -105,7 +105,7 @@ internal suspend fun EntryStateHolder.prepareSubmittedRun(
             )
     val recoveryPersistenceFailed =
         if (submissionPersisted(run, persistBeforeApply, recoveryEntryPersisted, submissionBindingSucceeded)) {
-            !runCatching { runSubmissionUncertaintyStore.remove(pendingKey, attemptId) }.getOrDefault(false)
+            !runCatchingSuspend { runSubmissionUncertaintyStore.remove(pendingKey, attemptId) }.getOrDefault(false)
         } else if (run.isActive()) {
             persistBeforeApply && (!recoveryEntryPersisted || !submissionBindingSucceeded)
         } else {
@@ -123,7 +123,10 @@ internal suspend fun EntryStateHolder.bindSubmittedRun(
     pendingKey: PendingRunSubmissionKey,
     runId: RunId,
     attemptId: String,
-): Boolean = runCatching { runSubmissionUncertaintyStore.bindRun(pendingKey, runId, attemptId) }.getOrDefault(false)
+): Boolean =
+    runCatchingSuspend {
+        runSubmissionUncertaintyStore.bindRun(pendingKey, runId, attemptId)
+    }.getOrDefault(false)
 
 internal fun EntryStateHolder.persistBeforeApply(
     run: Run,
@@ -163,7 +166,7 @@ internal suspend fun EntryStateHolder.applySubmitted(work: SubmittedRunApplicati
 
 internal suspend fun EntryStateHolder.recordSubmittedRunState(application: SubmittedRunApplication) {
     if (application.recoveryPersistenceFailed) {
-        runCatching {
+        runCatchingSuspend {
             runSubmissionUncertaintyStore.markAmbiguous(application.pendingKey, application.attemptId)
         }
     }

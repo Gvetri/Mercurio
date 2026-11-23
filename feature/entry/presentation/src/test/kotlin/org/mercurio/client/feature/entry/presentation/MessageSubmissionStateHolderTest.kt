@@ -452,7 +452,7 @@ class MessageSubmissionStateHolderTest {
                     onCreateRun = {
                         holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
                         val staleAttemptId = requireNotNull(store.attemptId(key))
-                        assertTrue(store.remove(key, staleAttemptId))
+                        assertTrue(runBlocking { store.remove(key, staleAttemptId) })
                         assertTrue(runBlocking { store.add(key, emptySet(), "new-attempt") })
                     }
                 }

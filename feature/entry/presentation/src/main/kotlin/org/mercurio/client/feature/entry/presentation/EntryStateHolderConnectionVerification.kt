@@ -202,9 +202,9 @@ internal fun EntryStateHolder.releaseGatewayConnection(): ReleasedConnectionStat
         }
     val persistence =
         persistenceScope.launch(start = CoroutineStart.LAZY) {
-            runCatching { writePendingCreateMarkers(released.pendingCreates) }
-            runCatching { removeGatewayConnectionUseCase?.execute() }
-            runCatching { clearEndpointStores(endpoint) }
+            runCatchingSuspend { writePendingCreateMarkers(released.pendingCreates) }
+            runCatchingSuspend { removeGatewayConnectionUseCase?.execute() }
+            runCatchingSuspend { clearEndpointStores(endpoint) }
         }
     pendingRemovalJob = persistence
     persistence.start()

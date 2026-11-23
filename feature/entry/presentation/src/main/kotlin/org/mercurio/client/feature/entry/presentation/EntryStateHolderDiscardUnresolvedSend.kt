@@ -31,7 +31,7 @@ internal fun EntryStateHolder.cancelDiscardUnresolvedSend() {
         )
 }
 
-internal fun EntryStateHolder.confirmDiscardUnresolvedSend() {
+internal suspend fun EntryStateHolder.confirmDiscardUnresolvedSend() {
     val current = mutableUiState.value.sessionList ?: return
     val opened = current.openedSession ?: return
     val sessionId = opened.session.id

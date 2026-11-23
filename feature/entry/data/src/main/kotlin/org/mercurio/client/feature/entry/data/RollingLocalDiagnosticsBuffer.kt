@@ -1,10 +1,12 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsStore
+import java.io.FileNotFoundException
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -32,8 +34,10 @@ const val LOCAL_DIAGNOSTICS_LIMIT_BYTES: Int = 1_048_576
  * recording for one event instead of for the whole session.
  *
  * Mutations serialize through one [Mutex] across a suspend boundary because each one replaces the
- * whole record file. Reads take no lock: the storage replaces the file atomically, so a reader
- * observes either the previous file or the next complete one.
+ * whole record file. Reads take no lock: the storage writes a complete file atomically, so a reader
+ * observes either the previous file or the next complete one. A concurrent [clear] deletes the file
+ * instead of replacing it; a read that loses that race observes a missing file and reports an empty
+ * buffer instead of failing.
  */
 class RollingLocalDiagnosticsBuffer(
     private val storage: LocalDiagnosticsStorage,
@@ -53,6 +57,8 @@ class RollingLocalDiagnosticsBuffer(
     override suspend fun record(event: LocalDiagnosticEvent) {
         try {
             recordEvent(event)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             if (failureReported.compareAndSet(false, true)) onRecordFailure(error)
         }
@@ -84,5 +90,10 @@ class RollingLocalDiagnosticsBuffer(
     /** Complete retained records, oldest first; the source of an explicit export. */
     fun records(): List<String> = readRetainedLocked()
 
-    private fun readRetainedLocked(): List<String> = storage.read().filter(LocalDiagnosticsRecords::isValidEventRecord)
+    private fun readRetainedLocked(): List<String> =
+        try {
+            storage.read().filter(LocalDiagnosticsRecords::isValidEventRecord)
+        } catch (_: FileNotFoundException) {
+            emptyList()
+        }
 }

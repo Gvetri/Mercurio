@@ -15,12 +15,10 @@ private val submissionUncertaintyMutex = Mutex()
 /**
  * Persists response-loss markers over one storage record per pending submission.
  *
- * Rewrites serialize through one process-wide [Mutex] across a suspend boundary, so two store
- * instances over the same storage cannot interleave a read-modify-write. Reads and [remove] stay
- * synchronous and lock-free: the storage commits one immutable record per key atomically, and a
- * storage listener may re-enter a removal on the writing thread, which a non-reentrant mutex would
- * deadlock. A removal can therefore land inside a concurrent rewrite; a rewrite that runs after it
- * recreates the marker.
+ * Every mutation, including [remove], serializes through one process-wide [Mutex] across a suspend
+ * boundary, so two store instances over the same storage cannot interleave a check-and-write.
+ * Reads take no lock: the storage commits one immutable record per key atomically, so a reader
+ * observes either the previous snapshot or the next complete one.
  */
 class DefaultRunSubmissionUncertaintyStore(
     private val storage: RunSubmissionUncertaintyStorage,
@@ -45,15 +43,16 @@ class DefaultRunSubmissionUncertaintyStore(
             true
         }
 
-    override fun remove(
+    override suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String?,
-    ): Boolean {
-        val current = storage.read(key)
-        val removable = current != null && (attemptId == null || current.attemptId == attemptId)
-        if (removable) storage.remove(key)
-        return removable
-    }
+    ): Boolean =
+        submissionUncertaintyMutex.withLock {
+            val current = storage.read(key)
+            val removable = current != null && (attemptId == null || current.attemptId == attemptId)
+            if (removable) storage.remove(key)
+            removable
+        }
 
     override fun contains(key: PendingRunSubmissionKey): Boolean = storage.read(key) != null
 

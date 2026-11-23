@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CancellationException
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
@@ -71,6 +72,8 @@ internal suspend fun EntryStateHolder.persistOrQueueRecoveryEntry(
             ?: error("No endpoint-scoped recovery writer is configured.")
 
         true
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         pendingDisconnectedRecoveryEntries
             .computeIfAbsent(endpoint) { ConcurrentHashMap.newKeySet() }
@@ -94,6 +97,8 @@ internal suspend fun EntryStateHolder.removeRecoveryEntry(
         forgetPendingRecoveryEntry(endpoint, entry)
 
         true
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         false
     }

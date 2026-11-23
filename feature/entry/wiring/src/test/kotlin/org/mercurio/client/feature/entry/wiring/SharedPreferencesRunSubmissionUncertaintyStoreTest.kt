@@ -2,6 +2,12 @@ package org.mercurio.client.feature.entry.wiring
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -65,21 +71,25 @@ class SharedPreferencesRunSubmissionUncertaintyStoreTest {
             val writer = SharedPreferencesRunSubmissionUncertaintyStore(context)
             val remover = SharedPreferencesRunSubmissionUncertaintyStore(context)
             val preferences = context.getSharedPreferences("gateway_run_submission_uncertainty", Context.MODE_PRIVATE)
-            var removed = false
+            val removal = CompletableDeferred<Boolean>()
+            val removalScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val listener =
                 SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-                    if (remover.remove(key, "attempt-1")) removed = true
+                    removalScope.launch {
+                        removal.complete(runCatching { remover.remove(key, "attempt-1") }.getOrDefault(false))
+                    }
                 }
             writer.remove(key)
             preferences.registerOnSharedPreferenceChangeListener(listener)
 
             try {
                 val accepted = writer.add(key, emptySet(), "attempt-1")
-                assertTrue("The listener must remove the successfully written marker", removed)
+                assertTrue("The listener must remove the successfully written marker", removal.await())
                 assertTrue("The successful write must remain accepted", accepted)
                 assertFalse(writer.contains(key))
             } finally {
                 preferences.unregisterOnSharedPreferenceChangeListener(listener)
+                removalScope.cancel()
                 writer.remove(key)
             }
         }

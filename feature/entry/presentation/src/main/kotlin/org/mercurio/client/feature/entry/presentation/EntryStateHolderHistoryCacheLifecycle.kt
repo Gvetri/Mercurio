@@ -24,7 +24,7 @@ internal fun EntryStateHolder.cancelClearHistoryCache() {
  */
 internal suspend fun EntryStateHolder.confirmClearHistoryCache() {
     if (!mutableUiState.value.isClearHistoryCacheConfirmationOpen) return
-    val cleared = runCatching { historyCacheStore.clear() }.isSuccess
+    val cleared = runCatchingSuspend { historyCacheStore.clear() }.isSuccess
     if (!cleared) {
         recordDiagnostic(LocalDiagnosticEventType.HISTORY_CACHE_CLEAR, LocalDiagnosticStatus.FAILED)
     }

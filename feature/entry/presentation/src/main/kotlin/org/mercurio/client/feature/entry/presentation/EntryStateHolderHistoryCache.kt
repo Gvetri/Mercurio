@@ -12,12 +12,12 @@ internal fun EntryStateHolder.historyCacheKey(sessionId: SessionId): HistoryCach
 
 /** Write-through of an authoritative first Session-list page; replaces the cached list. */
 internal suspend fun EntryStateHolder.cacheAuthoritativeSessionList(sessions: List<Session>) {
-    runCatching { historyCacheStore.writeSessionList(mutableUiState.value.endpoint, sessions) }
+    runCatchingSuspend { historyCacheStore.writeSessionList(mutableUiState.value.endpoint, sessions) }
 }
 
 /** Write-through of a successful next page, merged into the cached authoritative pages. */
 internal suspend fun EntryStateHolder.cacheSessionListPage(sessions: List<Session>) {
-    runCatching {
+    runCatchingSuspend {
         val endpoint = mutableUiState.value.endpoint
         val merged =
             (historyCacheStore.readSessionList(endpoint) + sessions)
@@ -30,7 +30,7 @@ internal suspend fun EntryStateHolder.cacheSessionListPage(sessions: List<Sessio
 
 /** Replace-on-refresh: binds to a fully successful OpenSession result, never to a partial one. */
 internal suspend fun EntryStateHolder.cacheOpenedSessionTranscript(openedSession: OpenedSession) {
-    runCatching {
+    runCatchingSuspend {
         historyCacheStore.write(
             historyCacheKey(openedSession.session.id),
             openedSession.history.messages,

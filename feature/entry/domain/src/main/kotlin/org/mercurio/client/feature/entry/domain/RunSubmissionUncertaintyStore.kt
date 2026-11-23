@@ -7,7 +7,7 @@ interface RunSubmissionUncertaintyStore : RunSubmissionUncertaintyReader {
         attemptId: String? = null,
     ): Boolean
 
-    fun remove(
+    suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String? = null,
     ): Boolean
