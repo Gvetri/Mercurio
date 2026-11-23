@@ -61,6 +61,15 @@ class RemoveGatewayConnectionTest {
     }
 
     @Test
+    fun the_default_clear_hook_still_removes_the_saved_connection() {
+        val repository = FakeGatewayConnectionRepository(GatewayConnection("https://gateway.example", "token"))
+
+        runBlocking { RemoveGatewayConnection(repository).execute() }
+
+        assertNull(repository.load())
+    }
+
+    @Test
     fun a_failing_cleanup_hook_propagates_its_own_failure() {
         val repository = FakeGatewayConnectionRepository(GatewayConnection("https://gateway.example", "token"))
 

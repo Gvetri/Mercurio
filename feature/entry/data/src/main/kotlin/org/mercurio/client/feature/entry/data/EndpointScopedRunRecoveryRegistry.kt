@@ -13,9 +13,9 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
  * instance takes. Loads and removals of a registry delegate to those same methods, so no path
  * takes a transaction lock twice.
  *
- * A load reads the fallback entries before the durable ones. A save writes durable first and then
- * drops the fallback copy; with that order a load that races a save reports the entry from at
- * least one side, so an entry is never observed as missing.
+ * A load reads the fallback entries before the durable ones. A successful save writes durable
+ * first and then drops the fallback copy; with that order a load that races a successful save
+ * reports the entry from at least one side, so it is never observed as missing.
  */
 class EndpointScopedRunRecoveryRegistry(
     private val endpointProvider: () -> String?,

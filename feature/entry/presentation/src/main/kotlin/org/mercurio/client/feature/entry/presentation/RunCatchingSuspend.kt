@@ -17,6 +17,6 @@ internal suspend fun <T> runCatchingSuspend(block: suspend () -> T): Result<T> =
         Result.success(block())
     } catch (error: CancellationException) {
         throw error
-    } catch (error: Exception) {
+    } catch (error: Throwable) {
         Result.failure(error)
     }

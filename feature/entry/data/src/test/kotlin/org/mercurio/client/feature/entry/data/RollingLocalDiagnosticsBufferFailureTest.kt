@@ -1,5 +1,8 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -7,7 +10,10 @@ import org.junit.Test
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticEventType
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticStatus
+import java.io.FileNotFoundException
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Recording failures must surface once with their cause instead of silently
@@ -63,11 +69,65 @@ class RollingLocalDiagnosticsBufferFailureTest {
             assertEquals(1, buffer.recordCount())
         }
 
+    @Test
+    fun cancellation_while_waiting_for_the_write_lock_is_not_reported_as_a_record_failure() =
+        runBlocking<Unit> {
+            val storage = BlockingWriteStorage()
+            val failures = mutableListOf<Throwable>()
+            val buffer =
+                RollingLocalDiagnosticsBuffer(
+                    storage,
+                    clock = { FIXED_INSTANT },
+                    onRecordFailure = failures::add,
+                )
+
+            val first = launch(Dispatchers.Default) { buffer.record(EXECUTED_EVENT) }
+            assertTrue("The first record must reach the storage write", storage.awaitWriteStarted())
+            val second = launch(Dispatchers.Default) { buffer.record(EXECUTED_EVENT) }
+            second.cancelAndJoin()
+            storage.releaseWrite()
+            first.join()
+
+            assertTrue(failures.isEmpty())
+        }
+
+    @Test
+    fun a_read_that_loses_the_file_reports_an_empty_buffer() {
+        val buffer = RollingLocalDiagnosticsBuffer(MissingFileStorage())
+
+        assertTrue(buffer.records().isEmpty())
+        assertEquals(0, buffer.recordCount())
+    }
+
     private companion object {
         val FIXED_INSTANT: Instant = Instant.parse("2026-09-28T10:15:30Z")
         val EXECUTED_EVENT =
             LocalDiagnosticEvent(LocalDiagnosticEventType.SESSION_LIST_LOAD, LocalDiagnosticStatus.SUCCEEDED)
     }
+}
+
+private class BlockingWriteStorage : LocalDiagnosticsStorage {
+    private val writeStarted = CountDownLatch(1)
+    private val writeAllowed = CountDownLatch(1)
+
+    fun awaitWriteStarted(): Boolean = writeStarted.await(5, TimeUnit.SECONDS)
+
+    fun releaseWrite() {
+        writeAllowed.countDown()
+    }
+
+    override fun read(): List<String> = emptyList()
+
+    override fun write(records: List<String>) {
+        writeStarted.countDown()
+        check(writeAllowed.await(5, TimeUnit.SECONDS)) { "The test did not release the blocked write." }
+    }
+}
+
+private class MissingFileStorage : LocalDiagnosticsStorage {
+    override fun read(): List<String> = throw FileNotFoundException("The diagnostics file was cleared.")
+
+    override fun write(records: List<String>) = Unit
 }
 
 private class FailingLocalDiagnosticsStorage(

@@ -29,7 +29,9 @@ const val LOCAL_DIAGNOSTICS_LIMIT_BYTES: Int = 1_048_576
  * [onRecordFailure] and never surfaces to the caller. The catch is deliberately
  * `Throwable`: the initialization failure on API 24 is an `Error`
  * (`ExceptionInInitializerError`), not an `Exception`, and the recorder contract
- * forbids surfacing any record-time failure to the caller. The next [record]
+ * forbids surfacing any record-time failure to the caller. Cancellation is not a
+ * record-time failure and does not reach `onRecordFailure`: it propagates so a
+ * cancelled job stops instead of consuming the one-shot report. The next [record]
  * attempt retries the failed initialization, so a transient failure disables
  * recording for one event instead of for the whole session.
  *
