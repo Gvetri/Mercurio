@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -83,12 +84,16 @@ class RollingLocalDiagnosticsBufferFailureTest {
 
             val first = launch(Dispatchers.Default) { buffer.record(EXECUTED_EVENT) }
             assertTrue("The first record must reach the storage write", storage.awaitWriteStarted())
-            val second = launch(Dispatchers.Default) { buffer.record(EXECUTED_EVENT) }
+            val second =
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    buffer.record(EXECUTED_EVENT)
+                }
             second.cancelAndJoin()
             storage.releaseWrite()
             first.join()
 
             assertTrue(failures.isEmpty())
+            assertEquals(1, storage.writes)
         }
 
     @Test
@@ -109,6 +114,9 @@ class RollingLocalDiagnosticsBufferFailureTest {
 private class BlockingWriteStorage : LocalDiagnosticsStorage {
     private val writeStarted = CountDownLatch(1)
     private val writeAllowed = CountDownLatch(1)
+    private val writeCount = java.util.concurrent.atomic.AtomicInteger(0)
+
+    val writes: Int get() = writeCount.get()
 
     fun awaitWriteStarted(): Boolean = writeStarted.await(5, TimeUnit.SECONDS)
 
@@ -119,6 +127,7 @@ private class BlockingWriteStorage : LocalDiagnosticsStorage {
     override fun read(): List<String> = emptyList()
 
     override fun write(records: List<String>) {
+        writeCount.incrementAndGet()
         writeStarted.countDown()
         check(writeAllowed.await(5, TimeUnit.SECONDS)) { "The test did not release the blocked write." }
     }

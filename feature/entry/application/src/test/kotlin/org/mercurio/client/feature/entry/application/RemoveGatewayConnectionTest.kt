@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.application
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -81,6 +82,22 @@ class RemoveGatewayConnectionTest {
             }.exceptionOrNull()
 
         assertTrue(failure is IllegalStateException)
+        assertTrue(repository.cleared)
+    }
+
+    @Test
+    fun a_cancelled_cleanup_hook_reports_cancellation_not_the_earlier_failure() {
+        val repository = FakeGatewayConnectionRepository(GatewayConnection("https://gateway.example", "token"))
+        repository.failOnLoad = true
+
+        val failure =
+            runCatching {
+                runBlocking {
+                    RemoveGatewayConnection(repository) { throw CancellationException("stopped") }.execute()
+                }
+            }.exceptionOrNull()
+
+        assertTrue(failure is CancellationException)
         assertTrue(repository.cleared)
     }
 

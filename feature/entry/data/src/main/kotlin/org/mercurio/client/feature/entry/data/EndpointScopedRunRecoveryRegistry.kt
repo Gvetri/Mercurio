@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
@@ -8,10 +9,12 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
 /**
  * Shares endpoint-scoped registries so every holder uses the same storage transactions.
  *
- * The registry map and the fallback entries serialize through one [Mutex]; each registry's own
- * read-modify-write serializes through the shared storage-transaction [Mutex] that every registry
- * instance takes. Loads and removals of a registry delegate to those same methods, so no path
- * takes a transaction lock twice.
+ * The registry map serializes through one per-instance [Mutex]. The fallback entries are shared by
+ * every registry, so they serialize through their own process-wide [Mutex]; two registries cannot
+ * mutate the same fallback set concurrently. Each registry's own read-modify-write serializes
+ * through the shared storage-transaction [Mutex] that every registry instance takes. Loads and
+ * removals of a registry delegate to those same methods, so no path takes a transaction lock
+ * twice.
  *
  * A load reads the fallback entries before the durable ones. A successful save writes durable
  * first and then drops the fallback copy; with that order a load that races a successful save
@@ -37,13 +40,11 @@ class EndpointScopedRunRecoveryRegistry(
     ) {
         try {
             registry(endpoint).save(entry)
-            registryMutex.withLock {
-                FallbackRecoveryEntries.remove(endpoint, entry)
-            }
+            FallbackRecoveryEntries.remove(endpoint, entry)
+        } catch (error: CancellationException) {
+            throw error
         } catch (expectedError: Exception) {
-            registryMutex.withLock {
-                FallbackRecoveryEntries.forEndpoint(endpoint).add(entry)
-            }
+            FallbackRecoveryEntries.add(endpoint, entry)
             throw expectedError
         }
     }
@@ -57,16 +58,12 @@ class EndpointScopedRunRecoveryRegistry(
         entry: RunRecoveryEntry,
     ) {
         registry(endpoint).remove(entry)
-        registryMutex.withLock {
-            FallbackRecoveryEntries.remove(endpoint, entry)
-        }
+        FallbackRecoveryEntries.remove(endpoint, entry)
     }
 
     suspend fun clearForEndpoint(endpoint: String?) {
         registry(endpoint).clear()
-        registryMutex.withLock {
-            FallbackRecoveryEntries.clear(endpoint)
-        }
+        FallbackRecoveryEntries.clear(endpoint)
     }
 
     suspend fun registryForEndpoint(endpoint: String): RunRecoveryRegistry =
@@ -87,10 +84,7 @@ class EndpointScopedRunRecoveryRegistry(
         }
 
     private suspend fun loadForEndpoint(endpoint: String?): List<RunRecoveryEntry> {
-        val fallback =
-            registryMutex.withLock {
-                FallbackRecoveryEntries.forEndpoint(endpoint).toList()
-            }
+        val fallback = FallbackRecoveryEntries.snapshot(endpoint)
         val durable = RunRecoveryStorageTransactions.mutex.withLock { registry(endpoint).load() }
         return (durable + fallback)
             .distinct()
@@ -106,19 +100,38 @@ class EndpointScopedRunRecoveryRegistry(
 }
 
 private object FallbackRecoveryEntries {
+    private val mutex = Mutex()
     private val pending = mutableMapOf<String?, MutableSet<RunRecoveryEntry>>()
 
-    fun forEndpoint(endpoint: String?): MutableSet<RunRecoveryEntry> = pending.getOrPut(endpoint) { mutableSetOf() }
+    suspend fun snapshot(endpoint: String?): List<RunRecoveryEntry> = mutex.withLock { forEndpoint(endpoint).toList() }
 
-    fun remove(
+    suspend fun add(
         endpoint: String?,
         entry: RunRecoveryEntry,
     ) {
-        forEndpoint(endpoint).remove(entry)
-        if (pending[endpoint].isNullOrEmpty()) pending.remove(endpoint)
+        mutex.withLock {
+            forEndpoint(endpoint).add(entry)
+        }
     }
 
-    fun clear(endpoint: String?) {
-        pending.remove(endpoint)
+    suspend fun remove(
+        endpoint: String?,
+        entry: RunRecoveryEntry,
+    ) {
+        mutex.withLock {
+            forEndpoint(endpoint).remove(entry)
+            if (pending[endpoint].isNullOrEmpty()) pending.remove(endpoint)
+        }
     }
+
+    suspend fun clear(endpoint: String?) {
+        mutex.withLock {
+            pending.remove(endpoint)
+        }
+    }
+
+    private fun forEndpoint(endpoint: String?): MutableSet<RunRecoveryEntry> =
+        pending.getOrPut(endpoint) {
+            mutableSetOf()
+        }
 }
