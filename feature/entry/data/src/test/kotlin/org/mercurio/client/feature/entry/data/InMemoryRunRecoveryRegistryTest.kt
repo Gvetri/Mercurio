@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.RunId
@@ -11,37 +12,40 @@ class InMemoryRunRecoveryRegistryTest {
     private val second = RunRecoveryEntry(SessionId("session-2"), RunId("run-2"))
 
     @Test
-    fun saves_minimum_run_identity_metadata_without_duplicates() {
-        val registry = InMemoryRunRecoveryRegistry()
+    fun saves_minimum_run_identity_metadata_without_duplicates() =
+        runBlocking<Unit> {
+            val registry = InMemoryRunRecoveryRegistry()
 
-        registry.save(first)
-        registry.save(first)
-        registry.save(second)
+            registry.save(first)
+            registry.save(first)
+            registry.save(second)
 
-        assertEquals(listOf(first, second), registry.load())
-    }
-
-    @Test
-    fun removes_only_the_entry_that_was_authoritatively_reconciled() {
-        val registry = InMemoryRunRecoveryRegistry(listOf(first, second))
-
-        registry.remove(first)
-
-        assertEquals(listOf(second), registry.load())
-    }
+            assertEquals(listOf(first, second), registry.load())
+        }
 
     @Test
-    fun default_registry_round_trips_entries_through_persistent_storage() {
-        val storage = FakeRunRecoveryStorage()
-        val registry = DefaultRunRecoveryRegistry(storage)
+    fun removes_only_the_entry_that_was_authoritatively_reconciled() =
+        runBlocking<Unit> {
+            val registry = InMemoryRunRecoveryRegistry(listOf(first, second))
 
-        registry.save(second)
-        registry.save(first)
+            registry.remove(first)
 
-        assertEquals(listOf(first, second), DefaultRunRecoveryRegistry(storage).load())
-        registry.remove(first)
-        assertEquals(listOf(second), registry.load())
-    }
+            assertEquals(listOf(second), registry.load())
+        }
+
+    @Test
+    fun default_registry_round_trips_entries_through_persistent_storage() =
+        runBlocking<Unit> {
+            val storage = FakeRunRecoveryStorage()
+            val registry = DefaultRunRecoveryRegistry(storage)
+
+            registry.save(second)
+            registry.save(first)
+
+            assertEquals(listOf(first, second), DefaultRunRecoveryRegistry(storage).load())
+            registry.remove(first)
+            assertEquals(listOf(second), registry.load())
+        }
 
     private class FakeRunRecoveryStorage(
         private var entries: Set<RunRecoveryEntry> = emptySet(),

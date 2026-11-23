@@ -10,7 +10,7 @@ import org.mercurio.client.feature.entry.domain.isActive
 import org.mercurio.client.feature.entry.domain.runs
 import org.mercurio.client.feature.entry.domain.toRunPresentationState
 
-internal fun EntryStateHolder.applyReconciliation(
+internal suspend fun EntryStateHolder.applyReconciliation(
     request: AuthoritativeReconciliationRequest,
     reconciliation: AuthoritativeRunReconciliation,
 ): ReconciledRunApplication =
@@ -158,7 +158,7 @@ internal fun EntryStateHolder.recordReconciledRunState(
     return ReconciledObservationRelease(wasActivelyObserved = wasActivelyObserved)
 }
 
-internal fun EntryStateHolder.clearConfirmedSubmissionState(
+internal suspend fun EntryStateHolder.clearConfirmedSubmissionState(
     sessionId: SessionId,
     reconciliation: AuthoritativeRunReconciliation,
     wasActivelyObserved: Boolean,
@@ -186,7 +186,7 @@ internal fun EntryStateHolder.clearConfirmedSubmissionState(
     return canClearSendState
 }
 
-internal fun EntryStateHolder.resolveBoundSubmission(
+internal suspend fun EntryStateHolder.resolveBoundSubmission(
     sessionId: SessionId,
     run: Run,
 ): Boolean {
@@ -209,7 +209,7 @@ internal fun EntryStateHolder.resolveBoundSubmission(
         !isBoundSubmission ||
             run.isActive() ||
             uncertaintySnapshot == null ||
-            runCatching {
+            runCatchingSuspend {
                 runSubmissionUncertaintyStore.removeIfSnapshotMatches(pendingKey, uncertaintySnapshot)
             }.getOrDefault(false)
     return isBoundSubmission && uncertaintyRemoved

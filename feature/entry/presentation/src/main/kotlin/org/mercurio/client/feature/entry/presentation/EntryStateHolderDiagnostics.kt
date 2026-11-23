@@ -82,7 +82,7 @@ internal fun EntryStateHolder.confirmClearLocalDiagnostics() {
     if (!canClear) return
     scope.launch {
         try {
-            val cleared = runCatching { store.clear() }.isSuccess
+            val cleared = runCatchingSuspend { store.clear() }.isSuccess
             applyStateChange {
                 mutableUiState.update { state ->
                     if (!state.localDiagnostics.isOpen) {
@@ -128,12 +128,12 @@ internal suspend fun EntryStateHolder.applyLocalDiagnosticsRecordCount() {
     }
 }
 
-internal fun EntryStateHolder.recordDiagnostic(
+internal suspend fun EntryStateHolder.recordDiagnostic(
     eventType: LocalDiagnosticEventType,
     status: LocalDiagnosticStatus? = null,
 ) {
     localDiagnostics?.let { ports ->
-        runCatching { ports.recorder.record(LocalDiagnosticEvent(eventType, status)) }
+        runCatchingSuspend { ports.recorder.record(LocalDiagnosticEvent(eventType, status)) }
     }
     if (!mutableUiState.value.localDiagnostics.isOpen) return
     scope.launch { applyLocalDiagnosticsRecordCount() }

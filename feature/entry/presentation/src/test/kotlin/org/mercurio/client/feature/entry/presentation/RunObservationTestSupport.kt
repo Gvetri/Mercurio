@@ -40,7 +40,7 @@ internal fun observationHolder(
     gateway: ObservationScriptedGateway,
     dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     recoveryRegistry: RunRecoveryRegistry? = null,
-    persistRunRecoveryEntry: ((String, RunRecoveryEntry) -> Unit)? = null,
+    persistRunRecoveryEntry: (suspend (String, RunRecoveryEntry) -> Unit)? = null,
 ): EntryStateHolder {
     val repository: GatewayConnectionRepository =
         DefaultGatewayConnectionRepository(InMemoryGatewayConnectionDataSource())
@@ -86,10 +86,10 @@ internal suspend fun openObservedSession(
 
 internal suspend fun awaitObservationState(
     holder: EntryStateHolder,
-    predicate: (EntryUiState) -> Boolean,
+    predicate: suspend (EntryUiState) -> Boolean,
 ) = holder.awaitUiState("the observation state", predicate)
 
-internal fun awaitObservationCondition(predicate: () -> Boolean) {
+internal fun awaitObservationCondition(predicate: suspend () -> Boolean) {
     runBlocking {
         withTimeout(OBSERVATION_TIMEOUT_MILLIS) {
             while (!predicate()) delay(10)
@@ -294,19 +294,19 @@ internal class ObservationDelayedTerminalObservation(
 }
 
 internal class ObservationFailingRunRecoveryRegistry : RunRecoveryRegistry {
-    override fun load(): List<RunRecoveryEntry> = emptyList()
+    override suspend fun load(): List<RunRecoveryEntry> = emptyList()
 
-    override fun save(entry: RunRecoveryEntry): Unit = error("recovery storage unavailable")
+    override suspend fun save(entry: RunRecoveryEntry): Unit = error("recovery storage unavailable")
 
-    override fun remove(entry: RunRecoveryEntry) = Unit
+    override suspend fun remove(entry: RunRecoveryEntry) = Unit
 }
 
 internal class ObservationFailingLoadRunRecoveryRegistry : RunRecoveryRegistry {
-    override fun load(): List<RunRecoveryEntry> = error("recovery storage unavailable")
+    override suspend fun load(): List<RunRecoveryEntry> = error("recovery storage unavailable")
 
-    override fun save(entry: RunRecoveryEntry) = Unit
+    override suspend fun save(entry: RunRecoveryEntry) = Unit
 
-    override fun remove(entry: RunRecoveryEntry) = Unit
+    override suspend fun remove(entry: RunRecoveryEntry) = Unit
 }
 
 internal class ObservationFlakyRunRecoveryRegistry : RunRecoveryRegistry {
@@ -314,15 +314,15 @@ internal class ObservationFlakyRunRecoveryRegistry : RunRecoveryRegistry {
     var failSave = true
     val saveAttempts = AtomicInteger(0)
 
-    override fun load(): List<RunRecoveryEntry> = entries.toList()
+    override suspend fun load(): List<RunRecoveryEntry> = entries.toList()
 
-    override fun save(entry: RunRecoveryEntry) {
+    override suspend fun save(entry: RunRecoveryEntry) {
         saveAttempts.incrementAndGet()
         if (failSave) error("recovery storage unavailable")
         if (entry !in entries) entries += entry
     }
 
-    override fun remove(entry: RunRecoveryEntry) {
+    override suspend fun remove(entry: RunRecoveryEntry) {
         entries -= entry
     }
 }
@@ -330,11 +330,11 @@ internal class ObservationFlakyRunRecoveryRegistry : RunRecoveryRegistry {
 internal class ObservationFailingRemoveRunRecoveryRegistry(
     private val entry: RunRecoveryEntry,
 ) : RunRecoveryRegistry {
-    override fun load(): List<RunRecoveryEntry> = listOf(entry)
+    override suspend fun load(): List<RunRecoveryEntry> = listOf(entry)
 
-    override fun save(entry: RunRecoveryEntry) = Unit
+    override suspend fun save(entry: RunRecoveryEntry) = Unit
 
-    override fun remove(entry: RunRecoveryEntry): Unit = error("recovery cleanup unavailable")
+    override suspend fun remove(entry: RunRecoveryEntry): Unit = error("recovery cleanup unavailable")
 }
 
 internal const val OBSERVATION_TIMEOUT_MILLIS = 15_000L

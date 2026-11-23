@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CancellationException
 import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
@@ -26,6 +27,8 @@ internal suspend fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunRecon
     val recoveryEntries =
         try {
             runRecoveryRegistry?.load().orEmpty()
+        } catch (error: CancellationException) {
+            throw error
         } catch (_: Exception) {
             null
         }
@@ -81,7 +84,7 @@ internal suspend fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunRecon
     }
 }
 
-internal fun EntryStateHolder.reconciliationRunIds(
+internal suspend fun EntryStateHolder.reconciliationRunIds(
     context: OpenedRunReconcileContext,
     sessionRecoveryEntries: List<RunRecoveryEntry>,
     recoveryEntriesLoadFailed: Boolean,

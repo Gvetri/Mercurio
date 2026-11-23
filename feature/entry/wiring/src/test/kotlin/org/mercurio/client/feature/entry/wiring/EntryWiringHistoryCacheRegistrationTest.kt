@@ -138,7 +138,7 @@ class EntryWiringHistoryCacheRegistrationTest {
 
         assertTrue(
             "the history cache purge must be registered in the removal lambda, found: $removalLambda",
-            "historyCacheStore::clearEndpoint" in removalLambda,
+            "historyCacheStore.clearEndpoint" in removalLambda,
         )
     }
 
@@ -225,7 +225,7 @@ class EntryWiringHistoryCacheRegistrationTest {
 
         override fun read(key: HistoryCacheKey): List<GatewayHistoryMessage> = emptyList()
 
-        override fun write(
+        override suspend fun write(
             key: HistoryCacheKey,
             messages: List<GatewayHistoryMessage>,
         ) = Unit
@@ -235,7 +235,7 @@ class EntryWiringHistoryCacheRegistrationTest {
         val writtenListSignal = Channel<String>(Channel.UNLIMITED)
         val clearedSignal = Channel<String>(Channel.UNLIMITED)
 
-        override fun writeSessionList(
+        override suspend fun writeSessionList(
             endpoint: String,
             sessions: List<Session>,
         ) {
@@ -244,13 +244,13 @@ class EntryWiringHistoryCacheRegistrationTest {
             writtenListSignal.trySend(endpoint)
         }
 
-        override fun clearEndpoint(endpoint: String) {
+        override suspend fun clearEndpoint(endpoint: String) {
             clearedEndpoints += endpoint
             lists.remove(endpoint)
             clearedSignal.trySend(endpoint)
         }
 
-        override fun clear() {
+        override suspend fun clear() {
             lists.clear()
         }
 

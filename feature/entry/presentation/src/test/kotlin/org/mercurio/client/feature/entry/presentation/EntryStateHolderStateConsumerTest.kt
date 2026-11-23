@@ -87,7 +87,7 @@ private class LaneRecordingUncertaintyStore(
 ) : RunSubmissionUncertaintyStore {
     val lanes = mutableListOf<String>()
 
-    override fun add(
+    override suspend fun add(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
@@ -96,7 +96,7 @@ private class LaneRecordingUncertaintyStore(
         return true
     }
 
-    override fun remove(
+    override suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ): Boolean {

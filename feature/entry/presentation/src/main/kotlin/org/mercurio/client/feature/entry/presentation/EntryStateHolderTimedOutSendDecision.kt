@@ -58,14 +58,14 @@ internal fun EntryStateHolder.noNewRunConfirmsNoSubmission(
         recoveryStoreAllowsNoNewRun &&
         uncertainSubmissionRunIds[sessionId] == null
 
-internal fun EntryStateHolder.uncertaintyCanBeRemoved(
+internal suspend fun EntryStateHolder.uncertaintyCanBeRemoved(
     pendingKey: PendingRunSubmissionKey,
     uncertaintySnapshot: RunSubmissionUncertaintySnapshot?,
     canResolveUncertainty: Boolean,
 ): Boolean =
     !canResolveUncertainty ||
         !runSubmissionUncertaintyStore.contains(pendingKey) ||
-        runCatching {
+        runCatchingSuspend {
             uncertaintySnapshot != null &&
                 runSubmissionUncertaintyStore.removeIfSnapshotMatches(pendingKey, uncertaintySnapshot)
         }.getOrDefault(false)
@@ -92,7 +92,7 @@ internal fun EntryStateHolder.uncertaintyIdentityIsStable(
     return belongsToThisSubmission && stable
 }
 
-internal fun EntryStateHolder.evaluateTimedOutSendUncertainty(
+internal suspend fun EntryStateHolder.evaluateTimedOutSendUncertainty(
     sessionId: SessionId,
     reconciliation: SessionReconciliation,
     resolveWhenNoNewRun: Boolean,

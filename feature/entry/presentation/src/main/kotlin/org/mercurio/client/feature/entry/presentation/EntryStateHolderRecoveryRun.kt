@@ -41,7 +41,7 @@ internal suspend fun EntryStateHolder.recoverRun(
     return reconciliation.run
 }
 
-internal fun EntryStateHolder.rememberRecoveredRun(
+internal suspend fun EntryStateHolder.rememberRecoveredRun(
     entry: RunRecoveryEntry,
     run: Run,
     updateVisibleState: Boolean = true,
@@ -63,7 +63,7 @@ internal fun EntryStateHolder.rememberRecoveredRun(
             }
             unresolvedSubmissionSessions += entry.sessionId
             ambiguousSubmissionSessions += entry.sessionId
-            runCatching {
+            runCatchingSuspend {
                 runSubmissionUncertaintyStore.markAmbiguous(
                     pendingKey,
                     uncertaintySnapshot.attemptId,
@@ -90,7 +90,7 @@ internal fun EntryStateHolder.rememberRecoveredRun(
     if (updateVisibleState) updateVisibleRunState(entry.sessionId)
 }
 
-internal fun EntryStateHolder.persistDisconnectedRecoveryEntry(
+internal suspend fun EntryStateHolder.persistDisconnectedRecoveryEntry(
     endpoint: String,
     entry: RunRecoveryEntry,
 ): Boolean {
@@ -113,7 +113,7 @@ internal fun EntryStateHolder.persistDisconnectedRecoveryEntry(
     return persisted
 }
 
-internal fun EntryStateHolder.reconcilePersistedRecoveryEntryIfConnected(
+internal suspend fun EntryStateHolder.reconcilePersistedRecoveryEntryIfConnected(
     endpoint: String,
     entry: RunRecoveryEntry,
 ) {
@@ -176,7 +176,7 @@ internal fun EntryStateHolder.claimRecoveryEntryForRun(
         }
     }
 
-internal fun EntryStateHolder.beginRecoveryJob(
+internal suspend fun EntryStateHolder.beginRecoveryJob(
     endpoint: String,
     entry: RunRecoveryEntry,
     recoveryContext: RecoveryRunContext,

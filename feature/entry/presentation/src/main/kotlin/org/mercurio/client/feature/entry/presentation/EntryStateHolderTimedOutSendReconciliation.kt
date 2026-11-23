@@ -260,10 +260,10 @@ internal suspend fun EntryStateHolder.applyTimedOutSendReconciliation(
     return outcome
 }
 
-private fun EntryStateHolder.applyAmbiguousMark(outcome: TimedOutSendReconciliationOutcome) {
+private suspend fun EntryStateHolder.applyAmbiguousMark(outcome: TimedOutSendReconciliationOutcome) {
     val mark = outcome.ambiguousMark ?: return
     val (key, attemptId) = mark
-    runCatching {
+    runCatchingSuspend {
         runSubmissionUncertaintyStore.markAmbiguous(key, attemptId)
     }
 }

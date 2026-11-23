@@ -196,11 +196,11 @@ class RunReconciliationRecoveryTest {
             val gateway = ReconciliationFakeGateway(reconciliationSession())
             val failingRegistry =
                 object : RunRecoveryRegistry {
-                    override fun load(): List<RunRecoveryEntry> = error("recovery storage unavailable")
+                    override suspend fun load(): List<RunRecoveryEntry> = error("recovery storage unavailable")
 
-                    override fun save(entry: RunRecoveryEntry) = Unit
+                    override suspend fun save(entry: RunRecoveryEntry) = Unit
 
-                    override fun remove(entry: RunRecoveryEntry) = Unit
+                    override suspend fun remove(entry: RunRecoveryEntry) = Unit
                 }
             val holder =
                 reconciliationHolder(

@@ -247,7 +247,7 @@ class EntryStateHolder(
         }
     }
 
-    private fun dispatchRunEvent(event: EntryUiEvent.Run) {
+    private suspend fun dispatchRunEvent(event: EntryUiEvent.Run) {
         when (event) {
             is EntryUiEvent.ComposerTextChanged -> updateComposerText(event.value)
             is EntryUiEvent.SendMessageClicked -> dispatchSendMessage()
@@ -259,7 +259,7 @@ class EntryStateHolder(
         }
     }
 
-    private fun dispatchSettingsEvent(event: EntryUiEvent.Settings) {
+    private suspend fun dispatchSettingsEvent(event: EntryUiEvent.Settings) {
         when (event) {
             is EntryUiEvent.OpenSettingsClicked -> openSettings()
             is EntryUiEvent.CheckForUpdatesClicked -> checkForUpdates()

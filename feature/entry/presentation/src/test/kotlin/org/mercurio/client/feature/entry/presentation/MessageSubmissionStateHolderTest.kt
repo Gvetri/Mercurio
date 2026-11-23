@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -451,8 +452,8 @@ class MessageSubmissionStateHolderTest {
                     onCreateRun = {
                         holder.onEvent(EntryUiEvent.ComposerTextChanged("Newer draft"))
                         val staleAttemptId = requireNotNull(store.attemptId(key))
-                        assertTrue(store.remove(key, staleAttemptId))
-                        assertTrue(store.add(key, emptySet(), "new-attempt"))
+                        assertTrue(runBlocking { store.remove(key, staleAttemptId) })
+                        assertTrue(runBlocking { store.add(key, emptySet(), "new-attempt") })
                     }
                 }
             holder = holder(gateway, StandardTestDispatcher(testScheduler), uncertaintyStore = store)

@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.fail
@@ -14,100 +15,103 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class EndpointScopedRunRecoveryRegistryTest {
     @Test
-    fun current_and_explicit_endpoint_access_share_cached_registries() {
-        var endpoint: String? = "https://gateway-a.example"
-        val storages = mutableMapOf<String?, MemoryRunRecoveryStorage>()
-        val registry =
-            EndpointScopedRunRecoveryRegistry(
-                endpointProvider = { endpoint },
-                storageForEndpoint = { value ->
-                    MemoryRunRecoveryStorage().also { storages[value] = it }
-                },
+    fun current_and_explicit_endpoint_access_share_cached_registries() =
+        runBlocking<Unit> {
+            var endpoint: String? = "https://gateway-a.example"
+            val storages = mutableMapOf<String?, MemoryRunRecoveryStorage>()
+            val registry =
+                EndpointScopedRunRecoveryRegistry(
+                    endpointProvider = { endpoint },
+                    storageForEndpoint = { value ->
+                        MemoryRunRecoveryStorage().also { storages[value] = it }
+                    },
+                )
+            val first = RunRecoveryEntry(SessionId("session-a"), RunId("run-a"))
+            val second = RunRecoveryEntry(SessionId("session-b"), RunId("run-b"))
+
+            registry.save(first)
+            registry.registryForEndpoint("https://gateway-b.example").save(second)
+            endpoint = "https://gateway-b.example"
+
+            assertEquals(listOf(first), registry.registryForEndpoint("https://gateway-a.example").load())
+            assertEquals(listOf(second), registry.load())
+            assertEquals(2, storages.size)
+            assertSame(
+                registry.registryForEndpoint("https://gateway-a.example"),
+                registry.registryForEndpoint("https://gateway-a.example"),
             )
-        val first = RunRecoveryEntry(SessionId("session-a"), RunId("run-a"))
-        val second = RunRecoveryEntry(SessionId("session-b"), RunId("run-b"))
-
-        registry.save(first)
-        registry.registryForEndpoint("https://gateway-b.example").save(second)
-        endpoint = "https://gateway-b.example"
-
-        assertEquals(listOf(first), registry.registryForEndpoint("https://gateway-a.example").load())
-        assertEquals(listOf(second), registry.load())
-        assertEquals(2, storages.size)
-        assertSame(
-            registry.registryForEndpoint("https://gateway-a.example"),
-            registry.registryForEndpoint("https://gateway-a.example"),
-        )
-    }
-
-    @Test
-    fun a_failed_save_is_available_to_a_recreated_endpoint_registry_until_it_is_durable() {
-        val storage = FailingRunRecoveryStorage()
-        val entry = RunRecoveryEntry(SessionId("session"), RunId("run"))
-        val firstRegistry =
-            EndpointScopedRunRecoveryRegistry(
-                endpointProvider = { "https://gateway.example" },
-                storageForEndpoint = { storage },
-            )
-
-        try {
-            firstRegistry.save(entry)
-            fail("Expected the storage failure")
-        } catch (_: IllegalStateException) {
         }
 
-        val recreatedRegistry =
-            EndpointScopedRunRecoveryRegistry(
-                endpointProvider = { "https://gateway.example" },
-                storageForEndpoint = { storage },
-            )
-        assertEquals(listOf(entry), recreatedRegistry.load())
-
-        storage.failWrites = false
-        recreatedRegistry.save(entry)
-        assertEquals(listOf(entry), recreatedRegistry.load())
-        recreatedRegistry.remove(entry)
-        assertEquals(emptyList<RunRecoveryEntry>(), recreatedRegistry.load())
-    }
-
     @Test
-    fun separate_endpoint_registries_serialize_shared_storage_transactions() {
-        val storage = ConcurrentRunRecoveryStorage()
-        val firstRegistry =
-            EndpointScopedRunRecoveryRegistry(
-                endpointProvider = { "https://gateway.example" },
-                storageForEndpoint = { storage },
-            )
-        val secondRegistry =
-            EndpointScopedRunRecoveryRegistry(
-                endpointProvider = { "https://gateway.example" },
-                storageForEndpoint = { storage },
-            )
-        val first = RunRecoveryEntry(SessionId("session-a"), RunId("run-a"))
-        val second = RunRecoveryEntry(SessionId("session-b"), RunId("run-b"))
-        val start = CountDownLatch(1)
-        val executor = Executors.newFixedThreadPool(2)
-        try {
-            val firstSave =
-                executor.submit {
-                    start.await()
-                    firstRegistry.save(first)
-                }
-            val secondSave =
-                executor.submit {
-                    start.await()
-                    secondRegistry.save(second)
-                }
-            start.countDown()
-            firstSave.get(2, TimeUnit.SECONDS)
-            secondSave.get(2, TimeUnit.SECONDS)
-        } finally {
-            executor.shutdownNow()
+    fun a_failed_save_is_available_to_a_recreated_endpoint_registry_until_it_is_durable() =
+        runBlocking<Unit> {
+            val storage = FailingRunRecoveryStorage()
+            val entry = RunRecoveryEntry(SessionId("session"), RunId("run"))
+            val firstRegistry =
+                EndpointScopedRunRecoveryRegistry(
+                    endpointProvider = { "https://gateway.example" },
+                    storageForEndpoint = { storage },
+                )
+
+            try {
+                firstRegistry.save(entry)
+                fail("Expected the storage failure")
+            } catch (_: IllegalStateException) {
+            }
+
+            val recreatedRegistry =
+                EndpointScopedRunRecoveryRegistry(
+                    endpointProvider = { "https://gateway.example" },
+                    storageForEndpoint = { storage },
+                )
+            assertEquals(listOf(entry), recreatedRegistry.load())
+
+            storage.failWrites = false
+            recreatedRegistry.save(entry)
+            assertEquals(listOf(entry), recreatedRegistry.load())
+            recreatedRegistry.remove(entry)
+            assertEquals(emptyList<RunRecoveryEntry>(), recreatedRegistry.load())
         }
 
-        assertEquals(1, storage.maximumConcurrentLoads.get())
-        assertEquals(setOf(first, second), firstRegistry.load().toSet())
-    }
+    @Test
+    fun separate_endpoint_registries_serialize_shared_storage_transactions() =
+        runBlocking<Unit> {
+            val storage = ConcurrentRunRecoveryStorage()
+            val firstRegistry =
+                EndpointScopedRunRecoveryRegistry(
+                    endpointProvider = { "https://gateway.example" },
+                    storageForEndpoint = { storage },
+                )
+            val secondRegistry =
+                EndpointScopedRunRecoveryRegistry(
+                    endpointProvider = { "https://gateway.example" },
+                    storageForEndpoint = { storage },
+                )
+            val first = RunRecoveryEntry(SessionId("session-a"), RunId("run-a"))
+            val second = RunRecoveryEntry(SessionId("session-b"), RunId("run-b"))
+            val start = CountDownLatch(1)
+            val executor = Executors.newFixedThreadPool(2)
+            try {
+                val firstSave =
+                    executor.submit {
+                        start.await()
+                        runBlocking { firstRegistry.save(first) }
+                    }
+                val secondSave =
+                    executor.submit {
+                        start.await()
+                        runBlocking { secondRegistry.save(second) }
+                    }
+                start.countDown()
+                firstSave.get(2, TimeUnit.SECONDS)
+                secondSave.get(2, TimeUnit.SECONDS)
+            } finally {
+                executor.shutdownNow()
+            }
+
+            assertEquals(1, storage.maximumConcurrentLoads.get())
+            assertEquals(setOf(first, second), firstRegistry.load().toSet())
+        }
 
     private class MemoryRunRecoveryStorage : RunRecoveryStorage {
         private var entries = emptySet<RunRecoveryEntry>()

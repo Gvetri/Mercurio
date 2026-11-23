@@ -113,7 +113,7 @@ internal fun mutation(
 
 internal fun awaitFixtureState(
     holder: EntryStateHolder,
-    predicate: (EntryUiState) -> Boolean,
+    predicate: suspend (EntryUiState) -> Boolean,
 ) {
     runBlocking {
         withTimeout(FIXTURE_TIMEOUT_MILLIS) {

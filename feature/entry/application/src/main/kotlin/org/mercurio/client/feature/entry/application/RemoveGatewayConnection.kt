@@ -1,12 +1,13 @@
 package org.mercurio.client.feature.entry.application
 
 import org.mercurio.client.feature.entry.domain.GatewayConnectionRepository
+import kotlin.coroutines.cancellation.CancellationException
 
 class RemoveGatewayConnection(
     private val gatewayConnectionRepository: GatewayConnectionRepository,
-    private val clearConnectionSpecificData: (String?) -> Unit = {},
+    private val clearConnectionSpecificData: suspend (String?) -> Unit = {},
 ) {
-    fun execute() {
+    suspend fun execute() {
         var failure: Exception? = null
         val endpoint =
             try {
@@ -22,6 +23,8 @@ class RemoveGatewayConnection(
         }
         try {
             clearConnectionSpecificData(endpoint)
+        } catch (error: CancellationException) {
+            throw error
         } catch (expectedError: Exception) {
             failure = failure ?: expectedError
         }

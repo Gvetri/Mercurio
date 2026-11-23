@@ -17,7 +17,7 @@ internal class RecordingHistoryCacheStore : HistoryCacheStore {
         return transcripts[key].orEmpty()
     }
 
-    override fun write(
+    override suspend fun write(
         key: HistoryCacheKey,
         messages: List<GatewayHistoryMessage>,
     ) {
@@ -30,7 +30,7 @@ internal class RecordingHistoryCacheStore : HistoryCacheStore {
         return lists[endpoint].orEmpty()
     }
 
-    override fun writeSessionList(
+    override suspend fun writeSessionList(
         endpoint: String,
         sessions: List<Session>,
     ) {
@@ -38,13 +38,13 @@ internal class RecordingHistoryCacheStore : HistoryCacheStore {
         lists[endpoint] = sessions
     }
 
-    override fun clearEndpoint(endpoint: String) {
+    override suspend fun clearEndpoint(endpoint: String) {
         operations += "clearEndpoint"
         lists.remove(endpoint)
         transcripts.keys.filter { it.endpoint == endpoint }.forEach(transcripts::remove)
     }
 
-    override fun clear() {
+    override suspend fun clear() {
         operations += "clear"
         lists.clear()
         transcripts.clear()

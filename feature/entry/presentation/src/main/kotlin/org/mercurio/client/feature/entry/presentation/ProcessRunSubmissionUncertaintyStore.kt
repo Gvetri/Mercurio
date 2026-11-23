@@ -5,7 +5,7 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintySnapshot
 
 internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
-    override fun bindRun(
+    override suspend fun bindRun(
         key: PendingRunSubmissionKey,
         runId: RunId,
         attemptId: String?,
@@ -19,7 +19,7 @@ internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
 
     override fun boundRunId(key: PendingRunSubmissionKey): RunId? = synchronized(lock) { keys[key]?.boundRunId }
 
-    override fun markSettled(
+    override suspend fun markSettled(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ): Boolean =
@@ -32,7 +32,7 @@ internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
 
     override fun isSettled(key: PendingRunSubmissionKey): Boolean = synchronized(lock) { keys[key]?.settled == true }
 
-    override fun markAmbiguous(
+    override suspend fun markAmbiguous(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ): Boolean =
@@ -48,7 +48,7 @@ internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
             keys[key]?.requiresRunMatch == true
         }
 
-    override fun removeIfKnownRunIdsMatch(
+    override suspend fun removeIfKnownRunIdsMatch(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
@@ -74,7 +74,7 @@ internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
             settled == snapshot.settled &&
             requiresRunMatch == snapshot.requiresRunMatch
 
-    override fun removeIfSnapshotMatches(
+    override suspend fun removeIfSnapshotMatches(
         key: PendingRunSubmissionKey,
         snapshot: RunSubmissionUncertaintySnapshot,
     ): Boolean =

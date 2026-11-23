@@ -15,13 +15,17 @@ const val HISTORY_CACHE_MAX_AGE_DAYS: Int = 7
  * [HISTORY_CACHE_MAX_AGE_DAYS] days, and evicts the oldest content first, deterministically.
  * It is never authoritative: a cleared store re-populates from later successful reads, and a
  * write only ever replaces the cached copy of the addressed content.
+ *
+ * Mutations suspend and serialize through one mutex, because each one is a read-modify-write of
+ * the whole record set. Reads are lock-free: the storage commits one immutable blob atomically,
+ * so a reader observes either the previous or the next complete record.
  */
 interface HistoryCacheStore {
     /** Cached messages for the addressed Session, oldest cached first; empty when nothing is cached. */
     fun read(key: HistoryCacheKey): List<GatewayHistoryMessage>
 
     /** Replaces the cached messages of the addressed Session with [messages]. */
-    fun write(
+    suspend fun write(
         key: HistoryCacheKey,
         messages: List<GatewayHistoryMessage>,
     )
@@ -30,14 +34,14 @@ interface HistoryCacheStore {
     fun readSessionList(endpoint: String): List<Session>
 
     /** Replaces the cached Session-list entries of the endpoint with [sessions]. */
-    fun writeSessionList(
+    suspend fun writeSessionList(
         endpoint: String,
         sessions: List<Session>,
     )
 
     /** Purges every cached record this store holds for the endpoint (connection removal). */
-    fun clearEndpoint(endpoint: String)
+    suspend fun clearEndpoint(endpoint: String)
 
     /** Empties the store completely, removing cached content and the key that protects it. */
-    fun clear()
+    suspend fun clear()
 }

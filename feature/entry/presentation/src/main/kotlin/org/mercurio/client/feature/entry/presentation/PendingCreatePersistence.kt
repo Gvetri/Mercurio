@@ -19,7 +19,7 @@ internal fun EntryStateHolder.persistPendingCreatesOffThread(pendingCreates: Lis
     persistenceScope.launch { writePendingCreateMarkers(pendingCreates) }
 }
 
-internal fun EntryStateHolder.writePendingCreateMarkers(pendingCreates: List<PendingCreatePersistence>) {
+internal suspend fun EntryStateHolder.writePendingCreateMarkers(pendingCreates: List<PendingCreatePersistence>) {
     pendingCreates.forEach { pending ->
         val submissionKey = PendingRunSubmissionKey(pending.key.endpoint, pending.key.sessionId)
         val persisted =

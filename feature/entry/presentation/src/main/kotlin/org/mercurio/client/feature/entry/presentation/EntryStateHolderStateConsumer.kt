@@ -3,7 +3,7 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 
-internal suspend fun <T> EntryStateHolder.applyStateChange(block: () -> T): T {
+internal suspend fun <T> EntryStateHolder.applyStateChange(block: suspend () -> T): T {
     if (currentCoroutineContext()[StateChangeConsumerMarker] != null) {
         return block()
     }
@@ -31,7 +31,7 @@ internal suspend fun <T> EntryStateHolder.applyStateChange(block: () -> T): T {
  * stopped draining it; this keeps `submitStateChange` safe to call from producer `finally`
  * blocks without masking the failure the block is unwinding.
  */
-internal fun EntryStateHolder.submitStateChange(block: () -> Unit) {
+internal fun EntryStateHolder.submitStateChange(block: suspend () -> Unit) {
     val command = StateChangeCommand(block)
     stateChangeCommands.trySend(command)
 }

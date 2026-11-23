@@ -3,6 +3,9 @@ package org.mercurio.client.feature.entry.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 class HistoryCacheStoreTest {
     @Test
@@ -18,10 +21,24 @@ class HistoryCacheStoreTest {
         assertTrue(NoOpHistoryCacheStore is HistoryCacheStore)
         assertTrue(NoOpHistoryCacheStore.read(key).isEmpty())
 
-        NoOpHistoryCacheStore.write(key, listOf(GatewayHistoryMessage(id = "m1", role = "user", content = "hello")))
-        NoOpHistoryCacheStore.clearEndpoint("https://gateway.example")
-        NoOpHistoryCacheStore.clear()
+        runSuspend {
+            NoOpHistoryCacheStore.write(key, listOf(GatewayHistoryMessage(id = "m1", role = "user", content = "hello")))
+            NoOpHistoryCacheStore.clearEndpoint("https://gateway.example")
+            NoOpHistoryCacheStore.clear()
+        }
 
         assertTrue(NoOpHistoryCacheStore.read(key).isEmpty())
     }
+}
+
+private fun runSuspend(block: suspend () -> Unit) {
+    block.startCoroutine(
+        object : Continuation<Unit> {
+            override val context = EmptyCoroutineContext
+
+            override fun resumeWith(result: Result<Unit>) {
+                result.getOrThrow()
+            }
+        },
+    )
 }

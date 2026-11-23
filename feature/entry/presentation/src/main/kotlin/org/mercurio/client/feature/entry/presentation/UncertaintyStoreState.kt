@@ -11,7 +11,7 @@ internal sealed class UncertaintyStoreState : RunSubmissionUncertaintyStore {
     protected val lock = Any()
     protected val keys = mutableMapOf<PendingRunSubmissionKey, UncertaintyRecord>()
 
-    override fun add(
+    override suspend fun add(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
@@ -26,7 +26,7 @@ internal sealed class UncertaintyStoreState : RunSubmissionUncertaintyStore {
         }
     }
 
-    override fun remove(
+    override suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ): Boolean =
@@ -39,7 +39,7 @@ internal sealed class UncertaintyStoreState : RunSubmissionUncertaintyStore {
 
     override fun contains(key: PendingRunSubmissionKey): Boolean = synchronized(lock) { key in keys }
 
-    override fun clearEndpoint(endpoint: String) {
+    override suspend fun clearEndpoint(endpoint: String) {
         synchronized(lock) {
             keys.keys.filter { it.endpoint == endpoint }.forEach(keys::remove)
         }

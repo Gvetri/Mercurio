@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -341,7 +342,7 @@ class RunObservationRecoveryTest {
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
             awaitObservationCondition { gateway.statusRequests.contains(run.id) }
-            assertEquals(listOf(entry), recoveryRegistry.load())
+            assertEquals(listOf(entry), runBlocking { recoveryRegistry.load() })
         } finally {
             holder.close()
         }

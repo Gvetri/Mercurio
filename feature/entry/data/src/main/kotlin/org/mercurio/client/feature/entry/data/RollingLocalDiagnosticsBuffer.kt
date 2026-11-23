@@ -1,8 +1,12 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticEvent
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsRecorder
 import org.mercurio.client.feature.entry.domain.LocalDiagnosticsStore
+import java.io.FileNotFoundException
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -25,9 +29,17 @@ const val LOCAL_DIAGNOSTICS_LIMIT_BYTES: Int = 1_048_576
  * [onRecordFailure] and never surfaces to the caller. The catch is deliberately
  * `Throwable`: the initialization failure on API 24 is an `Error`
  * (`ExceptionInInitializerError`), not an `Exception`, and the recorder contract
- * forbids surfacing any record-time failure to the caller. The next [record]
+ * forbids surfacing any record-time failure to the caller. Cancellation is not a
+ * record-time failure and does not reach `onRecordFailure`: it propagates so a
+ * cancelled job stops instead of consuming the one-shot report. The next [record]
  * attempt retries the failed initialization, so a transient failure disables
  * recording for one event instead of for the whole session.
+ *
+ * Mutations serialize through one [Mutex] across a suspend boundary because each one replaces the
+ * whole record file. Reads take no lock: the storage writes a complete file atomically, so a reader
+ * observes either the previous file or the next complete one. A concurrent [clear] deletes the file
+ * instead of replacing it; a read that loses that race observes a missing file and reports an empty
+ * buffer instead of failing.
  */
 class RollingLocalDiagnosticsBuffer(
     private val storage: LocalDiagnosticsStorage,
@@ -36,7 +48,7 @@ class RollingLocalDiagnosticsBuffer(
     private val onRecordFailure: (Throwable) -> Unit = {},
 ) : LocalDiagnosticsRecorder,
     LocalDiagnosticsStore {
-    private val lock = Any()
+    private val writeMutex = Mutex()
     private val failureReported = AtomicBoolean(false)
 
     init {
@@ -44,19 +56,21 @@ class RollingLocalDiagnosticsBuffer(
     }
 
     @Suppress("TooGenericExceptionCaught")
-    override fun record(event: LocalDiagnosticEvent) {
+    override suspend fun record(event: LocalDiagnosticEvent) {
         try {
             recordEvent(event)
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             if (failureReported.compareAndSet(false, true)) onRecordFailure(error)
         }
     }
 
-    private fun recordEvent(event: LocalDiagnosticEvent) {
+    private suspend fun recordEvent(event: LocalDiagnosticEvent) {
         val encoded = LocalDiagnosticsRecords.encodeEventRecord(event, clock()) ?: return
         val encodedBytes = LocalDiagnosticsRecords.retainedBytes(encoded)
         if (encodedBytes > limitBytes) return
-        synchronized(lock) {
+        writeMutex.withLock {
             val retained = readRetainedLocked().toMutableList()
             var retainedBytes = retained.sumOf(LocalDiagnosticsRecords::retainedBytes)
             while (retained.isNotEmpty() && retainedBytes + encodedBytes > limitBytes) {
@@ -69,17 +83,19 @@ class RollingLocalDiagnosticsBuffer(
 
     override fun recordCount(): Int = records().size
 
-    override fun clear() {
-        synchronized(lock) {
+    override suspend fun clear() {
+        writeMutex.withLock {
             storage.write(emptyList())
         }
     }
 
     /** Complete retained records, oldest first; the source of an explicit export. */
-    fun records(): List<String> =
-        synchronized(lock) {
-            readRetainedLocked()
-        }
+    fun records(): List<String> = readRetainedLocked()
 
-    private fun readRetainedLocked(): List<String> = storage.read().filter(LocalDiagnosticsRecords::isValidEventRecord)
+    private fun readRetainedLocked(): List<String> =
+        try {
+            storage.read().filter(LocalDiagnosticsRecords::isValidEventRecord)
+        } catch (_: FileNotFoundException) {
+            emptyList()
+        }
 }

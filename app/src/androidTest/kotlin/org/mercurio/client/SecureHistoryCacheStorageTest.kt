@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import androidx.annotation.XmlRes
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,89 +35,95 @@ class SecureHistoryCacheStorageTest {
 
     @Before
     fun clearBeforeTest() {
-        buildHistoryCacheStore(context).clear()
+        runBlocking { buildHistoryCacheStore(context).clear() }
     }
 
     @After
     fun clearAfterTest() {
-        buildHistoryCacheStore(context).clear()
+        runBlocking { buildHistoryCacheStore(context).clear() }
     }
 
     @Test
-    fun secure_default_storage_round_trips_only_ciphertext_in_no_backup_and_keystore() {
-        val store = buildHistoryCacheStore(context)
+    fun secure_default_storage_round_trips_only_ciphertext_in_no_backup_and_keystore() =
+        runBlocking<Unit> {
+            val store = buildHistoryCacheStore(context)
 
-        store.write(cacheKey, listOf(message("fixture-secret-transcript")))
+            store.write(cacheKey, listOf(message("fixture-secret-transcript")))
 
-        val recordFile = File(context.noBackupFilesDir, AndroidKeyStoreHistoryCacheStorage.CACHE_FILE_NAME)
-        val rawRecord = recordFile.readBytes().toString(StandardCharsets.UTF_8)
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        val key = keyStore.getKey(AndroidKeyStoreHistoryCacheStorage.KEY_ALIAS, null) as? SecretKey
+            val recordFile = File(context.noBackupFilesDir, AndroidKeyStoreHistoryCacheStorage.CACHE_FILE_NAME)
+            val rawRecord = recordFile.readBytes().toString(StandardCharsets.UTF_8)
+            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+            val key = keyStore.getKey(AndroidKeyStoreHistoryCacheStorage.KEY_ALIAS, null) as? SecretKey
 
-        assertEquals("fixture-secret-transcript", store.read(cacheKey).single().content)
-        assertTrue(recordFile.isFile)
-        assertFalse(rawRecord.contains("fixture-secret-transcript"))
-        assertNotNull(key)
-        assertNull(key?.encoded)
-        assertTrue(context.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP == 0)
-        assertEquals(context.noBackupFilesDir, recordFile.parentFile)
-    }
-
-    @Test
-    fun wholesale_clearing_the_history_cache_removes_ciphertext_and_keystore_key() {
-        val store = buildHistoryCacheStore(context)
-        store.write(cacheKey, listOf(message("fixture-secret-transcript")))
-
-        store.clear()
-
-        val recordFile = File(context.noBackupFilesDir, AndroidKeyStoreHistoryCacheStorage.CACHE_FILE_NAME)
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        assertFalse(recordFile.exists())
-        assertFalse(keyStore.containsAlias(AndroidKeyStoreHistoryCacheStorage.KEY_ALIAS))
-        assertTrue(store.read(cacheKey).isEmpty())
-    }
-
-    @Test
-    fun a_cleared_cache_re_populates_from_later_writes_through_a_fresh_key() {
-        val store = buildHistoryCacheStore(context)
-        store.write(cacheKey, listOf(message("fixture-secret-transcript")))
-        store.clear()
-
-        store.write(cacheKey, listOf(message("replacement transcript")))
-
-        assertEquals("replacement transcript", store.read(cacheKey).single().content)
-    }
-
-    @Test
-    fun a_missing_keystore_key_makes_cached_content_unreadable_until_the_next_write() {
-        val store = buildHistoryCacheStore(context)
-        store.write(cacheKey, listOf(message("fixture-secret-transcript")))
-        KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-            load(null)
-            deleteEntry(AndroidKeyStoreHistoryCacheStorage.KEY_ALIAS)
+            assertEquals("fixture-secret-transcript", store.read(cacheKey).single().content)
+            assertTrue(recordFile.isFile)
+            assertFalse(rawRecord.contains("fixture-secret-transcript"))
+            assertNotNull(key)
+            assertNull(key?.encoded)
+            assertTrue(context.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP == 0)
+            assertEquals(context.noBackupFilesDir, recordFile.parentFile)
         }
 
-        assertTrue(store.read(cacheKey).isEmpty())
+    @Test
+    fun wholesale_clearing_the_history_cache_removes_ciphertext_and_keystore_key() =
+        runBlocking<Unit> {
+            val store = buildHistoryCacheStore(context)
+            store.write(cacheKey, listOf(message("fixture-secret-transcript")))
 
-        store.write(cacheKey, listOf(message("replacement transcript")))
+            store.clear()
 
-        assertEquals("replacement transcript", store.read(cacheKey).single().content)
-    }
+            val recordFile = File(context.noBackupFilesDir, AndroidKeyStoreHistoryCacheStorage.CACHE_FILE_NAME)
+            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+            assertFalse(recordFile.exists())
+            assertFalse(keyStore.containsAlias(AndroidKeyStoreHistoryCacheStorage.KEY_ALIAS))
+            assertTrue(store.read(cacheKey).isEmpty())
+        }
 
     @Test
-    fun backup_rules_exclude_the_history_cache_record_location() {
-        val exclusions = declaredExclusions(R.xml.backup_rules)
+    fun a_cleared_cache_re_populates_from_later_writes_through_a_fresh_key() =
+        runBlocking<Unit> {
+            val store = buildHistoryCacheStore(context)
+            store.write(cacheKey, listOf(message("fixture-secret-transcript")))
+            store.clear()
 
-        assertTrue(exclusions.contains("full-backup-content:root:no_backup/"))
-    }
+            store.write(cacheKey, listOf(message("replacement transcript")))
+
+            assertEquals("replacement transcript", store.read(cacheKey).single().content)
+        }
 
     @Test
-    fun cloud_backup_and_device_transfer_rules_exclude_the_history_cache_record_location() {
-        val exclusions = declaredExclusions(R.xml.data_extraction_rules)
+    fun a_missing_keystore_key_makes_cached_content_unreadable_until_the_next_write() =
+        runBlocking<Unit> {
+            val store = buildHistoryCacheStore(context)
+            store.write(cacheKey, listOf(message("fixture-secret-transcript")))
+            KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                load(null)
+                deleteEntry(AndroidKeyStoreHistoryCacheStorage.KEY_ALIAS)
+            }
 
-        assertTrue(exclusions.contains("cloud-backup:root:no_backup/"))
-        assertTrue(exclusions.contains("device-transfer:root:no_backup/"))
-    }
+            assertTrue(store.read(cacheKey).isEmpty())
+
+            store.write(cacheKey, listOf(message("replacement transcript")))
+
+            assertEquals("replacement transcript", store.read(cacheKey).single().content)
+        }
+
+    @Test
+    fun backup_rules_exclude_the_history_cache_record_location() =
+        runBlocking<Unit> {
+            val exclusions = declaredExclusions(R.xml.backup_rules)
+
+            assertTrue(exclusions.contains("full-backup-content:root:no_backup/"))
+        }
+
+    @Test
+    fun cloud_backup_and_device_transfer_rules_exclude_the_history_cache_record_location() =
+        runBlocking<Unit> {
+            val exclusions = declaredExclusions(R.xml.data_extraction_rules)
+
+            assertTrue(exclusions.contains("cloud-backup:root:no_backup/"))
+            assertTrue(exclusions.contains("device-transfer:root:no_backup/"))
+        }
 
     private fun message(content: String): GatewayHistoryMessage =
         GatewayHistoryMessage(id = "message-1", role = "user", content = content)

@@ -444,7 +444,7 @@ class LocalDiagnosticsStateHolderTest {
         var exportCalls = 0
         var clearCalls = 0
 
-        override fun record(event: LocalDiagnosticEvent) {
+        override suspend fun record(event: LocalDiagnosticEvent) {
             if (failRecording) error("diagnostics storage unavailable")
             records += event
         }
@@ -454,7 +454,7 @@ class LocalDiagnosticsStateHolderTest {
             return records.size
         }
 
-        override fun clear() {
+        override suspend fun clear() {
             clearCalls += 1
             if (failClear) error("diagnostics storage unavailable")
             recordsClearedWith = records.toList()

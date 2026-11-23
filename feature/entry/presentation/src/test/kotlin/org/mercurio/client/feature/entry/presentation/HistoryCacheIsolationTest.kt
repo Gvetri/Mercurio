@@ -104,7 +104,7 @@ class HistoryCacheIsolationTest {
             assertEquals(emptyList<String>(), violations)
         }
 
-    private fun poisonCache(cache: RecordingHistoryCacheStore) {
+    private suspend fun poisonCache(cache: RecordingHistoryCacheStore) {
         cache.writeSessionList(RECONCILED_ENDPOINT, listOf(entrySession("ghost-session", "Ghost entry")))
         cache.write(
             HistoryCacheKey(RECONCILED_ENDPOINT, RECONCILED_SESSION_ID),

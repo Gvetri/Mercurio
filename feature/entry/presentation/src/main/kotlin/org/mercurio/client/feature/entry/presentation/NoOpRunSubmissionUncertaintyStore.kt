@@ -6,26 +6,26 @@ import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintySnapshot
 import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintyStore
 
 object NoOpRunSubmissionUncertaintyStore : RunSubmissionUncertaintyStore {
-    override fun add(
+    override suspend fun add(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
     ) = true
 
-    override fun remove(
+    override suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ) = true
 
     override fun contains(key: PendingRunSubmissionKey): Boolean = false
 
-    override fun removeIfKnownRunIdsMatch(
+    override suspend fun removeIfKnownRunIdsMatch(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
     ): Boolean = true
 
-    override fun removeIfSnapshotMatches(
+    override suspend fun removeIfSnapshotMatches(
         key: PendingRunSubmissionKey,
         snapshot: RunSubmissionUncertaintySnapshot,
     ): Boolean = true

@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CancellationException
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
@@ -48,7 +49,7 @@ internal fun EntryStateHolder.loadInitialSessions(gateway: SessionGatewayPort) {
     }.start()
 }
 
-internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
+internal suspend fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
     val entries =
         pendingDisconnectedRecoveryEntries.remove(endpoint).orEmpty().toList()
     entries.forEach { entry ->
@@ -58,7 +59,7 @@ internal fun EntryStateHolder.flushPendingRecoveryEntries(endpoint: String) {
     }
 }
 
-internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
+internal suspend fun EntryStateHolder.persistOrQueueRecoveryEntry(
     endpoint: String,
     entry: RunRecoveryEntry,
 ): Boolean {
@@ -71,6 +72,8 @@ internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
             ?: error("No endpoint-scoped recovery writer is configured.")
 
         true
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         pendingDisconnectedRecoveryEntries
             .computeIfAbsent(endpoint) { ConcurrentHashMap.newKeySet() }
@@ -80,7 +83,7 @@ internal fun EntryStateHolder.persistOrQueueRecoveryEntry(
     }
 }
 
-internal fun EntryStateHolder.removeRecoveryEntry(
+internal suspend fun EntryStateHolder.removeRecoveryEntry(
     endpoint: String?,
     entry: RunRecoveryEntry,
 ): Boolean =
@@ -94,6 +97,8 @@ internal fun EntryStateHolder.removeRecoveryEntry(
         forgetPendingRecoveryEntry(endpoint, entry)
 
         true
+    } catch (error: CancellationException) {
+        throw error
     } catch (_: Exception) {
         false
     }

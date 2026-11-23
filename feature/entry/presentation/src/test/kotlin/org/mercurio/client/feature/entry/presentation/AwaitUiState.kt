@@ -8,7 +8,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 internal suspend fun EntryStateHolder.awaitUiState(
     description: String,
-    predicate: (EntryUiState) -> Boolean,
+    predicate: suspend (EntryUiState) -> Boolean,
 ): EntryUiState {
     var matched: EntryUiState? = null
     try {

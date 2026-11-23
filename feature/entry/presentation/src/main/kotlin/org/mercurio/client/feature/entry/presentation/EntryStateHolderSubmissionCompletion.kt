@@ -47,12 +47,14 @@ internal fun EntryStateHolder.abortUnclaimedRun(work: RunSubmissionWork) {
     }
 }
 
-internal fun EntryStateHolder.prepareClaimedSubmission(work: RunSubmissionWork): RunSubmissionWork? {
+internal suspend fun EntryStateHolder.prepareClaimedSubmission(work: RunSubmissionWork): RunSubmissionWork? {
     if (work.recordDraft) {
-        runCatching { sessionDraftStore.write(sessionDraftKey(work.sessionId, work.requestEndpoint), work.input) }
+        runCatchingSuspend {
+            sessionDraftStore.write(sessionDraftKey(work.sessionId, work.requestEndpoint), work.input)
+        }
     }
     val claimed =
-        runCatching {
+        runCatchingSuspend {
             runSubmissionUncertaintyStore.add(
                 PendingRunSubmissionKey(work.requestEndpoint, work.sessionId),
                 work.knownRunIds,
@@ -100,11 +102,13 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
             onRunSubmissionCompleted?.invoke()
         }
     } catch (error: CancellationException) {
-        runCatching {
-            runSubmissionUncertaintyStore.markAmbiguous(
-                PendingRunSubmissionKey(submission.requestEndpoint, submission.sessionId),
-                submission.attemptId,
-            )
+        withContext(NonCancellable) {
+            runCatchingSuspend {
+                runSubmissionUncertaintyStore.markAmbiguous(
+                    PendingRunSubmissionKey(submission.requestEndpoint, submission.sessionId),
+                    submission.attemptId,
+                )
+            }
         }
         throw error
     } catch (error: GatewayException) {
@@ -159,7 +163,7 @@ internal suspend fun EntryStateHolder.reportUncertainRunSubmission(
     uncertaintyErrorCategory: MessageSendErrorCategory = MessageSendErrorCategory.UNCERTAIN,
 ): Boolean {
     recordDiagnostic(LocalDiagnosticEventType.RUN_SUBMISSION, LocalDiagnosticStatus.UNCERTAIN)
-    runCatching {
+    runCatchingSuspend {
         runSubmissionUncertaintyStore.markSettled(
             PendingRunSubmissionKey(work.requestEndpoint, work.sessionId),
             work.attemptId,

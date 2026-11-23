@@ -71,7 +71,7 @@ class HistoryCacheIsolationJourneyTest {
             }
         }
 
-    private fun poisonCache(cache: RecordingHistoryCacheStore) {
+    private suspend fun poisonCache(cache: RecordingHistoryCacheStore) {
         cache.writeSessionList(
             JOURNEY_ENDPOINT,
             listOf(entrySession("ghost-session", "Ghost entry")),

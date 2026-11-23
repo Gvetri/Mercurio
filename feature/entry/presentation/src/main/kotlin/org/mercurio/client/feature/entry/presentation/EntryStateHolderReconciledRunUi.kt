@@ -40,7 +40,7 @@ internal fun EntryStateHolder.updateUnconfirmedRunSessionUi(
  * Removes a reconciled run's recovery entry. Registry persistence can block, so callers keep
  * this producer-side instead of running it on the serialized state-change consumer.
  */
-internal fun EntryStateHolder.removeReconciledRecoveryEntry(
+internal suspend fun EntryStateHolder.removeReconciledRecoveryEntry(
     recoveryEntryToRemove: RunRecoveryEntry?,
     recoveryEndpointToRemove: String?,
     sessionId: SessionId,

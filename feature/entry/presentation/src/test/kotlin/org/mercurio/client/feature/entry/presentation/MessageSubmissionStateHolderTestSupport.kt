@@ -221,7 +221,7 @@ internal class FakeGateway(
 internal class FailingShutdownUncertaintyStore : RunSubmissionUncertaintyStore {
     private var addCount = 0
 
-    override fun add(
+    override suspend fun add(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
@@ -231,7 +231,7 @@ internal class FailingShutdownUncertaintyStore : RunSubmissionUncertaintyStore {
         return true
     }
 
-    override fun remove(
+    override suspend fun remove(
         key: PendingRunSubmissionKey,
         attemptId: String?,
     ): Boolean = true

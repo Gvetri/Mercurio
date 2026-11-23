@@ -12,7 +12,9 @@ interface LocalDiagnosticsRecorder {
      *
      * An event whose encoded fields fail safe-field validation is discarded
      * entirely: the buffer never retains, truncates, or repairs a partial
-     * record. Recording must never surface a failure to the caller.
+     * record. Recording must never surface a failure to the caller; cancellation is not a failure
+     * and propagates. Cancellation is observed at suspension points, so a write that already
+     * entered the storage may still complete.
      */
-    fun record(event: LocalDiagnosticEvent)
+    suspend fun record(event: LocalDiagnosticEvent)
 }
