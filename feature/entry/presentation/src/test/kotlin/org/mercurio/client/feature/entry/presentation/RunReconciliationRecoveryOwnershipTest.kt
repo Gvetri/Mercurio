@@ -1,15 +1,12 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import java.util.concurrent.TimeUnit
 
 class RunReconciliationRecoveryOwnershipTest {
     @Test
@@ -29,14 +26,12 @@ class RunReconciliationRecoveryOwnershipTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                            Dispatchers.Default,
-                        ),
+                        ReconciliationHolderSettings(),
                 )
             try {
                 openReconciledSession(holder, gateway)
                 invokePersistedRecoveryEntry(holder, "https://gateway.example/profile", entry)
-                assertTrue(gateway.statusStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.statusStarted.await()
 
                 holder.reconcileOpenedRun(
                     OpenedRunReconcileContext(
@@ -49,7 +44,7 @@ class RunReconciliationRecoveryOwnershipTest {
 
                 assertEquals(listOf(run.id), gateway.statusRequests)
             } finally {
-                gateway.releaseStatus.countDown()
+                gateway.releaseStatus.complete(Unit)
                 holder.close()
             }
         }

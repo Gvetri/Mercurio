@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -20,8 +21,7 @@ import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -302,9 +302,9 @@ class EntryStateHolderInboundLinkTest {
     fun a_blank_id_link_during_the_first_page_load_restarts_the_cancelled_request() =
         runTest {
             val gateway = BlockingListGateway(entrySession("listed-session"))
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
             verify(holder)
-            assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
+            gateway.listStarted.await()
 
             holder.applyInboundLink(EntryLink.Session(null))
 
@@ -313,7 +313,7 @@ class EntryStateHolderInboundLinkTest {
             }
             assertTrue(gateway.listCalls >= 2)
             assertFalse(requireNotNull(holder.uiState.value.sessionList).isStale)
-            gateway.releaseList.countDown()
+            gateway.releaseList.complete(Unit)
             holder.close()
         }
 
@@ -322,9 +322,9 @@ class EntryStateHolderInboundLinkTest {
         runTest {
             val gateway = BlockingListGateway(entrySession("listed-session"))
             gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
             verify(holder)
-            assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
+            gateway.listStarted.await()
 
             holder.applyInboundLink(EntryLink.Session("foreign-session"))
 
@@ -336,7 +336,7 @@ class EntryStateHolderInboundLinkTest {
             }
             assertTrue(gateway.listCalls >= 2)
             assertFalse(requireNotNull(holder.uiState.value.sessionList).isStale)
-            gateway.releaseList.countDown()
+            gateway.releaseList.complete(Unit)
             holder.close()
         }
 
@@ -368,12 +368,12 @@ class EntryStateHolderInboundLinkTest {
         runTest {
             val session = entrySession("linked-session")
             val gateway = BlockingListGateway(session)
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
             verify(holder)
-            assertTrue(gateway.listStarted.await(5, TimeUnit.SECONDS))
+            gateway.listStarted.await()
 
             holder.applyInboundLink(EntryLink.Session("linked-session"))
-            gateway.releaseList.countDown()
+            gateway.releaseList.complete(Unit)
 
             awaitStateRealTime(holder, "the linked Session during the list load") {
                 it.sessionList?.openedSession?.session?.id == SessionId("linked-session")
@@ -399,26 +399,21 @@ private suspend fun awaitStateRealTime(
 private class BlockingListGateway(
     private val session: Session,
 ) : SessionGatewayPort {
-    val listStarted = CountDownLatch(1)
-    val releaseList = CountDownLatch(1)
+    val listStarted = CompletableDeferred<Unit>()
+    val releaseList = CompletableDeferred<Unit>()
 
-    @Volatile
-    var listCalls = 0
+    private val listCallCount = AtomicInteger()
+
+    val listCalls: Int get() = listCallCount.get()
 
     @Volatile
     var openFailure: GatewayException? = null
 
     override suspend fun listSessions(request: SessionListRequest): SessionPage {
-        val call =
-            synchronized(this) {
-                listCalls += 1
-                listCalls
-            }
+        val call = listCallCount.incrementAndGet()
         if (call == 1) {
-            listStarted.countDown()
-            check(releaseList.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                "The first list request was not released."
-            }
+            listStarted.complete(Unit)
+            releaseList.await()
         }
         return SessionPage(listOf(session), null)
     }

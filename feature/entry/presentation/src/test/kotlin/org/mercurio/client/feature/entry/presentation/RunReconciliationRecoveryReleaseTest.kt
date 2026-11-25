@@ -1,7 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,7 +10,6 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import java.util.concurrent.TimeUnit
 
 class RunReconciliationRecoveryReleaseTest {
     @Test
@@ -22,29 +20,26 @@ class RunReconciliationRecoveryReleaseTest {
             val successfulRun = Run(RunId("run-recovery-success"), session.id, "succeeded")
             val successfulEntry = RunRecoveryEntry(session.id, successfulRun.id)
             val gateway = racingRecoveryGateway(session, failedEntry, successfulRun)
-            val holder =
-                reconciliationHolder(
-                    gateway,
-                    settings = ReconciliationHolderSettings(Dispatchers.Default),
-                )
-            val racingCounts = ReconciliationRacingCountMap()
-            privateField(holder, "connectionRecoverySessionCounts", racingCounts)
+            val holder = reconciliationHolder(gateway)
 
             try {
                 openReconciledSession(holder, gateway)
+                gateway.blockNextStatus = true
                 invokePersistedRecoveryEntry(holder, "https://gateway.example/profile", failedEntry)
-                val secondEntry =
-                    holder.scope.launch {
-                        racingCounts.armForCurrentThread()
-                        invokePersistedRecoveryEntry(holder, "https://gateway.example/profile", successfulEntry)
-                    }
+                advanceUntilIdle()
+
+                invokePersistedRecoveryEntry(holder, "https://gateway.example/profile", successfulEntry)
+                advanceUntilIdle()
+                gateway.statusStarted.await()
+
                 assertTrue(
-                    "The second recovery entry never reached its count write.",
-                    racingCounts.entered.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
+                    "An in-flight recovery entry must still hold the session's recovery count.",
+                    holder.testSurface.connectionRecoverySessionCounts.containsKey(session.id),
                 )
-                awaitReconciliationCondition { racingCounts.isEmpty() }
-                racingCounts.release.countDown()
-                secondEntry.join()
+                val inFlight = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
+                assertTrue(inFlight.hasUnresolvedSubmission)
+
+                gateway.releaseStatus.complete(Unit)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.let { opened ->
                         !opened.isRefreshing &&
@@ -53,8 +48,10 @@ class RunReconciliationRecoveryReleaseTest {
                             opened.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN
                     } == true
                 }
+                assertTrue(holder.testSurface.connectionRecoverySessionCounts.isEmpty())
+                assertTrue(holder.testSurface.connectionRecoveryJobs.isEmpty())
             } finally {
-                racingCounts.release.countDown()
+                gateway.releaseStatus.complete(Unit)
                 holder.close()
             }
         }

@@ -1,9 +1,12 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,9 +26,8 @@ import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintyStore
 import org.mercurio.client.feature.entry.domain.SessionDraftKey
 import org.mercurio.client.feature.entry.domain.SessionDraftStore
 import org.mercurio.client.feature.entry.domain.SessionId
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 private const val SEND_CLAIM_AND_CLOSE_MARKER_ADDS = 2
 
@@ -42,7 +44,7 @@ internal class MainThreadStorageBoundaryTest {
 
     @Test
     fun a_send_keeps_run_storage_off_the_event_thread() =
-        runTest {
+        runBlocking {
             val holder = storageBoundaryHolder()
             try {
                 open(holder, gateway, session.id)
@@ -70,7 +72,7 @@ internal class MainThreadStorageBoundaryTest {
 
     @Test
     fun connection_removal_never_touches_storage_on_the_event_thread() =
-        runTest {
+        runBlocking {
             val holder = storageBoundaryHolder()
             try {
                 connect(holder, gateway)
@@ -79,7 +81,7 @@ internal class MainThreadStorageBoundaryTest {
                 holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
                 awaitState(holder) { !it.isGatewayConnectionConfigured && it.sessionList == null }
-                assertTrue(selectionStore.cleared.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { selectionStore.cleared.await() }
 
                 recorder.assertOperationsRanOffThread(
                     eventThread,
@@ -97,7 +99,7 @@ internal class MainThreadStorageBoundaryTest {
 
     @Test
     fun close_persists_a_pending_submission_off_the_event_thread() =
-        runTest {
+        runBlocking {
             val blockedGateway =
                 FakeGateway(listOf(session)).apply {
                     enqueueRun(activeRun())
@@ -108,21 +110,21 @@ internal class MainThreadStorageBoundaryTest {
                 open(holder, blockedGateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(blockedGateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { blockedGateway.runStarted.await() }
                 recorder.reset()
 
                 holder.close()
                 recorder.assertNoCallOn(eventThread)
-                assertTrue(uncertaintyStore.awaitAdds())
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { uncertaintyStore.awaitAdds() }
                 recorder.assertOperationsRanOffThread(eventThread, "uncertainty.add")
             } finally {
-                blockedGateway.releaseRun.countDown()
+                blockedGateway.releaseRun.complete(Unit)
             }
         }
 
     @Test
     fun connection_removal_writes_the_pending_marker_before_it_purges() =
-        runTest {
+        runBlocking {
             val blockedGateway =
                 FakeGateway(listOf(session)).apply {
                     enqueueRun(activeRun())
@@ -133,23 +135,23 @@ internal class MainThreadStorageBoundaryTest {
                 open(holder, blockedGateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(blockedGateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { blockedGateway.runStarted.await() }
                 recorder.reset()
 
                 holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-                assertTrue(selectionStore.cleared.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { selectionStore.cleared.await() }
 
                 recorder.assertRanInOrder("uncertainty.add", "repository.clear", "uncertainty.clearEndpoint")
             } finally {
-                blockedGateway.releaseRun.countDown()
+                blockedGateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }
 
     @Test
     fun model_picker_selection_never_touches_storage_on_the_event_thread() =
-        runTest {
+        runBlocking {
             val holder = storageBoundaryHolder()
             try {
                 connect(holder, gateway)
@@ -249,11 +251,11 @@ private class StorageCallRecorder {
 private class RecordingDraftStore(
     private val recorder: StorageCallRecorder,
 ) : SessionDraftStore {
-    private val drafts = mutableMapOf<SessionDraftKey, String>()
+    private val drafts = ConcurrentHashMap<SessionDraftKey, String>()
 
     override fun read(key: SessionDraftKey): String? {
         recorder.record("draft.read")
-        return synchronized(drafts) { drafts[key] }
+        return drafts[key]
     }
 
     override fun write(
@@ -261,17 +263,17 @@ private class RecordingDraftStore(
         text: String,
     ) {
         recorder.record("draft.write")
-        synchronized(drafts) { drafts[key] = text }
+        drafts[key] = text
     }
 
     override fun remove(key: SessionDraftKey) {
         recorder.record("draft.remove")
-        synchronized(drafts) { drafts.remove(key) }
+        drafts.remove(key)
     }
 
     override fun clearEndpoint(endpoint: String) {
         recorder.record("draft.clearEndpoint")
-        synchronized(drafts) { drafts.keys.removeAll { key -> key.endpoint == endpoint } }
+        drafts.keys.removeAll { key -> key.endpoint == endpoint }
     }
 }
 
@@ -279,7 +281,7 @@ private class RecordingModelSelectionStore(
     private val recorder: StorageCallRecorder,
 ) : ModelSelectionStore {
     private var selection: ModelSelection? = null
-    val cleared = CountDownLatch(1)
+    val cleared = CompletableDeferred<Unit>()
 
     override fun read(endpoint: String): ModelSelection? {
         recorder.record("selection.read")
@@ -327,17 +329,19 @@ private class RecordingModelSelectionStore(
     override fun clearEndpoint(endpoint: String) {
         recorder.record("selection.clearEndpoint")
         selection = null
-        cleared.countDown()
+        cleared.complete(Unit)
     }
 }
 
 private class RecordingUncertaintyStore(
     private val recorder: StorageCallRecorder,
 ) : RunSubmissionUncertaintyStore {
-    private val keys = mutableSetOf<PendingRunSubmissionKey>()
-    private val adds = CountDownLatch(SEND_CLAIM_AND_CLOSE_MARKER_ADDS)
+    private val keys = ConcurrentHashMap.newKeySet<PendingRunSubmissionKey>()
+    private val adds = Channel<Unit>(SEND_CLAIM_AND_CLOSE_MARKER_ADDS)
 
-    fun awaitAdds(): Boolean = adds.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+    suspend fun awaitAdds() {
+        repeat(SEND_CLAIM_AND_CLOSE_MARKER_ADDS) { adds.receive() }
+    }
 
     override suspend fun add(
         key: PendingRunSubmissionKey,
@@ -345,8 +349,8 @@ private class RecordingUncertaintyStore(
         attemptId: String?,
     ): Boolean {
         recorder.record("uncertainty.add")
-        synchronized(keys) { keys += key }
-        adds.countDown()
+        keys += key
+        adds.trySend(Unit)
         return true
     }
 
@@ -355,17 +359,17 @@ private class RecordingUncertaintyStore(
         attemptId: String?,
     ): Boolean {
         recorder.record("uncertainty.remove")
-        return synchronized(keys) { keys.remove(key) }
+        return keys.remove(key)
     }
 
     override fun contains(key: PendingRunSubmissionKey): Boolean {
         recorder.record("uncertainty.contains")
-        return synchronized(keys) { key in keys }
+        return key in keys
     }
 
     override suspend fun clearEndpoint(endpoint: String) {
         recorder.record("uncertainty.clearEndpoint")
-        synchronized(keys) { keys.removeAll { key -> key.endpoint == endpoint } }
+        keys.removeAll { key -> key.endpoint == endpoint }
     }
 
     override fun snapshot(key: PendingRunSubmissionKey): RunSubmissionUncertaintySnapshot? = null

@@ -103,7 +103,7 @@ class GatewayTransportTest {
                 "reader must consume the buffered event lines",
                 firstLinesRead.await(5, TimeUnit.SECONDS),
             )
-            Thread.sleep(200)
+            reader.join(200)
             assertTrue(
                 "the reader must be blocked waiting for more bytes before close()",
                 reader.isAlive,

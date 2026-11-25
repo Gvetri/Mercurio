@@ -1,6 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -11,8 +11,6 @@ import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionPage
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSettingsTest {
     @Test
@@ -100,28 +98,28 @@ class EntryStateHolderSettingsTest {
     fun opening_settings_is_rejected_while_creation_is_submitting() =
         runTest {
             val created = entrySession("created", title = "Created")
-            val createStarted = CountDownLatch(1)
-            val createRelease = CountDownLatch(1)
+            val createStarted = CompletableDeferred<Unit>()
+            val createRelease = CompletableDeferred<Unit>()
             val gateway = ScriptedCreateGateway(entrySession("session-one", title = "Listed title"), created)
             gateway.onCreate = {
-                createStarted.countDown()
-                assertTrue(createRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                createStarted.complete(Unit)
+                createRelease.await()
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                assertTrue(createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                createStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession != null)
 
                 holder.onEvent(EntryUiEvent.OpenSettingsClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
 
                 assertFalse(holder.uiState.value.isSettingsOpen)
             } finally {
                 gateway.onCreate = null
-                createRelease.countDown()
+                createRelease.complete(Unit)
                 holder.close()
             }
         }

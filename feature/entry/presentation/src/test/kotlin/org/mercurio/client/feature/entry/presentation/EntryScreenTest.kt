@@ -19,10 +19,12 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -49,8 +51,6 @@ import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp")
@@ -554,16 +554,16 @@ class EntryScreenTest {
             }
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First request")) }
             clickWhenEnabled("[ send ]")
-            assertTrue(gateway.firstRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            assertTrue(gateway.firstObservation.started.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-            assertEquals(1L, gateway.firstObservation.closed.count)
+            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) { gateway.firstRunCreated.isCompleted }
+            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) { gateway.firstObservation.started.isCompleted }
+            assertFalse(gateway.firstObservation.closed.isCompleted)
             assertEquals(false, holder.uiState.value.sessionList?.openedSession?.hasUnresolvedSubmission)
 
             composeTestRule.runOnIdle { holder.onEvent(EntryUiEvent.ComposerTextChanged("First draft")) }
             composeTestRule.onNodeWithText("[ stop ]").assertIsEnabled()
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
-            assertTrue(gateway.firstObservation.closed.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) { gateway.firstObservation.closed.isCompleted }
             clickWhenVisible("Second Session")
             composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) {
                 holder.uiState.value.sessionList?.openedSession?.session?.id == second.id &&
@@ -575,7 +575,7 @@ class EntryScreenTest {
             }
             composeTestRule.onNodeWithText("[ send ]").assertIsEnabled()
             composeTestRule.onNodeWithText("[ send ]").performClick()
-            assertTrue(gateway.secondRunCreated.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            composeTestRule.waitUntil(TEST_TIMEOUT_MILLIS) { gateway.secondRunCreated.isCompleted }
 
             composeTestRule.onNodeWithContentDescription("Back to Sessions").performClick()
             clickWhenVisible("First Session")
@@ -610,8 +610,8 @@ class EntryScreenTest {
         private val activeRun: Run,
     ) : SessionGatewayPort,
         RunGatewayPort {
-        val firstRunCreated = CountDownLatch(1)
-        val secondRunCreated = CountDownLatch(1)
+        val firstRunCreated = CompletableDeferred<Unit>()
+        val secondRunCreated = CompletableDeferred<Unit>()
         val firstObservation = BlockingObservation()
         private val secondRun = Run(RunId("run-second"), second.id, "running")
         private var firstRunHasBeenCreated = false
@@ -667,10 +667,10 @@ class EntryScreenTest {
         ): Run =
             if (sessionId == first.id) {
                 firstRunHasBeenCreated = true
-                firstRunCreated.countDown()
+                firstRunCreated.complete(Unit)
                 activeRun
             } else {
-                secondRunCreated.countDown()
+                secondRunCreated.complete(Unit)
                 secondRun
             }
 
@@ -695,19 +695,19 @@ class EntryScreenTest {
     }
 
     private class BlockingObservation : RunEventObservation {
-        val started = CountDownLatch(1)
-        val closed = CountDownLatch(1)
-        private val release = CountDownLatch(1)
+        val started = CompletableDeferred<Unit>()
+        val closed = CompletableDeferred<Unit>()
+        private val release = CompletableDeferred<Unit>()
 
         override suspend fun next(): RunEvent? {
-            started.countDown()
-            release.await(TEST_TIMEOUT_MILLIS * 6, TimeUnit.MILLISECONDS)
+            started.complete(Unit)
+            release.await()
             return null
         }
 
         override fun close() {
-            closed.countDown()
-            release.countDown()
+            closed.complete(Unit)
+            release.complete(Unit)
         }
     }
 

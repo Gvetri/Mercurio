@@ -1,6 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,8 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class MessageSubmissionSettleOrderTest {
     @Test
@@ -22,33 +20,30 @@ class MessageSubmissionSettleOrderTest {
                     enqueueRun(run)
                     blockRunCreation = true
                 }
-            val submissionSettled = CountDownLatch(1)
-            val releaseCompletion = CountDownLatch(1)
+            val submissionSettled = CompletableDeferred<Unit>()
+            val releaseCompletion = CompletableDeferred<Unit>()
             val holder =
                 holder(
                     gateway,
-                    Dispatchers.Default,
                     onRunSubmissionSettled = {
-                        submissionSettled.countDown()
-                        check(releaseCompletion.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                            "The completion hook was not released."
-                        }
+                        submissionSettled.complete(Unit)
+                        releaseCompletion.await()
                     },
                 )
             try {
                 open(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
 
-                gateway.releaseRun.countDown()
-                assertTrue(submissionSettled.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.releaseRun.complete(Unit)
+                submissionSettled.await()
 
                 val settled = requireNotNull(holder.uiState.value.sessionList?.openedSession)
                 assertEquals(run, settled.latestRun)
                 assertTrue(settled.isSending)
 
-                releaseCompletion.countDown()
+                releaseCompletion.complete(Unit)
                 awaitState(holder) { it.sessionList?.openedSession?.isSending == false }
 
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
@@ -71,8 +66,8 @@ class MessageSubmissionSettleOrderTest {
                 assertEquals(run, stableReopen.latestRun)
                 assertFalse(stableReopen.isSending)
             } finally {
-                releaseCompletion.countDown()
-                gateway.releaseRun.countDown()
+                releaseCompletion.complete(Unit)
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }

@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,14 +38,10 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-
-internal const val RETRY_TIMEOUT_MILLIS = 15_000L
 
 internal class RetryHolderSettings(
     val dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
-    val onRunSubmissionSettled: (() -> Unit)? = null,
+    val onRunSubmissionSettled: (suspend () -> Unit)? = null,
     val recoveryRegistry: RunRecoveryRegistry? = null,
     val uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
     val persistRunRecoveryEntry: (suspend (String, RunRecoveryEntry) -> Unit)? = null,
@@ -193,9 +190,9 @@ internal class RetryFakeGateway(
     val runRequests = mutableListOf<Pair<SessionId, String>>()
     val runCreateRequests = mutableListOf<RunCreateRequest>()
     private val runResults = ArrayDeque<Result<Run>>()
-    val runStarted = CountDownLatch(1)
-    val runFinished = CountDownLatch(1)
-    val releaseRun = CountDownLatch(1)
+    val runStarted = CompletableDeferred<Unit>()
+    val runFinished = CompletableDeferred<Unit>()
+    val releaseRun = CompletableDeferred<Unit>()
     var blockRunCreation = false
 
     fun enqueueRun(run: Run) {
@@ -247,10 +244,8 @@ internal class RetryFakeGateway(
     ): Run {
         runRequests += sessionId to input
         if (blockRunCreation) {
-            runStarted.countDown()
-            check(releaseRun.await(RETRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                "Timed out waiting for Run release."
-            }
+            runStarted.complete(Unit)
+            releaseRun.await()
         }
         return runResults.removeFirst().getOrThrow()
     }

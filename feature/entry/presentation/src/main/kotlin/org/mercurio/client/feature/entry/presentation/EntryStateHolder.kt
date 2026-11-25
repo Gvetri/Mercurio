@@ -72,7 +72,7 @@ class EntryStateHolder(
         require(sendTimeoutMillis > 0) { "sendTimeoutMillis must be positive." }
     }
 
-    internal val mutableUiState =
+    internal var mutableUiState: MutableStateFlow<EntryUiState> =
         MutableStateFlow(
             initialState
                 .toUiState()

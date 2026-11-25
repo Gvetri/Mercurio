@@ -1,8 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -17,8 +15,6 @@ import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSessionActionsTest {
     @Test
@@ -154,15 +150,15 @@ class EntryStateHolderSessionActionsTest {
     fun pin_is_rejected_during_history_refresh_and_history_refresh_can_complete() =
         runTest {
             val gateway = ScriptedRefreshGateway()
-            val refreshStarted = CountDownLatch(1)
-            val refreshRelease = CountDownLatch(1)
+            val refreshStarted = CompletableDeferred<Unit>()
+            val refreshRelease = CompletableDeferred<Unit>()
             gateway.onHistory = { call ->
                 if (call == 2) {
-                    refreshStarted.countDown()
-                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    refreshStarted.complete(Unit)
+                    refreshRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
@@ -172,14 +168,14 @@ class EntryStateHolderSessionActionsTest {
                 }
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                refreshStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
                 holder.onEvent(EntryUiEvent.PinSessionClicked(gateway.sessionId))
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(0, gateway.pinCalls)
 
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 gateway.onHistory = null
                 awaitState(holder, "the completed history refresh") {
                     it.sessionList?.openedSession?.isRefreshing == false
@@ -189,7 +185,7 @@ class EntryStateHolderSessionActionsTest {
                 assertEquals(false, requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing)
             } finally {
                 gateway.onHistory = null
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -198,15 +194,15 @@ class EntryStateHolderSessionActionsTest {
     fun list_refresh_is_rejected_while_a_history_refresh_is_in_flight() =
         runTest {
             val gateway = ScriptedRefreshGateway()
-            val refreshStarted = CountDownLatch(1)
-            val refreshRelease = CountDownLatch(1)
+            val refreshStarted = CompletableDeferred<Unit>()
+            val refreshRelease = CompletableDeferred<Unit>()
             gateway.onHistory = { call ->
                 if (call == 2) {
-                    refreshStarted.countDown()
-                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    refreshStarted.complete(Unit)
+                    refreshRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
@@ -216,14 +212,14 @@ class EntryStateHolderSessionActionsTest {
                 }
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                refreshStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
                 holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.listCalls)
 
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 gateway.onHistory = null
                 awaitState(holder, "the completed history refresh") {
                     it.sessionList?.openedSession?.isRefreshing == false
@@ -232,7 +228,7 @@ class EntryStateHolderSessionActionsTest {
                 assertEquals(2, gateway.historyCalls)
             } finally {
                 gateway.onHistory = null
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -241,15 +237,15 @@ class EntryStateHolderSessionActionsTest {
     fun load_more_is_rejected_while_a_history_refresh_is_in_flight() =
         runTest {
             val gateway = ScriptedRefreshGateway(nextPageOffset = 2)
-            val refreshStarted = CountDownLatch(1)
-            val refreshRelease = CountDownLatch(1)
+            val refreshStarted = CompletableDeferred<Unit>()
+            val refreshRelease = CompletableDeferred<Unit>()
             gateway.onHistory = { call ->
                 if (call == 2) {
-                    refreshStarted.countDown()
-                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    refreshStarted.complete(Unit)
+                    refreshRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
@@ -259,14 +255,14 @@ class EntryStateHolderSessionActionsTest {
                 }
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                refreshStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
                 holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.listCalls)
 
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 gateway.onHistory = null
                 awaitState(holder, "the completed history refresh") {
                     it.sessionList?.openedSession?.isRefreshing == false
@@ -275,7 +271,7 @@ class EntryStateHolderSessionActionsTest {
                 assertEquals(2, gateway.historyCalls)
             } finally {
                 gateway.onHistory = null
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -284,7 +280,7 @@ class EntryStateHolderSessionActionsTest {
     fun history_refresh_is_rejected_while_a_list_refresh_is_in_flight() =
         runTest {
             val gateway = ScriptedRefreshGateway()
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
+            val holder = scriptedHolder(gateway)
 
             verifyScripted(holder)
             holder.onEvent(EntryUiEvent.SessionClicked(gateway.sessionId))
@@ -460,31 +456,31 @@ class EntryStateHolderSessionActionsTest {
     fun pending_creation_ignores_a_duplicate_create_click() =
         runTest {
             val created = entrySession("created", title = "Created")
-            val createStarted = CountDownLatch(1)
-            val createRelease = CountDownLatch(1)
+            val createStarted = CompletableDeferred<Unit>()
+            val createRelease = CompletableDeferred<Unit>()
             val gateway = ScriptedCreateGateway(entrySession("initial", title = "Initial"), created)
             gateway.onCreate = {
-                createStarted.countDown()
-                assertTrue(createRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                createStarted.complete(Unit)
+                createRelease.await()
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                assertTrue(createStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                createStarted.await()
                 val pending = requireNotNull(holder.uiState.value.sessionList)
                 assertTrue(pending.createSession?.isSubmitting == true)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.createCalls)
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.createCalls)
 
-                createRelease.countDown()
+                createRelease.complete(Unit)
                 gateway.onCreate = null
                 awaitState(holder, "the created Session row") { state ->
                     state.sessionList?.sessions?.any { session -> session.id == created.id } == true
@@ -495,7 +491,7 @@ class EntryStateHolderSessionActionsTest {
                 assertNull(confirmed.openedSession)
             } finally {
                 gateway.onCreate = null
-                createRelease.countDown()
+                createRelease.complete(Unit)
                 holder.close()
             }
         }

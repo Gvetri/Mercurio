@@ -10,6 +10,9 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -175,11 +178,6 @@ private class ObservingGateway(
     }
 }
 
-private fun reflectionDump(
-    holder: EntryStateHolder,
-    name: String,
-): String = runCatching { privateField(holder, name).toString() }.getOrElse { error -> "$name=<unavailable: $error>" }
-
 private fun awaitUiState(
     holder: EntryStateHolder,
     description: String,
@@ -193,16 +191,7 @@ private fun awaitUiState(
             }
         }
     } catch (_: TimeoutCancellationException) {
-        val internals =
-            listOf(
-                "runObservationJobs",
-                "runObservationRunIds",
-                "runObservationStates",
-                "pendingRunObservationRequests",
-                "sessionRuns",
-                "authoritativeSessionRuns",
-                "uncertainSubmissionRunIds",
-            ).joinToString("; ") { reflectionDump(holder, it) }
+        val internals = holder.testSurface.describeInternals()
         throw AssertionError(
             "Timed out waiting for $description. ${detail()} state=${holder.uiState.value} internals=[$internals]",
         )
@@ -306,70 +295,68 @@ class EntryStateHolderStateConsumerTest {
     }
 
     @Test
-    fun queued_events_are_not_applied_until_the_consumer_runs_and_apply_in_submission_order() {
-        val dispatcher = ReconciliationPausingDispatcher()
-        val holder = bareHolderOn(dispatcher)
-        val recording = installRecordingUiState(holder) { false }
-        try {
-            dispatcher.paused = true
-            holder.onEvent(EntryUiEvent.EndpointChanged("first"))
-            holder.onEvent(EntryUiEvent.EndpointChanged("second"))
-            holder.onEvent(EntryUiEvent.EndpointChanged("third"))
+    fun queued_events_are_not_applied_until_the_consumer_runs_and_apply_in_submission_order() =
+        runTest {
+            val holder = bareHolderOn(StandardTestDispatcher(testScheduler))
+            val recording = installRecordingUiState(holder) { false }
+            try {
+                holder.onEvent(EntryUiEvent.EndpointChanged("first"))
+                holder.onEvent(EntryUiEvent.EndpointChanged("second"))
+                holder.onEvent(EntryUiEvent.EndpointChanged("third"))
 
-            assertTrue(
-                "the paused consumer must not apply an enqueued event: ${recording.writes.size}",
-                recording.writes.isEmpty(),
-            )
-            assertEquals("", holder.uiState.value.endpoint)
+                assertTrue(
+                    "the paused consumer must not apply an enqueued event: ${recording.writes.size}",
+                    recording.writes.isEmpty(),
+                )
+                assertEquals("", holder.uiState.value.endpoint)
 
-            dispatcher.drain()
+                advanceUntilIdle()
 
-            assertEquals("third", holder.uiState.value.endpoint)
-            assertEquals(
-                "the consumer must apply enqueued events in submission order",
-                listOf("first", "second", "third"),
-                recording.writes.map { it.state.endpoint },
-            )
-            assertTrue(recording.writes.all { it.appliedOnConsumer })
-        } finally {
-            holder.close()
-            dispatcher.drain()
+                assertEquals("third", holder.uiState.value.endpoint)
+                assertEquals(
+                    "the consumer must apply enqueued events in submission order",
+                    listOf("first", "second", "third"),
+                    recording.writes.map { it.state.endpoint },
+                )
+                assertTrue(recording.writes.all { it.appliedOnConsumer })
+            } finally {
+                holder.close()
+                advanceUntilIdle()
+            }
         }
-    }
 
     @Test
-    fun close_applies_queued_events_before_the_scope_teardown() {
-        val dispatcher = ReconciliationPausingDispatcher()
-        val holder = bareHolderOn(dispatcher)
-        val closeCalled = AtomicBoolean(false)
-        val recording = installRecordingUiState(holder) { closeCalled.get() }
-        try {
-            dispatcher.paused = true
-            holder.onEvent(EntryUiEvent.EndpointChanged("queued-endpoint"))
-            holder.close()
-            closeCalled.set(true)
+    fun close_applies_queued_events_before_the_scope_teardown() =
+        runTest {
+            val holder = bareHolderOn(StandardTestDispatcher(testScheduler))
+            val closeCalled = AtomicBoolean(false)
+            val recording = installRecordingUiState(holder) { closeCalled.get() }
+            try {
+                holder.onEvent(EntryUiEvent.EndpointChanged("queued-endpoint"))
+                holder.close()
+                closeCalled.set(true)
 
-            dispatcher.drain()
+                advanceUntilIdle()
 
-            assertEquals("queued-endpoint", holder.uiState.value.endpoint)
-            assertTrue(
-                "the event queued before close must still be applied ahead of the teardown: " +
-                    recording.writes.map { it.state.endpoint },
-                recording.writes.size == 2 && recording.writes.first().state.endpoint == "queued-endpoint",
-            )
-            assertTrue(
-                "the queued event must apply after close() returned, on the consumer",
-                recording.writes.first().appliedAfterClose && recording.writes.first().appliedOnConsumer,
-            )
-            assertTrue(
-                "the teardown must end the holder scope",
-                (privateField(holder, "scope") as CoroutineScope).coroutineContext[Job]!!.isCancelled,
-            )
-        } finally {
-            holder.close()
-            dispatcher.drain()
+                assertEquals("queued-endpoint", holder.uiState.value.endpoint)
+                assertTrue(
+                    "the event queued before close must still be applied ahead of the teardown: " +
+                        recording.writes.map { it.state.endpoint },
+                    recording.writes.size == 2 && recording.writes.first().state.endpoint == "queued-endpoint",
+                )
+                assertTrue(
+                    "the queued event must apply after close() returned, on the consumer",
+                    recording.writes.first().appliedAfterClose && recording.writes.first().appliedOnConsumer,
+                )
+                assertTrue(
+                    "the teardown must end the holder scope",
+                    holder.testSurface.scope.coroutineContext[Job]!!.isCancelled,
+                )
+            } finally {
+                holder.close()
+                advanceUntilIdle()
+            }
         }
-    }
 }
 
 private class RecordedStateWrite(
@@ -435,11 +422,11 @@ private fun installRecordingUiState(
 ): RecordingUiStateFlow {
     val recording =
         RecordingUiStateFlow(
-            privateField(holder, "mutableUiState") as MutableStateFlow<EntryUiState>,
+            holder.testSurface.mutableUiState,
             CONSUMER_THREAD_PROBE,
             closeCalled,
         )
-    privateField(holder, "mutableUiState", recording)
+    holder.testSurface.installUiState(recording)
     return recording
 }
 

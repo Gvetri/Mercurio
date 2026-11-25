@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -16,7 +15,6 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.Session
-import java.util.concurrent.TimeUnit
 
 class RunRetryRecoveryTest {
     @Test
@@ -168,8 +166,7 @@ class RunRetryRecoveryTest {
                     gateway,
                     settings =
                         RetryHolderSettings(
-                            dispatcher = Dispatchers.Default,
-                            onRunSubmissionSettled = gateway.runFinished::countDown,
+                            onRunSubmissionSettled = { gateway.runFinished.complete(Unit) },
                         ),
                 )
 
@@ -180,11 +177,11 @@ class RunRetryRecoveryTest {
                 awaitRunSubmissionAllowed(holder, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("OLD SECRET"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(RETRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
 
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-                gateway.releaseRun.countDown()
-                assertTrue(gateway.runFinished.await(RETRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.releaseRun.complete(Unit)
+                gateway.runFinished.await()
 
                 gateway.setHistory(
                     retryHistory(
@@ -215,7 +212,7 @@ class RunRetryRecoveryTest {
 
                 assertEquals(listOf(session.id to "OLD SECRET", session.id to "NEW MESSAGE"), gateway.runRequests)
             } finally {
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }

@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,7 +14,6 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import java.util.concurrent.TimeUnit
 
 class RunReconciliationRecoveryTest {
     @Test
@@ -105,7 +103,7 @@ class RunReconciliationRecoveryTest {
             val holder =
                 reconciliationHolder(
                     gateway,
-                    settings = ReconciliationHolderSettings(Dispatchers.Default),
+                    settings = ReconciliationHolderSettings(),
                 )
 
             try {
@@ -163,16 +161,14 @@ class RunReconciliationRecoveryTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                            Dispatchers.Default,
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
                 openReconciledSession(holder, gateway)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
@@ -181,11 +177,11 @@ class RunReconciliationRecoveryTest {
                         opened.latestRunState == RunPresentationState.CANCELLED &&
                         opened.hasUnresolvedSubmission == false
                 }
-                assertTrue(observation.closed.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.closed.await()
 
                 assertEquals(1, gateway.runRequests.size)
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -207,7 +203,6 @@ class RunReconciliationRecoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                             recoveryRegistry = failingRegistry,
                         ),
                 )
@@ -261,9 +256,7 @@ class RunReconciliationRecoveryTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                            Dispatchers.Default,
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -305,13 +298,12 @@ class RunReconciliationRecoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                             recoveryRegistry = registry,
                         ),
                 )
             try {
                 connectReconciliationGateway(holder, gateway)
-                awaitReconciliationCondition { registry.removeRequests.get() == 1 }
+                awaitReconciliationCondition { registry.removeRequests == 1 }
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationCondition { gateway.statusRequests.size == 2 }
                 assertEquals(listOf(entry), registry.load())
@@ -319,18 +311,18 @@ class RunReconciliationRecoveryTest {
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 assertTrue(gateway.runRequests.isEmpty())
 
-                registry.releaseRemove.countDown()
+                registry.releaseRemove.complete(Unit)
                 awaitReconciliationCondition { registry.load().isEmpty() }
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.let { opened ->
                         !opened.isReconciliationInProgress && !opened.isRefreshing && !opened.hasUnresolvedSubmission
                     } == true
                 }
-                assertEquals(1, registry.effectiveRemovals.get())
+                assertEquals(1, registry.effectiveRemovals)
                 assertEquals(listOf(run.id, run.id), gateway.statusRequests)
                 assertTrue(gateway.observedRunIds.isEmpty())
             } finally {
-                registry.releaseRemove.countDown()
+                registry.releaseRemove.complete(Unit)
                 holder.close()
                 joinHolder(holder)
             }
@@ -353,7 +345,6 @@ class RunReconciliationRecoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                             recoveryRegistry = recoveryRegistry,
                         ),
                 )
@@ -363,7 +354,7 @@ class RunReconciliationRecoveryTest {
                 gateway.blockRunCreation = true
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("local request"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
 
                 recoveryRegistry.blockLoads = true
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
@@ -371,22 +362,22 @@ class RunReconciliationRecoveryTest {
                 holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
                 holder.onEvent(EntryUiEvent.BearerCredentialChanged("memory-only-token"))
                 holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-                assertTrue(recoveryRegistry.loadStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                recoveryRegistry.loadStarted.await()
 
                 gateway.blockNextStatus = true
-                gateway.releaseRun.countDown()
-                assertTrue(gateway.runFinished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                assertTrue(gateway.statusStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                gateway.releaseStatus.countDown()
-                assertTrue(gateway.statusFinished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.releaseRun.complete(Unit)
+                gateway.runFinished.await()
+                gateway.statusStarted.await()
+                gateway.releaseStatus.complete(Unit)
+                gateway.statusFinished.await()
 
-                recoveryRegistry.releaseLoad.countDown()
-                assertTrue(recoveryRegistry.loadFinished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                recoveryRegistry.releaseLoad.complete(Unit)
+                recoveryRegistry.loadFinished.await()
                 assertEquals(listOf(run.id), gateway.statusRequests)
             } finally {
-                gateway.releaseRun.countDown()
-                gateway.releaseStatus.countDown()
-                recoveryRegistry.releaseLoad.countDown()
+                gateway.releaseRun.complete(Unit)
+                gateway.releaseStatus.complete(Unit)
+                recoveryRegistry.releaseLoad.complete(Unit)
                 holder.close()
             }
         }
@@ -541,14 +532,12 @@ class RunReconciliationRecoveryTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                            Dispatchers.Default,
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
                 openReconciledSession(holder, gateway)
-                assertTrue(observation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
                 awaitReconciliationState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened?.latestRun?.id == run.id &&
@@ -562,7 +551,7 @@ class RunReconciliationRecoveryTest {
                         gateway.observedRunIds == listOf(run.id)
                 }
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -615,7 +604,6 @@ class RunReconciliationRecoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                             sendTimeoutMillis = 50L,
                         ),
                 )
@@ -624,7 +612,7 @@ class RunReconciliationRecoveryTest {
                 openReconciledSession(holder, gateway)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Keep this draft"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
 
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN
@@ -636,7 +624,7 @@ class RunReconciliationRecoveryTest {
                 assertTrue(opened.hasUnresolvedSubmission)
                 assertFalse(opened.isSending)
             } finally {
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }

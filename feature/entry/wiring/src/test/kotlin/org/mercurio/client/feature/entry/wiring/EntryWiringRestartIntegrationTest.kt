@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.wiring
 
 import android.content.Context
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -42,9 +43,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -63,14 +63,19 @@ class EntryWiringRestartIntegrationTest {
     @After
     fun finishHolderWork() {
         gateways.forEach { gateway ->
-            gateway.releaseCreate.countDown()
-            gateway.releaseStatus.countDown()
+            gateway.releaseCreate.complete(Unit)
+            gateway.releaseStatus.complete(Unit)
         }
         holders.forEach(EntryStateHolder::close)
         holders.forEach(::joinHolder)
         gateways.flatMap { it.observations }.forEach { observation ->
-            assertEquals(0L, observation.closed.count)
-            if (observation.started.count == 0L) assertEquals(0L, observation.finished.count)
+            assertTrue(
+                "every observation must be closed after the holder work finishes",
+                observation.closed.isCompleted,
+            )
+            if (observation.started.isCompleted) {
+                assertTrue("a started observation must finish", observation.finished.isCompleted)
+            }
         }
     }
 
@@ -91,7 +96,7 @@ class EntryWiringRestartIntegrationTest {
                 openSession(firstHolder, gateway.session.id)
                 sendFromComposer(firstHolder, gateway, "Persist this run")
                 awaitState(firstHolder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
-                assertTrue(gateway.observationStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.observationStarted.await() } }
                 awaitRecoveryEntries(storage, setOf(RunRecoveryEntry(gateway.session.id, gateway.activeRun.id)))
                 assertEquals(1, storage.load().size)
                 assertTrue(otherEndpointStorage.load().isEmpty())
@@ -149,14 +154,14 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(restartedHolder, endpoint, hasSavedEndpoint = true)
                 openSession(restartedHolder, gateway.session.id)
-                assertTrue(gateway.statusStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.statusStarted.await() } }
                 restartedHolder.onEvent(EntryUiEvent.ComposerTextChanged("Do not duplicate"))
                 restartedHolder.onEvent(EntryUiEvent.SendMessageClicked)
                 val blocked = requireNotNull(requireNotNull(restartedHolder.uiState.value.sessionList).openedSession)
                 assertFalse(blocked.isSending)
                 assertEquals(1, gateway.runRequests.size)
 
-                gateway.releaseStatus.countDown()
+                gateway.releaseStatus.complete(Unit)
                 awaitState(restartedHolder) {
                     it.sessionList?.openedSession?.let { opened ->
                         !opened.isReconciliationInProgress &&
@@ -164,11 +169,11 @@ class EntryWiringRestartIntegrationTest {
                     } == true
                 }
             } finally {
-                gateway.releaseStatus.countDown()
+                gateway.releaseStatus.complete(Unit)
                 restartedHolder.close()
             }
         } finally {
-            gateway.releaseStatus.countDown()
+            gateway.releaseStatus.complete(Unit)
             storage.clearForTest()
         }
     }
@@ -302,7 +307,7 @@ class EntryWiringRestartIntegrationTest {
                 connect(firstHolder, endpoint, hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
                 sendFromComposer(firstHolder, gateway, "Keep one request")
-                assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runStarted.await() } }
                 assertTrue(SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey))
 
                 val restartedHolder = createHolder(context, gateway)
@@ -321,11 +326,11 @@ class EntryWiringRestartIntegrationTest {
             } finally {
                 firstHolder.close()
             }
-            gateway.releaseCreate.countDown()
-            assertTrue(gateway.runFinished.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            gateway.releaseCreate.complete(Unit)
+            runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runFinished.await() } }
             awaitCondition { !SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey) }
         } finally {
-            gateway.releaseCreate.countDown()
+            gateway.releaseCreate.complete(Unit)
             storage.clearForTest()
             runBlocking { SharedPreferencesRunSubmissionUncertaintyStore(context).remove(uncertaintyKey) }
         }
@@ -392,15 +397,15 @@ class EntryWiringRestartIntegrationTest {
                 openSession(firstHolder, gateway.session.id)
                 gateway.blockCreate = true
                 sendFromComposer(firstHolder, gateway, "Do not lose recovery")
-                assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runStarted.await() } }
 
                 firstHolder.close()
                 assertFalse(SharedPreferencesRunSubmissionUncertaintyStore(context).isSettled(uncertaintyKey))
             } finally {
-                gateway.releaseCreate.countDown()
+                gateway.releaseCreate.complete(Unit)
                 firstHolder.close()
             }
-            assertTrue(gateway.runFinished.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runFinished.await() } }
             awaitCondition { !SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey) }
 
             gateway.terminal = true
@@ -420,7 +425,7 @@ class EntryWiringRestartIntegrationTest {
                 restartedHolder.close()
             }
         } finally {
-            gateway.releaseCreate.countDown()
+            gateway.releaseCreate.complete(Unit)
             storage.clearForTest()
             runBlocking { SharedPreferencesRunSubmissionUncertaintyStore(context).remove(uncertaintyKey) }
         }
@@ -482,9 +487,9 @@ class EntryWiringRestartIntegrationTest {
             connect(holder, "https://gateway.example/profile", hasSavedEndpoint = false)
             openSession(holder, gateway.session.id)
             sendFromComposer(holder, gateway, "A loaded Runner answers slowly")
-            assertTrue(gateway.runStarted.await(BOUNDED_AWAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runStarted.await() } }
         } finally {
-            gateway.releaseCreate.countDown()
+            gateway.releaseCreate.complete(Unit)
             holder.close()
         }
     }
@@ -661,7 +666,7 @@ class EntryWiringRestartIntegrationTest {
         val externalRun = Run(RunId("external-run"), SESSION_ID, "succeeded")
         val statusRequests = CopyOnWriteArrayList<RunId>()
         val runRequests = CopyOnWriteArrayList<Pair<SessionId, String>>()
-        val observationStarted = CountDownLatch(1)
+        val observationStarted = CompletableDeferred<Unit>()
         val observations = CopyOnWriteArrayList<BlockingObservation>()
         val statusByRun = ConcurrentHashMap<RunId, Run>()
 
@@ -683,11 +688,11 @@ class EntryWiringRestartIntegrationTest {
         @Volatile
         var createSignalDelayMillis = 0L
 
-        val runStarted = CountDownLatch(1)
-        val runFinished = CountDownLatch(1)
-        val releaseCreate = CountDownLatch(1)
-        val statusStarted = CountDownLatch(1)
-        val releaseStatus = CountDownLatch(1)
+        val runStarted = CompletableDeferred<Unit>()
+        val runFinished = CompletableDeferred<Unit>()
+        val releaseCreate = CompletableDeferred<Unit>()
+        val statusStarted = CompletableDeferred<Unit>()
+        val releaseStatus = CompletableDeferred<Unit>()
 
         override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
 
@@ -758,13 +763,11 @@ class EntryWiringRestartIntegrationTest {
                 error("response lost after acceptance")
             }
             if (blockCreate) {
-                runStarted.countDown()
+                runStarted.complete(Unit)
                 try {
-                    check(releaseCreate.await(RELEASE_GUARD_MILLIS, TimeUnit.MILLISECONDS)) {
-                        "Run was not released."
-                    }
+                    releaseCreate.await()
                 } finally {
-                    runFinished.countDown()
+                    runFinished.complete(Unit)
                 }
             }
             return activeRun
@@ -773,10 +776,8 @@ class EntryWiringRestartIntegrationTest {
         override suspend fun getRunStatus(runId: RunId): Run {
             statusRequests += runId
             if (blockStatus) {
-                statusStarted.countDown()
-                check(releaseStatus.await(RELEASE_GUARD_MILLIS, TimeUnit.MILLISECONDS)) {
-                    "Run status was not released."
-                }
+                statusStarted.complete(Unit)
+                releaseStatus.await()
             }
             return statusByRun[runId] ?: if (terminal) activeRun.copy(status = "succeeded") else activeRun
         }
@@ -788,27 +789,27 @@ class EntryWiringRestartIntegrationTest {
     }
 
     private class BlockingObservation(
-        private val anyObservationStarted: CountDownLatch,
+        private val anyObservationStarted: CompletableDeferred<Unit>,
     ) : RunEventObservation {
-        val started = CountDownLatch(1)
-        val closed = CountDownLatch(1)
-        val finished = CountDownLatch(1)
-        private val release = CountDownLatch(1)
+        val started = CompletableDeferred<Unit>()
+        val closed = CompletableDeferred<Unit>()
+        val finished = CompletableDeferred<Unit>()
+        private val release = CompletableDeferred<Unit>()
 
         override suspend fun next(): RunEvent? {
-            started.countDown()
-            anyObservationStarted.countDown()
+            started.complete(Unit)
+            anyObservationStarted.complete(Unit)
             return try {
                 release.await()
                 null
             } finally {
-                finished.countDown()
+                finished.complete(Unit)
             }
         }
 
         override fun close() {
-            closed.countDown()
-            release.countDown()
+            closed.complete(Unit)
+            release.complete(Unit)
         }
     }
 
@@ -816,21 +817,21 @@ class EntryWiringRestartIntegrationTest {
         @Volatile
         var paused = false
 
-        private val queued = ArrayDeque<Runnable>()
+        private val queued = ConcurrentLinkedQueue<Runnable>()
 
         val queuedCount: Int
-            get() = synchronized(queued) { queued.size }
+            get() = queued.size
 
         fun drain() {
             paused = false
             while (true) {
-                val next = synchronized(queued) { queued.removeFirstOrNull() } ?: return
+                val next = queued.poll() ?: return
                 next.run()
             }
         }
 
         fun runNext() {
-            val next = synchronized(queued) { queued.removeFirstOrNull() } ?: return
+            val next = queued.poll() ?: return
             next.run()
         }
 
@@ -839,7 +840,7 @@ class EntryWiringRestartIntegrationTest {
             block: Runnable,
         ) {
             if (paused) {
-                synchronized(queued) { queued.addLast(block) }
+                queued += block
             } else {
                 block.run()
             }
@@ -881,8 +882,6 @@ class EntryWiringRestartIntegrationTest {
 
     private companion object {
         const val BOUNDED_AWAIT_TIMEOUT_MILLIS = 60_000L
-
-        const val RELEASE_GUARD_MILLIS = 5_000L
 
         const val SLOW_GATEWAY_SIGNAL_MILLIS = 5_500L
     }

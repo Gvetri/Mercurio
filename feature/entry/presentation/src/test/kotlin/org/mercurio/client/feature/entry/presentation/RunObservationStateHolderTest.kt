@@ -1,8 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,7 +19,6 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
-import java.util.concurrent.TimeUnit
 
 class RunObservationStateHolderTest {
     @Test
@@ -44,6 +43,7 @@ class RunObservationStateHolderTest {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
+                advanceUntilIdle()
 
                 val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
                 assertEquals(RunPresentationState.UNCERTAIN, opened.latestRunState)
@@ -68,17 +68,17 @@ class RunObservationStateHolderTest {
                     statusByRun[run.id] = Run(RunId("run-1"), session.id, "completed")
                     this.observation = observation
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
 
                 holder.onEvent(EntryUiEvent.StopRunClicked)
 
-                assertTrue(observation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.closed.await()
                 awaitObservationState(holder) {
                     val opened = requireNotNull(it.sessionList?.openedSession)
                     opened.latestRunState == RunPresentationState.SUCCEEDED &&
@@ -102,21 +102,21 @@ class RunObservationStateHolderTest {
                     enqueueRun(run)
                     this.observation = observation
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
 
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
 
-                assertTrue(observation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.closed.await()
                 assertEquals(emptyList<SessionId>(), gateway.cancelledRunIds)
                 assertTrue(holder.uiState.value.sessionList?.openedSession == null)
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -133,13 +133,13 @@ class RunObservationStateHolderTest {
                     this.observation = observation
                 }
             val recoveryRegistry = InMemoryRunRecoveryRegistry()
-            val holder = observationHolder(gateway, Dispatchers.Default, recoveryRegistry)
+            val holder = observationHolder(gateway, recoveryRegistry)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
                 assertEquals(
                     listOf(RunRecoveryEntry(session.id, run.id)),
                     recoveryRegistry.load(),
@@ -147,11 +147,11 @@ class RunObservationStateHolderTest {
 
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
 
-                assertTrue(observation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.closed.await()
                 assertEquals(listOf(RunRecoveryEntry(session.id, run.id)), recoveryRegistry.load())
                 assertTrue(gateway.statusRequests.isEmpty())
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -168,16 +168,16 @@ class RunObservationStateHolderTest {
                     enqueueRun(localRun)
                     observation = initialObservation
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(initialObservation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                initialObservation.started.await()
 
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
-                assertTrue(initialObservation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                initialObservation.closed.await()
 
                 gateway.observation = reopenedObservation
                 gateway.enqueueStatus(localRun)
@@ -199,10 +199,10 @@ class RunObservationStateHolderTest {
                         opened.activeResponse?.runId == localRun.id &&
                         !opened.isReconciliationInProgress
                 }
-                assertTrue(reopenedObservation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                reopenedObservation.started.await()
             } finally {
-                initialObservation.release.countDown()
-                reopenedObservation.release.countDown()
+                initialObservation.release.complete(Unit)
+                reopenedObservation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -218,7 +218,7 @@ class RunObservationStateHolderTest {
                     observation = firstObservation
                     enqueueRun(Run(RunId("run-switch"), first.id, "running"))
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
@@ -234,17 +234,14 @@ class RunObservationStateHolderTest {
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(firstObservation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.started.await()
 
                 holder.onEvent(EntryUiEvent.SessionClicked(second.id))
                 awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == second.id }
 
-                assertTrue(
-                    "the previous Session's screen observer closes when another Session replaces it",
-                    firstObservation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
-                )
+                firstObservation.closed.await()
             } finally {
-                firstObservation.release.countDown()
+                firstObservation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -259,23 +256,20 @@ class RunObservationStateHolderTest {
                     observation = observer
                     enqueueRun(Run(RunId("run-search"), session.id, "running"))
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observer.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observer.started.await()
 
                 holder.onEvent(EntryUiEvent.SessionSearchQueryChanged("filter"))
                 awaitObservationState(holder) { it.sessionList?.openedSession == null }
 
-                assertTrue(
-                    "the open conversation's screen observer closes when a search replaces it",
-                    observer.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
-                )
+                observer.closed.await()
             } finally {
-                observer.release.countDown()
+                observer.release.complete(Unit)
                 holder.close()
             }
         }
@@ -292,7 +286,7 @@ class RunObservationStateHolderTest {
                     enqueueRun(Run(RunId("run-pending"), first.id, "running"))
                     blockOpenFor = second.id
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
@@ -308,11 +302,11 @@ class RunObservationStateHolderTest {
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(firstObservation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.started.await()
 
                 holder.onEvent(EntryUiEvent.SessionClicked(second.id))
-                assertTrue(gateway.openStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                gateway.openRelease.countDown()
+                gateway.openStarted.await()
+                gateway.openRelease.complete(Unit)
                 awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == second.id }
 
                 assertEquals(
@@ -321,8 +315,8 @@ class RunObservationStateHolderTest {
                     gateway.observedRunIds.toList(),
                 )
             } finally {
-                gateway.openRelease.countDown()
-                firstObservation.release.countDown()
+                gateway.openRelease.complete(Unit)
+                firstObservation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -339,7 +333,7 @@ class RunObservationStateHolderTest {
                     enqueueRun(Run(RunId("run-failed-switch"), first.id, "running"))
                     failOpenFor = second.id
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
@@ -355,7 +349,7 @@ class RunObservationStateHolderTest {
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(firstObservation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.started.await()
 
                 holder.onEvent(EntryUiEvent.SessionClicked(second.id))
                 awaitObservationState(holder) {
@@ -364,7 +358,7 @@ class RunObservationStateHolderTest {
 
                 assertFalse(
                     "the still-visible Session keeps its observer when the switch fails",
-                    firstObservation.closed.await(400, TimeUnit.MILLISECONDS),
+                    firstObservation.closed.isCompleted,
                 )
 
                 gateway.failOpenFor = null
@@ -375,12 +369,9 @@ class RunObservationStateHolderTest {
                 holder.onEvent(EntryUiEvent.SessionClicked(second.id))
                 awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == second.id }
 
-                assertTrue(
-                    "the replaced Session's observer closes once the switch finally succeeds",
-                    firstObservation.closed.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
-                )
+                firstObservation.closed.await()
             } finally {
-                firstObservation.release.countDown()
+                firstObservation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -399,22 +390,22 @@ class RunObservationStateHolderTest {
                     this.observation = observation
                     statusByRun[reconciledRun.id] = reconciledRun
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default, recoveryRegistry)
+            val holder = observationHolder(gateway, recoveryRegistry)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
 
                 recoveryRegistry.save(RunRecoveryEntry(session.id, reconciledRun.id))
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
 
                 awaitObservationCondition { gateway.statusRequests.contains(reconciledRun.id) }
                 assertEquals(listOf(observedRun.id), gateway.observedRunIds)
-                assertFalse(observation.closed.await(100, TimeUnit.MILLISECONDS))
+                assertFalse(observation.closed.isCompleted)
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }

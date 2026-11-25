@@ -1,7 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,7 +16,6 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.TimeUnit
 
 class RunObservationRecoveryTest {
     @Test
@@ -57,6 +56,7 @@ class RunObservationRecoveryTest {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
+                advanceUntilIdle()
 
                 val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
                 assertEquals(listOf(run.id), gateway.observedRunIds)
@@ -83,7 +83,6 @@ class RunObservationRecoveryTest {
             val holder =
                 observationHolder(
                     gateway = gateway,
-                    dispatcher = Dispatchers.Default,
                     persistRunRecoveryEntry = { endpoint, entry -> persisted += endpoint to entry },
                 )
 
@@ -91,10 +90,10 @@ class RunObservationRecoveryTest {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.createStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.createStarted.await()
 
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
 
                 awaitObservationCondition { persisted.isNotEmpty() }
                 assertEquals(
@@ -103,7 +102,7 @@ class RunObservationRecoveryTest {
                 )
                 assertTrue(gateway.cancelledRunIds.isEmpty())
             } finally {
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -123,7 +122,6 @@ class RunObservationRecoveryTest {
             val holder =
                 observationHolder(
                     gateway = gateway,
-                    dispatcher = Dispatchers.Default,
                     persistRunRecoveryEntry = { endpoint, entry -> persisted += endpoint to entry },
                 )
 
@@ -131,7 +129,7 @@ class RunObservationRecoveryTest {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.createStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.createStarted.await()
 
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
                 awaitObservationState(holder) { it.sessionList == null }
@@ -141,14 +139,14 @@ class RunObservationRecoveryTest {
                 holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
                 awaitObservationState(holder) { it.sessionList?.sessions == listOf(session.toSessionItemUiState()) }
 
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
 
                 awaitObservationCondition {
                     persisted.isNotEmpty() &&
                         gateway.statusRequests.contains(run.id)
                 }
             } finally {
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -168,7 +166,6 @@ class RunObservationRecoveryTest {
             val holder =
                 observationHolder(
                     gateway = gateway,
-                    dispatcher = Dispatchers.Default,
                     persistRunRecoveryEntry = { endpoint, entry -> persisted += endpoint to entry },
                 )
 
@@ -176,11 +173,11 @@ class RunObservationRecoveryTest {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.createStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.createStarted.await()
 
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
                 awaitObservationState(holder) { it.sessionList == null }
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
                 awaitObservationCondition { persisted.isNotEmpty() }
                 assertTrue(gateway.statusRequests.isEmpty())
 
@@ -191,7 +188,7 @@ class RunObservationRecoveryTest {
 
                 awaitObservationCondition { gateway.statusRequests.contains(run.id) }
             } finally {
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -207,7 +204,7 @@ class RunObservationRecoveryTest {
                     enqueueRun(run)
                     this.observation = observation
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default, ObservationFailingRunRecoveryRegistry())
+            val holder = observationHolder(gateway, ObservationFailingRunRecoveryRegistry())
 
             try {
                 openObservedSession(holder, gateway, session.id)
@@ -221,9 +218,9 @@ class RunObservationRecoveryTest {
                         opened.hasUnresolvedSubmission &&
                         opened.composerText == "Run this"
                 }
-                assertTrue(observation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -240,7 +237,7 @@ class RunObservationRecoveryTest {
                     this.observation = observation
                 }
             val recoveryRegistry = ObservationFlakyRunRecoveryRegistry()
-            val holder = observationHolder(gateway, Dispatchers.Default, recoveryRegistry)
+            val holder = observationHolder(gateway, recoveryRegistry)
 
             try {
                 openObservedSession(holder, gateway, session.id)
@@ -260,9 +257,9 @@ class RunObservationRecoveryTest {
                 awaitObservationCondition {
                     recoveryRegistry.load() == listOf(RunRecoveryEntry(session.id, run.id))
                 }
-                assertEquals(1, gateway.createRunCount.get())
+                assertEquals(1, gateway.createRunCount)
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -282,7 +279,7 @@ class RunObservationRecoveryTest {
                 }
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Do not duplicate"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertEquals(0, gateway.createRunCount.get())
+                assertEquals(0, gateway.createRunCount)
             } finally {
                 holder.close()
             }
@@ -319,34 +316,35 @@ class RunObservationRecoveryTest {
         }
 
     @Test
-    fun recovery_removal_failure_keeps_metadata_without_failing_the_recovery_job() {
-        val session = observationSession("session-remove-failure")
-        val run = Run(RunId("run-remove-failure"), session.id, "succeeded")
-        val entry = RunRecoveryEntry(session.id, run.id)
-        val recoveryRegistry = ObservationFailingRemoveRunRecoveryRegistry(entry)
-        val gateway =
-            ObservationScriptedGateway(session).apply {
-                enqueueStatus(run)
-                enqueueHistory(
-                    SessionHistory(
-                        session.id,
-                        listOf(GatewayHistoryMessage("result", "assistant", "Done", run.id, "succeeded")),
-                    ),
-                )
-            }
-        val holder = observationHolder(gateway, recoveryRegistry = recoveryRegistry)
+    fun recovery_removal_failure_keeps_metadata_without_failing_the_recovery_job() =
+        runTest {
+            val session = observationSession("session-remove-failure")
+            val run = Run(RunId("run-remove-failure"), session.id, "succeeded")
+            val entry = RunRecoveryEntry(session.id, run.id)
+            val recoveryRegistry = ObservationFailingRemoveRunRecoveryRegistry(entry)
+            val gateway =
+                ObservationScriptedGateway(session).apply {
+                    enqueueStatus(run)
+                    enqueueHistory(
+                        SessionHistory(
+                            session.id,
+                            listOf(GatewayHistoryMessage("result", "assistant", "Done", run.id, "succeeded")),
+                        ),
+                    )
+                }
+            val holder = observationHolder(gateway, recoveryRegistry = recoveryRegistry)
 
-        try {
-            holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
-            holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
-            holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
-            holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            awaitObservationCondition { gateway.statusRequests.contains(run.id) }
-            assertEquals(listOf(entry), runBlocking { recoveryRegistry.load() })
-        } finally {
-            holder.close()
+            try {
+                holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
+                holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
+                holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+                awaitObservationCondition { gateway.statusRequests.contains(run.id) }
+                assertEquals(listOf(entry), runBlocking { recoveryRegistry.load() })
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
     fun terminal_observation_forgets_a_recovery_write_queued_after_save_failure() =
@@ -377,11 +375,11 @@ class RunObservationRecoveryTest {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observation.started.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                assertEquals(1, recoveryRegistry.saveAttempts.get())
+                observation.started.await()
+                assertEquals(1, recoveryRegistry.saveAttempts)
 
                 recoveryRegistry.failSave = false
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 awaitObservationState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened?.latestRunState == RunPresentationState.SUCCEEDED &&
@@ -391,10 +389,10 @@ class RunObservationRecoveryTest {
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitObservationState(holder) { it.sessionList?.isRefreshing == false }
-                assertEquals(1, recoveryRegistry.saveAttempts.get())
+                assertEquals(1, recoveryRegistry.saveAttempts)
                 assertTrue(recoveryRegistry.load().isEmpty())
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -433,7 +431,7 @@ class RunObservationRecoveryTest {
                             ),
                         )
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default, recoveryRegistry)
+            val holder = observationHolder(gateway, recoveryRegistry)
 
             try {
                 holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
@@ -441,7 +439,7 @@ class RunObservationRecoveryTest {
                 holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
                 holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
                 awaitObservationState(holder) { it.sessionList?.sessions?.size == 2 }
-                assertTrue(gateway.statusStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.statusStarted.await()
 
                 holder.onEvent(EntryUiEvent.SessionClicked(firstSession.id))
                 awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == firstSession.id }
@@ -449,13 +447,13 @@ class RunObservationRecoveryTest {
                 holder.onEvent(EntryUiEvent.SessionClicked(secondSession.id))
                 awaitObservationState(holder) { it.sessionList?.openedSession?.session?.id == secondSession.id }
 
-                gateway.statusRelease.countDown()
+                gateway.statusRelease.complete(Unit)
                 awaitObservationCondition {
                     recoveryRegistry.load().isEmpty() &&
                         gateway.statusRequests.containsAll(listOf(firstRun.id, secondRun.id))
                 }
             } finally {
-                gateway.statusRelease.countDown()
+                gateway.statusRelease.complete(Unit)
                 holder.close()
             }
         }

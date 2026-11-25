@@ -40,10 +40,19 @@ internal fun holder(
     dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
 ): EntryStateHolder =
+    holderOn(CoroutineScope(SupervisorJob() + dispatcher), repository, verifier, gateway, dependencies)
+
+internal fun holderOn(
+    scope: CoroutineScope,
+    repository: FakeGatewayConnectionRepository,
+    verifier: (String, String) -> GatewayCapabilities,
+    gateway: SessionGatewayPort? = null,
+    dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
+): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
         verifyGatewayConnection = VerifyGatewayConnection(repository, discoverCapabilities = verifier),
-        scope = CoroutineScope(SupervisorJob() + dispatcher),
+        scope = scope,
         sessionGatewayFactory =
             gateway?.let { sessionGateway ->
                 { _, _ -> sessionGateway }
@@ -63,6 +72,13 @@ internal fun scriptedHolder(
     dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
     runGateway: RunGatewayPort? = null,
+): EntryStateHolder = scriptedHolderOn(CoroutineScope(SupervisorJob() + dispatcher), gateway, dependencies, runGateway)
+
+internal fun scriptedHolderOn(
+    scope: CoroutineScope,
+    gateway: SessionGatewayPort,
+    dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
+    runGateway: RunGatewayPort? = null,
 ): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
@@ -72,7 +88,7 @@ internal fun scriptedHolder(
             ) { _, _ ->
                 clientManifestCapabilities()
             },
-        scope = CoroutineScope(SupervisorJob() + dispatcher),
+        scope = scope,
         sessionGatewayFactory = { _, _ -> gateway },
         runGatewayFactory =
             runGateway?.let { runGatewayPort ->
@@ -145,7 +161,7 @@ internal class FakeSessionGateway : SessionGatewayPort {
     var openedSession: Session? = null
     var openedHistory: SessionHistory? = null
     var openFailure: GatewayException? = null
-    var onList: ((SessionListRequest) -> Unit)? = null
+    var onList: (suspend (SessionListRequest) -> Unit)? = null
 
     fun enqueueList(page: SessionPage) {
         listResults += Result.success(page)
@@ -226,7 +242,7 @@ internal class ScriptedCreateGateway(
     val operations = CopyOnWriteArrayList<String>()
     var createCalls = 0
         private set
-    var onCreate: (() -> Unit)? = null
+    var onCreate: (suspend () -> Unit)? = null
     private var created = false
 
     override suspend fun listSessions(request: SessionListRequest): SessionPage {
@@ -275,8 +291,8 @@ internal class ScriptedRefreshGateway(
         private set
     var listCalls = 0
         private set
-    var onList: ((Int) -> Unit)? = null
-    var onHistory: ((Int) -> Unit)? = null
+    var onList: (suspend (Int) -> Unit)? = null
+    var onHistory: (suspend (Int) -> Unit)? = null
     private val listedSession =
         Session(
             id = sessionId,
@@ -330,7 +346,7 @@ internal class ScriptedSessionGateway(
     val listRequests = CopyOnWriteArrayList<SessionListRequest>()
     private val queuedPages = ArrayDeque<SessionPage>()
     private val requestOccurrences = mutableMapOf<SessionListRequest, Int>()
-    var onList: ((SessionListRequest, Int) -> Unit)? = null
+    var onList: (suspend (SessionListRequest, Int) -> Unit)? = null
 
     fun enqueuePage(page: SessionPage) {
         queuedPages += page
