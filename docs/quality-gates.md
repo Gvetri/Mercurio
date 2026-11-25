@@ -250,7 +250,10 @@ deliberate, each with its reason here:
   one, and every finding is refactored rather than suppressed, because no baseline exists to absorb
   it. The test-source exclusion is deliberate: a test may build a long scenario or a wide branch
   table without making the production code harder to read, and the rules above the threshold keep
-  the production sources measurable.
+  the production sources measurable. Two defaults shape the refactor: `TooManyFunctions` counts the
+  functions of a class and of a file separately, so a helper moved to the top level still has a home,
+  and `MagicNumber` reports an array index written as a literal, so a decode table names its part
+  indexes as constants.
 
 `./gradlew detekt` runs the type-resolution tasks (`detektMain` and `detektTest` for every module),
 so a rule that needs binding executes instead of silently skipping. The plain, non-type-resolving
