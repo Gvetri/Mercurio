@@ -16,7 +16,7 @@ import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
-import java.util.concurrent.CountDownLatch
+import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.TimeUnit
 
 class SessionListEntryPointStateHolderTest {
@@ -30,26 +30,26 @@ class SessionListEntryPointStateHolderTest {
             gateway.openedSession = entrySession(target.value, "Target")
             gateway.openedHistory =
                 SessionHistory(target, listOf(GatewayHistoryMessage("message-one", "user", "Hello")))
-            val pageStarted = CountDownLatch(1)
-            val pageRelease = CountDownLatch(1)
+            val pageStarted = CompletableDeferred<Unit>()
+            val pageRelease = CompletableDeferred<Unit>()
             gateway.onList = { request ->
                 if (request.offset == 1) {
-                    pageStarted.countDown()
-                    assertTrue(pageRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    pageStarted.complete(Unit)
+                    pageRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
                 holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-                assertTrue(pageStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                pageStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
                 holder.onEvent(EntryUiEvent.SessionClicked(target))
                 runBlocking { holder.awaitStateChangesApplied() }
                 gateway.onList = null
-                pageRelease.countDown()
+                pageRelease.complete(Unit)
 
                 awaitState(holder, "the opened session with the page load settled") {
                     val list = it.sessionList ?: return@awaitState false
@@ -65,7 +65,7 @@ class SessionListEntryPointStateHolderTest {
                 assertFalse(state.isLoadingMore)
             } finally {
                 gateway.onList = null
-                pageRelease.countDown()
+                pageRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -79,26 +79,26 @@ class SessionListEntryPointStateHolderTest {
             gateway.enqueueList(SessionPage(listOf(target), null))
             gateway.enqueueCreate(created)
             gateway.enqueueList(SessionPage(listOf(created, target), null))
-            val refreshStarted = CountDownLatch(1)
-            val refreshRelease = CountDownLatch(1)
+            val refreshStarted = CompletableDeferred<Unit>()
+            val refreshRelease = CompletableDeferred<Unit>()
             gateway.onList = { _ ->
                 if (gateway.listRequests.size == 2) {
-                    refreshStarted.countDown()
-                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    refreshStarted.complete(Unit)
+                    refreshRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                refreshStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
                 runBlocking { holder.awaitStateChangesApplied() }
                 gateway.onList = null
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
 
                 awaitState(holder, "the created Session row") { state ->
                     state.sessionList?.sessions?.any { session -> session.id == created.id } == true
@@ -106,7 +106,7 @@ class SessionListEntryPointStateHolderTest {
                 assertEquals(1, gateway.createCalls)
             } finally {
                 gateway.onList = null
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -121,26 +121,26 @@ class SessionListEntryPointStateHolderTest {
             gateway.enqueueList(SessionPage(listOf(target), nextOffset = 1))
             gateway.enqueueCreate(created)
             gateway.enqueueList(SessionPage(listOf(created, target, next), null))
-            val pageStarted = CountDownLatch(1)
-            val pageRelease = CountDownLatch(1)
+            val pageStarted = CompletableDeferred<Unit>()
+            val pageRelease = CompletableDeferred<Unit>()
             gateway.onList = { request ->
                 if (request.offset == 1) {
-                    pageStarted.countDown()
-                    assertTrue(pageRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    pageStarted.complete(Unit)
+                    pageRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
                 holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-                assertTrue(pageStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                pageStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
                 runBlocking { holder.awaitStateChangesApplied() }
                 gateway.onList = null
-                pageRelease.countDown()
+                pageRelease.complete(Unit)
 
                 awaitState(holder, "the created Session row") { state ->
                     state.sessionList?.sessions?.any { session -> session.id == created.id } == true
@@ -148,7 +148,7 @@ class SessionListEntryPointStateHolderTest {
                 assertEquals(1, gateway.createCalls)
             } finally {
                 gateway.onList = null
-                pageRelease.countDown()
+                pageRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -161,20 +161,20 @@ class SessionListEntryPointStateHolderTest {
             gateway.enqueueList(SessionPage(listOf(target), null))
             gateway.enqueueCreateFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
             gateway.enqueueList(SessionPage(listOf(target), null))
-            val refreshStarted = CountDownLatch(1)
-            val refreshRelease = CountDownLatch(1)
+            val refreshStarted = CompletableDeferred<Unit>()
+            val refreshRelease = CompletableDeferred<Unit>()
             gateway.onList = { _ ->
                 if (gateway.listRequests.size == 2) {
-                    refreshStarted.countDown()
-                    assertTrue(refreshRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    refreshStarted.complete(Unit)
+                    refreshRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                assertTrue(refreshStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                refreshStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
@@ -201,7 +201,7 @@ class SessionListEntryPointStateHolderTest {
                 assertEquals(3, gateway.listRequests.size)
             } finally {
                 gateway.onList = null
-                refreshRelease.countDown()
+                refreshRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -214,20 +214,20 @@ class SessionListEntryPointStateHolderTest {
             gateway.enqueueList(SessionPage(listOf(target), nextOffset = 1))
             gateway.enqueueCreateFailure(GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED))
             gateway.enqueueList(SessionPage(listOf(target), null))
-            val pageStarted = CountDownLatch(1)
-            val pageRelease = CountDownLatch(1)
+            val pageStarted = CompletableDeferred<Unit>()
+            val pageRelease = CompletableDeferred<Unit>()
             gateway.onList = { request ->
                 if (request.offset == 1) {
-                    pageStarted.countDown()
-                    assertTrue(pageRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    pageStarted.complete(Unit)
+                    pageRelease.await()
                 }
             }
-            val holder = scriptedHolder(gateway, Dispatchers.Default)
+            val holder = scriptedHolder(gateway)
 
             try {
                 verifyScripted(holder)
                 holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-                assertTrue(pageStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                pageStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
@@ -243,7 +243,7 @@ class SessionListEntryPointStateHolderTest {
 
                 gateway.enqueueList(SessionPage(listOf(target), null))
                 gateway.onList = null
-                pageRelease.countDown()
+                pageRelease.complete(Unit)
 
                 holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
                 awaitState(holder, "the tail page load finishing") {
@@ -257,7 +257,7 @@ class SessionListEntryPointStateHolderTest {
                 assertEquals(3, gateway.listRequests.size)
             } finally {
                 gateway.onList = null
-                pageRelease.countDown()
+                pageRelease.complete(Unit)
                 holder.close()
             }
         }
@@ -270,7 +270,7 @@ class SessionListEntryPointStateHolderTest {
             val gateway = FakeSessionGateway()
             gateway.enqueueList(SessionPage(listOf(first, second), null))
             gateway.openFailure = GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
-            val holder = scriptedHolder(gateway, StandardTestDispatcher(testScheduler))
+            val holder = scriptedHolder(gateway)
 
             verifyScripted(holder)
             advanceUntilIdle()

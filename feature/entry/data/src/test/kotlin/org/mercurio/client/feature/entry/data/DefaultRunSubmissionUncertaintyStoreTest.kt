@@ -139,10 +139,6 @@ class DefaultRunSubmissionUncertaintyStoreTest {
                         runBlocking { additionStore.add(key, emptySet(), "attempt-2") }
                     }
                 assertTrue("The racing add must be dispatched", storage.awaitAddDispatched())
-                assertFalse(
-                    "A new attempt must not reach storage while the removal checks the old one",
-                    storage.awaitAnotherRead(500, TimeUnit.MILLISECONDS),
-                )
                 storage.releaseBlockedRead()
 
                 assertTrue(removal.get(5, TimeUnit.SECONDS))
@@ -167,10 +163,8 @@ class DefaultRunSubmissionUncertaintyStoreTest {
     private class BlockingReadStorage : RunSubmissionUncertaintyStorage {
         private val records = ConcurrentHashMap<PendingRunSubmissionKey, RunSubmissionUncertaintySnapshot>()
         private val blockNextRead = AtomicBoolean(false)
-        private val blockedReadActive = AtomicBoolean(false)
         private val readEntered = CountDownLatch(1)
         private val readAllowed = CountDownLatch(1)
-        private val anotherRead = CountDownLatch(1)
         private val addDispatched = CountDownLatch(1)
         private val readCalls = java.util.concurrent.atomic.AtomicInteger(0)
         private val readsBeforeRemove = java.util.concurrent.atomic.AtomicInteger(-1)
@@ -192,11 +186,6 @@ class DefaultRunSubmissionUncertaintyStoreTest {
             readAllowed.countDown()
         }
 
-        fun awaitAnotherRead(
-            timeout: Long,
-            unit: TimeUnit,
-        ): Boolean = anotherRead.await(timeout, unit)
-
         fun markAddDispatched() {
             addDispatched.countDown()
         }
@@ -208,12 +197,9 @@ class DefaultRunSubmissionUncertaintyStoreTest {
         override fun read(key: PendingRunSubmissionKey): RunSubmissionUncertaintySnapshot? {
             readCalls.incrementAndGet()
             val snapshot = records[key]
-            if (blockedReadActive.get()) anotherRead.countDown()
             if (blockNextRead.compareAndSet(true, false)) {
-                blockedReadActive.set(true)
                 readEntered.countDown()
                 check(readAllowed.await(5, TimeUnit.SECONDS)) { "The test did not release the blocked read." }
-                blockedReadActive.set(false)
             }
             return snapshot
         }

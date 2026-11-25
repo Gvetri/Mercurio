@@ -22,17 +22,17 @@ class MessageSubmissionInFlightDraftTest {
                     enqueueRun(run)
                     blockCreate = true
                 }
-            val holder = observationHolder(gateway, Dispatchers.Default)
+            val holder = observationHolder(gateway)
 
             try {
                 openObservedSession(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.createStarted.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.createStarted.await()
                 assertTrue(requireNotNull(holder.uiState.value.sessionList?.openedSession).isSending)
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
                 awaitObservationState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened?.latestRun?.id == run.id && !opened.isSending
@@ -40,9 +40,9 @@ class MessageSubmissionInFlightDraftTest {
 
                 val opened = requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession)
                 assertEquals("", opened.composerText)
-                assertEquals(1, gateway.createRunCount.get())
+                assertEquals(1, gateway.createRunCount)
             } finally {
-                gateway.createRelease.countDown()
+                gateway.createRelease.complete(Unit)
                 holder.close()
             }
         }

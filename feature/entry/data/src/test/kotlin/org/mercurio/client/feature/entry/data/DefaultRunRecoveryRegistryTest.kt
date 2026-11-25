@@ -50,10 +50,8 @@ class DefaultRunRecoveryRegistryTest {
     private class DelayedRunRecoveryStorage : RunRecoveryStorage {
         private var entries = emptySet<RunRecoveryEntry>()
 
-        @Synchronized
         override fun load(): Set<RunRecoveryEntry> = entries
 
-        @Synchronized
         override fun save(entries: Set<RunRecoveryEntry>) {
             Thread.sleep(10)
             this.entries = entries

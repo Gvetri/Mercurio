@@ -1,6 +1,8 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,14 +45,14 @@ internal class RunReconciliationDiscoveryTest {
             val holder =
                 reconciliationHolder(
                     gateway,
-                    settings = ReconciliationHolderSettings(Dispatchers.Default, sendTimeoutMillis = 50L),
+                    settings = ReconciliationHolderSettings(sendTimeoutMillis = 50L),
                 )
 
             try {
                 openReconciledSession(holder, gateway)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Keep this draft"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
                 awaitReconciliationState(holder) { state ->
                     state.sessionList?.openedSession?.sendErrorCategory == MessageSendErrorCategory.UNCERTAIN
                 }
@@ -70,10 +72,10 @@ internal class RunReconciliationDiscoveryTest {
                 assertEquals(1, gateway.runRequests.size)
                 assertTrue(gateway.observedRunIds.isEmpty())
                 @Suppress("UNCHECKED_CAST")
-                val localRuns = (privateField(holder, "sessionRuns") as Map<SessionId, List<Run>>)[session.id].orEmpty()
+                val localRuns = holder.testSurface.sessionRuns[session.id].orEmpty()
                 assertTrue(localRuns.none { it.id == realRun.id })
             } finally {
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }
@@ -100,7 +102,6 @@ internal class RunReconciliationDiscoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                             sendTimeoutMillis = 50L,
                         ),
                 )
@@ -135,7 +136,7 @@ internal class RunReconciliationDiscoveryTest {
                 }
                 assertEquals(listOf(baselineRun.id), gateway.statusRequests)
             } finally {
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }
@@ -163,24 +164,24 @@ internal class RunReconciliationDiscoveryTest {
             val holder =
                 reconciliationHolder(
                     gateway,
-                    settings = ReconciliationHolderSettings(Dispatchers.Default),
+                    settings = ReconciliationHolderSettings(),
                 )
 
             try {
                 openReconciledSession(holder, gateway)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run off screen"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
-                gateway.releaseRun.countDown()
-                assertTrue(gateway.submissionCompleted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.releaseRun.complete(Unit)
+                gateway.submissionCompleted.await()
 
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isSending == true
                 }
 
-                gateway.releaseSubmissionCompletion.countDown()
+                gateway.releaseSubmissionCompletion.complete(Unit)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.isSending == false &&
                         it.sessionList.openedSession.isReconciliationInProgress == false &&
@@ -189,8 +190,8 @@ internal class RunReconciliationDiscoveryTest {
                 }
                 assertEquals(listOf(terminalRun.id), gateway.statusRequests)
             } finally {
-                gateway.releaseRun.countDown()
-                gateway.releaseSubmissionCompletion.countDown()
+                gateway.releaseRun.complete(Unit)
+                gateway.releaseSubmissionCompletion.complete(Unit)
                 holder.close()
             }
         }
@@ -220,7 +221,6 @@ internal class RunReconciliationDiscoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                             sendTimeoutMillis = 50L,
                         ),
                 )
@@ -229,10 +229,10 @@ internal class RunReconciliationDiscoveryTest {
                 openReconciledSession(holder, gateway)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Keep this draft"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
-                assertTrue(gateway.runFinished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                assertTrue(gateway.submissionCompleted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runFinished.await()
+                gateway.submissionCompleted.await()
 
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
@@ -244,16 +244,16 @@ internal class RunReconciliationDiscoveryTest {
                         opened.activeResponse == null &&
                         opened.hasUnresolvedSubmission
                 }
-                assertFalse(correlatedObservation.started.await(100, TimeUnit.MILLISECONDS))
+                assertFalse(correlatedObservation.started.isCompleted)
                 assertTrue(gateway.observedRunIds.none { it == correlatedRun.id })
                 @Suppress("UNCHECKED_CAST")
-                val localRuns = (privateField(holder, "sessionRuns") as Map<SessionId, List<Run>>)[session.id].orEmpty()
+                val localRuns = holder.testSurface.sessionRuns[session.id].orEmpty()
                 assertTrue(localRuns.none { it.id == correlatedRun.id || it.id == unrelatedRun.id })
             } finally {
-                gateway.releaseRun.countDown()
-                correlatedObservation.release.countDown()
-                unrelatedObservation.release.countDown()
-                gateway.releaseSubmissionCompletion.countDown()
+                gateway.releaseRun.complete(Unit)
+                correlatedObservation.release.complete(Unit)
+                unrelatedObservation.release.complete(Unit)
+                gateway.releaseSubmissionCompletion.complete(Unit)
                 holder.close()
             }
         }
@@ -282,14 +282,14 @@ internal class RunReconciliationDiscoveryTest {
             val holder =
                 reconciliationHolder(
                     gateway,
-                    settings = ReconciliationHolderSettings(Dispatchers.Default),
+                    settings = ReconciliationHolderSettings(),
                 )
 
             try {
                 openReconciledSession(holder, gateway)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run this"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(observation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                observation.started.await()
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
@@ -297,7 +297,7 @@ internal class RunReconciliationDiscoveryTest {
                         it.sessionList.openedSession.latestRunState == RunPresentationState.UNCERTAIN
                 }
 
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
                         it.sessionList.openedSession.messages.lastOrNull()?.content == "Confirmed after refresh"
@@ -305,7 +305,7 @@ internal class RunReconciliationDiscoveryTest {
                 assertEquals(listOf(run.id, run.id), gateway.statusRequests)
                 assertEquals(4, gateway.historyRequests)
             } finally {
-                observation.release.countDown()
+                observation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -344,39 +344,38 @@ internal class RunReconciliationDiscoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                         ),
                 )
 
             try {
                 openReconciledSession(holder, gateway)
                 awaitReconciliationState(holder) { gateway.statusRequests.size == 1 && gateway.historyRequests == 2 }
-                assertTrue(firstObservation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.started.await()
 
                 gateway.blockNextStatus = true
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
-                assertTrue(gateway.statusStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.statusStarted.await()
 
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
                 awaitReconciliationState(holder) { it.sessionList?.openedSession == null }
-                assertTrue(firstObservation.finished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.finished.await()
 
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
                         it.sessionList.openedSession.messages.lastOrNull()?.content == "reopen-open"
                 }
-                assertTrue(secondObservation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                secondObservation.started.await()
                 assertEquals(3, gateway.statusRequests.size)
                 assertEquals(5, gateway.historyRequests)
                 assertEquals(2, gateway.observedRunIds.size)
 
-                gateway.releaseStatus.countDown()
+                gateway.releaseStatus.complete(Unit)
                 assertStaleRefreshDropped(holder, gateway, "reopen-open")
             } finally {
-                gateway.releaseStatus.countDown()
-                firstObservation.release.countDown()
-                secondObservation.release.countDown()
+                gateway.releaseStatus.complete(Unit)
+                firstObservation.release.complete(Unit)
+                secondObservation.release.complete(Unit)
                 holder.close()
             }
         }
@@ -410,7 +409,6 @@ internal class RunReconciliationDiscoveryTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                         ),
                 )
 
@@ -418,43 +416,46 @@ internal class RunReconciliationDiscoveryTest {
                 openReconciledSession(holder, gateway)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("First"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(firstObservation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.started.await()
 
                 holder.onEvent(EntryUiEvent.RefreshSessionsClicked)
                 awaitReconciliationState(holder) {
                     it.sessionList?.openedSession?.latestRunState == RunPresentationState.SUCCEEDED &&
                         !it.sessionList.openedSession.isRefreshing
                 }
-                assertTrue(firstObservation.closed.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.closed.await()
 
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Second"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertFalse(gateway.secondObservationRequested.await(100, TimeUnit.MILLISECONDS))
+                assertFalse(gateway.secondObservationRequested.isCompleted)
 
-                firstObservation.release.countDown()
-                assertTrue(firstObservation.finished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-                val secondObservationRequested =
-                    gateway.secondObservationRequested.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-                assertTrue(secondObservationRequested)
-                assertTrue(secondObservation.started.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                firstObservation.release.complete(Unit)
+                firstObservation.finished.await()
+                gateway.secondObservationRequested.await()
+                assertTrue(gateway.secondObservationRequested.isCompleted)
+                secondObservation.started.await()
                 assertEquals(listOf(firstRun.id, secondRun.id), gateway.observedRunIds)
             } finally {
-                firstObservation.release.countDown()
-                secondObservation.release.countDown()
+                firstObservation.release.complete(Unit)
+                secondObservation.release.complete(Unit)
                 holder.close()
             }
         }
 
-    private suspend fun assertStaleRefreshDropped(
+    private suspend fun TestScope.assertStaleRefreshDropped(
         holder: EntryStateHolder,
         gateway: ReconciliationFakeGateway,
         expectedContent: String,
     ) {
-        assertTrue(gateway.statusFinished.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
-        assertTrue(gateway.staleHistoryLoaded.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+        advanceUntilIdle()
+        assertTrue("the held status request must resume", gateway.statusFinished.isCompleted)
+        assertFalse(
+            "a refresh dropped before it issues its history request must not reach the gateway",
+            gateway.staleHistoryLoaded.isCompleted,
+        )
+        assertEquals(5, gateway.historyRequests)
         awaitReconciliationState(holder) {
-            gateway.staleHistoryLoaded.count == 0L &&
-                it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
+            it.sessionList?.openedSession?.latestRunState == RunPresentationState.UNCERTAIN &&
                 it.sessionList.openedSession.messages.lastOrNull()?.content == expectedContent
         }
     }

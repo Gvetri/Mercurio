@@ -1,17 +1,14 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.runInterruptible
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.mercurio.client.feature.entry.application.EntryState
@@ -44,75 +41,55 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.BiFunction
 
 /**
- * Asserts that a cancelled parent job releases the run observer. The submission application is
- * serialized on the holder's state-change consumer: the paused dispatcher is stepped until the
- * producer reaches the observation registration (the counter is monotonic, so it also settles
- * when the registration is immediately cancelled).
+ * Asserts that a cancelled parent job releases the run observer. The observation start is held at
+ * the gateway call, so a cancelled parent must stop the job before it registers its observation and
+ * must not start a replacement one.
  */
-internal suspend fun assertParentCancellationReleasesObserver(cancelDuringRegistration: Boolean) {
+internal suspend fun TestScope.assertParentCancellationReleasesObserver(cancelDuringRegistration: Boolean) {
     val session = reconciliationSession()
     val run = Run(RunId("parent-cancelled-run"), session.id, "running")
-    val dispatcher = ReconciliationPausingDispatcher()
     val parent = SupervisorJob()
     val failures = CopyOnWriteArrayList<Throwable>()
-    val scope = CoroutineScope(parent + dispatcher + CoroutineExceptionHandler { _, error -> failures += error })
-    val gateway = ReconciliationFakeGateway(session).apply { runs.add(run) }
-    val holder = reconciliationHolder(gateway, ReconciliationHolderSettings(scope = scope))
-    val registrations = AtomicInteger(0)
-    val observerJobs =
-        object : LinkedHashMap<SessionId, Job>() {
-            override fun put(
-                key: SessionId,
-                value: Job,
-            ): Job? {
-                check(registrations.incrementAndGet() <= 3) {
-                    "Observer restart did not stop after parent cancellation."
-                }
-                val previous = super.put(key, value)
-                if (cancelDuringRegistration) parent.cancel()
-                return previous
-            }
+    val scope =
+        CoroutineScope(
+            parent + StandardTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, error -> failures += error },
+        )
+    val gateway =
+        ReconciliationFakeGateway(session).apply {
+            runs.add(run)
+            blockNextObservationOpen = true
         }
-    privateField(holder, "runObservationJobs", observerJobs)
+    val holder = reconciliationHolderOn(scope, gateway)
 
     try {
         openReconciledSession(holder, gateway)
-        dispatcher.paused = true
         holder.onEvent(EntryUiEvent.ComposerTextChanged("Cancel the parent"))
         holder.onEvent(EntryUiEvent.SendMessageClicked)
-        dispatcher.runNext()
-        dispatcher.settleUntil { registrations.get() > 0 }
-        if (!cancelDuringRegistration) {
-            assertEquals(2, dispatcher.queuedCount)
-            assertTrue(observerJobs.values.single().isActive)
-        }
+        advanceUntilIdle()
+        assertEquals(1, gateway.observationRequests.size)
+        assertEquals(1, holder.testSurface.runObservationJobs.size)
+        assertTrue(holder.testSurface.runObservationJobs.values.single().isActive)
+        assertTrue(gateway.observedRunIds.isEmpty())
 
-        scope.cancel()
-        dispatcher.drain()
-        runBlocking { withTimeout(RECONCILIATION_TIMEOUT_MILLIS) { parent.join() } }
+        if (cancelDuringRegistration) parent.cancel() else scope.cancel()
+        advanceUntilIdle()
 
-        assertEquals("A cancelled parent must not register replacement observers.", 1, registrations.get())
+        assertEquals("A cancelled parent must not register replacement observers.", 1, gateway.observationRequests.size)
         assertTrue("Unexpected coroutine failures: $failures", failures.isEmpty())
         assertTrue(parent.isCompleted)
-        assertTrue(observerJobs.isEmpty())
-        assertTrue((privateField(holder, "runObservationRunIds") as Map<*, *>).isEmpty())
-        assertTrue((privateField(holder, "pendingRunObservationRequests") as Map<*, *>).isEmpty())
+        assertTrue(holder.testSurface.runObservationJobs.isEmpty())
+        assertTrue(holder.testSurface.runObservationRunIds.isEmpty())
+        assertTrue(holder.testSurface.pendingRunObservationRequests.isEmpty())
         assertTrue(gateway.observedRunIds.isEmpty())
         assertEquals(listOf(session.id to "Cancel the parent"), gateway.runRequests)
         assertEquals(run.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
     } finally {
+        gateway.releaseObservationOpen.complete(Unit)
         holder.close()
-        dispatcher.drain()
-        joinHolder(holder)
+        advanceUntilIdle()
     }
 }
 
@@ -127,38 +104,19 @@ internal suspend fun connectReconciliationGateway(
     awaitReconciliationState(holder) { it.sessionList?.sessions == listOf(gateway.session.toSessionItemUiState()) }
 }
 
-internal fun reconciliationSettles(predicate: () -> Boolean): Boolean {
-    val appeared =
-        runBlocking {
-            try {
-                withTimeout(RECONCILIATION_SETTLE_MILLIS) {
-                    while (!predicate()) delay(5)
-                }
-                true
-            } catch (_: TimeoutCancellationException) {
-                false
-            }
-        }
-    return appeared || predicate()
-}
-
-@Suppress("UNCHECKED_CAST")
-internal fun recoveryUnavailableSessions(holder: EntryStateHolder): Set<SessionId> =
-    privateField(holder, "recoveryUnavailableSessions") as Set<SessionId>
-
 internal class ReconciliationArmingRegistry(
     private val failAfterRelease: Boolean = false,
 ) : RunRecoveryRegistry {
-    val entered = CountDownLatch(1)
-    val release = CountDownLatch(1)
+    val entered = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
 
     @Volatile
     var armed = false
 
     override suspend fun load(): List<RunRecoveryEntry> {
         if (!armed) return emptyList()
-        entered.countDown()
-        check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) { "recovery load was not released." }
+        entered.complete(Unit)
+        release.await()
         if (failAfterRelease) error("recovery registry is unavailable")
         return emptyList()
     }
@@ -169,21 +127,24 @@ internal class ReconciliationArmingRegistry(
 }
 
 internal class ReconciliationHolderSettings(
-    val dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     val sendTimeoutMillis: Long = 30_000L,
     val recoveryRegistry: RunRecoveryRegistry? = null,
     val uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
     val sessionDraftStore: SessionDraftStore = NoOpSessionDraftStore,
-    val scope: CoroutineScope? = null,
 ) {
-    var stateChangeDispatcher: CoroutineDispatcher? = null
+    var stateChangeDispatcher: kotlinx.coroutines.CoroutineDispatcher? = null
 }
 
-internal fun reconciliationHolder(
+internal fun TestScope.reconciliationHolder(
+    gateway: ReconciliationFakeGateway,
+    settings: ReconciliationHolderSettings = ReconciliationHolderSettings(),
+): EntryStateHolder = reconciliationHolderOn(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), gateway, settings)
+
+internal fun reconciliationHolderOn(
+    scope: CoroutineScope,
     gateway: ReconciliationFakeGateway,
     settings: ReconciliationHolderSettings = ReconciliationHolderSettings(),
 ): EntryStateHolder {
-    val scope = settings.scope ?: CoroutineScope(SupervisorJob() + settings.dispatcher)
     val repository: GatewayConnectionRepository =
         DefaultGatewayConnectionRepository(InMemoryGatewayConnectionDataSource())
     return EntryStateHolder(
@@ -206,14 +167,9 @@ internal fun reconciliationHolder(
                     settings.recoveryRegistry?.let { registry -> { _, entry -> registry.remove(entry) } },
                 removeGatewayConnectionUseCase = RemoveGatewayConnection(repository),
                 onRunSubmissionCompleted = {
-                    gateway.submissionCompleted.countDown()
+                    gateway.submissionCompleted.complete(Unit)
                     if (gateway.blockSubmissionCompletion) {
-                        check(
-                            gateway.releaseSubmissionCompletion
-                                .await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS),
-                        ) {
-                            "Submission completion was not released."
-                        }
+                        gateway.releaseSubmissionCompletion.await()
                     }
                 },
                 sendTimeoutMillis = settings.sendTimeoutMillis,
@@ -244,15 +200,12 @@ internal suspend fun awaitReconciliationState(
     predicate: (EntryUiState) -> Boolean,
 ) = holder.awaitUiState("the reconciliation state", predicate)
 
-internal fun awaitReconciliationCondition(predicate: suspend () -> Boolean) {
-    runBlocking {
-        withTimeout(RECONCILIATION_TIMEOUT_MILLIS) {
-            while (!predicate()) delay(10)
-        }
-    }
+internal suspend fun TestScope.awaitReconciliationCondition(predicate: suspend () -> Boolean) {
+    advanceUntilIdle()
+    check(predicate()) { "The reconciliation condition did not hold after the scheduler drained." }
 }
 
-internal fun awaitRunSubmissionAllowed(
+internal suspend fun TestScope.awaitRunSubmissionAllowed(
     holder: EntryStateHolder,
     sessionId: SessionId,
 ) {
@@ -267,12 +220,8 @@ internal fun recoveredDeltaObservation(run: Run): ReconciliationScriptedObservat
         listOf(RunEvent(RunEventType.MESSAGE_DELTA, run.id, "running", "Recovered observation", "delta")),
     )
 
-internal fun joinHolder(holder: EntryStateHolder) {
-    runBlocking {
-        withTimeout(RECONCILIATION_TIMEOUT_MILLIS) {
-            (privateField(holder, "scope") as CoroutineScope).coroutineContext[Job]?.join()
-        }
-    }
+internal suspend fun joinHolder(holder: EntryStateHolder) {
+    holder.testSurface.scope.coroutineContext[Job]?.join()
 }
 
 internal fun reconciliationSession(): Session =
@@ -302,11 +251,12 @@ internal class ReconciliationFakeGateway(
     val statusRequests: MutableList<RunId> = CopyOnWriteArrayList()
     val failStatusRunIds = mutableSetOf<RunId>()
     val observedRunIds: MutableList<RunId> = CopyOnWriteArrayList()
+    val observationRequests: MutableList<RunId> = CopyOnWriteArrayList()
     val observations = ArrayDeque<RunEventObservation>()
-    private val historyRequestCount = AtomicInteger(0)
-    val historyRequests: Int get() = historyRequestCount.get()
-    private val listRequestCount = AtomicInteger(0)
-    val listRequests: Int get() = listRequestCount.get()
+    private var historyRequestCount = 0
+    val historyRequests: Int get() = historyRequestCount
+    private var listRequestCount = 0
+    val listRequests: Int get() = listRequestCount
     var observation: RunEventObservation = ReconciliationScriptedObservation(emptyList())
     var blockRunCreation = false
     var failRunCreation = false
@@ -315,23 +265,22 @@ internal class ReconciliationFakeGateway(
     private val lastServedStatuses = mutableMapOf<RunId, Run>()
     var blockSubmissionCompletion = false
     var blockNextObservationOpen = false
-    val runStarted = CountDownLatch(1)
-    val submissionCompleted = CountDownLatch(1)
-    val runFinished = CountDownLatch(1)
-    val releaseRun = CountDownLatch(1)
-    val releaseSubmissionCompletion = CountDownLatch(1)
-    val statusStarted = CountDownLatch(1)
-    val statusFinished = CountDownLatch(1)
-    val releaseStatus = CountDownLatch(1)
-    val staleHistoryLoaded = CountDownLatch(1)
-    val observationOpenStarted = CountDownLatch(1)
-    val observationOpenFinished = CountDownLatch(1)
-    val releaseObservationOpen = CountDownLatch(1)
-    val secondObservationRequested = CountDownLatch(1)
-    private val observationRequests = mutableListOf<RunId>()
+    val runStarted = CompletableDeferred<Unit>()
+    val submissionCompleted = CompletableDeferred<Unit>()
+    val runFinished = CompletableDeferred<Unit>()
+    val releaseRun = CompletableDeferred<Unit>()
+    val releaseSubmissionCompletion = CompletableDeferred<Unit>()
+    val statusStarted = CompletableDeferred<Unit>()
+    val statusFinished = CompletableDeferred<Unit>()
+    val releaseStatus = CompletableDeferred<Unit>()
+    val staleHistoryLoaded = CompletableDeferred<Unit>()
+    val observationOpenStarted = CompletableDeferred<Unit>()
+    val observationOpenFinished = CompletableDeferred<Unit>()
+    val releaseObservationOpen = CompletableDeferred<Unit>()
+    val secondObservationRequested = CompletableDeferred<Unit>()
 
     override suspend fun listSessions(request: SessionListRequest): SessionPage {
-        listRequestCount.incrementAndGet()
+        listRequestCount += 1
         return SessionPage(listOf(session), null)
     }
 
@@ -340,20 +289,16 @@ internal class ReconciliationFakeGateway(
     override suspend fun openSession(sessionId: SessionId): Session = session
 
     override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory {
-        val (history, shouldFail) =
-            synchronized(this) {
-                historyRequestCount.incrementAndGet()
-                val history =
-                    if (histories.isEmpty()) {
-                        SessionHistory(sessionId, emptyList())
-                    } else {
-                        histories.removeFirst()
-                    }
-                history to (historyRequests == failHistoryRequest)
+        historyRequestCount += 1
+        val history =
+            if (histories.isEmpty()) {
+                SessionHistory(sessionId, emptyList())
+            } else {
+                histories.removeFirst()
             }
-        if (shouldFail) error("history request failed")
+        if (historyRequestCount == failHistoryRequest) error("history request failed")
         if (history.messages.any { it.content == "stale-refresh" }) {
-            staleHistoryLoaded.countDown()
+            staleHistoryLoaded.complete(Unit)
         }
         return history
     }
@@ -376,81 +321,50 @@ internal class ReconciliationFakeGateway(
         runRequests += sessionId to input
         if (failRunCreation) error("run creation failed")
         if (blockRunCreation) {
-            runStarted.countDown()
+            runStarted.complete(Unit)
             try {
-                runInterruptible {
-                    check(releaseRun.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                        "Run was not released."
-                    }
-                }
+                releaseRun.await()
             } finally {
-                runFinished.countDown()
+                runFinished.complete(Unit)
             }
         }
         return if (runs.isEmpty()) error("missing run") else runs.removeFirst()
     }
 
     override suspend fun getRunStatus(runId: RunId): Run {
-        val (shouldBlock, status) =
-            synchronized(this) {
-                statusRequests += runId
-                if (failStatusRunIds.remove(runId)) error("status request failed")
-                val shouldBlock = blockNextStatus.also { blockNextStatus = false }
-                val status =
-                    statuses.pollFirst()
-                        ?: lastServedStatuses[runId]
-                        ?: error("no status scripted")
-                lastServedStatuses[runId] = status
-                shouldBlock to status
-            }
+        statusRequests += runId
+        if (failStatusRunIds.remove(runId)) error("status request failed")
+        val shouldBlock = blockNextStatus.also { blockNextStatus = false }
+        val status =
+            statuses.pollFirst()
+                ?: lastServedStatuses[runId]
+                ?: error("no status scripted")
+        lastServedStatuses[runId] = status
         if (shouldBlock) {
-            statusStarted.countDown()
+            statusStarted.complete(Unit)
             try {
-                check(releaseStatus.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                    "Status was not released."
-                }
-            } catch (error: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw error
+                releaseStatus.await()
             } finally {
-                statusFinished.countDown()
+                statusFinished.complete(Unit)
             }
         }
         return status
     }
 
     override suspend fun observeRun(runId: RunId): RunEventObservation {
-        val shouldBlockOpen =
-            synchronized(this) {
-                observationRequests += runId
-                if (observationRequests.size == 2) {
-                    secondObservationRequested.countDown()
-                }
-                blockNextObservationOpen.also { blockNextObservationOpen = false }
-            }
-        if (shouldBlockOpen) {
-            observationOpenStarted.countDown()
-            awaitObservationOpenRelease()
-            observationOpenFinished.countDown()
+        observationRequests += runId
+        if (observationRequests.size == 2) {
+            secondObservationRequested.complete(Unit)
         }
-        return synchronized(this) {
-            observedRunIds += runId
-            if (observations.isEmpty()) observation else observations.removeFirst()
+        if (blockNextObservationOpen) {
+            blockNextObservationOpen = false
+            observationOpenStarted.complete(Unit)
+            releaseObservationOpen.await()
+            observationOpenFinished.complete(Unit)
         }
+        observedRunIds += runId
+        return if (observations.isEmpty()) observation else observations.removeFirst()
     }
-
-    private fun awaitObservationOpenRelease() {
-        while (true) {
-            if (awaitReleaseOrInterrupted(releaseObservationOpen)) return
-        }
-    }
-
-    private fun awaitReleaseOrInterrupted(latch: CountDownLatch): Boolean =
-        try {
-            latch.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
-            false
-        }
 }
 
 internal open class ReconciliationScriptedObservation(
@@ -472,116 +386,56 @@ internal class ReconciliationThrowingObservation(
 internal class ReconciliationDelayedTerminalObservation(
     private val terminalEvent: RunEvent,
 ) : RunEventObservation {
-    val started = CountDownLatch(1)
-    val release = CountDownLatch(1)
+    val started = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
     private var emitted = false
 
     override suspend fun next(): RunEvent? {
         if (emitted) return null
-        started.countDown()
-        check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-            "Observation was not released."
-        }
+        started.complete(Unit)
+        release.await()
         emitted = true
         return terminalEvent
     }
 
     override fun close() {
-        release.countDown()
+        release.complete(Unit)
     }
 }
 
 internal class ReconciliationBlockingObservation(
     private val events: List<RunEvent> = emptyList(),
 ) : RunEventObservation {
-    val started = CountDownLatch(1)
-    val closed = CountDownLatch(1)
-    val finished = CountDownLatch(1)
-    val release = CountDownLatch(1)
-    private val closeCount = AtomicInteger(0)
+    val started = CompletableDeferred<Unit>()
+    val closed = CompletableDeferred<Unit>()
+    val finished = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    private var closeCount = 0
     private var nextEventIndex = 0
 
     override suspend fun next(): RunEvent? {
-        started.countDown()
+        started.complete(Unit)
         if (nextEventIndex < events.size) return events[nextEventIndex++]
         return try {
             release.await()
             null
         } finally {
-            finished.countDown()
+            finished.complete(Unit)
         }
     }
 
     override fun close() {
-        release.countDown()
-        if (closeCount.incrementAndGet() == 1) closed.countDown()
-    }
-}
-
-internal class ReconciliationBlockingContainsMap<K, V>(
-    private val delegate: MutableMap<K, V>,
-    private val entered: CountDownLatch,
-    private val release: CountDownLatch,
-) : AbstractMutableMap<K, V>() {
-    override val entries: MutableSet<MutableMap.MutableEntry<K, V>>
-        get() = delegate.entries
-
-    override fun put(
-        key: K,
-        value: V,
-    ): V? = delegate.put(key, value)
-
-    override fun containsKey(key: K): Boolean {
-        entered.countDown()
-        check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-            "Blocked map lookup was not released."
-        }
-        return delegate.containsKey(key)
-    }
-}
-
-internal class ReconciliationRacingCountMap : ConcurrentHashMap<SessionId, Int>() {
-    val entered = CountDownLatch(1)
-    val release = CountDownLatch(1)
-    private val blocked = AtomicBoolean(false)
-
-    @Volatile
-    private var armedThread: Thread? = null
-
-    fun armForCurrentThread() {
-        armedThread = Thread.currentThread()
-    }
-
-    override fun put(
-        key: SessionId,
-        value: Int,
-    ): Int? {
-        blockArmedThread()
-        return super.put(key, value)
-    }
-
-    override fun compute(
-        key: SessionId,
-        remappingFunction: BiFunction<in SessionId, in Int?, out Int?>,
-    ): Int? {
-        blockArmedThread()
-        return super.compute(key, remappingFunction)
-    }
-
-    private fun blockArmedThread() {
-        if (Thread.currentThread() !== armedThread || !blocked.compareAndSet(false, true)) return
-        entered.countDown()
-        check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-            "The racing count write was not released."
-        }
+        release.complete(Unit)
+        closeCount += 1
+        if (closeCount == 1) closed.complete(Unit)
     }
 }
 
 internal class ReconciliationBlockingRecoveryRegistry : RunRecoveryRegistry {
     private val entries = mutableListOf<RunRecoveryEntry>()
-    val loadStarted = CountDownLatch(1)
-    val loadFinished = CountDownLatch(1)
-    val releaseLoad = CountDownLatch(1)
+    val loadStarted = CompletableDeferred<Unit>()
+    val loadFinished = CompletableDeferred<Unit>()
+    val releaseLoad = CompletableDeferred<Unit>()
 
     @Volatile
     var blockLoads = false
@@ -592,58 +446,38 @@ internal class ReconciliationBlockingRecoveryRegistry : RunRecoveryRegistry {
     @Volatile
     var blockRemovals = false
 
-    val saveStarted = CountDownLatch(1)
-    val releaseSave = CountDownLatch(1)
-    val removeRequests = AtomicInteger(0)
-    val effectiveRemovals = AtomicInteger(0)
-    val releaseRemove = CountDownLatch(1)
+    val saveStarted = CompletableDeferred<Unit>()
+    val releaseSave = CompletableDeferred<Unit>()
+    var removeRequests = 0
+    var effectiveRemovals = 0
+    val releaseRemove = CompletableDeferred<Unit>()
 
     override suspend fun load(): List<RunRecoveryEntry> {
         val shouldSignalCompletion = blockLoads
         if (shouldSignalCompletion) {
-            loadStarted.countDown()
-            check(releaseLoad.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                "Recovery load was not released."
-            }
+            loadStarted.complete(Unit)
+            releaseLoad.await()
         }
-        return synchronized(entries) { entries.toList() }.also {
-            if (shouldSignalCompletion) loadFinished.countDown()
+        return entries.toList().also {
+            if (shouldSignalCompletion) loadFinished.complete(Unit)
         }
     }
 
     override suspend fun save(entry: RunRecoveryEntry) {
         if (blockSaves) {
-            saveStarted.countDown()
-            check(releaseSave.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                "Recovery save was not released."
-            }
+            saveStarted.complete(Unit)
+            releaseSave.await()
         }
-        synchronized(entries) {
-            if (entry !in entries) entries += entry
-        }
+        if (entry !in entries) entries += entry
     }
 
     override suspend fun remove(entry: RunRecoveryEntry) {
-        removeRequests.incrementAndGet()
+        removeRequests += 1
         if (blockRemovals) {
-            check(releaseRemove.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                "Recovery removal was not released."
-            }
+            releaseRemove.await()
         }
-        synchronized(entries) {
-            if (entries.remove(entry)) effectiveRemovals.incrementAndGet()
-        }
+        if (entries.remove(entry)) effectiveRemovals += 1
     }
-}
-
-internal fun privateField(
-    holder: EntryStateHolder,
-    name: String,
-    replacement: Any? = null,
-): Any {
-    val field = EntryStateHolder::class.java.getDeclaredField(name).apply { isAccessible = true }
-    if (replacement != null) field.set(holder, replacement)
-    return field.get(holder)
 }
 
 internal fun invokeHistoryRunIdToReconcile(
@@ -669,97 +503,29 @@ internal class ReconciliationUncertaintyStorage : RunSubmissionUncertaintyStorag
     }
 }
 
-internal class ReconciliationPausingDispatcher(
-    private val delegate: CoroutineDispatcher? = null,
-) : CoroutineDispatcher() {
-    @Volatile
-    var paused = false
-
-    private val queued = ArrayDeque<Runnable>()
-    val queuedCount: Int get() = synchronized(queued) { queued.size }
-
-    override fun dispatch(
-        context: kotlin.coroutines.CoroutineContext,
-        block: Runnable,
-    ) {
-        if (paused) {
-            synchronized(queued) { queued.addLast(block) }
-        } else if (delegate != null) {
-            delegate.dispatch(context, block)
-        } else {
-            block.run()
-        }
-    }
-
-    fun runNext() = synchronized(queued) { queued.removeFirst() }.run()
-
-    fun runLast() = synchronized(queued) { queued.removeLast() }.run()
-
-    fun drain() {
-        repeat(100) {
-            if (queuedCount == 0) return
-            runNext()
-        }
-        error("Dispatcher did not become idle.")
-    }
-
-    /**
-     * Runs queued blocks one at a time until [condition] holds. The state-change
-     * consumer serializes holder applications, so a paused dispatcher must step
-     * through the consumer and producer continuations before an applied result
-     * (or a queued observer registration) is observable.
-     */
-    fun settleUntil(condition: () -> Boolean) {
-        repeat(100) {
-            if (condition()) return
-            if (queuedCount > 0) runNext() else Thread.sleep(20)
-        }
-        if (!condition()) error("settleUntil: condition not met after stepping the dispatcher")
-    }
-
-    /** Steps from the tail so the oldest queued block (such as a superseded
-     * observation start) is never executed while the condition is awaited.
-     * Stepping requires more than one queued block; the chain order is safe
-     * because a resumed await is only queued after its completer ran. */
-    fun settleLastUntil(condition: () -> Boolean) {
-        repeat(100) {
-            if (condition()) return
-            if (queuedCount > 1) runLast() else Thread.sleep(20)
-        }
-        if (!condition()) error("settleLastUntil: condition not met after stepping the dispatcher")
-    }
-}
-
 internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
-    val started = CountDownLatch(1)
-    val closed = CountDownLatch(1)
-    val finished = CountDownLatch(1)
-    val release = CountDownLatch(1)
-    private val closeCount = AtomicInteger(0)
+    val started = CompletableDeferred<Unit>()
+    val closed = CompletableDeferred<Unit>()
+    val finished = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    private var closeCount = 0
 
     override suspend fun next(): RunEvent? {
-        started.countDown()
+        started.complete(Unit)
         return try {
-            awaitRelease()
+            release.await()
             null
         } finally {
-            finished.countDown()
+            finished.complete(Unit)
         }
     }
 
     override fun close() {
-        if (closeCount.incrementAndGet() == 1) {
-            closed.countDown()
-        }
-    }
-
-    private fun awaitRelease() {
-        var released = release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        while (!released) {
-            released = release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+        closeCount += 1
+        if (closeCount == 1) {
+            closed.complete(Unit)
         }
     }
 }
 
 internal const val RECONCILIATION_TIMEOUT_MILLIS = 15_000L
-internal const val RECONCILIATION_SETTLE_MILLIS = 500L

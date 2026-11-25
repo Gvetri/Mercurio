@@ -1,12 +1,11 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.application.RemoveGatewayConnection
 import org.mercurio.client.feature.entry.application.VerifyGatewayConnection
@@ -32,13 +31,9 @@ import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
-internal fun observationHolder(
+internal fun TestScope.observationHolder(
     gateway: ObservationScriptedGateway,
-    dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     recoveryRegistry: RunRecoveryRegistry? = null,
     persistRunRecoveryEntry: (suspend (String, RunRecoveryEntry) -> Unit)? = null,
 ): EntryStateHolder {
@@ -50,7 +45,7 @@ internal fun observationHolder(
             VerifyGatewayConnection(repository) { _, _ ->
                 GatewayCapabilities(PublicBetaGatewayCapabilityManifest.current.requiredEndpoints)
             },
-        scope = CoroutineScope(SupervisorJob() + dispatcher),
+        scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)),
         sessionGatewayFactory = { _, _ -> gateway },
         runGatewayFactory = { _, _ -> gateway },
         dependencies =
@@ -89,12 +84,9 @@ internal suspend fun awaitObservationState(
     predicate: suspend (EntryUiState) -> Boolean,
 ) = holder.awaitUiState("the observation state", predicate)
 
-internal fun awaitObservationCondition(predicate: suspend () -> Boolean) {
-    runBlocking {
-        withTimeout(OBSERVATION_TIMEOUT_MILLIS) {
-            while (!predicate()) delay(10)
-        }
-    }
+internal suspend fun TestScope.awaitObservationCondition(predicate: suspend () -> Boolean) {
+    advanceUntilIdle()
+    check(predicate()) { "The observation condition did not hold after the scheduler drained." }
 }
 
 internal fun observationSession(id: String): Session =
@@ -119,17 +111,17 @@ internal class ObservationScriptedGateway(
     val observedRunIds = CopyOnWriteArrayList<RunId>()
     val statusRequests = CopyOnWriteArrayList<RunId>()
     val cancelledRunIds = CopyOnWriteArrayList<RunId>()
-    val createRunCount = AtomicInteger(0)
+    var createRunCount = 0
     private val lastServedStatuses = ConcurrentHashMap<RunId, Run>()
     var blockCreate = false
-    val createStarted = CountDownLatch(1)
-    val createRelease = CountDownLatch(1)
+    val createStarted = CompletableDeferred<Unit>()
+    val createRelease = CompletableDeferred<Unit>()
     var blockStatus = false
-    val statusStarted = CountDownLatch(1)
-    val statusRelease = CountDownLatch(1)
+    val statusStarted = CompletableDeferred<Unit>()
+    val statusRelease = CompletableDeferred<Unit>()
     var blockOpenFor: SessionId? = null
-    val openStarted = CountDownLatch(1)
-    val openRelease = CountDownLatch(1)
+    val openStarted = CompletableDeferred<Unit>()
+    val openRelease = CompletableDeferred<Unit>()
     var failOpenFor: SessionId? = null
 
     fun enqueueRun(run: Run) {
@@ -155,8 +147,8 @@ internal class ObservationScriptedGateway(
     override suspend fun openSession(sessionId: SessionId): Session {
         if (failOpenFor == sessionId) error("gateway unavailable")
         if (blockOpenFor == sessionId) {
-            openStarted.countDown()
-            openRelease.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            openStarted.complete(Unit)
+            openRelease.await()
         }
         return (listOf(session) + additionalSessions).single { it.id == sessionId }
     }
@@ -184,10 +176,10 @@ internal class ObservationScriptedGateway(
         sessionId: SessionId,
         input: String,
     ): Run {
-        createRunCount.incrementAndGet()
+        createRunCount += 1
         if (blockCreate) {
-            createStarted.countDown()
-            createRelease.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            createStarted.complete(Unit)
+            createRelease.await()
         }
         return runResults.removeFirst().also { run -> lastServedStatuses[run.id] = run }
     }
@@ -195,8 +187,8 @@ internal class ObservationScriptedGateway(
     override suspend fun getRunStatus(runId: RunId): Run {
         statusRequests += runId
         if (blockStatus) {
-            statusStarted.countDown()
-            statusRelease.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            statusStarted.complete(Unit)
+            statusRelease.await()
         }
         val status =
             statusByRun[runId]
@@ -230,44 +222,43 @@ internal class ObservationThrowingObservation(
 }
 
 internal class ObservationBlockingObservation : RunEventObservation {
-    val started = CountDownLatch(1)
-    val closed = CountDownLatch(1)
-    val release = CountDownLatch(1)
-    private val closeCount = AtomicInteger(0)
+    val started = CompletableDeferred<Unit>()
+    val closed = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
+    private var closeCount = 0
 
     override suspend fun next(): RunEvent? {
-        started.countDown()
-        release.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+        started.complete(Unit)
+        release.await()
         return null
     }
 
     override fun close() {
-        if (closeCount.incrementAndGet() == 1) {
-            closed.countDown()
+        closeCount += 1
+        if (closeCount == 1) {
+            closed.complete(Unit)
         }
-        release.countDown()
+        release.complete(Unit)
     }
 }
 
 internal class ObservationDelayedTerminalObservation(
     private val terminalEvent: RunEvent,
 ) : RunEventObservation {
-    val started = CountDownLatch(1)
-    val release = CountDownLatch(1)
+    val started = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
     private var emitted = false
 
     override suspend fun next(): RunEvent? {
         if (emitted) return null
-        started.countDown()
-        check(release.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-            "Observation was not released."
-        }
+        started.complete(Unit)
+        release.await()
         emitted = true
         return terminalEvent
     }
 
     override fun close() {
-        release.countDown()
+        release.complete(Unit)
     }
 }
 
@@ -290,12 +281,12 @@ internal class ObservationFailingLoadRunRecoveryRegistry : RunRecoveryRegistry {
 internal class ObservationFlakyRunRecoveryRegistry : RunRecoveryRegistry {
     private val entries = CopyOnWriteArrayList<RunRecoveryEntry>()
     var failSave = true
-    val saveAttempts = AtomicInteger(0)
+    var saveAttempts = 0
 
     override suspend fun load(): List<RunRecoveryEntry> = entries.toList()
 
     override suspend fun save(entry: RunRecoveryEntry) {
-        saveAttempts.incrementAndGet()
+        saveAttempts += 1
         if (failSave) error("recovery storage unavailable")
         if (entry !in entries) entries += entry
     }

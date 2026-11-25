@@ -30,13 +30,12 @@ class RunReconciliationRecoveryOwnershipTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            Dispatchers.Default,
                         ),
                 )
             try {
                 openReconciledSession(holder, gateway)
                 invokePersistedRecoveryEntry(holder, "https://gateway.example/profile", entry)
-                assertTrue(gateway.statusStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.statusStarted.await()
 
                 holder.reconcileOpenedRun(
                     OpenedRunReconcileContext(
@@ -49,7 +48,7 @@ class RunReconciliationRecoveryOwnershipTest {
 
                 assertEquals(listOf(run.id), gateway.statusRequests)
             } finally {
-                gateway.releaseStatus.countDown()
+                gateway.releaseStatus.complete(Unit)
                 holder.close()
             }
         }

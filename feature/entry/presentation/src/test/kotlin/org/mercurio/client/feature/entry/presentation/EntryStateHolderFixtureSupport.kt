@@ -34,7 +34,7 @@ import org.mercurio.client.fixture.SyntheticGatewayBehavior
 import org.mercurio.client.fixture.SyntheticGatewaySession
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.CountDownLatch
+import kotlinx.coroutines.CompletableDeferred
 
 internal val repositoryRoot =
     File(
@@ -204,15 +204,15 @@ internal class BlockingMutationResponseTransport(
     private val shouldBlock: (GatewayHttpRequest) -> Boolean,
 ) : GatewayTransport {
     private val delegate = LoopbackFixtureTransport()
-    val started = CountDownLatch(1)
-    val release = CountDownLatch(1)
+    val started = CompletableDeferred<Unit>()
+    val release = CompletableDeferred<Unit>()
 
     override fun execute(request: GatewayHttpRequest): GatewayHttpResponse {
         val response = delegate.execute(request)
         if (shouldBlock(request)) {
-            started.countDown()
+            started.complete(Unit)
             try {
-                release.await()
+                runBlocking { release.await() }
             } catch (error: InterruptedException) {
                 Thread.currentThread().interrupt()
                 throw error

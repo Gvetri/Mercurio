@@ -189,7 +189,6 @@ class RunReconciliationTerminalPollTest {
                     gateway,
                     settings =
                         ReconciliationHolderSettings(
-                            dispatcher = Dispatchers.Default,
                         ),
                 )
 
@@ -207,14 +206,14 @@ class RunReconciliationTerminalPollTest {
                     endpoint,
                     RunRecoveryEntry(sessionId = session.id, runId = run.id),
                 )
-                assertTrue(gateway.statusStarted.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.statusStarted.await()
 
                 @Suppress("UNCHECKED_CAST")
                 val historyGenerations =
-                    privateField(holder, "authoritativeSessionHistoryGenerations") as MutableMap<SessionId, Long>
+                    holder.testSurface.authoritativeSessionHistoryGenerations
                 historyGenerations[session.id] = (historyGenerations[session.id] ?: 0L) + 1L
 
-                gateway.releaseStatus.countDown()
+                gateway.releaseStatus.complete(Unit)
                 awaitReconciliationState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened?.latestRunState == RunPresentationState.SUCCEEDED &&
@@ -222,7 +221,7 @@ class RunReconciliationTerminalPollTest {
                         opened.messages.any { message -> message.content == "Stored final reply" }
                 }
             } finally {
-                gateway.releaseStatus.countDown()
+                gateway.releaseStatus.complete(Unit)
                 holder.close()
             }
         }

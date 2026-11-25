@@ -1,5 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -88,6 +90,7 @@ class EntryStateHolderFailedSendRecoveryTest {
                     listOf(session.id to FAILED_SEND_DRAFT, session.id to FAILED_SEND_DRAFT),
                     gateway.runRequests,
                 )
+                advanceUntilIdle()
                 assertEquals(listOf(recoveryRun.id), gateway.observedRunIds)
             } finally {
                 holder.close()
@@ -243,7 +246,7 @@ class EntryStateHolderFailedSendRecoveryTest {
             }
         }
 
-    private fun restartedHolder(
+    private fun TestScope.restartedHolder(
         gateway: ReconciliationFakeGateway,
         uncertaintyStorage: ReconciliationUncertaintyStorage,
         draftStore: SessionDraftStore,

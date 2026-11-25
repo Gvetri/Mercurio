@@ -3,6 +3,7 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -228,7 +229,7 @@ class EntryStateHolderFixtureIntegrationTest {
                     holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(targetId, "Renamed"))
                     holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(targetId))
 
-                    assertTrue(transport.started.await(FIXTURE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    runBlocking { transport.started.await() }
                     assertEquals(SessionMutationAction.RENAME, mutation(holder, targetId)?.pendingAction)
                     assertEquals(
                         1,
@@ -246,7 +247,7 @@ class EntryStateHolderFixtureIntegrationTest {
                         },
                     )
                     assertEquals("Original", requireNotNull(holder.uiState.value.sessionList).sessions.single().title)
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     awaitFixtureState(holder) { state ->
                         state.sessionList?.let { list ->
                             list.sessions.singleOrNull()?.title == "Renamed" &&
@@ -254,7 +255,7 @@ class EntryStateHolderFixtureIntegrationTest {
                         } == true
                     }
                 } finally {
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     holder.close()
                 }
             }
@@ -282,7 +283,7 @@ class EntryStateHolderFixtureIntegrationTest {
 
                     holder.onEvent(EntryUiEvent.PinSessionClicked(targetId))
 
-                    assertTrue(transport.started.await(FIXTURE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    runBlocking { transport.started.await() }
                     assertEquals(SessionMutationAction.PIN, requireNotNull(mutation(holder, targetId)).pendingAction)
                     assertEquals(
                         1,
@@ -299,7 +300,7 @@ class EntryStateHolderFixtureIntegrationTest {
                             it.method == "PATCH" && it.path == "/api/sessions/$SERVER_A"
                         },
                     )
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     awaitFixtureState(holder) { state ->
                         state.sessionList?.let { list ->
                             list.sessions.singleOrNull()?.pinned == true &&
@@ -308,7 +309,7 @@ class EntryStateHolderFixtureIntegrationTest {
                         } == true
                     }
                 } finally {
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     holder.close()
                 }
             }
@@ -336,7 +337,7 @@ class EntryStateHolderFixtureIntegrationTest {
 
                     holder.onEvent(EntryUiEvent.UnpinSessionClicked(targetId))
 
-                    assertTrue(transport.started.await(FIXTURE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    runBlocking { transport.started.await() }
                     assertEquals(SessionMutationAction.UNPIN, mutation(holder, targetId)?.pendingAction)
                     assertEquals(
                         1,
@@ -353,7 +354,7 @@ class EntryStateHolderFixtureIntegrationTest {
                             it.method == "PATCH" && it.path == "/api/sessions/$SERVER_A"
                         },
                     )
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     awaitFixtureState(holder) { state ->
                         state.sessionList?.let { list ->
                             list.sessions.singleOrNull()?.pinned == false &&
@@ -362,7 +363,7 @@ class EntryStateHolderFixtureIntegrationTest {
                         } == true
                     }
                 } finally {
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     holder.close()
                 }
             }
@@ -391,7 +392,7 @@ class EntryStateHolderFixtureIntegrationTest {
                     holder.onEvent(EntryUiEvent.DeleteSessionClicked(targetId))
                     holder.onEvent(EntryUiEvent.ConfirmDeleteSessionClicked(targetId))
 
-                    assertTrue(transport.started.await(FIXTURE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                    runBlocking { transport.started.await() }
                     assertEquals(SessionMutationAction.DELETE, mutation(holder, targetId)?.pendingAction)
                     assertEquals(
                         1,
@@ -408,14 +409,14 @@ class EntryStateHolderFixtureIntegrationTest {
                             it.method == "DELETE" && it.path == "/api/sessions/$SERVER_A"
                         },
                     )
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     awaitFixtureState(holder) { state ->
                         state.sessionList?.let { list ->
                             list.sessions.isEmpty() && list.sessionMutations.isEmpty()
                         } == true
                     }
                 } finally {
-                    transport.release.countDown()
+                    transport.release.complete(Unit)
                     holder.close()
                 }
             }

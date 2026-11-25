@@ -11,7 +11,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.GatewayConnection
-import java.util.concurrent.CountDownLatch
+import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSecureSaveTest {
@@ -53,35 +53,35 @@ class EntryStateHolderSecureSaveTest {
 
     @Test
     fun repeated_verification_taps_launch_a_single_verification_while_one_is_in_flight() =
-        runTest {
+        runBlocking {
             val repository = FakeGatewayConnectionRepository()
             var verificationCalls = 0
-            val verifyStarted = CountDownLatch(1)
-            val verifyRelease = CountDownLatch(1)
+            val verifyStarted = CompletableDeferred<Unit>()
+            val verifyRelease = CompletableDeferred<Unit>()
             val holder =
                 holder(
                     repository = repository,
                     verifier = { _, _ ->
                         verificationCalls += 1
-                        verifyStarted.countDown()
-                        assertTrue(verifyRelease.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                        verifyStarted.complete(Unit)
+                        runBlocking { verifyRelease.await() }
                         clientManifestCapabilities()
                     },
-                    dispatcher = Dispatchers.Default,
+                    dispatcher = Dispatchers.IO,
                 )
 
             holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("secure-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            assertTrue(verifyStarted.await(ASYNC_TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+            verifyStarted.await()
             assertTrue(holder.uiState.value.isVerifying)
 
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            runBlocking { holder.awaitStateChangesApplied() }
+            holder.awaitStateChangesApplied()
 
-            verifyRelease.countDown()
+            verifyRelease.complete(Unit)
             awaitState(holder, "connected") { it.isConnected }
 
             assertEquals(1, verificationCalls)

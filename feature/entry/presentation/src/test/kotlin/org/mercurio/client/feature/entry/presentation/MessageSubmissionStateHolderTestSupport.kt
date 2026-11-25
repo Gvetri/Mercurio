@@ -28,7 +28,7 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
-import java.util.concurrent.CountDownLatch
+import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.TimeUnit
 
 private const val TEST_TIMEOUT_MILLIS = 15_000L
@@ -39,7 +39,7 @@ internal fun holder(
     repository: GatewayConnectionRepository =
         DefaultGatewayConnectionRepository(InMemoryGatewayConnectionDataSource()),
     uncertaintyStore: RunSubmissionUncertaintyStore = NoOpRunSubmissionUncertaintyStore,
-    onRunSubmissionSettled: (() -> Unit)? = null,
+    onRunSubmissionSettled: (suspend () -> Unit)? = null,
 ): EntryStateHolder =
     EntryStateHolder(
         initialState = EntryState(isGatewayConnectionConfigured = false),
@@ -55,7 +55,7 @@ internal fun holder(
                 repository,
                 uncertaintyStore,
                 onRunSubmissionSettled = {
-                    gateway.runFinished.countDown()
+                    gateway.runFinished.complete(Unit)
                     onRunSubmissionSettled?.invoke()
                 },
             ),
@@ -138,7 +138,7 @@ internal fun session(id: String): Session =
 internal fun submissionHolderDependencies(
     repository: GatewayConnectionRepository,
     uncertaintyStore: RunSubmissionUncertaintyStore,
-    onRunSubmissionSettled: () -> Unit,
+    onRunSubmissionSettled: suspend () -> Unit,
 ): EntryStateHolderDependencies =
     EntryStateHolderDependencies(
         removeGatewayConnectionUseCase = RemoveGatewayConnection(repository),
@@ -156,11 +156,11 @@ internal class FakeGateway(
     private val mutableRunStatuses = runStatuses.toMutableMap()
     val runRequests = mutableListOf<Pair<SessionId, String>>()
     private val runResults = ArrayDeque<Result<Run>>()
-    val runStarted = CountDownLatch(1)
-    val runFinished = CountDownLatch(1)
-    val releaseRun = CountDownLatch(1)
+    val runStarted = CompletableDeferred<Unit>()
+    val runFinished = CompletableDeferred<Unit>()
+    val releaseRun = CompletableDeferred<Unit>()
     var blockRunCreation = false
-    var onCreateRun: (() -> Unit)? = null
+    var onCreateRun: (suspend () -> Unit)? = null
 
     fun enqueueRun(run: Run) {
         runResults += Result.success(run)
@@ -205,10 +205,8 @@ internal class FakeGateway(
         runRequests += sessionId to input
         onCreateRun?.invoke()
         if (blockRunCreation) {
-            runStarted.countDown()
-            check(releaseRun.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                "Timed out waiting for Run release."
-            }
+            runStarted.complete(Unit)
+            releaseRun.await()
         }
         return runResults.removeFirst().getOrThrow()
     }

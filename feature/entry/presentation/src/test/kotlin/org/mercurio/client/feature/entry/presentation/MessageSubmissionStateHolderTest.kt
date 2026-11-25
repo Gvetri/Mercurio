@@ -105,11 +105,11 @@ class MessageSubmissionStateHolderTest {
                 open(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
                 assertTrue(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 awaitState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened != null && !opened.isSending && opened.latestRun == run
@@ -118,7 +118,7 @@ class MessageSubmissionStateHolderTest {
                 assertEquals(listOf(session.id to "Run once"), gateway.runRequests)
                 assertFalse(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
             } finally {
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }
@@ -139,16 +139,16 @@ class MessageSubmissionStateHolderTest {
                 open(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
                 val stateAtClose = holder.uiState.value
 
                 holder.close()
-                gateway.releaseRun.countDown()
-                assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.releaseRun.complete(Unit)
+                gateway.runFinished.await()
 
                 assertEquals(stateAtClose, holder.uiState.value)
             } finally {
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }
@@ -218,14 +218,14 @@ class MessageSubmissionStateHolderTest {
                 open(holder, gateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                assertTrue(gateway.runStarted.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runStarted.await()
                 assertTrue(requireNotNull(requireNotNull(holder.uiState.value.sessionList).openedSession).isSending)
 
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("New draft"))
                 holder.onEvent(EntryUiEvent.ReturnToSessionListClicked)
                 holder.onEvent(EntryUiEvent.SessionClicked(session.id))
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 awaitState(holder) {
                     val opened = it.sessionList?.openedSession
                     opened != null && !opened.isSending && opened.latestRun == run
@@ -237,7 +237,7 @@ class MessageSubmissionStateHolderTest {
                 assertEquals(run, reopened.latestRun)
                 assertFalse(reopened.isSending)
             } finally {
-                gateway.releaseRun.countDown()
+                gateway.releaseRun.complete(Unit)
                 holder.close()
             }
         }
@@ -547,7 +547,7 @@ class MessageSubmissionStateHolderTest {
                 assertEquals(MessageSendErrorCategory.GATEWAY_REQUEST_FAILED, failed.sendErrorCategory)
                 assertFalse(failed.isSending)
                 assertEquals(1, gateway.runRequests.size)
-                assertTrue(gateway.runFinished.await(TEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS))
+                gateway.runFinished.await()
                 awaitReconciliationCondition {
                     val opened = holder.uiState.value.sessionList?.openedSession
                     opened != null &&

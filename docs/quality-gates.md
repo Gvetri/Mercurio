@@ -314,6 +314,33 @@ rides the checks that already exist:
 - The contract document itself is checked by the `conformance` job, which resolves its links and
   anchors and applies the public documentation safety rules like every other page under `docs/`.
 
+## Test thread coordination
+
+A test source carries no `Thread.sleep`, no `CountDownLatch`, no `CompletableFuture`, and no
+`synchronized` block unless it is declared here. A test that observes a flow and a test that mixes
+suspend work waits through `runTest`, the scheduler (`runCurrent`, `advanceUntilIdle`), Turbine, and
+`CompletableDeferred` or `Channel` gates, so a wait is a scheduler step that can fail rather than a
+wall-clock interval that cannot.
+
+The declarations below keep a real thread or a real process, because a virtual clock cannot produce
+what they measure: a `Mutex` contends only across two threads, and a socket or a child process
+advances only in real time.
+
+| Test source | What it keeps | Why |
+| --- | --- | --- |
+| `feature/entry/data/.../DefaultRunSubmissionUncertaintyStoreTest.kt` | two real threads and their start and read gates | the claim is that one process-wide `Mutex` serializes read-modify-write across a blocking datasource; a single-threaded scheduler cannot interleave inside a blocking call |
+| `feature/entry/data/.../DefaultRunRecoveryRegistryTest.kt` | two real threads and a slow save | same claim for the recovery registry and its shared storage transaction |
+| `feature/entry/data/.../EndpointScopedRunRecoveryRegistryTest.kt` | two real threads and a slow load | same claim for two endpoint-scoped registries over one storage |
+| `feature/entry/data/.../GatewayTransportTest.kt` | a loopback server, a blocking reader thread, and its gates | the claim is that closing an open event stream cancels without draining a socket body |
+| `feature/entry/data/.../RollingLocalDiagnosticsBufferFailureTest.kt` | a real writer blocked inside a blocking storage write | the claim is that a coroutine cancelled while it waits for the buffer's `Mutex` is not reported as a record failure, and only a second thread can hold that `Mutex` across a blocking call |
+| `feature/entry/data/.../RunEventStreamIdleGapTest.kt` | the keep-alive gap itself | the parser measures a real quiet interval between socket frames |
+| `fixtures/mercurio/runner/.../JourneyGatewayProcessTest.kt`, `JourneyTestSupport.kt` | the waits for the gateway child process | the fixture runner drives a real subprocess and reads its output |
+| `buildSrc/.../QualityGateConfigurationTest.kt` | the quiet window after a timed-out child exits | the claim is that a killed descendant stops writing its evidence file |
+
+A source fixture in `buildSrc/.../ArchitectureCheckTest.kt` carries a `synchronized` call as a
+string: it is the deliberate violation the `state-holder/no-monitor-locks` rule must reject, not a
+wait.
+
 ## Changing a declared value
 
 A declared threshold, scope entry, or allowance is a deliberate decision that belongs in the same
