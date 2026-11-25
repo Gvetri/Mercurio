@@ -38,7 +38,7 @@ internal fun SettingsAppUpdatesSection(
     )
     SettingsValueRow(
         label = stringResource(R.string.settings_app_updates_row),
-        value = settingsUpdateSummary(status = status, playManaged = playManaged),
+        value = if (playManaged) stringResource(PLAY_MANAGED_SUMMARY) else settingsUpdateSummary(status),
         detail =
             (status as? AppUpdateStatus.Offered)?.let { offered ->
                 stringResource(
@@ -126,52 +126,46 @@ private fun SettingsUpdateStatusBody(
 }
 
 @Composable
-private fun settingsUpdateSummary(
-    status: AppUpdateStatus,
-    playManaged: Boolean,
-): String =
-    if (playManaged) {
-        stringResource(R.string.settings_app_updates_play_managed)
-    } else {
-        when (status) {
-            AppUpdateStatus.Idle -> stringResource(R.string.settings_app_updates_idle)
-            AppUpdateStatus.Checking -> stringResource(R.string.settings_app_updates_checking)
-            is AppUpdateStatus.UpToDate ->
-                stringResource(R.string.settings_app_updates_up_to_date, status.checkedAt.settingsCheckedTime())
-            is AppUpdateStatus.Offered ->
-                stringResource(
-                    R.string.settings_app_updates_offered,
-                    status.offer.versionName,
-                    status.offer.sourceCommit,
-                )
-            is AppUpdateStatus.Downloading -> stringResource(R.string.settings_app_updates_downloading_phase)
-            is AppUpdateStatus.Verified ->
-                stringResource(R.string.settings_app_updates_verified, status.verifiedAt.settingsCheckedTime())
-            is AppUpdateStatus.PermissionRequired ->
-                stringResource(
-                    R.string.settings_app_updates_waiting_permission,
-                    status.versionName,
-                    status.versionCode,
-                )
-            is AppUpdateStatus.Installed ->
-                stringResource(
-                    R.string.settings_app_updates_installed,
-                    status.versionName,
-                    status.versionCode,
-                )
-            is AppUpdateStatus.Refused,
-            is AppUpdateStatus.DownloadRefused,
-            is AppUpdateStatus.InstallRefused,
-            -> stringResource(refusedRowFor(status))
-            is AppUpdateStatus.Failed -> stringResource(R.string.settings_app_updates_failed_row)
-        }
+private fun settingsUpdateSummary(status: AppUpdateStatus): String =
+    when (status) {
+        AppUpdateStatus.Idle -> stringResource(R.string.settings_app_updates_idle)
+        AppUpdateStatus.Checking -> stringResource(R.string.settings_app_updates_checking)
+        is AppUpdateStatus.UpToDate ->
+            stringResource(R.string.settings_app_updates_up_to_date, status.checkedAt.settingsCheckedTime())
+        is AppUpdateStatus.Offered ->
+            stringResource(
+                R.string.settings_app_updates_offered,
+                status.offer.versionName,
+                status.offer.sourceCommit,
+            )
+        is AppUpdateStatus.Downloading -> stringResource(R.string.settings_app_updates_downloading_phase)
+        is AppUpdateStatus.Verified ->
+            stringResource(R.string.settings_app_updates_verified, status.verifiedAt.settingsCheckedTime())
+        is AppUpdateStatus.PermissionRequired ->
+            stringResource(
+                R.string.settings_app_updates_waiting_permission,
+                status.versionName,
+                status.versionCode,
+            )
+        is AppUpdateStatus.Installed ->
+            stringResource(
+                R.string.settings_app_updates_installed,
+                status.versionName,
+                status.versionCode,
+            )
+        is AppUpdateStatus.Refused,
+        is AppUpdateStatus.DownloadRefused,
+        is AppUpdateStatus.InstallRefused,
+        is AppUpdateStatus.Failed,
+        -> stringResource(failureRowFor(status))
     }
 
-private fun refusedRowFor(status: AppUpdateStatus): Int =
+private fun failureRowFor(status: AppUpdateStatus): Int =
     when {
         status is AppUpdateStatus.DownloadRefused -> R.string.settings_app_updates_download_refused_row
         status is AppUpdateStatus.InstallRefused -> R.string.settings_app_updates_install_refused_row
-        else -> R.string.settings_app_updates_refused_row
+        status is AppUpdateStatus.Refused -> R.string.settings_app_updates_refused_row
+        else -> R.string.settings_app_updates_failed_row
     }
 
 @Composable
@@ -284,6 +278,8 @@ private fun Instant.settingsCheckedTime(): String = SETTINGS_CHECKED_TIME.format
 private fun Instant.settingsPublishedTime(): String = SETTINGS_PUBLISHED_TIME.format(atZone(ZoneOffset.UTC))
 
 private const val PERCENT_FULL = 100f
+
+private val PLAY_MANAGED_SUMMARY = R.string.settings_app_updates_play_managed
 
 private val SETTINGS_CHECKED_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())
 

@@ -156,27 +156,28 @@ class DeterministicGatewayFixture(
         } catch (expectedError: Throwable) {
             cleanupFailures += expectedError
         }
-
-        val activeProcess = process
-        if (activeProcess != null) {
-            var stopFailed = false
-            try {
-                activeProcess.stop()
-            } catch (expectedError: Throwable) {
-                stopFailed = true
-                cleanupFailures += expectedError
-            }
-            if (activeProcess.isRunning) {
-                cleanupFailures += IllegalStateException("Deterministic Gateway process did not stop.")
-            }
-            if (!stopFailed && !activeProcess.isRunning) {
-                process = null
-            }
-        }
+        stopActiveProcess(cleanupFailures)
         lifecycleState = FixtureLifecycleState.TORN_DOWN
 
         if (cleanupFailures.isNotEmpty()) {
             throw FixtureCleanupException("Deterministic Gateway fixture cleanup failed.", cleanupFailures)
+        }
+    }
+
+    private fun stopActiveProcess(cleanupFailures: MutableList<Throwable>) {
+        val activeProcess = process ?: return
+        var stopFailed = false
+        try {
+            activeProcess.stop()
+        } catch (expectedError: Throwable) {
+            stopFailed = true
+            cleanupFailures += expectedError
+        }
+        if (activeProcess.isRunning) {
+            cleanupFailures += IllegalStateException("Deterministic Gateway process did not stop.")
+        }
+        if (!stopFailed && !activeProcess.isRunning) {
+            process = null
         }
     }
 

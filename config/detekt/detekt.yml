@@ -29,7 +29,7 @@ comments:
 complexity:
   CyclomaticComplexMethod:
     active: true
-    allowedComplexity: 12
+    allowedComplexity: 10
     excludes: ['**/test/**', '**/androidTest/**']
   CognitiveComplexMethod:
     active: true

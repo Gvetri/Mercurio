@@ -127,7 +127,17 @@ internal fun EntryStateHolder.uncertainObservationState(
         isStreaming = false,
     )
 
-internal fun EntryStateHolder.hasUnresolvedSubmission(sessionId: SessionId): Boolean {
+internal fun EntryStateHolder.hasUnresolvedSubmission(sessionId: SessionId): Boolean =
+    hasStoredUnresolvedSubmission(sessionId) || hasUncertainSubmissionFor(sessionId)
+
+private fun EntryStateHolder.hasStoredUnresolvedSubmission(sessionId: SessionId): Boolean =
+    unresolvedSubmissionSessions.contains(sessionId) ||
+        recoveryUnavailableSessions.contains(sessionId) ||
+        pendingCreateSessions.contains(recoverySessionKey(sessionId)) ||
+        runSubmissionUncertaintyStore.contains(pendingRunSubmissionKey(sessionId)) ||
+        !unresolvedLocalRunIds[recoverySessionKey(sessionId)].isNullOrEmpty()
+
+private fun EntryStateHolder.hasUncertainSubmissionFor(sessionId: SessionId): Boolean {
     val hasUncertainRun = uncertainSubmissionRunIds.containsKey(sessionId)
     val uncertainRunId =
         if (hasUncertainRun) {
@@ -139,18 +149,11 @@ internal fun EntryStateHolder.hasUnresolvedSubmission(sessionId: SessionId): Boo
         uncertainRunId?.let { runId ->
             visibleSessionRuns(sessionId).lastOrNull { it.id == runId }
         }
-    return unresolvedSubmissionSessions.contains(sessionId) ||
-        recoveryUnavailableSessions.contains(sessionId) ||
-        pendingCreateSessions.contains(recoverySessionKey(sessionId)) ||
-        runSubmissionUncertaintyStore.contains(pendingRunSubmissionKey(sessionId)) ||
-        !unresolvedLocalRunIds[recoverySessionKey(sessionId)].isNullOrEmpty() ||
+    return hasUncertainRun &&
         (
-            uncertainRunId != null &&
-                (
-                    sessionSendErrors[sessionId] == MessageSendErrorCategory.UNCERTAIN ||
-                        uncertainRun == null ||
-                        !uncertainRun.isActive()
-                )
+            sessionSendErrors[sessionId] == MessageSendErrorCategory.UNCERTAIN ||
+                uncertainRun == null ||
+                !uncertainRun.isActive()
         )
 }
 

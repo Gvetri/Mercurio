@@ -103,33 +103,39 @@ internal suspend fun EntryStateHolder.markRunObservationUncertain(
         if (previous.state.isTerminal() || !previous.run.isActive()) return@applyStateChange
         val next = RunEventStateTransition.interrupted(previous)
         rememberObservationState(next)
-        val current = mutableUiState.value.sessionList ?: return@applyStateChange
-        val opened = current.openedSession?.takeIf { it.session.id == sessionId } ?: return@applyStateChange
-        val knownRuns = visibleSessionRuns(sessionId)
-        val latestRun = knownRuns.latestRun()
-        val latestObservation = latestObservationState(sessionId, knownRuns)
-        val latestState =
-            latestObservation?.state
-                ?: next.state.takeIf { latestRun?.id == runId }
-                ?: latestRun?.toRunPresentationState()
-        val latestResponse =
-            observedMessageUiState(latestObservation)
-                ?: next.takeIf { latestRun?.id == runId }?.let { observedMessageUiState(it) }
-        mutableUiState.value =
-            mutableUiState.value.copy(
-                sessionList =
-                    current.copy(
-                        openedSession =
-                            opened.copy(
-                                latestRunState = latestState,
-                                latestRunRetryAvailable = latestRunRetryAvailable(knownRuns, latestState),
-                                activeResponse = latestResponse,
-                            ),
-                    ),
-            )
-
-        Unit
+        applyUncertainObservationUi(sessionId, runId, next)
     }
+}
+
+private fun EntryStateHolder.applyUncertainObservationUi(
+    sessionId: SessionId,
+    runId: RunId,
+    next: RunObservationState,
+) {
+    val current = mutableUiState.value.sessionList ?: return
+    val opened = current.openedSession?.takeIf { it.session.id == sessionId } ?: return
+    val knownRuns = visibleSessionRuns(sessionId)
+    val latestRun = knownRuns.latestRun()
+    val latestObservation = latestObservationState(sessionId, knownRuns)
+    val latestState =
+        latestObservation?.state
+            ?: next.state.takeIf { latestRun?.id == runId }
+            ?: latestRun?.toRunPresentationState()
+    val latestResponse =
+        observedMessageUiState(latestObservation)
+            ?: next.takeIf { latestRun?.id == runId }?.let { observedMessageUiState(it) }
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    openedSession =
+                        opened.copy(
+                            latestRunState = latestState,
+                            latestRunRetryAvailable = latestRunRetryAvailable(knownRuns, latestState),
+                            activeResponse = latestResponse,
+                        ),
+                ),
+        )
 }
 
 internal fun EntryStateHolder.observationStateFor(

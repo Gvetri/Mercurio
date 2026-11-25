@@ -95,46 +95,54 @@ internal fun EntryStateHolder.beginReconciliation(
     sessionId: SessionId,
     requestConnectionGeneration: Long,
     requestSessionGeneration: Long,
-): Boolean =
-    run {
-        val opened = mutableUiState.value.sessionList?.openedSession
-        val reconciliationIsSuperseded =
-            connectionGeneration != requestConnectionGeneration ||
-                sessionRequestGeneration != requestSessionGeneration ||
-                opened?.session?.id != sessionId ||
-                reconcilingSessions[sessionId] == requestSessionGeneration
-        if (reconciliationIsSuperseded) {
-            false
-        } else {
-            reconcilingSessions[sessionId] = requestSessionGeneration
-            submitStateChange {
-                if (
-                    connectionGeneration != requestConnectionGeneration ||
-                    sessionRequestGeneration != requestSessionGeneration ||
-                    reconcilingSessions[sessionId] != requestSessionGeneration
-                ) {
-                    return@submitStateChange
-                }
-                val current = mutableUiState.value.sessionList ?: return@submitStateChange
-                val openedNow =
-                    current.openedSession?.takeIf { it.session.id == sessionId }
-                        ?: return@submitStateChange
-                mutableUiState.value =
-                    mutableUiState.value.copy(
-                        sessionList =
-                            current.copy(
-                                openedSession =
-                                    openedNow.copy(
-                                        isRefreshing = true,
-                                        isReconciliationInProgress = true,
-                                        errorCategory = null,
-                                    ),
-                            ),
-                    )
-            }
-            true
-        }
+): Boolean {
+    val opened = mutableUiState.value.sessionList?.openedSession
+    if (isReconciliationSuperseded(sessionId, opened, requestConnectionGeneration, requestSessionGeneration)) {
+        return false
     }
+    reconcilingSessions[sessionId] = requestSessionGeneration
+    submitStateChange {
+        applyReconciliationStarted(sessionId, requestConnectionGeneration, requestSessionGeneration)
+    }
+    return true
+}
+
+private fun EntryStateHolder.isReconciliationSuperseded(
+    sessionId: SessionId,
+    opened: OpenSessionUiState?,
+    requestConnectionGeneration: Long,
+    requestSessionGeneration: Long,
+): Boolean =
+    connectionGeneration != requestConnectionGeneration ||
+        sessionRequestGeneration != requestSessionGeneration ||
+        opened?.session?.id != sessionId ||
+        reconcilingSessions[sessionId] == requestSessionGeneration
+
+private fun EntryStateHolder.applyReconciliationStarted(
+    sessionId: SessionId,
+    requestConnectionGeneration: Long,
+    requestSessionGeneration: Long,
+) {
+    val current =
+        mutableUiState.value.sessionList?.takeIf {
+            connectionGeneration == requestConnectionGeneration &&
+                sessionRequestGeneration == requestSessionGeneration &&
+                reconcilingSessions[sessionId] == requestSessionGeneration
+        } ?: return
+    val openedNow = current.openedSession?.takeIf { it.session.id == sessionId } ?: return
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    openedSession =
+                        openedNow.copy(
+                            isRefreshing = true,
+                            isReconciliationInProgress = true,
+                            errorCategory = null,
+                        ),
+                ),
+        )
+}
 
 /**
  * Releases the reconciliation claim and clears its visible in-progress state on the

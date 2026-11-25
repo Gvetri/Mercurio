@@ -66,6 +66,16 @@ private fun EntryContent(
     if (state.isSettingsOpen) {
         SettingsBackHandling(state, onEvent)
     }
+    EntryPrimaryContent(state = state, onEvent = onEvent, sessionList = sessionList)
+    EntryConfirmations(state = state, onEvent = onEvent, sessionList = sessionList)
+}
+
+@Composable
+private fun EntryPrimaryContent(
+    state: EntryUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+    sessionList: SessionListUiState?,
+) {
     if (state.isErrorReportingConsentRequired) {
         ErrorReportingConsentContent(onEvent = onEvent, modifier = Modifier.fillMaxSize())
     } else if (state.localDiagnostics.isOpen) {
@@ -90,6 +100,14 @@ private fun EntryContent(
     } else {
         ConnectionContent(state = state, onEvent = onEvent)
     }
+}
+
+@Composable
+private fun EntryConfirmations(
+    state: EntryUiState,
+    onEvent: (EntryUiEvent) -> Unit,
+    sessionList: SessionListUiState?,
+) {
     if (state.isRemoveConfirmationOpen) {
         RemoveGatewayConnectionConfirmation(onEvent = onEvent)
     }

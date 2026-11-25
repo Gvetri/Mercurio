@@ -13,32 +13,31 @@ import org.mercurio.client.feature.entry.domain.toRunPresentationState
 internal suspend fun EntryStateHolder.applyReconciliation(
     request: AuthoritativeReconciliationRequest,
     reconciliation: AuthoritativeRunReconciliation,
-): ReconciledRunApplication =
-    run {
-        if (!isCurrentReconciliationRequest(request)) return@run ReconciledRunApplication()
-        val shouldUpdateVisibleUi =
-            request.updateVisibleUi &&
-                request.sessionGeneration != null &&
-                sessionRequestGeneration == request.sessionGeneration
-        val run = reconciliation.run
-        val decision = reconciliation.decision
-        val confirmed = decision == RunReconciliationDecision.CONFIRMED
-        val terminalRunIds = terminalRunIdsFor(request.sessionId, reconciliation)
-        val session = openedSessionFor(request.sessionId).takeIf { shouldUpdateVisibleUi }
-        if (confirmed && !run.isActive()) {
-            recordTerminalPollReconciliation(request.sessionId, run)
+): ReconciledRunApplication {
+    if (!isCurrentReconciliationRequest(request)) return ReconciledRunApplication()
+    val shouldUpdateVisibleUi =
+        request.updateVisibleUi && sessionRequestGeneration == request.sessionGeneration
+    val run = reconciliation.run
+    val confirmed = reconciliation.decision == RunReconciliationDecision.CONFIRMED
+    val confirmedTerminalRun = confirmed && !run.isActive()
+    val terminalRunIds = terminalRunIdsFor(request.sessionId, reconciliation)
+    val session = openedSessionFor(request.sessionId).takeIf { shouldUpdateVisibleUi }
+    if (confirmedTerminalRun) {
+        recordTerminalPollReconciliation(request.sessionId, run)
+    }
+    val release =
+        if (historyGenerationMatches(request.sessionId, request.historyGeneration)) {
+            recordReconciledRunState(request.sessionId, reconciliation, terminalRunIds)
+        } else {
+            null
         }
-        val historyMatches = historyGenerationMatches(request.sessionId, request.historyGeneration)
-        val release =
-            if (historyMatches) {
-                recordReconciledRunState(request.sessionId, reconciliation, terminalRunIds)
-            } else {
-                null
-            }
-        val terminalRun = confirmed && !run.isActive() && historyConfirmsTerminalRun(request.sessionId, run.id)
-        if (release == null && !terminalRun) return@run ReconciledRunApplication()
+    val terminalRun = confirmedTerminalRun && historyConfirmsTerminalRun(request.sessionId, run.id)
+    return if (release == null && !terminalRun) {
+        ReconciledRunApplication()
+    } else {
         applyReconciledRelease(request, reconciliation, release, session, confirmed)
     }
+}
 
 internal fun EntryStateHolder.confirmedRecoveryHandles(
     request: AuthoritativeReconciliationRequest,
@@ -149,11 +148,10 @@ internal suspend fun EntryStateHolder.resolveBoundSubmission(
 ): Boolean {
     val pendingKey = pendingRunSubmissionKey(sessionId)
     val uncertaintySnapshot = runSubmissionUncertaintyStore.snapshot(pendingKey)
-    val unresolvedAttemptId =
-        unresolvedLocalRunAttempts[recoverySessionKey(sessionId)]?.get(run.id)
     val trackedAttemptId =
-        uncertainSubmissionAttemptIds[sessionId] ?: unresolvedAttemptId
-    val hasBoundSubmission =
+        uncertainSubmissionAttemptIds[sessionId]
+            ?: unresolvedLocalRunAttempts[recoverySessionKey(sessionId)]?.get(run.id)
+    val boundSubmission =
         uncertainSubmissionRunIds[sessionId] == run.id ||
             unresolvedLocalRunIds[recoverySessionKey(sessionId)]?.contains(run.id) == true ||
             uncertaintySnapshot?.boundRunId == run.id
@@ -161,15 +159,12 @@ internal suspend fun EntryStateHolder.resolveBoundSubmission(
         trackedAttemptId == null ||
             uncertaintySnapshot == null ||
             uncertaintySnapshot.attemptId == trackedAttemptId
-    val isBoundSubmission = hasBoundSubmission && markerMatchesTrackedAttempt
-    val uncertaintyRemoved =
-        !isBoundSubmission ||
-            run.isActive() ||
-            uncertaintySnapshot == null ||
-            runCatchingSuspend {
-                runSubmissionUncertaintyStore.removeIfSnapshotMatches(pendingKey, uncertaintySnapshot)
-            }.getOrDefault(false)
-    return isBoundSubmission && uncertaintyRemoved
+    if (!boundSubmission || !markerMatchesTrackedAttempt) return false
+    return run.isActive() ||
+        uncertaintySnapshot == null ||
+        runCatchingSuspend {
+            runSubmissionUncertaintyStore.removeIfSnapshotMatches(pendingKey, uncertaintySnapshot)
+        }.getOrDefault(false)
 }
 
 internal fun EntryStateHolder.updateConfirmedRunSessionUi(

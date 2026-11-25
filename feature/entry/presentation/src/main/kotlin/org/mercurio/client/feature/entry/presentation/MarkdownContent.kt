@@ -64,44 +64,45 @@ internal fun MarkdownContent(
         verticalArrangement = Arrangement.spacedBy(blockSpacing ?: spacing.s),
     ) {
         blocks.forEach { block ->
-            when (block) {
-                is MarkdownBlock.Paragraph -> MarkdownParagraph(spans = block.spans, actions = actions)
-                is MarkdownBlock.Heading -> MarkdownHeading(heading = block, actions = actions)
-                is MarkdownBlock.Blockquote -> MarkdownBlockquote(spans = block.spans, actions = actions)
-                is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
-                is MarkdownBlock.BulletList ->
-                    MarkdownList(
-                        items = block.items.map { item -> RenderedItem(marker = BULLET_MARKER, spans = item) },
-                        actions = actions,
-                    )
-                is MarkdownBlock.NumberedList ->
-                    MarkdownList(
-                        items =
-                            block.items.map { item ->
-                                RenderedItem(marker = item.marker, spans = item.spans)
-                            },
-                        actions = actions,
-                    )
-                is MarkdownBlock.CodeBlock -> MarkdownCodeBlock(block = block, onCopy = actions.copy)
-                is MarkdownBlock.Table ->
-                    MarkdownTableCard(
-                        block = block,
-                        actions = actions,
-                        onExpand = { onTableExpand(block) },
-                    )
-                is MarkdownBlock.DisplayMath ->
-                    MarkdownDisplayMath(expression = block.expression, source = block.source)
-            }
+            MarkdownBlockContent(block = block, actions = actions, onTableExpand = onTableExpand)
         }
     }
 }
 
 @Composable
-private fun MarkdownParagraph(
-    spans: List<MarkdownSpan>,
+private fun MarkdownBlockContent(
+    block: MarkdownBlock,
     actions: MessageActions,
+    onTableExpand: (MarkdownBlock.Table) -> Unit,
 ) {
-    MarkdownSpans(spans = spans, actions = actions)
+    when (block) {
+        is MarkdownBlock.Paragraph -> MarkdownSpans(spans = block.spans, actions = actions)
+        is MarkdownBlock.Heading -> MarkdownHeading(heading = block, actions = actions)
+        is MarkdownBlock.Blockquote -> MarkdownBlockquote(spans = block.spans, actions = actions)
+        is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
+        is MarkdownBlock.BulletList ->
+            MarkdownList(
+                items = block.items.map { item -> RenderedItem(marker = BULLET_MARKER, spans = item) },
+                actions = actions,
+            )
+        is MarkdownBlock.NumberedList ->
+            MarkdownList(
+                items =
+                    block.items.map { item ->
+                        RenderedItem(marker = item.marker, spans = item.spans)
+                    },
+                actions = actions,
+            )
+        is MarkdownBlock.CodeBlock -> MarkdownCodeBlock(block = block, onCopy = actions.copy)
+        is MarkdownBlock.Table ->
+            MarkdownTableCard(
+                block = block,
+                actions = actions,
+                onExpand = { onTableExpand(block) },
+            )
+        is MarkdownBlock.DisplayMath ->
+            MarkdownDisplayMath(expression = block.expression, source = block.source)
+    }
 }
 
 @Composable

@@ -217,32 +217,11 @@ internal object GatewayJsonParser {
         val eventName = GatewayJsonFields.requiredNonBlankString(root, "event", operation)
         val eventType = GatewayJsonElements.eventTypeFor(eventName) ?: return null
         val runId = RunId(GatewayJsonFields.requiredNonBlankString(root, "run_id", operation))
-        val status =
-            GatewayJsonFields.optionalString(root, "status", operation)
-                ?: when (eventType) {
-                    RunEventType.RUNNING, RunEventType.MESSAGE_DELTA -> "running"
-                    RunEventType.COMPLETING -> "completing"
-                    RunEventType.COMPLETED -> "succeeded"
-                    RunEventType.FAILED -> "failed"
-                    RunEventType.CANCELLED -> "cancelled"
-                    RunEventType.STARTED,
-                    RunEventType.TEXT_DELTA,
-                    RunEventType.SUCCEEDED,
-                    RunEventType.INTERRUPTED,
-                    -> ""
-                }
-        val text =
-            if (eventType == RunEventType.MESSAGE_DELTA) {
-                GatewayJsonFields.optionalString(root, "delta", operation)
-                    ?: invalid("$operation.$eventName", "missing required field 'delta'")
-            } else {
-                null
-            }
         return RunEvent(
             type = eventType,
             runId = runId,
-            status = status,
-            text = text,
+            status = runEventStatus(operation, root, eventType),
+            text = runEventText(operation, root, eventName, eventType),
         )
     }
 }
@@ -515,6 +494,41 @@ private fun invalid(
         category = GatewayErrorCategory.INVALID_RESPONSE,
         message = "Invalid Gateway response for $operation: $detail.",
     )
+
+private fun runEventStatus(
+    operation: String,
+    root: JsonObject,
+    eventType: RunEventType,
+): String =
+    GatewayJsonFields.optionalString(root, "status", operation)
+        ?: eventType.defaultStatus()
+
+private fun RunEventType.defaultStatus(): String =
+    when (this) {
+        RunEventType.RUNNING, RunEventType.MESSAGE_DELTA -> "running"
+        RunEventType.COMPLETING -> "completing"
+        RunEventType.COMPLETED -> "succeeded"
+        RunEventType.FAILED -> "failed"
+        RunEventType.CANCELLED -> "cancelled"
+        RunEventType.STARTED,
+        RunEventType.TEXT_DELTA,
+        RunEventType.SUCCEEDED,
+        RunEventType.INTERRUPTED,
+        -> ""
+    }
+
+private fun runEventText(
+    operation: String,
+    root: JsonObject,
+    eventName: String,
+    eventType: RunEventType,
+): String? =
+    if (eventType == RunEventType.MESSAGE_DELTA) {
+        GatewayJsonFields.optionalString(root, "delta", operation)
+            ?: invalid("$operation.$eventName", "missing required field 'delta'")
+    } else {
+        null
+    }
 
 internal data class RunAdmission(
     val runId: RunId,

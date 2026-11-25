@@ -241,14 +241,13 @@ deliberate, each with its reason here:
 
   | Rule | Value | Measured on 2026-11-25 |
   | --- | --- | --- |
-  | `CyclomaticComplexMethod` | `allowedComplexity: 12` | zero findings at 12 |
+  | `CyclomaticComplexMethod` | `allowedComplexity: 10` | zero findings at 10 |
   | `CognitiveComplexMethod` | `allowedComplexity: 15` | zero findings at 15 |
   | `LongMethod` | `allowedLines: 50` | zero findings at 50 |
   | `LargeClass` | `allowedLines: 300` | zero findings at 300 |
 
-  The ratchet is two steps: cyclomatic complexity lands at 12 in this change and at 10 in the next
-  one, and every finding is refactored rather than suppressed, because no baseline exists to absorb
-  it. The test-source exclusion is deliberate: a test may build a long scenario or a wide branch
+  Every finding is refactored rather than suppressed, because no baseline exists to absorb it. The
+  test-source exclusion is deliberate: a test may build a long scenario or a wide branch
   table without making the production code harder to read, and the rules above the threshold keep
   the production sources measurable. Two defaults shape the refactor: `TooManyFunctions` counts the
   functions of a class and of a file separately, so a helper moved to the top level still has a home,
