@@ -93,57 +93,88 @@ internal class JourneyGatewayBehavior(
     fun telemetryJson(): String =
         buildString {
             append("""{"scenario":${scenario.name.jsonValue()},"provenance":${scenario.hermesRevision.jsonValue()}""")
-            append(""","requests":[""")
-            append(
-                requests.joinToString(",") { request ->
-                    """{"method":${request.method.jsonValue()},"path":${request.path.jsonValue()}}"""
-                },
-            )
-            append(']')
-            append(""","session_mutations":[""")
-            append(
-                sessionMutations.joinToString(",") { (operation, sessionId) ->
-                    """{"operation":${operation.jsonValue()},"session_id":${sessionId.jsonValue()}}"""
-                },
-            )
-            append(']')
+            appendRequests(requests)
+            appendSessionMutations(sessionMutations)
             append(""","run_status_requests":${runStatusRequests.get()}""")
-            append(""","run_creates":{""")
-            append(
-                scenario.sessions.joinToString(",") { session ->
-                    """${session.id.jsonValue()}:${createdRunCounters[session.id]?.get() ?: 0}"""
-                },
-            )
-            append('}')
-            append(""","run_selections":[""")
-            append(
-                runSelections.joinToString(",") { selection ->
-                    "{\"session_id\":${selection.sessionId.jsonValue()}," +
-                        "\"model\":${selection.model.jsonValue()}," +
-                        "\"effort\":${selection.effort.jsonValue()}," +
-                        "\"accepted\":${selection.accepted}}"
-                },
-            )
-            append(']')
+            appendRunCreates(scenario.sessions, createdRunCounters)
+            appendRunSelections(runSelections)
             append(""","interrupted_run_ids":[${interruptedRunIds.joinToString(",") { it.jsonValue() }}]""")
-            append(""","error_reports":[""")
-            append(
-                errorReports.joinToString(",") { (release, environment) ->
-                    """{"release":${release.jsonValue()},"environment":${environment.jsonValue()}}"""
-                },
-            )
-            append(']')
-            append(""","sse_connections":{""")
-            append(
-                scenario.runs.joinToString(",") { run ->
-                    val opened = sseOpened[run.runId]?.get() ?: 0
-                    val closed = sseClosed[run.runId]?.get() ?: 0
-                    """${run.runId.jsonValue()}:{"opened":$opened,"closed":$closed}"""
-                },
-            )
-            append('}')
+            appendErrorReports(errorReports)
+            appendSseConnections(scenario.runs, sseOpened, sseClosed)
             append('}')
         }
+}
 
-    private fun String.jsonValue(): String = GatewayHttpSupport.quote(this)
+private fun String.jsonValue(): String = GatewayHttpSupport.quote(this)
+
+private fun StringBuilder.appendRequests(requests: List<SyntheticGatewayRequest>) {
+    append(""","requests":[""")
+    append(
+        requests.joinToString(",") { request ->
+            """{"method":${request.method.jsonValue()},"path":${request.path.jsonValue()}}"""
+        },
+    )
+    append(']')
+}
+
+private fun StringBuilder.appendSessionMutations(sessionMutations: List<Pair<String, String>>) {
+    append(""","session_mutations":[""")
+    append(
+        sessionMutations.joinToString(",") { (operation, sessionId) ->
+            """{"operation":${operation.jsonValue()},"session_id":${sessionId.jsonValue()}}"""
+        },
+    )
+    append(']')
+}
+
+private fun StringBuilder.appendRunCreates(
+    sessions: List<JourneySession>,
+    createdRunCounters: Map<String, AtomicInteger>,
+) {
+    append(""","run_creates":{""")
+    append(
+        sessions.joinToString(",") { session ->
+            """${session.id.jsonValue()}:${createdRunCounters[session.id]?.get() ?: 0}"""
+        },
+    )
+    append('}')
+}
+
+private fun StringBuilder.appendRunSelections(runSelections: List<JourneyRunSelectionRecord>) {
+    append(""","run_selections":[""")
+    append(
+        runSelections.joinToString(",") { selection ->
+            "{\"session_id\":${selection.sessionId.jsonValue()}," +
+                "\"model\":${selection.model.jsonValue()}," +
+                "\"effort\":${selection.effort.jsonValue()}," +
+                "\"accepted\":${selection.accepted}}"
+        },
+    )
+    append(']')
+}
+
+private fun StringBuilder.appendErrorReports(errorReports: List<Pair<String, String>>) {
+    append(""","error_reports":[""")
+    append(
+        errorReports.joinToString(",") { (release, environment) ->
+            """{"release":${release.jsonValue()},"environment":${environment.jsonValue()}}"""
+        },
+    )
+    append(']')
+}
+
+private fun StringBuilder.appendSseConnections(
+    runs: List<JourneyRunScript>,
+    sseOpened: Map<String, AtomicInteger>,
+    sseClosed: Map<String, AtomicInteger>,
+) {
+    append(""","sse_connections":{""")
+    append(
+        runs.joinToString(",") { run ->
+            val opened = sseOpened[run.runId]?.get() ?: 0
+            val closed = sseClosed[run.runId]?.get() ?: 0
+            """${run.runId.jsonValue()}:{"opened":$opened,"closed":$closed}"""
+        },
+    )
+    append('}')
 }

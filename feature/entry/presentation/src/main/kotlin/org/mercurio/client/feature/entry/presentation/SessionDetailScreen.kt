@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.mercurio.client.feature.entry.domain.RunId
+import org.mercurio.client.feature.entry.domain.SessionId
 
 /**
  * The approved Chat composition: the 40 dp bar island, and one transcript island that holds the
@@ -52,23 +53,8 @@ internal fun SessionDetailContent(
     val items = rememberChatItems(state.messages, state.activeResponse)
     val messageActions = rememberMessageActions()
     val callbacks =
-        remember(detail, messageActions, state.session.id) {
-            ChatCallbacks(
-                actions = messageActions,
-                retryEnabled = detail.retryEnabled(chatCanSubmit(detail)),
-                onRetry = { runId: RunId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
-                onTableExpand = { table -> openTable = table },
-                onEvent = onEvent,
-            )
-        }
-    LaunchedEffect(items) {
-        if (items.isEmpty()) return@LaunchedEffect
-        val newestIndex = items.lastIndex
-        repeat(PIN_ATTEMPTS) {
-            if (transcriptScroll.settleNewestItemPin(newestIndex)) return@LaunchedEffect
-            withFrameNanos { }
-        }
-    }
+        rememberChatCallbacks(detail, messageActions, state.session.id, { table -> openTable = table }, onEvent)
+    PinNewestTranscriptItem(items = items, transcriptScroll = transcriptScroll)
     val table = openTable
     Column(
         modifier = modifier.fillMaxSize().padding(CHAT_ISLAND_GUTTER),
@@ -112,6 +98,39 @@ private fun rememberChatItems(
     remember(messages, activeResponse) {
         chatTranscriptItems(messages + listOfNotNull(activeResponse))
     }
+
+@Composable
+private fun rememberChatCallbacks(
+    detail: SessionDetailState,
+    messageActions: MessageActions,
+    sessionId: SessionId,
+    onTableExpand: (MarkdownBlock.Table) -> Unit,
+    onEvent: (EntryUiEvent) -> Unit,
+): ChatCallbacks =
+    remember(detail, messageActions, sessionId) {
+        ChatCallbacks(
+            actions = messageActions,
+            retryEnabled = detail.retryEnabled(chatCanSubmit(detail)),
+            onRetry = { runId: RunId -> onEvent(EntryUiEvent.RetryRunClicked(runId)) },
+            onTableExpand = onTableExpand,
+            onEvent = onEvent,
+        )
+    }
+
+@Composable
+private fun PinNewestTranscriptItem(
+    items: List<ChatTranscriptItem>,
+    transcriptScroll: TranscriptScroll,
+) {
+    LaunchedEffect(items) {
+        if (items.isEmpty()) return@LaunchedEffect
+        val newestIndex = items.lastIndex
+        repeat(PIN_ATTEMPTS) {
+            if (transcriptScroll.settleNewestItemPin(newestIndex)) return@LaunchedEffect
+            withFrameNanos { }
+        }
+    }
+}
 
 @Composable
 private fun ChatTopBar(

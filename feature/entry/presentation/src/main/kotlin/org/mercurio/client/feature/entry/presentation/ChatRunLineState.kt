@@ -25,62 +25,74 @@ internal fun chatRunLineState(detail: SessionDetailState): ChatRunLineState {
     return state.ownedRunLine(runId, gateway) ?: state.historyLine(gateway)
 }
 
-@Suppress("CyclomaticComplexMethod")
 private fun OpenSessionUiState.ownedRunLine(
     runId: RunId?,
     gateway: ChatRunRight.Gateway,
 ): ChatRunLineState? =
     when {
-        isReconciliationInProgress ->
-            ChatRunLineState(
-                UiText.Resource(R.string.chat_run_state_reconciling),
-                null,
-                gateway,
-                active = true,
-                error = false,
-            )
-        chatStreamingRun() ->
-            ChatRunLineState(
-                state =
-                    runState(
-                        R.string.chat_run_state_streaming,
-                        R.string.chat_run_state_streaming_unlabelled,
-                        runId,
-                    ),
-                dim = null,
-                right = ChatRunRight.Action(UiText.Resource(R.string.chat_stop), EntryUiEvent.StopRunClicked),
-                active = true,
-                error = false,
-            )
-        isSending ->
-            ChatRunLineState(
-                UiText.Resource(R.string.chat_run_state_sending),
-                uiText(R.string.chat_run_pending, chatPendingCount().coerceAtLeast(1)),
-                gateway,
-                active = true,
-                error = false,
-            )
-        latestRunState == RunPresentationState.FAILED ->
-            ChatRunLineState(
-                runState(R.string.chat_run_state_failed, R.string.chat_run_state_failed_unlabelled, runId),
-                null,
-                gateway,
-                active = false,
-                error = true,
-            )
-        chatStaleRun() ->
-            ChatRunLineState(
-                runState(R.string.chat_run_state_stale, R.string.chat_run_state_stale_unlabelled, runId),
-                null,
-                ChatRunRight.Action(
-                    UiText.Resource(R.string.chat_refresh_history),
-                    EntryUiEvent.RefreshSessionsClicked,
-                ),
-                active = false,
-                error = true,
-            )
+        isReconciliationInProgress -> reconcilingRunLine(gateway)
+        chatStreamingRun() -> streamingRunLine(runId)
+        isSending -> sendingRunLine(gateway)
+        latestRunState == RunPresentationState.FAILED -> failedRunLine(runId, gateway)
+        chatStaleRun() -> staleRunLine(runId)
         else -> null
     }
+
+private fun reconcilingRunLine(gateway: ChatRunRight.Gateway): ChatRunLineState =
+    ChatRunLineState(
+        UiText.Resource(R.string.chat_run_state_reconciling),
+        null,
+        gateway,
+        active = true,
+        error = false,
+    )
+
+private fun streamingRunLine(runId: RunId?): ChatRunLineState =
+    ChatRunLineState(
+        state =
+            runState(
+                R.string.chat_run_state_streaming,
+                R.string.chat_run_state_streaming_unlabelled,
+                runId,
+            ),
+        dim = null,
+        right = ChatRunRight.Action(UiText.Resource(R.string.chat_stop), EntryUiEvent.StopRunClicked),
+        active = true,
+        error = false,
+    )
+
+private fun OpenSessionUiState.sendingRunLine(gateway: ChatRunRight.Gateway): ChatRunLineState =
+    ChatRunLineState(
+        UiText.Resource(R.string.chat_run_state_sending),
+        uiText(R.string.chat_run_pending, chatPendingCount().coerceAtLeast(1)),
+        gateway,
+        active = true,
+        error = false,
+    )
+
+private fun failedRunLine(
+    runId: RunId?,
+    gateway: ChatRunRight.Gateway,
+): ChatRunLineState =
+    ChatRunLineState(
+        runState(R.string.chat_run_state_failed, R.string.chat_run_state_failed_unlabelled, runId),
+        null,
+        gateway,
+        active = false,
+        error = true,
+    )
+
+private fun staleRunLine(runId: RunId?): ChatRunLineState =
+    ChatRunLineState(
+        runState(R.string.chat_run_state_stale, R.string.chat_run_state_stale_unlabelled, runId),
+        null,
+        ChatRunRight.Action(
+            UiText.Resource(R.string.chat_refresh_history),
+            EntryUiEvent.RefreshSessionsClicked,
+        ),
+        active = false,
+        error = true,
+    )
 
 private fun OpenSessionUiState.historyLine(gateway: ChatRunRight.Gateway): ChatRunLineState =
     when {

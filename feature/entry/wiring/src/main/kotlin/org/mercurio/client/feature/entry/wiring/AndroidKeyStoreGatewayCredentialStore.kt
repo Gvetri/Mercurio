@@ -65,30 +65,41 @@ class AndroidKeyStoreGatewayCredentialStore(
 
     override fun clear() {
         synchronized(storageLock) {
-            val credentialFiles =
-                listOf(
-                    credentialFile,
-                    File("${credentialFile.path}.bak"),
-                    File("${credentialFile.path}.new"),
-                )
+            val credentialFiles = credentialFiles()
             val hasCredentialRecord = credentialFiles.any(File::exists)
-            var failure: Throwable? = null
-            credentialFiles.forEach { file ->
-                if (file.exists() && !file.delete()) {
-                    failure = IllegalStateException("Could not remove the Gateway credential record.")
-                }
-            }
-            try {
-                val keyStore = loadKeyStore()
-                if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
-            } catch (error: GeneralSecurityException) {
-                if (hasCredentialRecord) failure = error
-            } catch (error: IOException) {
-                if (hasCredentialRecord) failure = error
-            }
-            failure?.let { throw GatewayConnectionPersistenceException(it) }
+            val deletionFailure = deleteAll(credentialFiles)
+            val keyFailure = deleteKeyEntry(hasCredentialRecord)
+            (keyFailure ?: deletionFailure)?.let { throw GatewayConnectionPersistenceException(it) }
         }
     }
+
+    private fun credentialFiles(): List<File> =
+        listOf(
+            credentialFile,
+            File("${credentialFile.path}.bak"),
+            File("${credentialFile.path}.new"),
+        )
+
+    private fun deleteAll(files: List<File>): Throwable? {
+        var failure: Throwable? = null
+        files.forEach { file ->
+            if (file.exists() && !file.delete()) {
+                failure = IllegalStateException("Could not remove the Gateway credential record.")
+            }
+        }
+        return failure
+    }
+
+    private fun deleteKeyEntry(hasCredentialRecord: Boolean): Throwable? =
+        try {
+            val keyStore = loadKeyStore()
+            if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
+            null
+        } catch (error: GeneralSecurityException) {
+            error.takeIf { hasCredentialRecord }
+        } catch (error: IOException) {
+            error.takeIf { hasCredentialRecord }
+        }
 
     private fun loadKey(): SecretKey =
         loadKeyStore().getKey(KEY_ALIAS, null) as? SecretKey

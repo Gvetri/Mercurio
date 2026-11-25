@@ -78,12 +78,14 @@ object RunEventStateTransition {
             RunEventType.FAILED -> RunPresentationState.FAILED
             RunEventType.INTERRUPTED -> RunPresentationState.UNCERTAIN
             RunEventType.CANCELLED -> RunPresentationState.CANCELLED
-            RunEventType.COMPLETED ->
-                when (status.trim().lowercase(Locale.ROOT)) {
-                    "", "completed", "complete", "succeeded", "success" -> RunPresentationState.SUCCEEDED
-                    "failed", "failure", "error" -> RunPresentationState.FAILED
-                    "cancelled", "canceled", "interrupted" -> RunPresentationState.CANCELLED
-                    else -> RunPresentationState.UNCERTAIN
-                }
+            RunEventType.COMPLETED -> completedState()
+        }
+
+    private fun RunEvent.completedState(): RunPresentationState =
+        when (status.trim().lowercase(Locale.ROOT)) {
+            "", "completed", "complete", "succeeded", "success" -> RunPresentationState.SUCCEEDED
+            "failed", "failure", "error" -> RunPresentationState.FAILED
+            "cancelled", "canceled", "interrupted" -> RunPresentationState.CANCELLED
+            else -> RunPresentationState.UNCERTAIN
         }
 }

@@ -306,38 +306,42 @@ internal fun List<MarkdownSpan>.toAnnotatedString(
     math: InlineMathContent? = null,
 ): AnnotatedString =
     buildAnnotatedString {
+        val codeStyle =
+            SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground ?: Color.Unspecified)
         this@toAnnotatedString.forEachIndexed { index, span ->
             val mathId = math?.idFor(index)
             if (mathId != null) {
                 appendInlineContent(mathId, alternateText = (span.element as InlineElement.Math).expression)
                 return@forEachIndexed
             }
-            val start = length
-            append(span.text)
-            val end = length
-            if (start == end) return@forEachIndexed
-            if (span.bold) addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
-            if (span.italic) addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
-            if (span.code) {
-                addStyle(
-                    SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground ?: Color.Unspecified),
-                    start,
-                    end,
-                )
-            }
-            span.link?.let { destination ->
-                addLink(
-                    LinkAnnotation.Url(
-                        url = destination,
-                        styles =
-                            TextLinkStyles(
-                                style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
-                            ),
-                        linkInteractionListener = { onOpenLink(destination) },
-                    ),
-                    start = start,
-                    end = end,
-                )
-            }
+            appendSpan(span, linkColor, onOpenLink, codeStyle)
         }
     }
+
+private fun AnnotatedString.Builder.appendSpan(
+    span: MarkdownSpan,
+    linkColor: Color,
+    onOpenLink: (String) -> Unit,
+    codeStyle: SpanStyle,
+) {
+    val start = length
+    append(span.text)
+    val end = length
+    if (start == end) return
+    if (span.bold) addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
+    if (span.italic) addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
+    if (span.code) addStyle(codeStyle, start, end)
+    val destination = span.link ?: return
+    addLink(
+        LinkAnnotation.Url(
+            url = destination,
+            styles =
+                TextLinkStyles(
+                    style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
+                ),
+            linkInteractionListener = { onOpenLink(destination) },
+        ),
+        start = start,
+        end = end,
+    )
+}

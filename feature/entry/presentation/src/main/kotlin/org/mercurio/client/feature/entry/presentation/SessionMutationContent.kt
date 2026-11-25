@@ -50,20 +50,7 @@ internal fun RenameSessionContent(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Button(
-            onClick = { onEvent(EntryUiEvent.ConfirmRenameSessionClicked(session.id)) },
-            enabled = enabled && !state.isSubmitting,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        ) {
-            Text(
-                text =
-                    if (state.errorCategory == SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED) {
-                        stringResource(R.string.action_try_again)
-                    } else {
-                        stringResource(R.string.action_confirm_rename)
-                    },
-            )
-        }
+        RenameConfirmButton(session = session, state = state, enabled = enabled, onEvent = onEvent)
         Spacer(modifier = Modifier.height(4.dp))
         OutlinedButton(
             onClick = { onEvent(EntryUiEvent.CancelRenameSessionClicked(session.id)) },
@@ -78,6 +65,29 @@ internal fun RenameSessionContent(
             topSpacing = 8.dp,
         )
         SessionMutationErrorMessage(message = state.errorCategory?.messageRes, topSpacing = 8.dp)
+    }
+}
+
+@Composable
+private fun RenameConfirmButton(
+    session: SessionItemUiState,
+    state: SessionRenameUiState,
+    enabled: Boolean,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    Button(
+        onClick = { onEvent(EntryUiEvent.ConfirmRenameSessionClicked(session.id)) },
+        enabled = enabled && !state.isSubmitting,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+    ) {
+        Text(
+            text =
+                if (state.errorCategory == SessionRenameErrorCategory.GATEWAY_REQUEST_FAILED) {
+                    stringResource(R.string.action_try_again)
+                } else {
+                    stringResource(R.string.action_confirm_rename)
+                },
+        )
     }
 }
 

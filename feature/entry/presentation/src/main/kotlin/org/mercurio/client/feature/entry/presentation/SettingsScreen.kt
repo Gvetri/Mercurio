@@ -108,24 +108,37 @@ private fun SettingsTopBar(
                 ) {
                     Text(text = overflowMark, style = MaterialTheme.typography.labelMedium)
                 }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(R.string.settings_action_change_credential)) },
-                        onClick = {
-                            menuOpen = false
-                            onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(R.string.settings_action_remove_connection)) },
-                        onClick = {
-                            menuOpen = false
-                            onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
-                        },
-                    )
-                }
+                SettingsActionsMenu(
+                    expanded = menuOpen,
+                    onDismiss = { menuOpen = false },
+                    onEvent = onEvent,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsActionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(text = stringResource(R.string.settings_action_change_credential)) },
+            onClick = {
+                onDismiss()
+                onEvent(EntryUiEvent.ChangeGatewayCredentialClicked)
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(text = stringResource(R.string.settings_action_remove_connection)) },
+            onClick = {
+                onDismiss()
+                onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
+            },
+        )
     }
 }
 

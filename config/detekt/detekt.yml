@@ -25,3 +25,21 @@ comments:
     active: true
   DocumentationOverPrivateProperty:
     active: true
+
+complexity:
+  CyclomaticComplexMethod:
+    active: true
+    allowedComplexity: 12
+    excludes: ['**/test/**', '**/androidTest/**']
+  CognitiveComplexMethod:
+    active: true
+    allowedComplexity: 15
+    excludes: ['**/test/**', '**/androidTest/**']
+  LongMethod:
+    active: true
+    allowedLines: 50
+    excludes: ['**/test/**', '**/androidTest/**']
+  LargeClass:
+    active: true
+    allowedLines: 300
+    excludes: ['**/test/**', '**/androidTest/**']

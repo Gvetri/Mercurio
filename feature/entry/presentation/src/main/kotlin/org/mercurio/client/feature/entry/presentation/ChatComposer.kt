@@ -189,7 +189,6 @@ private fun ChatComposerField(
     val tokens = LocalHermesDesignTokens.current
     val focusRequester = remember { FocusRequester() }
     val handledFocusRequestId = remember { mutableStateOf(0L) }
-    val haptics = LocalHapticFeedback.current
     LaunchedEffect(state.composerFocusRequestId, composer.fieldEnabled) {
         val requested = state.composerFocusRequestId
         if (requested > handledFocusRequestId.value && composer.fieldEnabled) {
@@ -215,15 +214,7 @@ private fun ChatComposerField(
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = draftColor),
         cursorBrush = SolidColor(tokens.colorScheme.primary),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-        keyboardActions =
-            KeyboardActions(
-                onSend = {
-                    if (composer.sendEnabled) {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onEvent(EntryUiEvent.SendMessageClicked)
-                    }
-                },
-            ),
+        keyboardActions = chatComposerKeyboardActions(composer, onEvent),
         modifier =
             modifier
                 .heightIn(max = CHAT_DRAFT_MAX_HEIGHT)
@@ -235,6 +226,22 @@ private fun ChatComposerField(
             Box(contentAlignment = Alignment.TopStart) {
                 ChatDraftPlaceholder(visible = draft.value.text.isEmpty())
                 innerTextField()
+            }
+        },
+    )
+}
+
+@Composable
+private fun chatComposerKeyboardActions(
+    composer: ChatComposerState,
+    onEvent: (EntryUiEvent) -> Unit,
+): KeyboardActions {
+    val haptics = LocalHapticFeedback.current
+    return KeyboardActions(
+        onSend = {
+            if (composer.sendEnabled) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onEvent(EntryUiEvent.SendMessageClicked)
             }
         },
     )

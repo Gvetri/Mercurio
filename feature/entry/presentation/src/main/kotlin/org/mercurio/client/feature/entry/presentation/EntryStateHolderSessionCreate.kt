@@ -7,6 +7,7 @@ import org.mercurio.client.feature.entry.application.LoadSessionList
 import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionGatewayPort
+import org.mercurio.client.feature.entry.domain.SessionPage
 
 /**
  * Creates a Session from the `+ new session` row. The approved Session list design
@@ -50,36 +51,9 @@ internal fun EntryStateHolder.createSessionJob(
     createSessionJob {
         try {
             val createdSession = CreateSession(gateway).execute(request.title)
-            val refreshedPage =
-                try {
-                    LoadSessionList(gateway).execute(sessionListRequest(offset = null))
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    null
-                }
+            val refreshedPage = loadRefreshedPage(gateway)
             updateCurrentSessionRequest(request.context.generation) { current ->
-                current.copy(
-                    sessions =
-                        refreshedPage?.let { page ->
-                            mergeSessions(
-                                emptyList(),
-                                page.sessions.map { it.toSessionItemUiState() },
-                            )
-                        } ?: mergeSession(current.sessions, createdSession),
-                    nextOffset = refreshedPage?.nextOffset,
-                    isLoading = false,
-                    isRefreshing = false,
-                    isSearching = false,
-                    isLoadingMore = false,
-                    isStale = refreshedPage == null,
-                    isCached = refreshedPage == null && current.isCached,
-                    isUnavailable = refreshedPage == null,
-                    errorCategory =
-                        if (refreshedPage == null) SessionListErrorCategory.GATEWAY_UNAVAILABLE else null,
-                    createSession = null,
-                    creationErrorCategory = null,
-                )
+                applyCreatedSession(current, createdSession, refreshedPage)
             }
         } catch (error: CancellationException) {
             throw error
@@ -89,6 +63,41 @@ internal fun EntryStateHolder.createSessionJob(
             showCreateSessionFailure(request.context.generation)
         }
     }
+
+private fun EntryStateHolder.loadRefreshedPage(gateway: SessionGatewayPort): SessionPage? =
+    try {
+        LoadSessionList(gateway).execute(sessionListRequest(offset = null))
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    }
+
+private fun EntryStateHolder.applyCreatedSession(
+    current: SessionListUiState,
+    createdSession: Session,
+    refreshedPage: SessionPage?,
+): SessionListUiState =
+    current.copy(
+        sessions =
+            refreshedPage?.let { page ->
+                mergeSessions(
+                    emptyList(),
+                    page.sessions.map { it.toSessionItemUiState() },
+                )
+            } ?: mergeSession(current.sessions, createdSession),
+        nextOffset = refreshedPage?.nextOffset,
+        isLoading = false,
+        isRefreshing = false,
+        isSearching = false,
+        isLoadingMore = false,
+        isStale = refreshedPage == null,
+        isCached = refreshedPage == null && current.isCached,
+        isUnavailable = refreshedPage == null,
+        errorCategory = if (refreshedPage == null) SessionListErrorCategory.GATEWAY_UNAVAILABLE else null,
+        createSession = null,
+        creationErrorCategory = null,
+    )
 
 internal suspend fun EntryStateHolder.showCreateSessionFailure(requestGeneration: Long) {
     updateCurrentSessionRequest(requestGeneration) { current ->

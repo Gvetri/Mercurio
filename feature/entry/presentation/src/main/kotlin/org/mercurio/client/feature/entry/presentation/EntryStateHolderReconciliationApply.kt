@@ -15,62 +15,29 @@ internal suspend fun EntryStateHolder.applyReconciliation(
     reconciliation: AuthoritativeRunReconciliation,
 ): ReconciledRunApplication =
     run {
-        val requestIsCurrent =
-            connectionGeneration == request.connectionGeneration &&
-                (!request.updateVisibleUi || sessionRequestGeneration == request.sessionGeneration)
-        if (!requestIsCurrent) return@run ReconciledRunApplication()
+        if (!isCurrentReconciliationRequest(request)) return@run ReconciledRunApplication()
         val shouldUpdateVisibleUi =
             request.updateVisibleUi &&
                 request.sessionGeneration != null &&
                 sessionRequestGeneration == request.sessionGeneration
         val run = reconciliation.run
         val decision = reconciliation.decision
+        val confirmed = decision == RunReconciliationDecision.CONFIRMED
         val terminalRunIds = terminalRunIdsFor(request.sessionId, reconciliation)
-        val session = visibleSessionTarget(request.sessionId, shouldUpdateVisibleUi)
-        if (decision == RunReconciliationDecision.CONFIRMED && !run.isActive()) {
+        val session = openedSessionFor(request.sessionId).takeIf { shouldUpdateVisibleUi }
+        if (confirmed && !run.isActive()) {
             recordTerminalPollReconciliation(request.sessionId, run)
         }
-        if (historyGenerationMatches(request.sessionId, request.historyGeneration)) {
-            val release = recordReconciledRunState(request.sessionId, reconciliation, terminalRunIds)
-            if (decision == RunReconciliationDecision.CONFIRMED) {
-                val handles = confirmedRecoveryHandles(request, run)
-                val canClearSendState =
-                    clearConfirmedSubmissionState(request.sessionId, reconciliation, release.wasActivelyObserved)
-                updateConfirmedRunSessionUi(
-                    sessionId = request.sessionId,
-                    reconciliation = reconciliation,
-                    canClearSendState = canClearSendState,
-                    session = session,
-                )
-                ReconciledRunApplication(
-                    observationJobToCancel = release.job,
-                    observationToClose = release.observation,
-                    recoveryEntryToRemove = handles.first,
-                    recoveryEndpointToRemove = handles.second,
-                )
+        val historyMatches = historyGenerationMatches(request.sessionId, request.historyGeneration)
+        val release =
+            if (historyMatches) {
+                recordReconciledRunState(request.sessionId, reconciliation, terminalRunIds)
             } else {
-                updateUnconfirmedRunSessionUi(
-                    sessionId = request.sessionId,
-                    run = run,
-                    session = session,
-                )
-                ReconciledRunApplication(
-                    observationJobToCancel = release.job,
-                    observationToClose = release.observation,
-                )
+                null
             }
-        } else if (
-            decision == RunReconciliationDecision.CONFIRMED &&
-            !run.isActive() &&
-            historyConfirmsTerminalRun(request.sessionId, run.id)
-        ) {
-            ReconciledRunApplication(
-                recoveryEntryToRemove = RunRecoveryEntry(sessionId = request.sessionId, runId = run.id),
-                recoveryEndpointToRemove = mutableUiState.value.endpoint.takeIf(String::isNotBlank),
-            )
-        } else {
-            ReconciledRunApplication()
-        }
+        val terminalRun = confirmed && !run.isActive() && historyConfirmsTerminalRun(request.sessionId, run.id)
+        if (release == null && !terminalRun) return@run ReconciledRunApplication()
+        applyReconciledRelease(request, reconciliation, release, session, confirmed)
     }
 
 internal fun EntryStateHolder.confirmedRecoveryHandles(
@@ -82,16 +49,6 @@ internal fun EntryStateHolder.confirmedRecoveryHandles(
     } else {
         RunRecoveryEntry(sessionId = request.sessionId, runId = run.id) to
             mutableUiState.value.endpoint.takeIf(String::isNotBlank)
-    }
-
-internal fun EntryStateHolder.visibleSessionTarget(
-    sessionId: SessionId,
-    shouldUpdate: Boolean,
-): Pair<SessionListUiState, OpenSessionUiState>? =
-    if (!shouldUpdate) {
-        null
-    } else {
-        openedSessionFor(sessionId)
     }
 
 internal fun EntryStateHolder.terminalRunIdsFor(
@@ -242,3 +199,42 @@ internal fun EntryStateHolder.updateConfirmedRunSessionUi(
                 ),
         )
 }
+
+private fun EntryStateHolder.isCurrentReconciliationRequest(request: AuthoritativeReconciliationRequest): Boolean =
+    connectionGeneration == request.connectionGeneration &&
+        (!request.updateVisibleUi || sessionRequestGeneration == request.sessionGeneration)
+
+private suspend fun EntryStateHolder.applyReconciledRelease(
+    request: AuthoritativeReconciliationRequest,
+    reconciliation: AuthoritativeRunReconciliation,
+    release: ReconciledObservationRelease?,
+    session: Pair<SessionListUiState, OpenSessionUiState>?,
+    confirmed: Boolean,
+): ReconciledRunApplication =
+    when {
+        release == null ->
+            ReconciledRunApplication(
+                recoveryEntryToRemove =
+                    RunRecoveryEntry(sessionId = request.sessionId, runId = reconciliation.run.id),
+                recoveryEndpointToRemove = mutableUiState.value.endpoint.takeIf(String::isNotBlank),
+            )
+        !confirmed -> {
+            updateUnconfirmedRunSessionUi(request.sessionId, reconciliation.run, session)
+            ReconciledRunApplication(
+                observationJobToCancel = release.job,
+                observationToClose = release.observation,
+            )
+        }
+        else -> {
+            val handles = confirmedRecoveryHandles(request, reconciliation.run)
+            val canClearSendState =
+                clearConfirmedSubmissionState(request.sessionId, reconciliation, release.wasActivelyObserved)
+            updateConfirmedRunSessionUi(request.sessionId, reconciliation, canClearSendState, session)
+            ReconciledRunApplication(
+                observationJobToCancel = release.job,
+                observationToClose = release.observation,
+                recoveryEntryToRemove = handles.first,
+                recoveryEndpointToRemove = handles.second,
+            )
+        }
+    }

@@ -115,25 +115,31 @@ private fun ConsentDecision(
                 color = tokens.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(spacing.l))
-            Button(
-                onClick = { onEvent(EntryUiEvent.ErrorReportingConsentGranted) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = CONSENT_ACTION_HEIGHT),
-                shape = tokens.shapes.small,
-                contentPadding = PaddingValues(horizontal = CONSENT_ACTION_PADDING, vertical = 0.dp),
-            ) {
-                Text(text = stringResource(R.string.consent_send_reports))
-            }
-            Spacer(modifier = Modifier.height(spacing.s))
-            OutlinedButton(
-                onClick = { onEvent(EntryUiEvent.ErrorReportingConsentDeclined) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = CONSENT_ACTION_HEIGHT),
-                shape = tokens.shapes.small,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = tokens.colorScheme.onSurface),
-                contentPadding = PaddingValues(horizontal = CONSENT_ACTION_PADDING, vertical = 0.dp),
-            ) {
-                Text(text = stringResource(R.string.consent_do_not_send))
-            }
+            ConsentDecisionActions(onEvent = onEvent)
         }
+    }
+}
+
+@Composable
+private fun ConsentDecisionActions(onEvent: (EntryUiEvent) -> Unit) {
+    val tokens = LocalHermesDesignTokens.current
+    Button(
+        onClick = { onEvent(EntryUiEvent.ErrorReportingConsentGranted) },
+        modifier = Modifier.fillMaxWidth().heightIn(min = CONSENT_ACTION_HEIGHT),
+        shape = tokens.shapes.small,
+        contentPadding = PaddingValues(horizontal = CONSENT_ACTION_PADDING, vertical = 0.dp),
+    ) {
+        Text(text = stringResource(R.string.consent_send_reports))
+    }
+    Spacer(modifier = Modifier.height(tokens.spacing.s))
+    OutlinedButton(
+        onClick = { onEvent(EntryUiEvent.ErrorReportingConsentDeclined) },
+        modifier = Modifier.fillMaxWidth().heightIn(min = CONSENT_ACTION_HEIGHT),
+        shape = tokens.shapes.small,
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = tokens.colorScheme.onSurface),
+        contentPadding = PaddingValues(horizontal = CONSENT_ACTION_PADDING, vertical = 0.dp),
+    ) {
+        Text(text = stringResource(R.string.consent_do_not_send))
     }
 }
 

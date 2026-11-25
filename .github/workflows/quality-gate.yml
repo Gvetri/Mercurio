@@ -351,6 +351,7 @@ jobs:
           ./gradlew -p buildSrc test
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.quality_gate_rejects_a_skipped_detekt_verification
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_else_case_violation_fails_the_real_analysis_with_type_resolution
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_cyclomatic_complexity_violation_fails_the_real_analysis
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_documentation_over_private_property_fails_the_real_analysis
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_return_count_violation_fails_the_real_analysis_task
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_documentation_over_private_function_fails_the_real_analysis

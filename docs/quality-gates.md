@@ -237,6 +237,20 @@ deliberate, each with its reason here:
 - `InjectDispatcher` excludes test sources only, because a test chooses the dispatcher it drives the
   subject with and dispatcher injection is a production-wiring concern; the rule stays enforced in
   production sources.
+- The complexity ratchet applies to production sources only, and it is declared with its value:
+
+  | Rule | Value | Measured on 2026-11-25 |
+  | --- | --- | --- |
+  | `CyclomaticComplexMethod` | `allowedComplexity: 12` | zero findings at 12 |
+  | `CognitiveComplexMethod` | `allowedComplexity: 15` | zero findings at 15 |
+  | `LongMethod` | `allowedLines: 50` | zero findings at 50 |
+  | `LargeClass` | `allowedLines: 300` | zero findings at 300 |
+
+  The ratchet is two steps: cyclomatic complexity lands at 12 in this change and at 10 in the next
+  one, and every finding is refactored rather than suppressed, because no baseline exists to absorb
+  it. The test-source exclusion is deliberate: a test may build a long scenario or a wide branch
+  table without making the production code harder to read, and the rules above the threshold keep
+  the production sources measurable.
 
 `./gradlew detekt` runs the type-resolution tasks (`detektMain` and `detektTest` for every module),
 so a rule that needs binding executes instead of silently skipping. The plain, non-type-resolving
@@ -255,7 +269,7 @@ build on every reported finding.
 
 The detekt contracts are self-tested as well: `QualityGateConfigurationTest` pins the workflow job,
 the declaration, and the configuration, and `QualityVerificationFailClosedTest` runs the real tasks
-against a deliberate violation of each of the four rules, a clean tree, a committed baseline file,
+against a deliberate violation of each of the five rules, a clean tree, a committed baseline file,
 and a skipped detekt verification.
 
 ### Comments

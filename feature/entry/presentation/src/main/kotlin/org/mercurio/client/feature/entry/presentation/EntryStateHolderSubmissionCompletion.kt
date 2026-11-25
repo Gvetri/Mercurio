@@ -92,24 +92,14 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
             }
         val applied = completeSuccessfulSubmission(submission, run)
         if (applied) {
-            if (!run.isActive()) {
-                reconcileInactiveSubmittedRun(submission.sessionId, run.id, submission.requestConnectionGeneration)
-            }
-            onRunSubmissionCompleted?.invoke()
+            applySuccessfulSubmission(submission, run)
         }
     } catch (_: TimeoutCancellationException) {
         if (reportUncertainRunSubmission(submission)) {
             onRunSubmissionCompleted?.invoke()
         }
     } catch (error: CancellationException) {
-        withContext(NonCancellable) {
-            runCatchingSuspend {
-                runSubmissionUncertaintyStore.markAmbiguous(
-                    PendingRunSubmissionKey(submission.requestEndpoint, submission.sessionId),
-                    submission.attemptId,
-                )
-            }
-        }
+        markSubmissionAmbiguous(submission)
         throw error
     } catch (error: GatewayException) {
         val sendCategory =
@@ -226,3 +216,24 @@ internal fun EntryStateHolder.prepareSettledSubmissionRecovery(sessionId: Sessio
             ).also { pendingTimedOutSends[sessionId] = it }
         }
     }
+
+private suspend fun EntryStateHolder.markSubmissionAmbiguous(submission: RunSubmissionWork) {
+    withContext(NonCancellable) {
+        runCatchingSuspend {
+            runSubmissionUncertaintyStore.markAmbiguous(
+                PendingRunSubmissionKey(submission.requestEndpoint, submission.sessionId),
+                submission.attemptId,
+            )
+        }
+    }
+}
+
+private suspend fun EntryStateHolder.applySuccessfulSubmission(
+    submission: RunSubmissionWork,
+    run: Run,
+) {
+    if (!run.isActive()) {
+        reconcileInactiveSubmittedRun(submission.sessionId, run.id, submission.requestConnectionGeneration)
+    }
+    onRunSubmissionCompleted?.invoke()
+}

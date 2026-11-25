@@ -88,15 +88,11 @@ internal fun EntryStateHolder.confirmRenameSession(sessionId: SessionId) {
                 mutableUiState.value =
                     mutableUiState.value.copy(
                         sessionList =
-                            current.copy(
-                                sessionMutations =
-                                    current.sessionMutations +
-                                        (
-                                            sessionId to
-                                                mutation.copy(
-                                                    rename = rename.copy(errorCategory = validationError),
-                                                )
-                                        ),
+                            current.withRename(
+                                sessionId = sessionId,
+                                mutation = mutation,
+                                rename = rename.copy(errorCategory = validationError),
+                                submitting = false,
                             ),
                     )
                 return@run null
@@ -104,22 +100,11 @@ internal fun EntryStateHolder.confirmRenameSession(sessionId: SessionId) {
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =
-                        current.copy(
-                            sessionMutations =
-                                current.sessionMutations +
-                                    (
-                                        sessionId to
-                                            mutation.copy(
-                                                rename =
-                                                    rename.copy(
-                                                        isSubmitting = true,
-                                                        errorCategory = null,
-                                                    ),
-                                                pendingAction = SessionMutationAction.RENAME,
-                                                errorCategory = null,
-                                                retryAction = null,
-                                            )
-                                    ),
+                        current.withRename(
+                            sessionId = sessionId,
+                            mutation = mutation,
+                            rename = rename.copy(isSubmitting = true, errorCategory = null),
+                            submitting = true,
                         ),
                 )
             val request = beginSessionMutation(sessionId, gateway)
@@ -128,6 +113,30 @@ internal fun EntryStateHolder.confirmRenameSession(sessionId: SessionId) {
         } ?: return
     job.start()
 }
+
+private fun SessionListUiState.withRename(
+    sessionId: SessionId,
+    mutation: SessionMutationUiState,
+    rename: SessionRenameUiState,
+    submitting: Boolean,
+): SessionListUiState =
+    copy(
+        sessionMutations =
+            sessionMutations +
+                (
+                    sessionId to
+                        if (submitting) {
+                            mutation.copy(
+                                rename = rename,
+                                pendingAction = SessionMutationAction.RENAME,
+                                errorCategory = null,
+                                retryAction = null,
+                            )
+                        } else {
+                            mutation.copy(rename = rename)
+                        }
+                ),
+    )
 
 internal fun EntryStateHolder.submitRenameSession(
     gateway: SessionGatewayPort,

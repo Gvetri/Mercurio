@@ -49,6 +49,24 @@ private fun emphasisedRange(
     return if (contentEnd > contentStart) contentStart until contentEnd else null
 }
 
+private fun consumeLink(
+    text: String,
+    index: Int,
+    linkBrackets: LinkBrackets?,
+    literal: StringBuilder,
+    spans: MutableList<MarkdownSpan>,
+): Int {
+    val link = linkAt(text, index, linkBrackets)
+    if (link == null) {
+        literal.append(text[index])
+        return index + 1
+    }
+    flushLiteral(literal, spans)
+    val destination = allowedExternalLinkDestination(link.destination)
+    spans += parseInline(link.label).map { span -> span.copy(link = destination) }
+    return link.endIndex
+}
+
 internal fun parseInline(text: String): List<MarkdownSpan> {
     val spans = mutableListOf<MarkdownSpan>()
     val literal = StringBuilder()
@@ -62,18 +80,8 @@ internal fun parseInline(text: String): List<MarkdownSpan> {
         val math = inlineMathAt(text, index)
         when {
             text.startsWith(IMAGE_PREFIX, index) -> index = consumeImage(text, index, linkBrackets, literal, spans)
-            text.startsWith(LINK_OPEN, index) -> {
-                val link = linkAt(text, index, linkBrackets)
-                if (link == null) {
-                    literal.append(text[index])
-                    index++
-                } else {
-                    flushLiteral(literal, spans)
-                    val destination = allowedExternalLinkDestination(link.destination)
-                    spans += parseInline(link.label).map { span -> span.copy(link = destination) }
-                    index = link.endIndex
-                }
-            }
+            text.startsWith(LINK_OPEN, index) ->
+                index = consumeLink(text, index, linkBrackets, literal, spans)
             bold != null -> {
                 flushLiteral(literal, spans)
                 spans += parseInline(text.substring(bold)).map { span -> span.copy(bold = true) }
