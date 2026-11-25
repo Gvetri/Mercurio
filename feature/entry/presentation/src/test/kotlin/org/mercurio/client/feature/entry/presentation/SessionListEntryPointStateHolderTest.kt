@@ -1,8 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -16,8 +14,6 @@ import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
-import kotlinx.coroutines.CompletableDeferred
-import java.util.concurrent.TimeUnit
 
 class SessionListEntryPointStateHolderTest {
     @Test
@@ -47,7 +43,7 @@ class SessionListEntryPointStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
                 holder.onEvent(EntryUiEvent.SessionClicked(target))
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 gateway.onList = null
                 pageRelease.complete(Unit)
 
@@ -96,7 +92,7 @@ class SessionListEntryPointStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 gateway.onList = null
                 refreshRelease.complete(Unit)
 
@@ -138,7 +134,7 @@ class SessionListEntryPointStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 gateway.onList = null
                 pageRelease.complete(Unit)
 
@@ -178,7 +174,7 @@ class SessionListEntryPointStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 awaitState(holder, "the failed create") {
                     it.sessionList?.creationErrorCategory != null
                 }
@@ -231,7 +227,7 @@ class SessionListEntryPointStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 awaitState(holder, "the failed create") {
                     it.sessionList?.creationErrorCategory != null
                 }

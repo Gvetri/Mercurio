@@ -1,6 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,8 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
-import kotlinx.coroutines.CompletableDeferred
-import java.util.concurrent.TimeUnit
 
 class MessageSubmissionSettleOrderTest {
     @Test

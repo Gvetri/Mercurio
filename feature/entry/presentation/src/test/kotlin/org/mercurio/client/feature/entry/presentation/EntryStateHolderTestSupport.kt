@@ -39,7 +39,8 @@ internal fun holder(
     gateway: SessionGatewayPort? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     dependencies: EntryStateHolderDependencies = EntryStateHolderDependencies(),
-): EntryStateHolder = holderOn(CoroutineScope(SupervisorJob() + dispatcher), repository, verifier, gateway, dependencies)
+): EntryStateHolder =
+    holderOn(CoroutineScope(SupervisorJob() + dispatcher), repository, verifier, gateway, dependencies)
 
 internal fun holderOn(
     scope: CoroutineScope,

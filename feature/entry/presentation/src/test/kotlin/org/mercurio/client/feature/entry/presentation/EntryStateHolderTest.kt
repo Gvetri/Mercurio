@@ -1,6 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -19,8 +19,6 @@ import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
-import kotlinx.coroutines.CompletableDeferred
-import java.util.concurrent.TimeUnit
 
 class EntryStateHolderTest {
     @Test
@@ -457,7 +455,7 @@ class EntryStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isLoadingMore)
 
                 holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(
                     listOf(SessionListRequest(), SessionListRequest(offset = 1)),
                     gateway.listRequests,
@@ -504,7 +502,7 @@ class EntryStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).isRefreshing)
 
                 holder.onEvent(EntryUiEvent.SessionClicked(target))
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 gateway.enqueueList(SessionPage(listOf(entrySession(target.value, "Target")), null))
                 refreshRelease.complete(Unit)
                 gateway.onList = null
@@ -586,7 +584,7 @@ class EntryStateHolderTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession?.isSubmitting == true)
 
                 holder.onEvent(EntryUiEvent.SessionSearchQueryChanged("needle"))
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
 
                 val submitting = requireNotNull(holder.uiState.value.sessionList)
                 assertEquals("", submitting.searchQuery)

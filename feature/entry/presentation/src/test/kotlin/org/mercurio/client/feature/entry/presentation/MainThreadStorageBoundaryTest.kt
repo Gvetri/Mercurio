@@ -1,8 +1,10 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -23,10 +25,8 @@ import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintyStore
 import org.mercurio.client.feature.entry.domain.SessionDraftKey
 import org.mercurio.client.feature.entry.domain.SessionDraftStore
 import org.mercurio.client.feature.entry.domain.SessionId
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.channels.Channel
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 private const val SEND_CLAIM_AND_CLOSE_MARKER_ADDS = 2
 

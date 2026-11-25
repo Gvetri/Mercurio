@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -16,8 +15,6 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import org.mercurio.client.feature.entry.domain.SessionId
-import java.util.concurrent.TimeUnit
 
 class RunReconciliationObservationTest {
     @Test
@@ -105,8 +102,7 @@ class RunReconciliationObservationTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -159,8 +155,7 @@ class RunReconciliationObservationTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -323,7 +318,10 @@ class RunReconciliationObservationTest {
                     1,
                     gateway.runRequests.size,
                 )
-                assertEquals("Keep this draft", requireNotNull(holder.uiState.value.sessionList?.openedSession).composerText)
+                assertEquals(
+                    "Keep this draft",
+                    requireNotNull(holder.uiState.value.sessionList?.openedSession).composerText,
+                )
                 assertTrue(gateway.statusRequests.isEmpty())
             } finally {
                 gateway.releaseRun.complete(Unit)
@@ -401,8 +399,7 @@ class RunReconciliationObservationTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -456,8 +453,7 @@ class RunReconciliationObservationTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {

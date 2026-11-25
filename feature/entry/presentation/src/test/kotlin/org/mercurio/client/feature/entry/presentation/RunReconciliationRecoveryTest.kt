@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,7 +14,6 @@ import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.RunRecoveryRegistry
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import java.util.concurrent.TimeUnit
 
 class RunReconciliationRecoveryTest {
     @Test
@@ -163,8 +161,7 @@ class RunReconciliationRecoveryTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -259,8 +256,7 @@ class RunReconciliationRecoveryTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -536,8 +532,7 @@ class RunReconciliationRecoveryTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {

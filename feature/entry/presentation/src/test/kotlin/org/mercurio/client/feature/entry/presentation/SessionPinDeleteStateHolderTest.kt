@@ -1,11 +1,10 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -30,8 +29,6 @@ import org.mercurio.client.feature.entry.domain.SessionListRequest
 import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
-import kotlinx.coroutines.CompletableDeferred
-import java.util.concurrent.TimeUnit
 
 class SessionPinDeleteStateHolderTest {
     @Test
@@ -157,7 +154,7 @@ class SessionPinDeleteStateHolderTest {
                 assertEquals(SessionMutationAction.PIN, mutation(holder, target.id)?.pendingAction)
 
                 holder.onEvent(EntryUiEvent.PinSessionClicked(target.id))
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.pinCalls)
                 assertFalse(requireNotNull(holder.uiState.value.sessionList).sessions.single().pinned)
 

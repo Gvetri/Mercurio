@@ -4,11 +4,13 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.mercurio.client.feature.entry.application.EntryState
@@ -55,7 +57,13 @@ internal suspend fun TestScope.assertParentCancellationReleasesObserver(cancelDu
     val failures = CopyOnWriteArrayList<Throwable>()
     val scope =
         CoroutineScope(
-            parent + StandardTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, error -> failures += error },
+            parent + StandardTestDispatcher(testScheduler) +
+                CoroutineExceptionHandler {
+                    _,
+                    error,
+                    ->
+                    failures += error
+                },
         )
     val gateway =
         ReconciliationFakeGateway(session).apply {
@@ -138,7 +146,8 @@ internal class ReconciliationHolderSettings(
 internal fun TestScope.reconciliationHolder(
     gateway: ReconciliationFakeGateway,
     settings: ReconciliationHolderSettings = ReconciliationHolderSettings(),
-): EntryStateHolder = reconciliationHolderOn(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), gateway, settings)
+): EntryStateHolder =
+    reconciliationHolderOn(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)), gateway, settings)
 
 internal fun reconciliationHolderOn(
     scope: CoroutineScope,
@@ -265,6 +274,7 @@ internal class ReconciliationFakeGateway(
     private val lastServedStatuses = mutableMapOf<RunId, Run>()
     var blockSubmissionCompletion = false
     var blockNextObservationOpen = false
+    var openIgnoresCancellation = false
     val runStarted = CompletableDeferred<Unit>()
     val submissionCompleted = CompletableDeferred<Unit>()
     val runFinished = CompletableDeferred<Unit>()
@@ -359,11 +369,19 @@ internal class ReconciliationFakeGateway(
         if (blockNextObservationOpen) {
             blockNextObservationOpen = false
             observationOpenStarted.complete(Unit)
-            releaseObservationOpen.await()
+            awaitObservationOpenRelease()
             observationOpenFinished.complete(Unit)
         }
         observedRunIds += runId
         return if (observations.isEmpty()) observation else observations.removeFirst()
+    }
+
+    private suspend fun awaitObservationOpenRelease() {
+        if (openIgnoresCancellation) {
+            withContext(NonCancellable) { releaseObservationOpen.await() }
+        } else {
+            releaseObservationOpen.await()
+        }
     }
 }
 

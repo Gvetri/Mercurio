@@ -1,6 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -11,8 +11,6 @@ import org.mercurio.client.feature.entry.application.EntryState
 import org.mercurio.client.feature.entry.domain.ImageLoadingSettingsStore
 import org.mercurio.client.feature.entry.domain.InstallSource
 import org.mercurio.client.feature.entry.domain.SessionPage
-import kotlinx.coroutines.CompletableDeferred
-import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSettingsTest {
     @Test
@@ -116,7 +114,7 @@ class EntryStateHolderSettingsTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).createSession != null)
 
                 holder.onEvent(EntryUiEvent.OpenSettingsClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
 
                 assertFalse(holder.uiState.value.isSettingsOpen)
             } finally {

@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -9,7 +8,6 @@ import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionId
-import java.util.concurrent.TimeUnit
 
 class MessageSubmissionInFlightDraftTest {
     @Test

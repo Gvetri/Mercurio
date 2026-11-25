@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.wiring
 
 import android.content.Context
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -42,9 +43,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
-import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CopyOnWriteArrayList
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -69,8 +69,13 @@ class EntryWiringRestartIntegrationTest {
         holders.forEach(EntryStateHolder::close)
         holders.forEach(::joinHolder)
         gateways.flatMap { it.observations }.forEach { observation ->
-            assertEquals(true, observation.closed.isCompleted.not())
-            if (!observation.started.isCompleted) assertEquals(false, observation.finished.isCompleted)
+            assertTrue(
+                "every observation must be closed after the holder work finishes",
+                observation.closed.isCompleted,
+            )
+            if (observation.started.isCompleted) {
+                assertTrue("a started observation must finish", observation.finished.isCompleted)
+            }
         }
     }
 

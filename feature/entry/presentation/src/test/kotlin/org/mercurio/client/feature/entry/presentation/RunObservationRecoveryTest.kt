@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -17,7 +16,6 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.TimeUnit
 
 class RunObservationRecoveryTest {
     @Test
@@ -320,33 +318,33 @@ class RunObservationRecoveryTest {
     @Test
     fun recovery_removal_failure_keeps_metadata_without_failing_the_recovery_job() =
         runTest {
-        val session = observationSession("session-remove-failure")
-        val run = Run(RunId("run-remove-failure"), session.id, "succeeded")
-        val entry = RunRecoveryEntry(session.id, run.id)
-        val recoveryRegistry = ObservationFailingRemoveRunRecoveryRegistry(entry)
-        val gateway =
-            ObservationScriptedGateway(session).apply {
-                enqueueStatus(run)
-                enqueueHistory(
-                    SessionHistory(
-                        session.id,
-                        listOf(GatewayHistoryMessage("result", "assistant", "Done", run.id, "succeeded")),
-                    ),
-                )
-            }
-        val holder = observationHolder(gateway, recoveryRegistry = recoveryRegistry)
+            val session = observationSession("session-remove-failure")
+            val run = Run(RunId("run-remove-failure"), session.id, "succeeded")
+            val entry = RunRecoveryEntry(session.id, run.id)
+            val recoveryRegistry = ObservationFailingRemoveRunRecoveryRegistry(entry)
+            val gateway =
+                ObservationScriptedGateway(session).apply {
+                    enqueueStatus(run)
+                    enqueueHistory(
+                        SessionHistory(
+                            session.id,
+                            listOf(GatewayHistoryMessage("result", "assistant", "Done", run.id, "succeeded")),
+                        ),
+                    )
+                }
+            val holder = observationHolder(gateway, recoveryRegistry = recoveryRegistry)
 
-        try {
-            holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
-            holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
-            holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
-            holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            awaitObservationCondition { gateway.statusRequests.contains(run.id) }
-            assertEquals(listOf(entry), runBlocking { recoveryRegistry.load() })
-        } finally {
-            holder.close()
+            try {
+                holder.onEvent(EntryUiEvent.AddGatewayConnectionClicked)
+                holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
+                holder.onEvent(EntryUiEvent.BearerCredentialChanged("test-only-credential"))
+                holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
+                awaitObservationCondition { gateway.statusRequests.contains(run.id) }
+                assertEquals(listOf(entry), runBlocking { recoveryRegistry.load() })
+            } finally {
+                holder.close()
+            }
         }
-    }
 
     @Test
     fun terminal_observation_forgets_a_recovery_write_queued_after_save_failure() =

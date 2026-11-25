@@ -20,9 +20,6 @@ import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
-import java.util.concurrent.TimeUnit
-
-private const val TEST_TIMEOUT_MILLIS = 15_000L
 
 class MessageSubmissionStateHolderTest {
     @Test

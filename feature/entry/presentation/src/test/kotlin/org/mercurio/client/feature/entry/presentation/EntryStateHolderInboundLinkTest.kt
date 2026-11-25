@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -20,8 +21,7 @@ import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlinx.coroutines.CompletableDeferred
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -402,18 +402,15 @@ private class BlockingListGateway(
     val listStarted = CompletableDeferred<Unit>()
     val releaseList = CompletableDeferred<Unit>()
 
-    @Volatile
-    var listCalls = 0
+    private val listCallCount = AtomicInteger()
+
+    val listCalls: Int get() = listCallCount.get()
 
     @Volatile
     var openFailure: GatewayException? = null
 
     override suspend fun listSessions(request: SessionListRequest): SessionPage {
-        val call =
-            synchronized(this) {
-                listCalls += 1
-                listCalls
-            }
+        val call = listCallCount.incrementAndGet()
         if (call == 1) {
             listStarted.complete(Unit)
             releaseList.await()

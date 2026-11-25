@@ -20,7 +20,6 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import org.mercurio.client.feature.entry.domain.SessionId
 import java.util.concurrent.atomic.AtomicReference
 
 class RunReconciliationStateHolderTest {
@@ -366,8 +365,7 @@ class RunReconciliationStateHolderTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -429,8 +427,7 @@ class RunReconciliationStateHolderTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {

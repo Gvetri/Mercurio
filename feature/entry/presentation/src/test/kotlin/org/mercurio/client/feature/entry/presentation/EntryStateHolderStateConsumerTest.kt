@@ -301,29 +301,29 @@ class EntryStateHolderStateConsumerTest {
             val recording = installRecordingUiState(holder) { false }
             try {
                 holder.onEvent(EntryUiEvent.EndpointChanged("first"))
-            holder.onEvent(EntryUiEvent.EndpointChanged("second"))
-            holder.onEvent(EntryUiEvent.EndpointChanged("third"))
+                holder.onEvent(EntryUiEvent.EndpointChanged("second"))
+                holder.onEvent(EntryUiEvent.EndpointChanged("third"))
 
-            assertTrue(
-                "the paused consumer must not apply an enqueued event: ${recording.writes.size}",
-                recording.writes.isEmpty(),
-            )
-            assertEquals("", holder.uiState.value.endpoint)
+                assertTrue(
+                    "the paused consumer must not apply an enqueued event: ${recording.writes.size}",
+                    recording.writes.isEmpty(),
+                )
+                assertEquals("", holder.uiState.value.endpoint)
 
-            advanceUntilIdle()
+                advanceUntilIdle()
 
-            assertEquals("third", holder.uiState.value.endpoint)
-            assertEquals(
-                "the consumer must apply enqueued events in submission order",
-                listOf("first", "second", "third"),
-                recording.writes.map { it.state.endpoint },
-            )
-            assertTrue(recording.writes.all { it.appliedOnConsumer })
-        } finally {
-            holder.close()
-            advanceUntilIdle()
+                assertEquals("third", holder.uiState.value.endpoint)
+                assertEquals(
+                    "the consumer must apply enqueued events in submission order",
+                    listOf("first", "second", "third"),
+                    recording.writes.map { it.state.endpoint },
+                )
+                assertTrue(recording.writes.all { it.appliedOnConsumer })
+            } finally {
+                holder.close()
+                advanceUntilIdle()
+            }
         }
-    }
 
     @Test
     fun close_applies_queued_events_before_the_scope_teardown() =
@@ -333,30 +333,30 @@ class EntryStateHolderStateConsumerTest {
             val recording = installRecordingUiState(holder) { closeCalled.get() }
             try {
                 holder.onEvent(EntryUiEvent.EndpointChanged("queued-endpoint"))
-            holder.close()
-            closeCalled.set(true)
+                holder.close()
+                closeCalled.set(true)
 
-            advanceUntilIdle()
+                advanceUntilIdle()
 
-            assertEquals("queued-endpoint", holder.uiState.value.endpoint)
-            assertTrue(
-                "the event queued before close must still be applied ahead of the teardown: " +
-                    recording.writes.map { it.state.endpoint },
-                recording.writes.size == 2 && recording.writes.first().state.endpoint == "queued-endpoint",
-            )
-            assertTrue(
-                "the queued event must apply after close() returned, on the consumer",
-                recording.writes.first().appliedAfterClose && recording.writes.first().appliedOnConsumer,
-            )
-            assertTrue(
-                "the teardown must end the holder scope",
-                holder.testSurface.scope.coroutineContext[Job]!!.isCancelled,
-            )
-        } finally {
-            holder.close()
-            advanceUntilIdle()
+                assertEquals("queued-endpoint", holder.uiState.value.endpoint)
+                assertTrue(
+                    "the event queued before close must still be applied ahead of the teardown: " +
+                        recording.writes.map { it.state.endpoint },
+                    recording.writes.size == 2 && recording.writes.first().state.endpoint == "queued-endpoint",
+                )
+                assertTrue(
+                    "the queued event must apply after close() returned, on the consumer",
+                    recording.writes.first().appliedAfterClose && recording.writes.first().appliedOnConsumer,
+                )
+                assertTrue(
+                    "the teardown must end the holder scope",
+                    holder.testSurface.scope.coroutineContext[Job]!!.isCancelled,
+                )
+            } finally {
+                holder.close()
+                advanceUntilIdle()
+            }
         }
-    }
 }
 
 private class RecordedStateWrite(

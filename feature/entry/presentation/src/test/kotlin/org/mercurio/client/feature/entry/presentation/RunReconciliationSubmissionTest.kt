@@ -1,7 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,7 +17,6 @@ import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.Session
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import java.util.concurrent.TimeUnit
 
 class RunReconciliationSubmissionTest {
     @Test
@@ -190,13 +189,13 @@ class RunReconciliationSubmissionTest {
                     observations.add(firstLateObservation)
                     observations.add(secondObservation)
                     blockNextObservationOpen = true
+                    openIgnoresCancellation = true
                 }
             val holder =
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -221,6 +220,21 @@ class RunReconciliationSubmissionTest {
                     gateway.secondObservationRequested.isCompleted,
                 )
                 assertEquals(1, gateway.observationRequests.size)
+                val ownershipJob =
+                    requireNotNull(holder.testSurface.runObservationJobs[session.id]) {
+                        "the blocked open keeps the only registered observation job"
+                    }
+                assertEquals(1, holder.testSurface.runObservationJobs.size)
+                assertTrue("the next run has already asked for the open's ownership", ownershipJob.isCancelled)
+                assertFalse(
+                    "the cancelled open must not release ownership before its cancellation finishes",
+                    ownershipJob.isCompleted,
+                )
+                assertEquals(
+                    "the next run waits in the pending slot while the open is blocked",
+                    secondRun.id,
+                    holder.testSurface.pendingRunObservationRequests[session.id]?.run?.id,
+                )
 
                 gateway.releaseObservationOpen.complete(Unit)
                 advanceUntilIdle()
@@ -232,6 +246,8 @@ class RunReconciliationSubmissionTest {
                 )
                 assertTrue(secondObservation.started.isCompleted)
                 assertEquals(listOf(firstRun.id, secondRun.id), gateway.observedRunIds)
+                assertEquals(secondRun.id, holder.testSurface.runObservationRunIds[session.id])
+                assertTrue(holder.testSurface.pendingRunObservationRequests.isEmpty())
             } finally {
                 gateway.releaseObservationOpen.complete(Unit)
                 secondObservation.release.complete(Unit)
@@ -266,8 +282,7 @@ class RunReconciliationSubmissionTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {
@@ -322,8 +337,7 @@ class RunReconciliationSubmissionTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {

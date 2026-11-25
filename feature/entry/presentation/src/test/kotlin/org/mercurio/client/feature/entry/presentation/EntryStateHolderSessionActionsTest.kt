@@ -1,8 +1,6 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -17,8 +15,6 @@ import org.mercurio.client.feature.entry.domain.GatewayHistoryMessage
 import org.mercurio.client.feature.entry.domain.SessionHistory
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.SessionPage
-import kotlinx.coroutines.CompletableDeferred
-import java.util.concurrent.TimeUnit
 
 class EntryStateHolderSessionActionsTest {
     @Test
@@ -176,7 +172,7 @@ class EntryStateHolderSessionActionsTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
                 holder.onEvent(EntryUiEvent.PinSessionClicked(gateway.sessionId))
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(0, gateway.pinCalls)
 
                 refreshRelease.complete(Unit)
@@ -220,7 +216,7 @@ class EntryStateHolderSessionActionsTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
                 holder.onEvent(EntryUiEvent.RefreshSessionListClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.listCalls)
 
                 refreshRelease.complete(Unit)
@@ -263,7 +259,7 @@ class EntryStateHolderSessionActionsTest {
                 assertTrue(requireNotNull(holder.uiState.value.sessionList).openedSession?.isRefreshing == true)
 
                 holder.onEvent(EntryUiEvent.LoadMoreSessionsClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.listCalls)
 
                 refreshRelease.complete(Unit)
@@ -478,10 +474,10 @@ class EntryStateHolderSessionActionsTest {
                 assertTrue(pending.createSession?.isSubmitting == true)
 
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.createCalls)
                 holder.onEvent(EntryUiEvent.CreateSessionClicked)
-                runBlocking { holder.awaitStateChangesApplied() }
+                holder.awaitStateChangesApplied()
                 assertEquals(1, gateway.createCalls)
 
                 createRelease.complete(Unit)

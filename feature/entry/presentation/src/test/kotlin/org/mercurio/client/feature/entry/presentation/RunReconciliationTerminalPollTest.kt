@@ -1,6 +1,5 @@
 package org.mercurio.client.feature.entry.presentation
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -12,8 +11,6 @@ import org.mercurio.client.feature.entry.domain.RunId
 import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
 import org.mercurio.client.feature.entry.domain.SessionHistory
-import org.mercurio.client.feature.entry.domain.SessionId
-import java.util.concurrent.TimeUnit
 
 class RunReconciliationTerminalPollTest {
     @Test
@@ -188,8 +185,7 @@ class RunReconciliationTerminalPollTest {
                 reconciliationHolder(
                     gateway,
                     settings =
-                        ReconciliationHolderSettings(
-                        ),
+                        ReconciliationHolderSettings(),
                 )
 
             try {

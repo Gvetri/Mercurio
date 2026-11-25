@@ -28,7 +28,8 @@ internal class EntryStateHolderTestSurface(
     val recoveryLoadFailed: Boolean get() = holder.recoveryLoadFailed
     val runObservationJobs: MutableMap<SessionId, Job> get() = holder.runObservationJobs
     val runObservationRunIds: MutableMap<SessionId, RunId> get() = holder.runObservationRunIds
-    val pendingRunObservationRequests: MutableMap<SessionId, ObserverStartRequest> get() = holder.pendingRunObservationRequests
+    val pendingRunObservationRequests: MutableMap<SessionId, ObserverStartRequest> get() =
+        holder.pendingRunObservationRequests
     val runObservations: MutableMap<SessionId, RunEventObservation> get() = holder.runObservations
     val recoveryUnavailableSessions: MutableSet<SessionId> get() = holder.recoveryUnavailableSessions
     val sessionRuns: MutableMap<SessionId, List<Run>> get() = holder.sessionRuns

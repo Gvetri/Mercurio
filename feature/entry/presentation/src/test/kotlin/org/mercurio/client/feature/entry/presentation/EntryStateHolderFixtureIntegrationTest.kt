@@ -15,7 +15,6 @@ import org.mercurio.client.feature.entry.data.DefaultGatewayClient
 import org.mercurio.client.feature.entry.domain.GatewayCapabilities
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.fixture.SyntheticGatewayBehavior
-import java.util.concurrent.TimeUnit
 
 class EntryStateHolderFixtureIntegrationTest {
     @Test
