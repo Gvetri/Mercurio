@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,7 +81,7 @@ internal class MainThreadStorageBoundaryTest {
                 holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
                 awaitState(holder) { !it.isGatewayConnectionConfigured && it.sessionList == null }
-                selectionStore.cleared.await()
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { selectionStore.cleared.await() }
 
                 recorder.assertOperationsRanOffThread(
                     eventThread,
@@ -109,12 +110,12 @@ internal class MainThreadStorageBoundaryTest {
                 open(holder, blockedGateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                blockedGateway.runStarted.await()
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { blockedGateway.runStarted.await() }
                 recorder.reset()
 
                 holder.close()
                 recorder.assertNoCallOn(eventThread)
-                uncertaintyStore.awaitAdds()
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { uncertaintyStore.awaitAdds() }
                 recorder.assertOperationsRanOffThread(eventThread, "uncertainty.add")
             } finally {
                 blockedGateway.releaseRun.complete(Unit)
@@ -134,12 +135,12 @@ internal class MainThreadStorageBoundaryTest {
                 open(holder, blockedGateway, session.id)
                 holder.onEvent(EntryUiEvent.ComposerTextChanged("Run once"))
                 holder.onEvent(EntryUiEvent.SendMessageClicked)
-                blockedGateway.runStarted.await()
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { blockedGateway.runStarted.await() }
                 recorder.reset()
 
                 holder.onEvent(EntryUiEvent.RemoveGatewayConnectionClicked)
                 holder.onEvent(EntryUiEvent.ConfirmRemoveGatewayConnectionClicked)
-                selectionStore.cleared.await()
+                withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { selectionStore.cleared.await() }
 
                 recorder.assertRanInOrder("uncertainty.add", "repository.clear", "uncertainty.clearEndpoint")
             } finally {

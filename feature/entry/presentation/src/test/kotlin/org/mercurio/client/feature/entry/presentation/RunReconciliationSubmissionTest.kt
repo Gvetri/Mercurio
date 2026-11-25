@@ -156,13 +156,13 @@ class RunReconciliationSubmissionTest {
     @Test(timeout = RECONCILIATION_TIMEOUT_MILLIS)
     fun direct_parent_cancellation_releases_a_queued_observer_without_restarting() =
         runTest {
-            assertParentCancellationReleasesObserver(cancelDuringRegistration = false)
+            assertParentCancellationReleasesObserver(beforeSubmissionRuns = false)
         }
 
     @Test(timeout = RECONCILIATION_TIMEOUT_MILLIS)
-    fun direct_parent_cancellation_during_observer_registration_still_releases_ownership() =
+    fun a_parent_cancelled_before_the_submission_runs_registers_no_observer() =
         runTest {
-            assertParentCancellationReleasesObserver(cancelDuringRegistration = true)
+            assertParentCancellationReleasesObserver(beforeSubmissionRuns = true)
         }
 
     @Test

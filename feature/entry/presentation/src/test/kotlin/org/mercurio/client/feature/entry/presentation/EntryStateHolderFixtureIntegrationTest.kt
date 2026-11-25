@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -228,7 +229,7 @@ class EntryStateHolderFixtureIntegrationTest {
                     holder.onEvent(EntryUiEvent.RenameSessionTitleChanged(targetId, "Renamed"))
                     holder.onEvent(EntryUiEvent.ConfirmRenameSessionClicked(targetId))
 
-                    runBlocking { transport.started.await() }
+                    runBlocking { withTimeout(FIXTURE_TIMEOUT_MILLIS) { transport.started.await() } }
                     assertEquals(SessionMutationAction.RENAME, mutation(holder, targetId)?.pendingAction)
                     assertEquals(
                         1,
@@ -282,7 +283,7 @@ class EntryStateHolderFixtureIntegrationTest {
 
                     holder.onEvent(EntryUiEvent.PinSessionClicked(targetId))
 
-                    runBlocking { transport.started.await() }
+                    runBlocking { withTimeout(FIXTURE_TIMEOUT_MILLIS) { transport.started.await() } }
                     assertEquals(SessionMutationAction.PIN, requireNotNull(mutation(holder, targetId)).pendingAction)
                     assertEquals(
                         1,
@@ -336,7 +337,7 @@ class EntryStateHolderFixtureIntegrationTest {
 
                     holder.onEvent(EntryUiEvent.UnpinSessionClicked(targetId))
 
-                    runBlocking { transport.started.await() }
+                    runBlocking { withTimeout(FIXTURE_TIMEOUT_MILLIS) { transport.started.await() } }
                     assertEquals(SessionMutationAction.UNPIN, mutation(holder, targetId)?.pendingAction)
                     assertEquals(
                         1,
@@ -391,7 +392,7 @@ class EntryStateHolderFixtureIntegrationTest {
                     holder.onEvent(EntryUiEvent.DeleteSessionClicked(targetId))
                     holder.onEvent(EntryUiEvent.ConfirmDeleteSessionClicked(targetId))
 
-                    runBlocking { transport.started.await() }
+                    runBlocking { withTimeout(FIXTURE_TIMEOUT_MILLIS) { transport.started.await() } }
                     assertEquals(SessionMutationAction.DELETE, mutation(holder, targetId)?.pendingAction)
                     assertEquals(
                         1,

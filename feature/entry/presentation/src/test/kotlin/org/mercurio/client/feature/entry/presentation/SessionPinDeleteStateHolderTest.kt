@@ -449,8 +449,4 @@ class SessionPinDeleteStateHolderTest {
 
         override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
     }
-
-    private companion object {
-        const val ASYNC_TEST_TIMEOUT_MILLIS = 15_000L
-    }
 }

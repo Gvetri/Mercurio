@@ -13,6 +13,8 @@ import org.mercurio.client.feature.entry.domain.GatewayException
 import org.mercurio.client.feature.entry.domain.RunEventType
 import org.mercurio.client.feature.entry.domain.RunId
 
+private const val CLOSE_TIMEOUT_MILLIS = 5_000L
+
 class GatewaySseParserTest {
     private val runId = RunId("run-1")
 
@@ -326,7 +328,7 @@ class GatewaySseParserTest {
             assertTrue(closed)
         }
 
-    @Test
+    @Test(timeout = CLOSE_TIMEOUT_MILLIS)
     fun closing_during_stream_open_does_not_block_and_closes_the_late_stream() =
         runBlocking {
             val openStarted = CompletableDeferred<Unit>()

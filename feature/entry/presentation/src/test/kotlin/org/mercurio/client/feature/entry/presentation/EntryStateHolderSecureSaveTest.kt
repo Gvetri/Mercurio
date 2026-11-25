@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -73,7 +74,7 @@ class EntryStateHolderSecureSaveTest {
             holder.onEvent(EntryUiEvent.EndpointChanged("https://gateway.example/profile"))
             holder.onEvent(EntryUiEvent.BearerCredentialChanged("secure-token"))
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)
-            verifyStarted.await()
+            withTimeout(ASYNC_TEST_TIMEOUT_MILLIS) { verifyStarted.await() }
             assertTrue(holder.uiState.value.isVerifying)
 
             holder.onEvent(EntryUiEvent.VerifyGatewayConnectionClicked)

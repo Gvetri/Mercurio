@@ -96,7 +96,7 @@ class EntryWiringRestartIntegrationTest {
                 openSession(firstHolder, gateway.session.id)
                 sendFromComposer(firstHolder, gateway, "Persist this run")
                 awaitState(firstHolder) { it.sessionList?.openedSession?.latestRun?.id == gateway.activeRun.id }
-                runBlocking { gateway.observationStarted.await() }
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.observationStarted.await() } }
                 awaitRecoveryEntries(storage, setOf(RunRecoveryEntry(gateway.session.id, gateway.activeRun.id)))
                 assertEquals(1, storage.load().size)
                 assertTrue(otherEndpointStorage.load().isEmpty())
@@ -154,7 +154,7 @@ class EntryWiringRestartIntegrationTest {
             try {
                 connect(restartedHolder, endpoint, hasSavedEndpoint = true)
                 openSession(restartedHolder, gateway.session.id)
-                runBlocking { gateway.statusStarted.await() }
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.statusStarted.await() } }
                 restartedHolder.onEvent(EntryUiEvent.ComposerTextChanged("Do not duplicate"))
                 restartedHolder.onEvent(EntryUiEvent.SendMessageClicked)
                 val blocked = requireNotNull(requireNotNull(restartedHolder.uiState.value.sessionList).openedSession)
@@ -307,7 +307,7 @@ class EntryWiringRestartIntegrationTest {
                 connect(firstHolder, endpoint, hasSavedEndpoint = false)
                 openSession(firstHolder, gateway.session.id)
                 sendFromComposer(firstHolder, gateway, "Keep one request")
-                runBlocking { gateway.runStarted.await() }
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runStarted.await() } }
                 assertTrue(SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey))
 
                 val restartedHolder = createHolder(context, gateway)
@@ -327,7 +327,7 @@ class EntryWiringRestartIntegrationTest {
                 firstHolder.close()
             }
             gateway.releaseCreate.complete(Unit)
-            runBlocking { gateway.runFinished.await() }
+            runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runFinished.await() } }
             awaitCondition { !SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey) }
         } finally {
             gateway.releaseCreate.complete(Unit)
@@ -397,7 +397,7 @@ class EntryWiringRestartIntegrationTest {
                 openSession(firstHolder, gateway.session.id)
                 gateway.blockCreate = true
                 sendFromComposer(firstHolder, gateway, "Do not lose recovery")
-                runBlocking { gateway.runStarted.await() }
+                runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runStarted.await() } }
 
                 firstHolder.close()
                 assertFalse(SharedPreferencesRunSubmissionUncertaintyStore(context).isSettled(uncertaintyKey))
@@ -405,7 +405,7 @@ class EntryWiringRestartIntegrationTest {
                 gateway.releaseCreate.complete(Unit)
                 firstHolder.close()
             }
-            runBlocking { gateway.runFinished.await() }
+            runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runFinished.await() } }
             awaitCondition { !SharedPreferencesRunSubmissionUncertaintyStore(context).contains(uncertaintyKey) }
 
             gateway.terminal = true
@@ -487,7 +487,7 @@ class EntryWiringRestartIntegrationTest {
             connect(holder, "https://gateway.example/profile", hasSavedEndpoint = false)
             openSession(holder, gateway.session.id)
             sendFromComposer(holder, gateway, "A loaded Runner answers slowly")
-            runBlocking { gateway.runStarted.await() }
+            runBlocking { withTimeout(BOUNDED_AWAIT_TIMEOUT_MILLIS) { gateway.runStarted.await() } }
         } finally {
             gateway.releaseCreate.complete(Unit)
             holder.close()
@@ -882,8 +882,6 @@ class EntryWiringRestartIntegrationTest {
 
     private companion object {
         const val BOUNDED_AWAIT_TIMEOUT_MILLIS = 60_000L
-
-        const val RELEASE_GUARD_MILLIS = 5_000L
 
         const val SLOW_GATEWAY_SIGNAL_MILLIS = 5_500L
     }

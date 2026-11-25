@@ -204,7 +204,6 @@ class RunReconciliationTerminalPollTest {
                 )
                 gateway.statusStarted.await()
 
-                @Suppress("UNCHECKED_CAST")
                 val historyGenerations =
                     holder.testSurface.authoritativeSessionHistoryGenerations
                 historyGenerations[session.id] = (historyGenerations[session.id] ?: 0L) + 1L

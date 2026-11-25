@@ -46,11 +46,12 @@ import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Asserts that a cancelled parent job releases the run observer. The observation start is held at
- * the gateway call, so a cancelled parent must stop the job before it registers its observation and
- * must not start a replacement one.
+ * Asserts that a cancelled parent job releases the run observer. With the observation start held
+ * at the gateway call, a cancelled parent must stop the job before it registers its observation
+ * and must not start a replacement one. Cancelled before the submission runs, the holder must not
+ * open an observation at all.
  */
-internal suspend fun TestScope.assertParentCancellationReleasesObserver(cancelDuringRegistration: Boolean) {
+internal suspend fun TestScope.assertParentCancellationReleasesObserver(beforeSubmissionRuns: Boolean) {
     val session = reconciliationSession()
     val run = Run(RunId("parent-cancelled-run"), session.id, "running")
     val parent = SupervisorJob()
@@ -76,24 +77,34 @@ internal suspend fun TestScope.assertParentCancellationReleasesObserver(cancelDu
         openReconciledSession(holder, gateway)
         holder.onEvent(EntryUiEvent.ComposerTextChanged("Cancel the parent"))
         holder.onEvent(EntryUiEvent.SendMessageClicked)
+        if (beforeSubmissionRuns) {
+            parent.cancel()
+        } else {
+            advanceUntilIdle()
+            assertEquals(1, gateway.observationRequests.size)
+            assertEquals(1, holder.testSurface.runObservationJobs.size)
+            assertTrue(holder.testSurface.runObservationJobs.values.single().isActive)
+            assertTrue(gateway.observedRunIds.isEmpty())
+            parent.cancel()
+        }
         advanceUntilIdle()
-        assertEquals(1, gateway.observationRequests.size)
-        assertEquals(1, holder.testSurface.runObservationJobs.size)
-        assertTrue(holder.testSurface.runObservationJobs.values.single().isActive)
-        assertTrue(gateway.observedRunIds.isEmpty())
 
-        if (cancelDuringRegistration) parent.cancel() else scope.cancel()
-        advanceUntilIdle()
-
-        assertEquals("A cancelled parent must not register replacement observers.", 1, gateway.observationRequests.size)
+        val expectedObservationRequests = if (beforeSubmissionRuns) 0 else 1
+        assertEquals(
+            "A cancelled parent must not register a replacement observer.",
+            expectedObservationRequests,
+            gateway.observationRequests.size,
+        )
         assertTrue("Unexpected coroutine failures: $failures", failures.isEmpty())
         assertTrue(parent.isCompleted)
         assertTrue(holder.testSurface.runObservationJobs.isEmpty())
         assertTrue(holder.testSurface.runObservationRunIds.isEmpty())
         assertTrue(holder.testSurface.pendingRunObservationRequests.isEmpty())
         assertTrue(gateway.observedRunIds.isEmpty())
-        assertEquals(listOf(session.id to "Cancel the parent"), gateway.runRequests)
-        assertEquals(run.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
+        if (!beforeSubmissionRuns) {
+            assertEquals(listOf(session.id to "Cancel the parent"), gateway.runRequests)
+            assertEquals(run.id, holder.uiState.value.sessionList?.openedSession?.latestRun?.id)
+        }
     } finally {
         gateway.releaseObservationOpen.complete(Unit)
         holder.close()

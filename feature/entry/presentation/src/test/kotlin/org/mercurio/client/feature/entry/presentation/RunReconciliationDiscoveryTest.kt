@@ -68,7 +68,6 @@ internal class RunReconciliationDiscoveryTest {
                 assertEquals(listOf("user", "assistant"), opened.messages.map { it.id })
                 assertEquals(1, gateway.runRequests.size)
                 assertTrue(gateway.observedRunIds.isEmpty())
-                @Suppress("UNCHECKED_CAST")
                 val localRuns = holder.testSurface.sessionRuns[session.id].orEmpty()
                 assertTrue(localRuns.none { it.id == realRun.id })
             } finally {
@@ -243,7 +242,6 @@ internal class RunReconciliationDiscoveryTest {
                 }
                 assertFalse(correlatedObservation.started.isCompleted)
                 assertTrue(gateway.observedRunIds.none { it == correlatedRun.id })
-                @Suppress("UNCHECKED_CAST")
                 val localRuns = holder.testSurface.sessionRuns[session.id].orEmpty()
                 assertTrue(localRuns.none { it.id == correlatedRun.id || it.id == unrelatedRun.id })
             } finally {

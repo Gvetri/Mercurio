@@ -63,7 +63,6 @@ class RunReconciliationObservationTest {
                         opened.hasUnresolvedSubmission &&
                         opened.composerText == "Keep this draft"
                 }
-                @Suppress("UNCHECKED_CAST")
                 val localRuns = holder.testSurface.sessionRuns[session.id].orEmpty()
                 assertTrue(localRuns.none { it.id == submittedRun.id || it.id == laterRun.id })
             } finally {

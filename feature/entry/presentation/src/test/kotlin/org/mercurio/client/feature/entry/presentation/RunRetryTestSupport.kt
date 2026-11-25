@@ -39,8 +39,6 @@ import org.mercurio.client.feature.entry.domain.SessionPage
 import org.mercurio.client.feature.entry.domain.SessionPinResult
 import java.util.ArrayDeque
 
-internal const val RETRY_TIMEOUT_MILLIS = 15_000L
-
 internal class RetryHolderSettings(
     val dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
     val onRunSubmissionSettled: (suspend () -> Unit)? = null,
