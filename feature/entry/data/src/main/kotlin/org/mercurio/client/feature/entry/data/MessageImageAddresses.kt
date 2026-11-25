@@ -73,20 +73,42 @@ private fun isReservedIpv4(
 private fun isPublicIpv6Address(bytes: ByteArray): Boolean {
     val first = bytes[0].toInt() and BYTE_MASK
     val second = bytes[1].toInt() and BYTE_MASK
-    val third = bytes[2].toInt() and BYTE_MASK
-    val fourth = bytes[3].toInt() and BYTE_MASK
-    val isIpv4MappedPrefix = bytes.take(IPV4_MAPPED_PREFIX_BYTES).all { it.toInt() == 0 }
-    val isDocumentationPrefix = first == 0x20 && second == 0x01 && third == 0x0d && fourth == 0xb8
-    return when {
-        isIpv4MappedPrefix -> false
-        isDocumentationPrefix -> false
-        (first and 0xfe) == 0xfc -> false
-        first == 0xfe && (second and 0xc0) == 0x80 -> false
-        first == 0xff -> false
-        else -> true
-    }
+    return !(
+        hasIpv4MappedPrefix(bytes) ||
+            isDocumentationIpv6Prefix(bytes) ||
+            isLocalIpv6Prefix(first, second) ||
+            first == IPV6_MULTICAST_FIRST_OCTET
+    )
 }
+
+private fun hasIpv4MappedPrefix(bytes: ByteArray): Boolean =
+    bytes.take(IPV4_MAPPED_PREFIX_BYTES).all { it.toInt() == 0 }
+
+private fun isDocumentationIpv6Prefix(bytes: ByteArray): Boolean =
+    bytes.take(DOCUMENTATION_PREFIX_OCTETS.size)
+        .map { octet -> octet.toInt() and BYTE_MASK } == DOCUMENTATION_PREFIX_OCTETS
+
+private fun isLocalIpv6Prefix(
+    first: Int,
+    second: Int,
+): Boolean =
+    (first and UNIQUE_LOCAL_MASK) == UNIQUE_LOCAL_PREFIX ||
+        (first == LINK_LOCAL_FIRST_OCTET && (second and LINK_LOCAL_MASK) == LINK_LOCAL_PREFIX)
 
 private const val BYTE_MASK = 0xff
 
 private const val IPV4_MAPPED_PREFIX_BYTES = 12
+
+private const val IPV6_MULTICAST_FIRST_OCTET = 0xff
+
+private const val UNIQUE_LOCAL_MASK = 0xfe
+
+private const val UNIQUE_LOCAL_PREFIX = 0xfc
+
+private const val LINK_LOCAL_FIRST_OCTET = 0xfe
+
+private const val LINK_LOCAL_MASK = 0xc0
+
+private const val LINK_LOCAL_PREFIX = 0x80
+
+private val DOCUMENTATION_PREFIX_OCTETS = listOf(0x20, 0x01, 0x0d, 0xb8)

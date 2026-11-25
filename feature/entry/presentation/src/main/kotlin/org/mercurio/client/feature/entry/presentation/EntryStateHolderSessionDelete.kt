@@ -5,6 +5,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import org.mercurio.client.feature.entry.application.DeleteSession
 import org.mercurio.client.feature.entry.domain.RunEventObservation
+import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 import org.mercurio.client.feature.entry.domain.SessionId
 
 internal fun EntryStateHolder.showDeleteSession(sessionId: SessionId) {
@@ -48,44 +49,59 @@ internal fun EntryStateHolder.cancelDeleteSession(sessionId: SessionId) {
 
 internal fun EntryStateHolder.confirmDeleteSession(sessionId: SessionId) {
     val gateway = sessionGateway ?: return
-    val job =
-        run {
-            val current = mutationSessionFor(gateway) ?: return@run null
-            val mutation = current.sessionMutations[sessionId]
-            val delete = mutation?.delete
-            if (mutation == null || delete == null) return@run null
-            if (mutation.pendingAction != null || delete.isSubmitting) return@run null
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    sessionList =
-                        current.copy(
-                            sessionMutations =
-                                current.sessionMutations +
-                                    (
-                                        sessionId to
-                                            mutation.copy(
-                                                delete = delete.copy(isSubmitting = true),
-                                                pendingAction = SessionMutationAction.DELETE,
-                                                errorCategory = null,
-                                                retryAction = null,
-                                            )
-                                    ),
-                        ),
-                )
-            val request = beginSessionMutation(sessionId, gateway)
-            unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
-            createMutationJob(request) {
-                try {
-                    DeleteSession(gateway).execute(sessionId)
-                    removeConfirmedSession(sessionId, request)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    showDeleteFailure(request)
-                }
-            }
-        } ?: return
+    val job = startDeleteSessionJob(sessionId, gateway) ?: return
     job.start()
+}
+
+private fun EntryStateHolder.startDeleteSessionJob(
+    sessionId: SessionId,
+    gateway: SessionGatewayPort,
+): Job? {
+    val deletable =
+        mutationSessionFor(gateway)?.let { current ->
+            current.deletableMutation(sessionId)?.let { mutation -> current to mutation }
+        } ?: return null
+    val (current, mutation) = deletable
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            sessionList =
+                current.copy(
+                    sessionMutations =
+                        current.sessionMutations + (sessionId to mutation.markDeleting()),
+                ),
+        )
+    val request = beginSessionMutation(sessionId, gateway)
+    unresolvedSessionMutations.remove(recoverySessionKey(sessionId))
+    return createMutationJob(request) { runDeleteSession(gateway, sessionId, request) }
+}
+
+private fun SessionListUiState.deletableMutation(sessionId: SessionId): SessionMutationUiState? {
+    val mutation = sessionMutations[sessionId]
+    val delete = mutation?.delete
+    return mutation?.takeIf { delete != null && it.pendingAction == null && !delete.isSubmitting }
+}
+
+private fun SessionMutationUiState.markDeleting(): SessionMutationUiState =
+    copy(
+        delete = delete?.copy(isSubmitting = true),
+        pendingAction = SessionMutationAction.DELETE,
+        errorCategory = null,
+        retryAction = null,
+    )
+
+private suspend fun EntryStateHolder.runDeleteSession(
+    gateway: SessionGatewayPort,
+    sessionId: SessionId,
+    request: SessionMutationRequest,
+) {
+    try {
+        DeleteSession(gateway).execute(sessionId)
+        removeConfirmedSession(sessionId, request)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        showDeleteFailure(request)
+    }
 }
 
 internal suspend fun EntryStateHolder.showDeleteFailure(request: SessionMutationRequest) {

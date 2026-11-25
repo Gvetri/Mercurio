@@ -1205,7 +1205,7 @@ class QualityGateConfigurationTest {
             "DocumentationOverPrivateFunction:",
             "DocumentationOverPrivateProperty:",
             "CyclomaticComplexMethod:",
-            "allowedComplexity: 12",
+            "allowedComplexity: 10",
             "CognitiveComplexMethod:",
             "allowedComplexity: 15",
             "LongMethod:",

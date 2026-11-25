@@ -24,21 +24,33 @@ private fun scanStep(
     index: Int,
 ): Int {
     val char = state.code[index]
-    val block = state.grammar.blockComment
-    val line = state.grammar.lineComment
+    val commentEnd = commentEnd(state, index)
     return when {
-        block != null && state.code.startsWith(block.first, index) -> {
-            val close = state.code.indexOf(block.second, startIndex = index + block.first.length)
-            emitComment(state, index, if (close < 0) state.code.length else close + block.second.length)
-        }
-        line != null && state.code.startsWith(line, index) -> {
-            val newline = state.code.indexOf('\n', startIndex = index)
-            emitComment(state, index, if (newline < 0) state.code.length else newline)
-        }
+        commentEnd != null -> emitComment(state, index, commentEnd)
         char in state.grammar.quotes -> scanString(state, index)
         char.isDigit() -> scanNumber(state, index)
         char == '_' || char.isLetter() -> scanWord(state, index)
         else -> index + 1
+    }
+}
+
+private fun commentEnd(
+    state: ScannerState,
+    index: Int,
+): Int? {
+    val code = state.code
+    val block = state.grammar.blockComment
+    val line = state.grammar.lineComment
+    return when {
+        block != null && code.startsWith(block.first, index) -> {
+            val close = code.indexOf(block.second, startIndex = index + block.first.length)
+            if (close < 0) code.length else close + block.second.length
+        }
+        line != null && code.startsWith(line, index) -> {
+            val newline = code.indexOf('\n', startIndex = index)
+            if (newline < 0) code.length else newline
+        }
+        else -> null
     }
 }
 

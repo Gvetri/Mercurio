@@ -13,6 +13,7 @@ import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEventObservation
 import org.mercurio.client.feature.entry.domain.RunEventStateTransition
 import org.mercurio.client.feature.entry.domain.RunGatewayPort
+import org.mercurio.client.feature.entry.domain.RunPresentationState
 import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 import org.mercurio.client.feature.entry.domain.isTerminal
@@ -168,6 +169,25 @@ internal fun EntryStateHolder.startNewRunObservation(
             ?: state
                 .takeIf { latestRun == null || latestRun.id == run.id }
                 ?.let { observedMessageUiState(it) }
+    applyRunObservationStart(sessionId, knownRuns, latestState, latestResponse)
+    val observationJob =
+        scope.launch(start = CoroutineStart.LAZY) {
+            observeRun(
+                sessionId = sessionId,
+                run = run,
+            )
+        }
+    runObservationJobs[sessionId] = observationJob
+    runObservationRunIds[sessionId] = run.id
+    return RunObservationStart(jobToStart = observationJob)
+}
+
+private fun EntryStateHolder.applyRunObservationStart(
+    sessionId: SessionId,
+    knownRuns: List<Run>,
+    latestState: RunPresentationState?,
+    latestResponse: SessionMessageUiState?,
+) {
     submitStateChange {
         val currentNow = mutableUiState.value.sessionList ?: return@submitStateChange
         val openedNow =
@@ -186,16 +206,6 @@ internal fun EntryStateHolder.startNewRunObservation(
                     ),
             )
     }
-    val observationJob =
-        scope.launch(start = CoroutineStart.LAZY) {
-            observeRun(
-                sessionId = sessionId,
-                run = run,
-            )
-        }
-    runObservationJobs[sessionId] = observationJob
-    runObservationRunIds[sessionId] = run.id
-    return RunObservationStart(jobToStart = observationJob)
 }
 
 internal fun EntryStateHolder.restartObservationAfterCompletion(

@@ -10,6 +10,7 @@ import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEventStateTransition
 import org.mercurio.client.feature.entry.domain.RunRecoveryEntry
+import org.mercurio.client.feature.entry.domain.RunSubmissionUncertaintySnapshot
 import org.mercurio.client.feature.entry.domain.isActive
 import java.util.concurrent.ConcurrentHashMap
 
@@ -49,27 +50,7 @@ internal suspend fun EntryStateHolder.rememberRecoveredRun(
     val pendingKey = PendingRunSubmissionKey(mutableUiState.value.endpoint, entry.sessionId)
     val uncertaintySnapshot = runSubmissionUncertaintyStore.snapshot(pendingKey)
     if (uncertaintySnapshot != null && entry.runId !in uncertaintySnapshot.knownRunIds) {
-        val currentAttemptId = uncertainSubmissionAttemptIds[entry.sessionId] ?: uncertaintySnapshot.attemptId
-        if (
-            uncertaintySnapshot.attemptId == currentAttemptId &&
-            uncertaintySnapshot.boundRunId == entry.runId
-        ) {
-            uncertainSubmissionRunIds[entry.sessionId] = entry.runId
-            uncertainSubmissionAttemptIds[entry.sessionId] = uncertaintySnapshot.attemptId
-        } else {
-            if (uncertainSubmissionRunIds[entry.sessionId] == entry.runId) {
-                uncertainSubmissionRunIds.remove(entry.sessionId)
-                uncertainSubmissionAttemptIds.remove(entry.sessionId)
-            }
-            unresolvedSubmissionSessions += entry.sessionId
-            ambiguousSubmissionSessions += entry.sessionId
-            runCatchingSuspend {
-                runSubmissionUncertaintyStore.markAmbiguous(
-                    pendingKey,
-                    uncertaintySnapshot.attemptId,
-                )
-            }
-        }
+        reconcileRecoveredSubmission(entry, pendingKey, uncertaintySnapshot)
     }
     sessionRuns[entry.sessionId] =
         mergeRuns(sessionRuns[entry.sessionId].orEmpty(), listOf(run))
@@ -88,6 +69,31 @@ internal suspend fun EntryStateHolder.rememberRecoveredRun(
         }
     rememberObservationState(state)
     if (updateVisibleState) updateVisibleRunState(entry.sessionId)
+}
+
+private suspend fun EntryStateHolder.reconcileRecoveredSubmission(
+    entry: RunRecoveryEntry,
+    pendingKey: PendingRunSubmissionKey,
+    uncertaintySnapshot: RunSubmissionUncertaintySnapshot,
+) {
+    val currentAttemptId = uncertainSubmissionAttemptIds[entry.sessionId] ?: uncertaintySnapshot.attemptId
+    if (uncertaintySnapshot.attemptId == currentAttemptId && uncertaintySnapshot.boundRunId == entry.runId) {
+        uncertainSubmissionRunIds[entry.sessionId] = entry.runId
+        uncertainSubmissionAttemptIds[entry.sessionId] = uncertaintySnapshot.attemptId
+    } else {
+        if (uncertainSubmissionRunIds[entry.sessionId] == entry.runId) {
+            uncertainSubmissionRunIds.remove(entry.sessionId)
+            uncertainSubmissionAttemptIds.remove(entry.sessionId)
+        }
+        unresolvedSubmissionSessions += entry.sessionId
+        ambiguousSubmissionSessions += entry.sessionId
+        runCatchingSuspend {
+            runSubmissionUncertaintyStore.markAmbiguous(
+                pendingKey,
+                uncertaintySnapshot.attemptId,
+            )
+        }
+    }
 }
 
 internal suspend fun EntryStateHolder.persistDisconnectedRecoveryEntry(

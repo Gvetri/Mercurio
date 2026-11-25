@@ -95,25 +95,35 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
             applySuccessfulSubmission(submission, run)
         }
     } catch (_: TimeoutCancellationException) {
-        if (reportUncertainRunSubmission(submission)) {
-            onRunSubmissionCompleted?.invoke()
-        }
+        reportSubmissionFailure(submission, null)
     } catch (error: CancellationException) {
         markSubmissionAmbiguous(submission)
         throw error
     } catch (error: GatewayException) {
-        val sendCategory =
-            error.category.toSendFailureCategoryOrNull() ?: MessageSendErrorCategory.GATEWAY_REQUEST_FAILED
-        if (reportUncertainRunSubmission(submission, sendCategory)) {
-            onRunSubmissionCompleted?.invoke()
-        }
+        reportSubmissionFailure(
+            submission,
+            error.category.toSendFailureCategoryOrNull() ?: MessageSendErrorCategory.GATEWAY_REQUEST_FAILED,
+        )
     } catch (_: Exception) {
-        if (reportUncertainRunSubmission(submission, MessageSendErrorCategory.GATEWAY_REQUEST_FAILED)) {
-            onRunSubmissionCompleted?.invoke()
-        }
+        reportSubmissionFailure(submission, MessageSendErrorCategory.GATEWAY_REQUEST_FAILED)
     } finally {
         forgetPendingCreate(submission.recoverySessionKey, submission.pendingCreate)
         onRunSubmissionSettled?.invoke()
+    }
+}
+
+private suspend fun EntryStateHolder.reportSubmissionFailure(
+    submission: RunSubmissionWork,
+    sendCategory: MessageSendErrorCategory?,
+) {
+    val reported =
+        if (sendCategory == null) {
+            reportUncertainRunSubmission(submission)
+        } else {
+            reportUncertainRunSubmission(submission, sendCategory)
+        }
+    if (reported) {
+        onRunSubmissionCompleted?.invoke()
     }
 }
 

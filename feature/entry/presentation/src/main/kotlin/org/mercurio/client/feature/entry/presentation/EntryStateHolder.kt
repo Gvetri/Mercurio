@@ -175,119 +175,42 @@ class EntryStateHolder(
      * result application.
      */
     fun onEvent(event: EntryUiEvent) {
-        submitStateChange {
-            when (event) {
-                is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
-                is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
-                is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
-                is EntryUiEvent.SessionMutation,
-                is EntryUiEvent.SessionPinAndDelete,
-                -> dispatchSessionMutationEvent(event)
-                is EntryUiEvent.Run -> dispatchRunEvent(event)
-                is EntryUiEvent.ModelPicker -> handleModelPickerEvent(event)
-                is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
-                is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
-                is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
-                is EntryUiEvent.ErrorReportingConsentEvent ->
-                    recordErrorReportingConsent(event.decision)
-                is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
-            }
-        }
+        submitStateChange { dispatchEvent(event) }
     }
 
-    private fun dispatchConnectionEvent(event: EntryUiEvent.Connection) {
+    private suspend fun dispatchEvent(event: EntryUiEvent) {
         when (event) {
-            is EntryUiEvent.AddGatewayConnectionClicked -> showConnectionSetup()
-            is EntryUiEvent.ChangeGatewayCredentialClicked -> showCredentialRotation()
-            is EntryUiEvent.CancelGatewayCredentialChangeClicked -> cancelCredentialRotation()
-            is EntryUiEvent.CloseGatewayConnectionSetupClicked -> closeGatewayConnectionSetup()
-            is EntryUiEvent.EndpointChanged -> updateEndpoint(event.value)
-            is EntryUiEvent.BearerCredentialChanged -> updateBearerCredential(event.value)
-            is EntryUiEvent.VerifyGatewayConnectionClicked,
-            is EntryUiEvent.TryAgainClicked,
-            -> verifyConnection()
-            is EntryUiEvent.RemoveGatewayConnectionClicked,
-            is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked,
-            is EntryUiEvent.CancelRemoveGatewayConnectionClicked,
-            -> dispatchRemoveConnectionEvent(event)
-            is EntryUiEvent.RunStatusNotificationsToggleClicked -> toggleRunStatusNotifications()
-            is EntryUiEvent.AutoLoadImagesToggleClicked -> toggleAutoLoadImages()
-            is EntryUiEvent.RunStatusNotificationPermissionResult ->
-                applyRunStatusNotificationPermissionResult(event.granted)
+            is EntryUiEvent.Intake,
+            is EntryUiEvent.AppLock,
+            is EntryUiEvent.ErrorReportingConsentEvent,
+            is EntryUiEvent.AppLifecycle,
+            -> dispatchHostEvent(event)
+            is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
+            is EntryUiEvent.SessionNavigation,
+            is EntryUiEvent.SessionMutation,
+            is EntryUiEvent.SessionPinAndDelete,
+            -> dispatchSessionEvent(event)
+            is EntryUiEvent.Run -> dispatchRunEvent(event)
+            is EntryUiEvent.ModelPicker -> handleModelPickerEvent(event)
+            is EntryUiEvent.Settings -> dispatchSettingsEvent(event)
+            is EntryUiEvent.Diagnostics -> dispatchDiagnosticsEvent(event)
         }
     }
 
-    private fun dispatchRemoveConnectionEvent(event: EntryUiEvent) {
+    private fun dispatchSessionEvent(event: EntryUiEvent) {
         when {
-            event is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
-            event is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
-            event is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
+            event is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
+            event is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
+            event is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
         }
     }
 
-    private fun dispatchSessionNavigationEvent(event: EntryUiEvent.SessionNavigation) {
-        when (event) {
-            is EntryUiEvent.RefreshSessionsClicked -> refreshSessions()
-            is EntryUiEvent.RefreshSessionListClicked -> refreshSessionList()
-            is EntryUiEvent.SessionSearchQueryChanged -> updateSearchQuery(event.value)
-            is EntryUiEvent.ClearSessionSearchClicked -> clearSearch()
-            is EntryUiEvent.LoadMoreSessionsClicked -> loadMoreSessions()
-            is EntryUiEvent.SessionClicked -> openSession(event.sessionId)
-            is EntryUiEvent.ReturnToSessionListClicked -> returnToSessionList()
-        }
-    }
-
-    private fun dispatchSessionMutationEvent(event: EntryUiEvent) {
+    private fun dispatchHostEvent(event: EntryUiEvent) {
         when {
-            event is EntryUiEvent.CreateSessionClicked -> showCreateSession()
-            event is EntryUiEvent.RenameSessionClicked -> showRenameSession(event.sessionId)
-            event is EntryUiEvent.RenameSessionTitleChanged ->
-                updateRenameSessionTitle(event.sessionId, event.value)
-            event is EntryUiEvent.ConfirmRenameSessionClicked -> confirmRenameSession(event.sessionId)
-            event is EntryUiEvent.CancelRenameSessionClicked -> cancelRenameSession(event.sessionId)
-            event is EntryUiEvent.PinSessionClicked -> pinSession(event.sessionId)
-            event is EntryUiEvent.UnpinSessionClicked -> unpinSession(event.sessionId)
-            event is EntryUiEvent.DeleteSessionClicked -> showDeleteSession(event.sessionId)
-            event is EntryUiEvent.ConfirmDeleteSessionClicked -> confirmDeleteSession(event.sessionId)
-            event is EntryUiEvent.CancelDeleteSessionClicked -> cancelDeleteSession(event.sessionId)
-        }
-    }
-
-    private suspend fun dispatchRunEvent(event: EntryUiEvent.Run) {
-        when (event) {
-            is EntryUiEvent.ComposerTextChanged -> updateComposerText(event.value)
-            is EntryUiEvent.SendMessageClicked -> dispatchSendMessage()
-            is EntryUiEvent.StopRunClicked -> stopRunObservation()
-            is EntryUiEvent.DiscardUnresolvedSendClicked -> showDiscardUnresolvedSendConfirmation()
-            is EntryUiEvent.ConfirmDiscardUnresolvedSendClicked -> confirmDiscardUnresolvedSend()
-            is EntryUiEvent.CancelDiscardUnresolvedSendClicked -> cancelDiscardUnresolvedSend()
-            is EntryUiEvent.RetryRunClicked -> retryRun(event.runId)
-        }
-    }
-
-    private suspend fun dispatchSettingsEvent(event: EntryUiEvent.Settings) {
-        when (event) {
-            is EntryUiEvent.OpenSettingsClicked -> openSettings()
-            is EntryUiEvent.CheckForUpdatesClicked -> checkForUpdates()
-            is EntryUiEvent.DownloadUpdateClicked -> downloadUpdate()
-            is EntryUiEvent.CancelUpdateDownloadClicked -> cancelUpdateDownload()
-            is EntryUiEvent.OpenInstallPermissionSettingsClicked -> openInstallPermissionSettings()
-            is EntryUiEvent.RestartToFinishClicked -> restartToFinish()
-            is EntryUiEvent.CloseSettingsClicked -> closeSettings()
-            is EntryUiEvent.ClearHistoryCacheClicked -> requestClearHistoryCache()
-            is EntryUiEvent.ConfirmClearHistoryCacheClicked -> confirmClearHistoryCache()
-            is EntryUiEvent.CancelClearHistoryCacheClicked -> cancelClearHistoryCache()
-        }
-    }
-
-    private fun dispatchDiagnosticsEvent(event: EntryUiEvent.Diagnostics) {
-        when (event) {
-            is EntryUiEvent.OpenLocalDiagnosticsClicked -> openLocalDiagnostics()
-            is EntryUiEvent.CloseLocalDiagnosticsClicked -> closeLocalDiagnostics()
-            is EntryUiEvent.ExportDiagnosticsClicked -> exportLocalDiagnostics()
-            is EntryUiEvent.ClearDiagnosticsClicked -> requestClearLocalDiagnostics()
-            is EntryUiEvent.ConfirmClearDiagnosticsClicked -> confirmClearLocalDiagnostics()
-            is EntryUiEvent.CancelClearDiagnosticsClicked -> cancelClearLocalDiagnostics()
+            event is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
+            event is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
+            event is EntryUiEvent.ErrorReportingConsentEvent -> recordErrorReportingConsent(event.decision)
+            event is EntryUiEvent.AppLifecycle -> applyAppLifecycleEvent(event)
         }
     }
 
@@ -322,5 +245,124 @@ class EntryStateHolder(
         released.observations.forEach(RunEventObservation::close)
         persistPendingCreatesOffThread(released.pendingCreates)
         scope.cancel()
+    }
+}
+
+private fun EntryStateHolder.dispatchConnectionEvent(event: EntryUiEvent.Connection) {
+    when (event) {
+        is EntryUiEvent.AddGatewayConnectionClicked,
+        is EntryUiEvent.ChangeGatewayCredentialClicked,
+        is EntryUiEvent.CancelGatewayCredentialChangeClicked,
+        is EntryUiEvent.CloseGatewayConnectionSetupClicked,
+        -> dispatchConnectionSetupEvent(event)
+        is EntryUiEvent.EndpointChanged -> updateEndpoint(event.value)
+        is EntryUiEvent.BearerCredentialChanged -> updateBearerCredential(event.value)
+        is EntryUiEvent.VerifyGatewayConnectionClicked,
+        is EntryUiEvent.TryAgainClicked,
+        -> verifyConnection()
+        is EntryUiEvent.RemoveGatewayConnectionClicked,
+        is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked,
+        is EntryUiEvent.CancelRemoveGatewayConnectionClicked,
+        -> dispatchRemoveConnectionEvent(event)
+        is EntryUiEvent.RunStatusNotificationsToggleClicked -> toggleRunStatusNotifications()
+        is EntryUiEvent.AutoLoadImagesToggleClicked -> toggleAutoLoadImages()
+        is EntryUiEvent.RunStatusNotificationPermissionResult ->
+            applyRunStatusNotificationPermissionResult(event.granted)
+    }
+}
+
+private fun EntryStateHolder.dispatchConnectionSetupEvent(event: EntryUiEvent.Connection) {
+    when {
+        event is EntryUiEvent.AddGatewayConnectionClicked -> showConnectionSetup()
+        event is EntryUiEvent.ChangeGatewayCredentialClicked -> showCredentialRotation()
+        event is EntryUiEvent.CancelGatewayCredentialChangeClicked -> cancelCredentialRotation()
+        event is EntryUiEvent.CloseGatewayConnectionSetupClicked -> closeGatewayConnectionSetup()
+    }
+}
+
+private fun EntryStateHolder.dispatchRemoveConnectionEvent(event: EntryUiEvent) {
+    when {
+        event is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
+        event is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
+        event is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
+    }
+}
+
+private fun EntryStateHolder.dispatchSessionNavigationEvent(event: EntryUiEvent.SessionNavigation) {
+    when (event) {
+        is EntryUiEvent.RefreshSessionsClicked -> refreshSessions()
+        is EntryUiEvent.RefreshSessionListClicked -> refreshSessionList()
+        is EntryUiEvent.SessionSearchQueryChanged -> updateSearchQuery(event.value)
+        is EntryUiEvent.ClearSessionSearchClicked -> clearSearch()
+        is EntryUiEvent.LoadMoreSessionsClicked -> loadMoreSessions()
+        is EntryUiEvent.SessionClicked -> openSession(event.sessionId)
+        is EntryUiEvent.ReturnToSessionListClicked -> returnToSessionList()
+    }
+}
+
+private fun EntryStateHolder.dispatchSessionMutationEvent(event: EntryUiEvent.SessionMutation) {
+    when (event) {
+        is EntryUiEvent.CreateSessionClicked -> showCreateSession()
+        is EntryUiEvent.RenameSessionClicked -> showRenameSession(event.sessionId)
+        is EntryUiEvent.RenameSessionTitleChanged -> updateRenameSessionTitle(event.sessionId, event.value)
+        is EntryUiEvent.ConfirmRenameSessionClicked -> confirmRenameSession(event.sessionId)
+        is EntryUiEvent.CancelRenameSessionClicked -> cancelRenameSession(event.sessionId)
+    }
+}
+
+private fun EntryStateHolder.dispatchSessionPinDeleteEvent(event: EntryUiEvent.SessionPinAndDelete) {
+    when (event) {
+        is EntryUiEvent.PinSessionClicked -> pinSession(event.sessionId)
+        is EntryUiEvent.UnpinSessionClicked -> unpinSession(event.sessionId)
+        is EntryUiEvent.DeleteSessionClicked -> showDeleteSession(event.sessionId)
+        is EntryUiEvent.ConfirmDeleteSessionClicked -> confirmDeleteSession(event.sessionId)
+        is EntryUiEvent.CancelDeleteSessionClicked -> cancelDeleteSession(event.sessionId)
+    }
+}
+
+private suspend fun EntryStateHolder.dispatchRunEvent(event: EntryUiEvent.Run) {
+    when (event) {
+        is EntryUiEvent.ComposerTextChanged -> updateComposerText(event.value)
+        is EntryUiEvent.SendMessageClicked -> dispatchSendMessage()
+        is EntryUiEvent.StopRunClicked -> stopRunObservation()
+        is EntryUiEvent.DiscardUnresolvedSendClicked -> showDiscardUnresolvedSendConfirmation()
+        is EntryUiEvent.ConfirmDiscardUnresolvedSendClicked -> confirmDiscardUnresolvedSend()
+        is EntryUiEvent.CancelDiscardUnresolvedSendClicked -> cancelDiscardUnresolvedSend()
+        is EntryUiEvent.RetryRunClicked -> retryRun(event.runId)
+    }
+}
+
+private suspend fun EntryStateHolder.dispatchSettingsEvent(event: EntryUiEvent.Settings) {
+    when (event) {
+        is EntryUiEvent.OpenSettingsClicked -> openSettings()
+        is EntryUiEvent.CheckForUpdatesClicked -> checkForUpdates()
+        is EntryUiEvent.DownloadUpdateClicked -> downloadUpdate()
+        is EntryUiEvent.CancelUpdateDownloadClicked -> cancelUpdateDownload()
+        is EntryUiEvent.OpenInstallPermissionSettingsClicked -> openInstallPermissionSettings()
+        is EntryUiEvent.RestartToFinishClicked -> restartToFinish()
+        is EntryUiEvent.CloseSettingsClicked -> closeSettings()
+        is EntryUiEvent.ClearHistoryCacheClicked,
+        is EntryUiEvent.ConfirmClearHistoryCacheClicked,
+        is EntryUiEvent.CancelClearHistoryCacheClicked,
+        -> dispatchSettingsHistoryEvent(event)
+    }
+}
+
+private suspend fun EntryStateHolder.dispatchSettingsHistoryEvent(event: EntryUiEvent.Settings) {
+    when {
+        event is EntryUiEvent.ClearHistoryCacheClicked -> requestClearHistoryCache()
+        event is EntryUiEvent.ConfirmClearHistoryCacheClicked -> confirmClearHistoryCache()
+        event is EntryUiEvent.CancelClearHistoryCacheClicked -> cancelClearHistoryCache()
+    }
+}
+
+private fun EntryStateHolder.dispatchDiagnosticsEvent(event: EntryUiEvent.Diagnostics) {
+    when (event) {
+        is EntryUiEvent.OpenLocalDiagnosticsClicked -> openLocalDiagnostics()
+        is EntryUiEvent.CloseLocalDiagnosticsClicked -> closeLocalDiagnostics()
+        is EntryUiEvent.ExportDiagnosticsClicked -> exportLocalDiagnostics()
+        is EntryUiEvent.ClearDiagnosticsClicked -> requestClearLocalDiagnostics()
+        is EntryUiEvent.ConfirmClearDiagnosticsClicked -> confirmClearLocalDiagnostics()
+        is EntryUiEvent.CancelClearDiagnosticsClicked -> cancelClearLocalDiagnostics()
     }
 }

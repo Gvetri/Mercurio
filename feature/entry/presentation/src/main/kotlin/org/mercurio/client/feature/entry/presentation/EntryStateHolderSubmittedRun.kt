@@ -170,6 +170,16 @@ internal suspend fun EntryStateHolder.recordSubmittedRunState(application: Submi
             runSubmissionUncertaintyStore.markAmbiguous(application.pendingKey, application.attemptId)
         }
     }
+    recordSubmissionBinding(application)
+    sessionRuns[application.sessionId] =
+        (sessionRuns[application.sessionId].orEmpty().filterNot { it.id == application.run.id } + application.run)
+    val recoveryKey = RecoverySessionKey(application.requestEndpoint, application.sessionId)
+    pendingCreateSessions[recoveryKey]
+        ?.takeIf { it.attemptId == application.attemptId }
+        ?.let { forgetPendingCreate(recoveryKey, it) }
+}
+
+private fun EntryStateHolder.recordSubmissionBinding(application: SubmittedRunApplication) {
     if (!application.submissionBindingSucceeded) {
         rememberUnresolvedLocalRun(
             application.requestEndpoint,
@@ -178,33 +188,29 @@ internal suspend fun EntryStateHolder.recordSubmittedRunState(application: Submi
             application.attemptId,
         )
         unresolvedSubmissionSessions += application.sessionId
-    } else {
-        uncertainSubmissionRunIds[application.sessionId] = application.run.id
-        uncertainSubmissionAttemptIds[application.sessionId] = application.attemptId
-    }
-    val submittedDraft =
-        if (application.submissionBindingSucceeded) pendingRunDrafts.remove(application.sessionId) else null
-    if (!application.submissionBindingSucceeded || application.recoveryPersistenceFailed) {
-        if (application.submissionBindingSucceeded) {
-            submittedDraft?.let { uncertainSendDrafts[application.sessionId] = it }
-        }
         sessionSendErrors[application.sessionId] = MessageSendErrorCategory.UNCERTAIN
-    } else if (
-        submittedDraft != null &&
-        sessionDrafts[application.sessionId] == submittedDraft.text
-    ) {
-        sessionSendErrors.remove(application.sessionId)
-        sessionDrafts.remove(application.sessionId)
-        sessionDraftStore.remove(sessionDraftKey(application.sessionId))
-    } else {
-        sessionSendErrors.remove(application.sessionId)
+        return
     }
-    sessionRuns[application.sessionId] =
-        (sessionRuns[application.sessionId].orEmpty().filterNot { it.id == application.run.id } + application.run)
-    val recoveryKey = RecoverySessionKey(application.requestEndpoint, application.sessionId)
-    pendingCreateSessions[recoveryKey]
-        ?.takeIf { it.attemptId == application.attemptId }
-        ?.let { forgetPendingCreate(recoveryKey, it) }
+    uncertainSubmissionRunIds[application.sessionId] = application.run.id
+    uncertainSubmissionAttemptIds[application.sessionId] = application.attemptId
+    val submittedDraft = pendingRunDrafts.remove(application.sessionId)
+    if (application.recoveryPersistenceFailed) {
+        submittedDraft?.let { uncertainSendDrafts[application.sessionId] = it }
+        sessionSendErrors[application.sessionId] = MessageSendErrorCategory.UNCERTAIN
+    } else {
+        clearSubmittedDraft(application.sessionId, submittedDraft)
+    }
+}
+
+private fun EntryStateHolder.clearSubmittedDraft(
+    sessionId: SessionId,
+    submittedDraft: PendingDraft?,
+) {
+    if (submittedDraft != null && sessionDrafts[sessionId] == submittedDraft.text) {
+        sessionDrafts.remove(sessionId)
+        sessionDraftStore.remove(sessionDraftKey(sessionId))
+    }
+    sessionSendErrors.remove(sessionId)
 }
 
 internal fun EntryStateHolder.markSubmittedRunObservationState(

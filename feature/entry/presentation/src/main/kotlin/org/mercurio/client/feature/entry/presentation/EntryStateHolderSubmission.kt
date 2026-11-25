@@ -11,7 +11,6 @@ import org.mercurio.client.feature.entry.domain.SessionId
 import org.mercurio.client.feature.entry.domain.isActive
 import org.mercurio.client.feature.entry.domain.isRunRetryEligible
 import org.mercurio.client.feature.entry.domain.runs
-import org.mercurio.client.feature.entry.domain.toRunPresentationState
 import java.util.UUID
 
 internal fun EntryStateHolder.retryUncertainSubmissionOrSend() {
@@ -77,30 +76,6 @@ internal fun EntryStateHolder.dispatchSendMessage() {
     } else {
         sendMessage()
     }
-}
-
-internal fun EntryStateHolder.retryRun(runId: RunId) {
-    val originalMessage =
-        run {
-            val opened = mutableUiState.value.sessionList?.openedSession ?: return@run null
-            val sessionId = opened.session.id
-            val failedState =
-                visibleSessionRuns(sessionId).lastOrNull { it.id == runId }?.toRunPresentationState()
-                    ?: observationStateFor(sessionId, runId)?.state
-                    ?: opened.messages.lastOrNull { it.runId == runId }?.runState
-                    ?: opened.messages
-                        .lastOrNull { it.runId == runId && it.isFailedRun }
-                        ?.let { RunPresentationState.FAILED }
-            val original =
-                submittedRunInputs[runId]
-                    ?: opened.messages
-                        .lastOrNull { it.runId == runId && it.role == "user" }
-                        ?.content
-                        ?.takeIf { it.isNotBlank() }
-            if (!isRunRetryEligible(failedState, original)) return@run null
-            original
-        } ?: return
-    launchRunSubmission(input = originalMessage, recordDraft = false, rejectRunId = runId)
 }
 
 internal fun EntryStateHolder.latestRunRetryAvailable(
