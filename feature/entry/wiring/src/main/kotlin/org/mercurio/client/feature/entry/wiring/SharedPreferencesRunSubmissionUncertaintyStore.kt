@@ -70,28 +70,11 @@ private class SharedPreferencesRunSubmissionUncertaintyStorage(
 
     private fun decode(value: String): RunSubmissionUncertaintySnapshot? {
         val parts = value.split('|', limit = 6)
-        val isCurrentFormat = parts.size == CURRENT_PART_COUNT && parts[0] == FORMAT_VERSION
-        val isLegacyFormat = parts.size == LEGACY_PART_COUNT && parts[0] == LEGACY_FORMAT_VERSION
-        if (!isCurrentFormat && !isLegacyFormat) return null
-        return runCatching {
-            RunSubmissionUncertaintySnapshot(
-                attemptId = if (isCurrentFormat) decodePart(parts[1]) else LEGACY_ATTEMPT_ID,
-                knownRunIds =
-                    parts[if (isCurrentFormat) 5 else 4]
-                        .takeUnless(String::isEmpty)
-                        ?.split(',')
-                        ?.map { encoded -> RunId(decodePart(encoded)) }
-                        ?.filter { it.value.isNotBlank() }
-                        ?.toSet()
-                        .orEmpty(),
-                boundRunId =
-                    parts[if (isCurrentFormat) 4 else 3]
-                        .takeUnless(String::isEmpty)
-                        ?.let { RunId(decodePart(it)) },
-                settled = parts[if (isCurrentFormat) 2 else 1] == "1",
-                requiresRunMatch = parts[if (isCurrentFormat) 3 else 2] == "1",
-            )
-        }.getOrNull()
+        return when {
+            parts.size == CURRENT_PART_COUNT && parts[0] == FORMAT_VERSION -> decodeCurrent(parts)
+            parts.size == LEGACY_PART_COUNT && parts[0] == LEGACY_FORMAT_VERSION -> decodeLegacy(parts)
+            else -> null
+        }
     }
 
     private fun recordKey(key: PendingRunSubmissionKey): String =
@@ -99,9 +82,6 @@ private class SharedPreferencesRunSubmissionUncertaintyStorage(
 
     private fun encodePart(value: String): String =
         Base64.encodeToString(value.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-
-    private fun decodePart(value: String): String =
-        Base64.decode(value, Base64.NO_WRAP).toString(StandardCharsets.UTF_8)
 
     private fun endpointNamespace(endpoint: String): String {
         val canonicalEndpoint = runCatching { normalizeGatewayEndpoint(endpoint) }.getOrDefault(endpoint.trim())
@@ -116,9 +96,65 @@ private class SharedPreferencesRunSubmissionUncertaintyStorage(
         const val RECORDS_KEY = "records"
         const val FORMAT_VERSION = "2"
         const val LEGACY_FORMAT_VERSION = "1"
-        const val LEGACY_ATTEMPT_ID = "legacy"
         private const val CURRENT_PART_COUNT = 6
         private const val LEGACY_PART_COUNT = 5
         private const val BYTE_MASK = 0xFF
     }
 }
+
+private const val UNCERTAINTY_LEGACY_ATTEMPT_ID = "legacy"
+
+private const val CURRENT_ATTEMPT_PART = 1
+
+private const val CURRENT_SETTLED_PART = 2
+
+private const val CURRENT_RUN_MATCH_PART = 3
+
+private const val CURRENT_BOUND_RUN_PART = 4
+
+private const val CURRENT_KNOWN_RUNS_PART = 5
+
+private const val LEGACY_SETTLED_PART = 1
+
+private const val LEGACY_RUN_MATCH_PART = 2
+
+private const val LEGACY_BOUND_RUN_PART = 3
+
+private const val LEGACY_KNOWN_RUNS_PART = 4
+
+private fun decodeUncertaintyPart(value: String): String =
+    Base64.decode(value, Base64.NO_WRAP).toString(StandardCharsets.UTF_8)
+
+private fun decodeCurrent(parts: List<String>): RunSubmissionUncertaintySnapshot? =
+    runCatching {
+        RunSubmissionUncertaintySnapshot(
+            attemptId = decodeUncertaintyPart(parts[CURRENT_ATTEMPT_PART]),
+            knownRunIds = decodeRunIds(parts[CURRENT_KNOWN_RUNS_PART]),
+            boundRunId = decodeBoundRunId(parts[CURRENT_BOUND_RUN_PART]),
+            settled = parts[CURRENT_SETTLED_PART] == "1",
+            requiresRunMatch = parts[CURRENT_RUN_MATCH_PART] == "1",
+        )
+    }.getOrNull()
+
+private fun decodeLegacy(parts: List<String>): RunSubmissionUncertaintySnapshot? =
+    runCatching {
+        RunSubmissionUncertaintySnapshot(
+            attemptId = UNCERTAINTY_LEGACY_ATTEMPT_ID,
+            knownRunIds = decodeRunIds(parts[LEGACY_KNOWN_RUNS_PART]),
+            boundRunId = decodeBoundRunId(parts[LEGACY_BOUND_RUN_PART]),
+            settled = parts[LEGACY_SETTLED_PART] == "1",
+            requiresRunMatch = parts[LEGACY_RUN_MATCH_PART] == "1",
+        )
+    }.getOrNull()
+
+private fun decodeRunIds(value: String): Set<RunId> =
+    value
+        .takeUnless(String::isEmpty)
+        ?.split(',')
+        ?.map { encoded -> RunId(decodeUncertaintyPart(encoded)) }
+        ?.filter { it.value.isNotBlank() }
+        ?.toSet()
+        .orEmpty()
+
+private fun decodeBoundRunId(value: String): RunId? =
+    value.takeUnless(String::isEmpty)?.let { RunId(decodeUncertaintyPart(it)) }

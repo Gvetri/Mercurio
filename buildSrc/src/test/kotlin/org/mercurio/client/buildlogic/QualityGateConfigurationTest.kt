@@ -1204,6 +1204,14 @@ class QualityGateConfigurationTest {
             "ElseCaseInsteadOfExhaustiveWhen:",
             "DocumentationOverPrivateFunction:",
             "DocumentationOverPrivateProperty:",
+            "CyclomaticComplexMethod:",
+            "allowedComplexity: 12",
+            "CognitiveComplexMethod:",
+            "allowedComplexity: 15",
+            "LongMethod:",
+            "allowedLines: 50",
+            "LargeClass:",
+            "allowedLines: 300",
         ).forEach { declaration ->
             assertTrue("The detekt configuration must declare $declaration.", configuration.contains(declaration))
         }

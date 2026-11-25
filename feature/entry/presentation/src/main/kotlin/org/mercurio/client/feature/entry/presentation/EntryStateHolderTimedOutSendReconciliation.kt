@@ -217,31 +217,8 @@ internal suspend fun EntryStateHolder.applyTimedOutSendReconciliation(
             val evaluation =
                 evaluateTimedOutSendUncertainty(sessionId, reconciliation, resolveWhenNoNewRun)
                     ?: return@applyStateChange TimedOutSendReconciliationOutcome(applied = false)
-            authoritativeSessionRuns[sessionId] =
-                mergeRuns(evaluation.retainedAuthoritativeRuns, evaluation.authoritativeRuns)
-            evaluation.durableBoundRunId?.let { boundRunId -> uncertainSubmissionRunIds[sessionId] = boundRunId }
-            var ambiguousMark: Pair<PendingRunSubmissionKey, String>? = null
-            if (evaluation.discoveredUnattributedRun) {
-                ambiguousSubmissionSessions += sessionId
-                ambiguousMark = evaluation.pendingKey to evaluation.attemptId
-            }
-            evaluation.terminalRunIds.forEach { runId -> forgetUnresolvedLocalRun(sessionId, runId) }
-            if (evaluation.canClearUncertainty) {
-                clearTimedOutSendUncertainty(sessionId, current, opened, evaluation, resolveWhenNoNewRun)
-            } else {
-                markTimedOutSendUncertain(
-                    sessionId = sessionId,
-                    ui =
-                        TimedOutSendUiContext(
-                            current = current,
-                            opened = opened,
-                            recoveryDraft = evaluation.recoveryDraft,
-                            authoritativeMessages = evaluation.authoritativeMessages,
-                        ),
-                    errorCategory = evaluation.pendingRecovery?.errorCategory ?: MessageSendErrorCategory.UNCERTAIN,
-                )
-            }
-            pendingTimedOutSends.remove(sessionId)
+            val ambiguousMark =
+                applyTimedOutSendEvaluation(sessionId, current, opened, evaluation, resolveWhenNoNewRun)
             TimedOutSendReconciliationOutcome(
                 applied = true,
                 runToObserve = evaluation.boundSubmissionRun?.takeIf(Run::isActive),
@@ -258,6 +235,43 @@ internal suspend fun EntryStateHolder.applyTimedOutSendReconciliation(
         }
     applyAmbiguousMark(outcome)
     return outcome
+}
+
+private fun EntryStateHolder.applyTimedOutSendEvaluation(
+    sessionId: SessionId,
+    current: SessionListUiState,
+    opened: OpenSessionUiState,
+    evaluation: TimedOutSendUncertainty,
+    resolveWhenNoNewRun: Boolean,
+): Pair<PendingRunSubmissionKey, String>? {
+    authoritativeSessionRuns[sessionId] =
+        mergeRuns(evaluation.retainedAuthoritativeRuns, evaluation.authoritativeRuns)
+    evaluation.durableBoundRunId?.let { boundRunId -> uncertainSubmissionRunIds[sessionId] = boundRunId }
+    val ambiguousMark =
+        if (evaluation.discoveredUnattributedRun) {
+            ambiguousSubmissionSessions += sessionId
+            evaluation.pendingKey to evaluation.attemptId
+        } else {
+            null
+        }
+    evaluation.terminalRunIds.forEach { runId -> forgetUnresolvedLocalRun(sessionId, runId) }
+    if (evaluation.canClearUncertainty) {
+        clearTimedOutSendUncertainty(sessionId, current, opened, evaluation, resolveWhenNoNewRun)
+    } else {
+        markTimedOutSendUncertain(
+            sessionId = sessionId,
+            ui =
+                TimedOutSendUiContext(
+                    current = current,
+                    opened = opened,
+                    recoveryDraft = evaluation.recoveryDraft,
+                    authoritativeMessages = evaluation.authoritativeMessages,
+                ),
+            errorCategory = evaluation.pendingRecovery?.errorCategory ?: MessageSendErrorCategory.UNCERTAIN,
+        )
+    }
+    pendingTimedOutSends.remove(sessionId)
+    return ambiguousMark
 }
 
 private suspend fun EntryStateHolder.applyAmbiguousMark(outcome: TimedOutSendReconciliationOutcome) {

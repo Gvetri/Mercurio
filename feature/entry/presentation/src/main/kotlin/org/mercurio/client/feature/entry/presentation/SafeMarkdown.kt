@@ -53,61 +53,75 @@ internal fun parseSafeMarkdown(content: String): List<MarkdownBlock> {
 
     var index = 0
     while (index < lines.size) {
-        val line = lines[index]
-        when {
-            isFenceLine(line) -> {
-                flushParagraphRun()
-                val (block, nextIndex) = readFenceBlock(lines, index, line)
-                blocks += block
-                index = nextIndex
-            }
-            line.isBlank() -> {
-                flushParagraphRun()
-                index++
-            }
-            ATX_HEADING.matches(line.trim()) -> {
-                flushParagraphRun()
-                blocks +=
-                    MarkdownBlock.Heading(
-                        level = line.trim().takeWhile { it == '#' }.length,
-                        spans = parseInline(line.trim().dropWhile { it == '#' }.trim()),
-                    )
-                index++
-            }
-            isBlockquoteLine(line) -> {
-                flushParagraphRun()
-                val (spans, nextIndex) = readBlockquote(lines, index)
-                blocks += MarkdownBlock.Blockquote(spans)
-                index = nextIndex
-            }
-            isThematicBreak(line) -> {
-                flushParagraphRun()
-                blocks += MarkdownBlock.HorizontalRule
-                index++
-            }
-            bulletItem(line) != null -> {
-                flushParagraphRun()
-                val (items, nextIndex) = readListItemRun(lines, index, ::bulletItem)
-                blocks += MarkdownBlock.BulletList(items)
-                index = nextIndex
-            }
-            numberedItem(line) != null -> {
-                flushParagraphRun()
-                val (items, nextIndex) = readListItemRun(lines, index, ::numberedItem)
-                blocks += MarkdownBlock.NumberedList(items)
-                index = nextIndex
-            }
-            else -> {
-                paragraphLines += line.trim()
-                index++
-            }
-        }
+        index = consumeBlock(lines, index, blocks, paragraphLines, ::flushParagraphRun)
     }
     flushParagraphRun()
     return blocks
 }
 
+private fun consumeBlock(
+    lines: List<String>,
+    index: Int,
+    blocks: MutableList<MarkdownBlock>,
+    paragraphLines: MutableList<String>,
+    flushParagraph: () -> Unit,
+): Int {
+    val line = lines[index]
+    return when {
+        isFenceLine(line) -> {
+            flushParagraph()
+            val (block, nextIndex) = readFenceBlock(lines, index, line)
+            blocks += block
+            nextIndex
+        }
+        line.isBlank() -> {
+            flushParagraph()
+            index + 1
+        }
+        ATX_HEADING.matches(line.trim()) -> {
+            flushParagraph()
+            blocks += headingBlock(line)
+            index + 1
+        }
+        isBlockquoteLine(line) -> {
+            flushParagraph()
+            val (spans, nextIndex) = readBlockquote(lines, index)
+            blocks += MarkdownBlock.Blockquote(spans)
+            nextIndex
+        }
+        isThematicBreak(line) -> {
+            flushParagraph()
+            blocks += MarkdownBlock.HorizontalRule
+            index + 1
+        }
+        bulletItem(line) != null -> {
+            flushParagraph()
+            val (items, nextIndex) = readListItemRun(lines, index, ::bulletItem)
+            blocks += MarkdownBlock.BulletList(items)
+            nextIndex
+        }
+        numberedItem(line) != null -> {
+            flushParagraph()
+            val (items, nextIndex) = readListItemRun(lines, index, ::numberedItem)
+            blocks += MarkdownBlock.NumberedList(items)
+            nextIndex
+        }
+        else -> {
+            paragraphLines += line.trim()
+            index + 1
+        }
+    }
+}
+
 private val ATX_HEADING = Regex("""^#{1,6}\s+.+$""")
+
+private fun headingBlock(line: String): MarkdownBlock.Heading {
+    val trimmed = line.trim()
+    return MarkdownBlock.Heading(
+        trimmed.takeWhile { it == '#' }.length,
+        parseInline(trimmed.dropWhile { it == '#' }.trim()),
+    )
+}
 
 private fun isBlockquoteLine(line: String): Boolean = line.trimStart().startsWith(">")
 
@@ -141,7 +155,7 @@ private fun readFenceBlock(
     openingLine: String,
 ): Pair<MarkdownBlock.CodeBlock, Int> {
     val code = mutableListOf<String>()
-    val openingFenceLength = fenceLength(openingLine)
+    val openingFenceLength = openingLine.trimStart().takeWhile { it == '`' }.length
     var index = startIndex + 1
     while (index < lines.size && !isClosingFence(lines[index], openingFenceLength)) {
         code += lines[index]
@@ -155,20 +169,18 @@ private fun readFenceBlock(
     return MarkdownBlock.CodeBlock(language = fenceLanguage(openingLine), code = code.joinToString("\n")) to index
 }
 
-private fun fenceLength(line: String): Int = line.trimStart().takeWhile { it == '`' }.length
-
-private fun isFenceLine(line: String): Boolean = fenceLength(line) >= CODE_FENCE.length
+private fun isFenceLine(line: String): Boolean = line.trimStart().takeWhile { it == '`' }.length >= CODE_FENCE.length
 
 private fun isClosingFence(
     line: String,
     openingFenceLength: Int,
 ): Boolean {
     val trimmed = line.trim()
-    val closingFenceLength = fenceLength(trimmed)
+    val closingFenceLength = trimmed.trimStart().takeWhile { it == '`' }.length
     return closingFenceLength >= openingFenceLength && trimmed.drop(closingFenceLength).isEmpty()
 }
 
 private fun fenceLanguage(line: String): String? =
-    line.trimStart().drop(fenceLength(line)).trim().substringBefore(' ').ifEmpty {
+    line.trimStart().drop(line.trimStart().takeWhile { it == '`' }.length).trim().substringBefore(' ').ifEmpty {
         null
     }

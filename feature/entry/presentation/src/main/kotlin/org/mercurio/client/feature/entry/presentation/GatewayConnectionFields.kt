@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -38,6 +39,7 @@ internal fun GatewayAddressField(
     val pending = state.isVerifying || state.isSaving
     val host = state.endpointHost()
     val invalid = host.isNotEmpty() && !host.isValidGatewayHost()
+    val hintColor = tokens.colorScheme.onSurfaceVariant
     val address = rememberEchoSafeTextFieldBuffer(host)
     OutlinedTextField(
         value = address.value,
@@ -52,20 +54,8 @@ internal fun GatewayAddressField(
         singleLine = false,
         maxLines = 2,
         shape = tokens.shapes.small,
-        prefix = {
-            Text(
-                text = stringResource(R.string.gateway_address_prefix),
-                style = MaterialTheme.typography.bodyLarge,
-                color = tokens.colorScheme.onSurfaceVariant,
-            )
-        },
-        placeholder = {
-            Text(
-                text = stringResource(R.string.gateway_address_placeholder),
-                style = MaterialTheme.typography.bodyLarge,
-                color = tokens.colorScheme.onSurfaceVariant,
-            )
-        },
+        prefix = { GatewayAddressHint(R.string.gateway_address_prefix, hintColor) },
+        placeholder = { GatewayAddressHint(R.string.gateway_address_placeholder, hintColor) },
         label = {
             Text(
                 text = stringResource(R.string.gateway_address_label),
@@ -85,6 +75,18 @@ internal fun GatewayAddressField(
                 keyboardType = KeyboardType.Uri,
                 imeAction = ImeAction.Next,
             ),
+    )
+}
+
+@Composable
+private fun GatewayAddressHint(
+    textRes: Int,
+    color: Color,
+) {
+    Text(
+        text = stringResource(textRes),
+        style = MaterialTheme.typography.bodyLarge,
+        color = color,
     )
 }
 

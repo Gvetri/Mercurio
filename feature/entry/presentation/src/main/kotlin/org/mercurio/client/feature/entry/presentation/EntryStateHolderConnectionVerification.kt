@@ -118,40 +118,48 @@ internal suspend fun EntryStateHolder.connectVerifiedGateway(
                 ) ?: (gateway as? RunGatewayPort)
             catalogGateway = (runGateway as? ModelGatewayPort) ?: (gateway as? ModelGatewayPort)
             credentialBeforeRotation = null
-            mutableUiState.value =
-                mutableUiState.value.copy(
-                    endpoint = normalizedEndpoint,
-                    title = UiText.Resource(R.string.entry_title_connected),
-                    supportingText = UiText.Resource(R.string.entry_supporting_connected),
-                    actionLabel = UiText.Resource(R.string.entry_action_connected),
-                    isChangingCredential = false,
-                    isVerifying = false,
-                    isSaving = false,
-                    isConnected = true,
-                    isGatewayConnectionConfigured = true,
-                    gatewayFacts =
-                        UiText.Resource(
-                            R.string.gateway_facts_verified,
-                            listOf(LocalTime.now().format(GATEWAY_FACTS_TIME_FORMAT)),
-                        ),
-                    errorCategory = null,
-                    inboundLinkNotice = null,
-                    sessionList =
-                        gateway?.let {
-                            SessionListUiState(
-                                isLoading = true,
-                                showFirstUseGuidance = true,
-                                modelPicker =
-                                    ModelPickerUiState(
-                                        capabilityKnown = true,
-                                        catalogSurface = capabilities.modelCatalogSurface(),
-                                    ),
-                            )
-                        },
-                )
+            applyConnectedGatewayState(normalizedEndpoint, capabilities, gateway)
             gateway
         }
     }
+
+private fun EntryStateHolder.applyConnectedGatewayState(
+    normalizedEndpoint: String,
+    capabilities: GatewayCapabilities,
+    gateway: SessionGatewayPort?,
+) {
+    mutableUiState.value =
+        mutableUiState.value.copy(
+            endpoint = normalizedEndpoint,
+            title = UiText.Resource(R.string.entry_title_connected),
+            supportingText = UiText.Resource(R.string.entry_supporting_connected),
+            actionLabel = UiText.Resource(R.string.entry_action_connected),
+            isChangingCredential = false,
+            isVerifying = false,
+            isSaving = false,
+            isConnected = true,
+            isGatewayConnectionConfigured = true,
+            gatewayFacts =
+                UiText.Resource(
+                    R.string.gateway_facts_verified,
+                    listOf(LocalTime.now().format(GATEWAY_FACTS_TIME_FORMAT)),
+                ),
+            errorCategory = null,
+            inboundLinkNotice = null,
+            sessionList =
+                gateway?.let {
+                    SessionListUiState(
+                        isLoading = true,
+                        showFirstUseGuidance = true,
+                        modelPicker =
+                            ModelPickerUiState(
+                                capabilityKnown = true,
+                                catalogSurface = capabilities.modelCatalogSurface(),
+                            ),
+                    )
+                },
+        )
+}
 
 internal suspend fun EntryStateHolder.showFailure(
     category: EntryErrorCategory,

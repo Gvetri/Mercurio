@@ -71,36 +71,54 @@ internal fun GatewayConnectionScreen(
                     .clip(tokens.shapes.large)
                     .background(tokens.colorScheme.surface),
         ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .heightIn(min = maxHeight)
-                            .padding(spacing.m),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(spacing.l)) {
-                        state.inboundLinkNotice?.let { notice ->
-                            InboundLinkNoticeText(notice = notice)
-                        }
-                        GatewayBodyContent(
-                            state = state,
-                            mode = mode,
-                            addressFocus = addressFocus,
-                            onManage = { menuOpen = true },
-                            onEvent = onEvent,
-                        )
-                    }
-                    if (mode != GatewayScreenMode.SAVED && !state.errorCategory.belongsToBanner()) {
-                        GatewayFormActions(
-                            state = state,
-                            change = mode == GatewayScreenMode.CHANGE,
-                            onEvent = onEvent,
-                        )
-                    }
+            GatewayConnectionBody(
+                state = state,
+                mode = mode,
+                addressFocus = addressFocus,
+                onManage = { menuOpen = true },
+                onEvent = onEvent,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GatewayConnectionBody(
+    state: EntryUiState,
+    mode: GatewayScreenMode,
+    addressFocus: FocusRequester,
+    onManage: () -> Unit,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val spacing = LocalHermesDesignTokens.current.spacing
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight)
+                    .padding(spacing.m),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.l)) {
+                state.inboundLinkNotice?.let { notice ->
+                    InboundLinkNoticeText(notice = notice)
                 }
+                GatewayBodyContent(
+                    state = state,
+                    mode = mode,
+                    addressFocus = addressFocus,
+                    onManage = onManage,
+                    onEvent = onEvent,
+                )
+            }
+            if (mode != GatewayScreenMode.SAVED && !state.errorCategory.belongsToBanner()) {
+                GatewayFormActions(
+                    state = state,
+                    change = mode == GatewayScreenMode.CHANGE,
+                    onEvent = onEvent,
+                )
             }
         }
     }

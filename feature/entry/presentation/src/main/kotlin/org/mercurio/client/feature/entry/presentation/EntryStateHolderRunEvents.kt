@@ -59,6 +59,7 @@ internal fun EntryStateHolder.updateRunEventSessionUi(
     val opened = current.openedSession?.takeIf { it.session.id == sessionId } ?: return
     val latestRun = knownRuns.latestRun() ?: next.run
     val latestObservation = latestObservationState(sessionId, knownRuns)
+    val resolvedState = latestObservation?.state ?: next.state
     val terminal = next.state.isTerminal() || !next.run.isActive()
     mutableUiState.value =
         mutableUiState.value.copy(
@@ -68,28 +69,26 @@ internal fun EntryStateHolder.updateRunEventSessionUi(
                         opened.copy(
                             latestRun = latestRun,
                             activeRuns = knownRuns.activeRuns(),
-                            latestRunState = latestObservation?.state ?: next.state,
-                            latestRunRetryAvailable =
-                                latestRunRetryAvailable(knownRuns, latestObservation?.state ?: next.state),
+                            latestRunState = resolvedState,
+                            latestRunRetryAvailable = latestRunRetryAvailable(knownRuns, resolvedState),
                             activeResponse =
                                 observedMessageUiState(latestObservation) ?: observedMessageUiState(next),
                             isRefreshing = opened.isRefreshing || terminal,
                             isStale = opened.isStale || terminal,
-                            isReconciliationInProgress =
-                                opened.isReconciliationInProgress || terminal,
+                            isReconciliationInProgress = opened.isReconciliationInProgress || terminal,
                             composerText = opened.composerText,
-                            sendErrorCategory =
-                                if (submissionAwaitingConfirmation) {
-                                    MessageSendErrorCategory.UNCERTAIN
-                                } else {
-                                    opened.sendErrorCategory
-                                },
-                            hasUnresolvedSubmission =
-                                if (submissionAwaitingConfirmation) true else opened.hasUnresolvedSubmission,
+                            sendErrorCategory = opened.sendErrorFor(submissionAwaitingConfirmation),
+                            hasUnresolvedSubmission = opened.unresolvedFor(submissionAwaitingConfirmation),
                         ),
                 ),
         )
 }
+
+private fun OpenSessionUiState.sendErrorFor(awaitingConfirmation: Boolean): MessageSendErrorCategory? =
+    if (awaitingConfirmation) MessageSendErrorCategory.UNCERTAIN else sendErrorCategory
+
+private fun OpenSessionUiState.unresolvedFor(awaitingConfirmation: Boolean): Boolean =
+    awaitingConfirmation || hasUnresolvedSubmission
 
 internal suspend fun EntryStateHolder.markRunObservationUncertain(
     sessionId: SessionId,

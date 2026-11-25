@@ -152,33 +152,37 @@ internal suspend fun EntryStateHolder.finishRecoveryLoad(
         }
         val opened = current?.openedSession
         if (current != null && opened != null) {
-            val sessionId = opened.session.id
-            val recoveryInProgress =
-                sessionId in recoveredSessionIds ||
-                    sessionId in connectionRecoverySessionCounts ||
-                    recoverySessionCounts.containsKey(sessionId) ||
-                    sessionId in reconcilingSessions
             mutableUiState.value =
                 mutableUiState.value.copy(
                     sessionList =
                         current.copy(
-                            openedSession =
-                                opened.copy(
-                                    isRefreshing = if (failed) false else recoveryInProgress,
-                                    isReconciliationInProgress = if (failed) false else recoveryInProgress,
-                                    hasUnresolvedSubmission =
-                                        failed || hasUnresolvedSubmission(sessionId),
-                                    sendErrorCategory =
-                                        if (failed) {
-                                            MessageSendErrorCategory.UNCERTAIN
-                                        } else {
-                                            sendErrorCategoryFor(sessionId)
-                                        },
-                                ),
+                            openedSession = recoveredOpenedSession(opened, recoveredSessionIds, failed),
                         ),
                 )
         }
     }
+}
+
+private fun EntryStateHolder.recoveredOpenedSession(
+    opened: OpenSessionUiState,
+    recoveredSessionIds: Set<SessionId>,
+    failed: Boolean,
+): OpenSessionUiState {
+    val sessionId = opened.session.id
+    val recoveryInProgress =
+        !failed &&
+            (
+                sessionId in recoveredSessionIds ||
+                    sessionId in connectionRecoverySessionCounts ||
+                    recoverySessionCounts.containsKey(sessionId) ||
+                    sessionId in reconcilingSessions
+            )
+    return opened.copy(
+        isRefreshing = recoveryInProgress,
+        isReconciliationInProgress = recoveryInProgress,
+        hasUnresolvedSubmission = failed || hasUnresolvedSubmission(sessionId),
+        sendErrorCategory = if (failed) MessageSendErrorCategory.UNCERTAIN else sendErrorCategoryFor(sessionId),
+    )
 }
 
 internal fun EntryStateHolder.markRecoveryFailure(

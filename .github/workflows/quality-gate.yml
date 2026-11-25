@@ -267,6 +267,7 @@ jobs:
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.evidence_wrapper_redaction_timeout_keeps_marker_and_unsanitized_file
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.nightly_release_validates_main_tip_and_publishes_verified_metadata
           --tests org.mercurio.client.buildlogic.QualityGateConfigurationTest.stable_beta_requires_closed_milestone_exact_candidate_and_fresh_approval
+          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_cyclomatic_complexity_violation_fails_the_real_analysis
           --no-daemon
 
   buildsrc_contracts_shard_2:

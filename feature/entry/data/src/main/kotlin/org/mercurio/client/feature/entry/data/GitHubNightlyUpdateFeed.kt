@@ -220,53 +220,16 @@ class GitHubNightlyUpdateFeed(
         }
     }
 
-    private fun JsonObject.toRelease(): NightlyRelease? =
-        string("tag_name")?.takeIf { value -> value.startsWith(NIGHTLY_TAG_PREFIX) }?.let { tag ->
-            string("published_at")?.let(::parsePublishedAt)?.let { published ->
-                (this["assets"] as? JsonArray)?.mapNotNull { it as? JsonObject }?.let { assets ->
-                    val assetNames = assets.mapNotNull { asset -> asset.string("name") }.toSet()
-                    val assetIds =
-                        assets
-                            .mapNotNull { asset -> asset.string("name")?.let { name -> name to asset.long("id") } }
-                            .toMap()
-                    val metadataAddress =
-                        assetIds[SIGNING_METADATA_ASSET]?.let { id ->
-                            "$apiBase/repos/$repository/releases/assets/$id"
-                        }
-                    val apkAddress =
-                        assetIds[APPLICATION_APK_ASSET]?.let { id ->
-                            "$apiBase/repos/$repository/releases/assets/$id"
-                        }
-                    val apkSizeBytes =
-                        assets.firstOrNull { asset -> asset.string("name") == APPLICATION_APK_ASSET }
-                            ?.long("size")
-                            ?: 0L
-                    val eligible =
-                        boolean("draft") == false &&
-                            boolean("prerelease") == true &&
-                            assetNames.containsAll(REQUIRED_ASSETS)
-                    val offerable = metadataAddress != null && apkAddress != null && apkSizeBytes > 0L
-                    if (eligible && offerable) {
-                        NightlyRelease(
-                            tag = tag,
-                            publishedAt = published,
-                            metadataAddress = metadataAddress,
-                            apkAddress = apkAddress,
-                            apkSizeBytes = apkSizeBytes,
-                        )
-                    } else {
-                        null
-                    }
-                }
-            }
-        }
+    private fun JsonObject.toRelease(): NightlyRelease? = nightlyReleaseOf(this, apiBase, repository)
 
     private fun parseMetadata(body: String): NightlySigningMetadata? {
         val document = parseJson(body) as? JsonObject ?: return null
         val sourceSha = document.string("source_sha")
         val versionCode = document.long("version_code")
         val versionName = document.string("version_name")
-        val nativeAbis = (document["native_abis"] as? JsonArray)?.mapNotNull { it.jsonString() }
+        val nativeAbis =
+            (document["native_abis"] as? JsonArray)
+                ?.mapNotNull { element -> (element as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content }
         val apkSha256 = document.string("apk_sha256")
         val certificateSha256 = document.string("certificate_sha256")
         return when {
@@ -302,26 +265,25 @@ class GitHubNightlyUpdateFeed(
         const val HTTP_FORBIDDEN = 403
         const val HTTP_TOO_MANY_REQUESTS = 429
         const val HTTPS_PREFIX = "https://"
-        const val NIGHTLY_TAG_PREFIX = "nightly-"
-        const val SIGNING_METADATA_ASSET = "signing-metadata.json"
-        const val APPLICATION_APK_ASSET = "mercurio.apk"
-        val REQUIRED_ASSETS = setOf(APPLICATION_APK_ASSET, SIGNING_METADATA_ASSET, "SHA256SUMS")
     }
 }
 
-private fun JsonObject.primitive(name: String): JsonPrimitive? = this[name] as? JsonPrimitive
+private const val NIGHTLY_TAG_PREFIX = "nightly-"
 
-private fun JsonObject.string(name: String): String? = primitive(name)?.takeIf(JsonPrimitive::isString)?.content
+private const val SIGNING_METADATA_ASSET = "signing-metadata.json"
 
-private fun JsonObject.boolean(name: String): Boolean? = primitive(name)?.booleanValue()
+private const val APPLICATION_APK_ASSET = "mercurio.apk"
 
-private fun JsonObject.long(name: String): Long? = primitive(name)?.longValue()
+private val REQUIRED_ASSETS = setOf(APPLICATION_APK_ASSET, SIGNING_METADATA_ASSET, "SHA256SUMS")
 
-private fun JsonPrimitive.booleanValue(): Boolean? = takeIf { !isString }?.content?.toBooleanStrictOrNull()
+private fun JsonObject.string(name: String): String? =
+    (this[name] as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content
 
-private fun JsonPrimitive.longValue(): Long? = takeIf { !isString }?.content?.toLongOrNull()
+private fun JsonObject.boolean(name: String): Boolean? =
+    (this[name] as? JsonPrimitive)?.takeIf { primitive -> !primitive.isString }?.content?.toBooleanStrictOrNull()
 
-private fun JsonElement.jsonString(): String? = (this as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content
+private fun JsonObject.long(name: String): Long? =
+    (this[name] as? JsonPrimitive)?.takeIf { primitive -> !primitive.isString }?.content?.toLongOrNull()
 
 private fun parsePublishedAt(value: String): Instant? =
     try {
@@ -329,6 +291,58 @@ private fun parsePublishedAt(value: String): Instant? =
     } catch (error: DateTimeParseException) {
         null
     }
+
+private fun nightlyReleaseOf(
+    release: JsonObject,
+    apiBase: String,
+    repository: String,
+): NightlyRelease? =
+    release
+        .string("tag_name")
+        ?.takeIf { value -> value.startsWith(NIGHTLY_TAG_PREFIX) }
+        ?.let { tag ->
+            release.string("published_at")?.let(::parsePublishedAt)?.let { published ->
+                (release["assets"] as? JsonArray)
+                    ?.mapNotNull { element -> element as? JsonObject }
+                    ?.toNightlyRelease(tag, published, release.isNightlyCandidate(), apiBase, repository)
+            }
+        }
+
+private fun JsonObject.isNightlyCandidate(): Boolean = boolean("draft") == false && boolean("prerelease") == true
+
+private fun List<JsonObject>.toNightlyRelease(
+    tag: String,
+    publishedAt: Instant,
+    eligible: Boolean,
+    apiBase: String,
+    repository: String,
+): NightlyRelease? {
+    val assetNames = mapNotNull { asset -> asset.string("name") }.toSet()
+    val assetIds =
+        mapNotNull { asset -> asset.string("name")?.let { name -> name to asset.long("id") } }.toMap()
+    val metadataAddress = assetIds[SIGNING_METADATA_ASSET]?.let { id -> assetAddress(id, apiBase, repository) }
+    val apkAddress = assetIds[APPLICATION_APK_ASSET]?.let { id -> assetAddress(id, apiBase, repository) }
+    val apkSizeBytes =
+        firstOrNull { asset -> asset.string("name") == APPLICATION_APK_ASSET }?.long("size") ?: 0L
+    val offerable = eligible && assetNames.containsAll(REQUIRED_ASSETS) && apkSizeBytes > 0L
+    return metadataAddress?.let { metadata ->
+        apkAddress?.takeIf { offerable }?.let { apk ->
+            NightlyRelease(
+                tag = tag,
+                publishedAt = publishedAt,
+                metadataAddress = metadata,
+                apkAddress = apk,
+                apkSizeBytes = apkSizeBytes,
+            )
+        }
+    }
+}
+
+private fun assetAddress(
+    id: Long,
+    apiBase: String,
+    repository: String,
+): String = "$apiBase/repos/$repository/releases/assets/$id"
 
 private fun IOException.toFeedFailure(): NightlyFeedFailure =
     when (this) {

@@ -180,8 +180,9 @@ class EntryStateHolder(
                 is EntryUiEvent.Intake -> dispatchIntakeEvent(event)
                 is EntryUiEvent.Connection -> dispatchConnectionEvent(event)
                 is EntryUiEvent.SessionNavigation -> dispatchSessionNavigationEvent(event)
-                is EntryUiEvent.SessionMutation -> dispatchSessionMutationEvent(event)
-                is EntryUiEvent.SessionPinAndDelete -> dispatchSessionPinDeleteEvent(event)
+                is EntryUiEvent.SessionMutation,
+                is EntryUiEvent.SessionPinAndDelete,
+                -> dispatchSessionMutationEvent(event)
                 is EntryUiEvent.Run -> dispatchRunEvent(event)
                 is EntryUiEvent.ModelPicker -> handleModelPickerEvent(event)
                 is EntryUiEvent.AppLock -> dispatchAppLockEvent(event)
@@ -205,13 +206,22 @@ class EntryStateHolder(
             is EntryUiEvent.VerifyGatewayConnectionClicked,
             is EntryUiEvent.TryAgainClicked,
             -> verifyConnection()
-            is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
-            is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
-            is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
+            is EntryUiEvent.RemoveGatewayConnectionClicked,
+            is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked,
+            is EntryUiEvent.CancelRemoveGatewayConnectionClicked,
+            -> dispatchRemoveConnectionEvent(event)
             is EntryUiEvent.RunStatusNotificationsToggleClicked -> toggleRunStatusNotifications()
             is EntryUiEvent.AutoLoadImagesToggleClicked -> toggleAutoLoadImages()
             is EntryUiEvent.RunStatusNotificationPermissionResult ->
                 applyRunStatusNotificationPermissionResult(event.granted)
+        }
+    }
+
+    private fun dispatchRemoveConnectionEvent(event: EntryUiEvent) {
+        when {
+            event is EntryUiEvent.RemoveGatewayConnectionClicked -> requestRemoveGatewayConnection()
+            event is EntryUiEvent.ConfirmRemoveGatewayConnectionClicked -> confirmRemoveGatewayConnection()
+            event is EntryUiEvent.CancelRemoveGatewayConnectionClicked -> cancelRemoveGatewayConnection()
         }
     }
 
@@ -227,23 +237,19 @@ class EntryStateHolder(
         }
     }
 
-    private fun dispatchSessionMutationEvent(event: EntryUiEvent.SessionMutation) {
-        when (event) {
-            is EntryUiEvent.CreateSessionClicked -> showCreateSession()
-            is EntryUiEvent.RenameSessionClicked -> showRenameSession(event.sessionId)
-            is EntryUiEvent.RenameSessionTitleChanged -> updateRenameSessionTitle(event.sessionId, event.value)
-            is EntryUiEvent.ConfirmRenameSessionClicked -> confirmRenameSession(event.sessionId)
-            is EntryUiEvent.CancelRenameSessionClicked -> cancelRenameSession(event.sessionId)
-        }
-    }
-
-    private fun dispatchSessionPinDeleteEvent(event: EntryUiEvent.SessionPinAndDelete) {
-        when (event) {
-            is EntryUiEvent.PinSessionClicked -> pinSession(event.sessionId)
-            is EntryUiEvent.UnpinSessionClicked -> unpinSession(event.sessionId)
-            is EntryUiEvent.DeleteSessionClicked -> showDeleteSession(event.sessionId)
-            is EntryUiEvent.ConfirmDeleteSessionClicked -> confirmDeleteSession(event.sessionId)
-            is EntryUiEvent.CancelDeleteSessionClicked -> cancelDeleteSession(event.sessionId)
+    private fun dispatchSessionMutationEvent(event: EntryUiEvent) {
+        when {
+            event is EntryUiEvent.CreateSessionClicked -> showCreateSession()
+            event is EntryUiEvent.RenameSessionClicked -> showRenameSession(event.sessionId)
+            event is EntryUiEvent.RenameSessionTitleChanged ->
+                updateRenameSessionTitle(event.sessionId, event.value)
+            event is EntryUiEvent.ConfirmRenameSessionClicked -> confirmRenameSession(event.sessionId)
+            event is EntryUiEvent.CancelRenameSessionClicked -> cancelRenameSession(event.sessionId)
+            event is EntryUiEvent.PinSessionClicked -> pinSession(event.sessionId)
+            event is EntryUiEvent.UnpinSessionClicked -> unpinSession(event.sessionId)
+            event is EntryUiEvent.DeleteSessionClicked -> showDeleteSession(event.sessionId)
+            event is EntryUiEvent.ConfirmDeleteSessionClicked -> confirmDeleteSession(event.sessionId)
+            event is EntryUiEvent.CancelDeleteSessionClicked -> cancelDeleteSession(event.sessionId)
         }
     }
 

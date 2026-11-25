@@ -203,6 +203,24 @@ class QualityVerificationFailClosedTest {
     }
 
     @Test
+    fun detekt_cyclomatic_complexity_violation_fails_the_real_analysis() {
+        assertNewFixtureFails(
+            relativePath =
+                "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/" +
+                    "DetektComplexityFixture.kt",
+            content =
+                "package org.mercurio.client.feature.entry.domain\n\n" +
+                    "internal fun detektFixtureBranching(input: Int): Int =\n" +
+                    "    when (input) {\n" +
+                    (0..14).joinToString("") { value -> "        $value -> $value\n" } +
+                    "        else -> -1\n" +
+                    "    }\n",
+            tasks = listOf(":feature:entry:domain:detektMain"),
+            expected = "[CyclomaticComplexMethod]",
+        )
+    }
+
+    @Test
     fun detekt_else_case_violation_fails_the_real_analysis_with_type_resolution() {
         assertNewFixtureFails(
             relativePath = "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/DetektFixtureState.kt",

@@ -100,16 +100,11 @@ internal suspend fun EntryStateHolder.evaluateTimedOutSendUncertainty(
     val pendingRecovery = pendingTimedOutSends[sessionId]
     val pendingKey = pendingRunSubmissionKey(sessionId)
     val uncertaintySnapshot = runSubmissionUncertaintyStore.snapshot(pendingKey)
-    val attemptId =
-        pendingRecovery?.attemptId ?: uncertaintySnapshot?.attemptId ?: LEGACY_ATTEMPT_ID
+    val attemptId = pendingRecovery?.attemptId ?: uncertaintySnapshot?.attemptId ?: LEGACY_ATTEMPT_ID
     val authoritativeRuns = authoritativeRunsFor(reconciliation)
     val retainedAuthoritativeRuns = retainedAuthoritativeRuns(sessionId, authoritativeRuns)
-    val belongsToThisSubmission =
-        uncertaintyBelongsToSubmission(uncertaintySnapshot, pendingRecovery, attemptId)
-    val durableBoundRunId =
-        uncertaintySnapshot
-            ?.boundRunId
-            ?.takeIf { belongsToThisSubmission }
+    val belongsToThisSubmission = uncertaintyBelongsToSubmission(uncertaintySnapshot, pendingRecovery, attemptId)
+    val durableBoundRunId = uncertaintySnapshot?.boundRunId?.takeIf { belongsToThisSubmission }
     val localBoundRunId = localBoundRunIdFor(sessionId, attemptId, uncertaintySnapshot)
     val boundSubmissionRun = boundSubmissionRun(sessionId, durableBoundRunId, localBoundRunId, reconciliation)
     val discoveredLocalRun: Run? = null
@@ -117,14 +112,13 @@ internal suspend fun EntryStateHolder.evaluateTimedOutSendUncertainty(
         discoveredUnattributedRun(boundSubmissionRun, reconciliation, belongsToThisSubmission)
     val submissionRun = boundSubmissionRun ?: discoveredLocalRun
     val terminalRunIds = confirmedTerminalRunIds(reconciliation, submissionRun)
-    val recoveryAllowsNoNewRun =
-        recoveryStoreAllowsNoNewRun(uncertaintySnapshot, belongsToThisSubmission)
+    val recoveryAllowsNoNewRun = recoveryStoreAllowsNoNewRun(uncertaintySnapshot, belongsToThisSubmission)
     val noNewRunConfirms =
         noNewRunConfirmsNoSubmission(
-            sessionId = sessionId,
-            resolveWhenNoNewRun = resolveWhenNoNewRun,
-            discoveredUnattributedRun = discoveredUnattributedRun,
-            recoveryStoreAllowsNoNewRun = recoveryAllowsNoNewRun,
+            sessionId,
+            resolveWhenNoNewRun,
+            discoveredUnattributedRun,
+            recoveryAllowsNoNewRun,
         )
     val submissionConfirms = submissionConfirmed(submissionRun, belongsToThisSubmission)
     val canResolveUncertainty = belongsToThisSubmission && (submissionConfirms || noNewRunConfirms)
@@ -132,24 +126,21 @@ internal suspend fun EntryStateHolder.evaluateTimedOutSendUncertainty(
     val canClearUncertainty = canResolveUncertainty && uncertaintyRemoved
     val identityIsStable =
         uncertaintyIdentityIsStable(pendingKey, uncertaintySnapshot, canClearUncertainty, belongsToThisSubmission)
-    return if (identityIsStable) {
-        TimedOutSendUncertainty(
-            pendingKey = pendingKey,
-            pendingRecovery = pendingRecovery,
-            recoveryDraft = pendingRecovery?.draft,
-            attemptId = attemptId,
-            authoritativeMessages = toMessageUiStates(reconciliation.history),
-            retainedAuthoritativeRuns = retainedAuthoritativeRuns,
-            authoritativeRuns = authoritativeRuns,
-            durableBoundRunId = durableBoundRunId,
-            discoveredUnattributedRun = discoveredUnattributedRun,
-            boundSubmissionRun = boundSubmissionRun,
-            discoveredLocalRun = discoveredLocalRun,
-            submissionRun = submissionRun,
-            terminalRunIds = terminalRunIds,
-            canClearUncertainty = canClearUncertainty,
-        )
-    } else {
-        null
-    }
+    if (!identityIsStable) return null
+    return TimedOutSendUncertainty(
+        pendingKey = pendingKey,
+        pendingRecovery = pendingRecovery,
+        recoveryDraft = pendingRecovery?.draft,
+        attemptId = attemptId,
+        authoritativeMessages = toMessageUiStates(reconciliation.history),
+        retainedAuthoritativeRuns = retainedAuthoritativeRuns,
+        authoritativeRuns = authoritativeRuns,
+        durableBoundRunId = durableBoundRunId,
+        discoveredUnattributedRun = discoveredUnattributedRun,
+        boundSubmissionRun = boundSubmissionRun,
+        discoveredLocalRun = discoveredLocalRun,
+        submissionRun = submissionRun,
+        terminalRunIds = terminalRunIds,
+        canClearUncertainty = canClearUncertainty,
+    )
 }

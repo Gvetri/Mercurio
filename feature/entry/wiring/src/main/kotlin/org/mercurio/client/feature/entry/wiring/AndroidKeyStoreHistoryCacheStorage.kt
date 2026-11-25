@@ -54,30 +54,41 @@ class AndroidKeyStoreHistoryCacheStorage(
 
     override fun clear() {
         synchronized(storageLock) {
-            val cacheFiles =
-                listOf(
-                    cacheFile,
-                    File("${cacheFile.path}.bak"),
-                    File("${cacheFile.path}.new"),
-                )
+            val cacheFiles = cacheFiles()
             val hasCacheRecord = cacheFiles.any(File::exists)
-            var failure: Throwable? = null
-            cacheFiles.forEach { file ->
-                if (file.exists() && !file.delete()) {
-                    failure = IllegalStateException("Could not remove the history cache record.")
-                }
-            }
-            try {
-                val keyStore = loadKeyStore()
-                if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
-            } catch (error: GeneralSecurityException) {
-                if (hasCacheRecord) failure = error
-            } catch (error: IOException) {
-                if (hasCacheRecord) failure = error
-            }
-            failure?.let { throw GatewayConnectionPersistenceException(it) }
+            val deletionFailure = deleteAll(cacheFiles)
+            val keyFailure = deleteKeyEntry(hasCacheRecord)
+            (keyFailure ?: deletionFailure)?.let { throw GatewayConnectionPersistenceException(it) }
         }
     }
+
+    private fun cacheFiles(): List<File> =
+        listOf(
+            cacheFile,
+            File("${cacheFile.path}.bak"),
+            File("${cacheFile.path}.new"),
+        )
+
+    private fun deleteAll(files: List<File>): Throwable? {
+        var failure: Throwable? = null
+        files.forEach { file ->
+            if (file.exists() && !file.delete()) {
+                failure = IllegalStateException("Could not remove the history cache record.")
+            }
+        }
+        return failure
+    }
+
+    private fun deleteKeyEntry(hasCacheRecord: Boolean): Throwable? =
+        try {
+            val keyStore = loadKeyStore()
+            if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
+            null
+        } catch (error: GeneralSecurityException) {
+            error.takeIf { hasCacheRecord }
+        } catch (error: IOException) {
+            error.takeIf { hasCacheRecord }
+        }
 
     fun loadOrCreateKey(): SecretKey =
         runCatching { createOrLoadKey() }.getOrElse { error ->

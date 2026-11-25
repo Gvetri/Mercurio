@@ -159,12 +159,19 @@ private fun settingsUpdateSummary(
                     status.versionName,
                     status.versionCode,
                 )
-            is AppUpdateStatus.Refused -> stringResource(R.string.settings_app_updates_refused_row)
-            is AppUpdateStatus.DownloadRefused -> stringResource(R.string.settings_app_updates_download_refused_row)
-            is AppUpdateStatus.InstallRefused ->
-                stringResource(R.string.settings_app_updates_install_refused_row)
+            is AppUpdateStatus.Refused,
+            is AppUpdateStatus.DownloadRefused,
+            is AppUpdateStatus.InstallRefused,
+            -> stringResource(refusedRowFor(status))
             is AppUpdateStatus.Failed -> stringResource(R.string.settings_app_updates_failed_row)
         }
+    }
+
+private fun refusedRowFor(status: AppUpdateStatus): Int =
+    when {
+        status is AppUpdateStatus.DownloadRefused -> R.string.settings_app_updates_download_refused_row
+        status is AppUpdateStatus.InstallRefused -> R.string.settings_app_updates_install_refused_row
+        else -> R.string.settings_app_updates_refused_row
     }
 
 @Composable

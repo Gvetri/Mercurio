@@ -24,41 +24,19 @@ internal fun EntryStateHolder.recordTerminalPollReconciliation(
 }
 
 internal suspend fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunReconcileContext) {
-    val recoveryEntries =
-        try {
-            runRecoveryRegistry?.load().orEmpty()
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            null
-        }
+    val recoveryEntries = loadRecoveryEntries()
     val recoveryEntriesLoadFailed = recoveryEntries == null
     val sessionRecoveryEntries =
         recoveryEntries.orEmpty().filter { entry -> entry.sessionId == context.sessionId }
     val runIds = reconciliationRunIds(context, sessionRecoveryEntries, recoveryEntriesLoadFailed) ?: return
     if (runIds.isEmpty()) {
-        if (context.clearRefreshWhenNoRun) {
-            finishReconciliation(
-                context.sessionId,
-                context.requestConnectionGeneration,
-                context.requestSessionGeneration,
-            )
-        }
-        if (recoveryLoadFailed) {
-            markRecoveryUnavailable(
-                context.sessionId,
-                context.requestConnectionGeneration,
-                context.requestSessionGeneration,
-            )
-        }
+        finishEmptyReconciliation(context, recoveryEntriesLoadFailed)
         return
     }
-    var activeRunToObserve: Run? = null
-    runIds.forEach { runId ->
-        reconcileRunObservationCandidate(context, runId, activeRunToObserve != null)
-            ?.let { candidate -> activeRunToObserve = candidate }
-    }
-    val runToObserve = activeRunToObserve
+    val runToObserve =
+        runIds.fold<RunId, Run?>(null) { active, runId ->
+            reconcileRunObservationCandidate(context, runId, active != null) ?: active
+        }
     if (
         context.restartObservation &&
         runToObserve != null &&
@@ -73,6 +51,35 @@ internal suspend fun EntryStateHolder.reconcileOpenedRun(context: OpenedRunRecon
             run = runToObserve,
             expectedConnectionGeneration = context.requestConnectionGeneration,
             expectedSessionGeneration = context.requestSessionGeneration,
+        )
+    }
+    if (recoveryEntriesLoadFailed) {
+        markRecoveryUnavailable(
+            context.sessionId,
+            context.requestConnectionGeneration,
+            context.requestSessionGeneration,
+        )
+    }
+}
+
+private suspend fun EntryStateHolder.loadRecoveryEntries(): List<RunRecoveryEntry>? =
+    try {
+        runRecoveryRegistry?.load().orEmpty()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    }
+
+private fun EntryStateHolder.finishEmptyReconciliation(
+    context: OpenedRunReconcileContext,
+    recoveryLoadFailed: Boolean,
+) {
+    if (context.clearRefreshWhenNoRun) {
+        finishReconciliation(
+            context.sessionId,
+            context.requestConnectionGeneration,
+            context.requestSessionGeneration,
         )
     }
     if (recoveryLoadFailed) {
@@ -90,42 +97,15 @@ internal suspend fun EntryStateHolder.reconciliationRunIds(
     recoveryEntriesLoadFailed: Boolean,
 ): List<RunId>? =
     run {
-        if (
-            connectionGeneration != context.requestConnectionGeneration ||
-            sessionRequestGeneration != context.requestSessionGeneration ||
-            sessionGateway !== context.sessionGateway
-        ) {
+        if (!reconciliationRequestIsCurrent(context)) {
             null
         } else {
             val ids = linkedSetOf<RunId>()
             context.runIdToReconcile?.let(ids::add)
-            val pendingKey = PendingRunSubmissionKey(mutableUiState.value.endpoint, context.sessionId)
-            runSubmissionUncertaintyStore
-                .boundRunId(pendingKey)
-                ?.let { boundRunId ->
-                    uncertainSubmissionRunIds[context.sessionId] = boundRunId
-                    uncertainSubmissionAttemptIds[context.sessionId] =
-                        runSubmissionUncertaintyStore.attemptId(pendingKey) ?: LEGACY_ATTEMPT_ID
-                }
-            recoveryLoadPending = false
-            recoveryLoadFailed = recoveryEntriesLoadFailed
-            if (recoveryEntriesLoadFailed) {
-                recoveryUnavailableSessions.add(context.sessionId)
-            } else {
-                recoveryUnavailableSessions.remove(context.sessionId)
-            }
+            prepareReconciliationState(context, recoveryEntriesLoadFailed)
             sessionRecoveryEntries.forEach { entry ->
                 ids += entry.runId
-                if (
-                    sessionRuns[context.sessionId].orEmpty().none { it.id == entry.runId } &&
-                    observationStateFor(context.sessionId, entry.runId) == null
-                ) {
-                    rememberRecoveredRun(
-                        entry = entry,
-                        run = Run(entry.runId, entry.sessionId, RECOVERY_PENDING_STATUS),
-                        updateVisibleState = false,
-                    )
-                }
+                rememberRecoveredRunIfAbsent(context, entry)
             }
             sessionRuns[context.sessionId].orEmpty().filter(Run::isActive).mapTo(ids) { it.id }
             unresolvedLocalRunIds[recoverySessionKey(context.sessionId)].orEmpty().forEach(ids::add)
@@ -142,6 +122,48 @@ internal suspend fun EntryStateHolder.reconciliationRunIds(
             ids.toList()
         }
     }
+
+private fun EntryStateHolder.reconciliationRequestIsCurrent(context: OpenedRunReconcileContext): Boolean =
+    connectionGeneration == context.requestConnectionGeneration &&
+        sessionRequestGeneration == context.requestSessionGeneration &&
+        sessionGateway === context.sessionGateway
+
+private fun EntryStateHolder.prepareReconciliationState(
+    context: OpenedRunReconcileContext,
+    recoveryEntriesLoadFailed: Boolean,
+) {
+    val pendingKey = PendingRunSubmissionKey(mutableUiState.value.endpoint, context.sessionId)
+    runSubmissionUncertaintyStore
+        .boundRunId(pendingKey)
+        ?.let { boundRunId ->
+            uncertainSubmissionRunIds[context.sessionId] = boundRunId
+            uncertainSubmissionAttemptIds[context.sessionId] =
+                runSubmissionUncertaintyStore.attemptId(pendingKey) ?: LEGACY_ATTEMPT_ID
+        }
+    recoveryLoadPending = false
+    recoveryLoadFailed = recoveryEntriesLoadFailed
+    if (recoveryEntriesLoadFailed) {
+        recoveryUnavailableSessions.add(context.sessionId)
+    } else {
+        recoveryUnavailableSessions.remove(context.sessionId)
+    }
+}
+
+private suspend fun EntryStateHolder.rememberRecoveredRunIfAbsent(
+    context: OpenedRunReconcileContext,
+    entry: RunRecoveryEntry,
+) {
+    if (
+        sessionRuns[context.sessionId].orEmpty().none { run -> run.id == entry.runId } &&
+        observationStateFor(context.sessionId, entry.runId) == null
+    ) {
+        rememberRecoveredRun(
+            entry = entry,
+            run = Run(entry.runId, entry.sessionId, RECOVERY_PENDING_STATUS),
+            updateVisibleState = false,
+        )
+    }
+}
 
 internal fun EntryStateHolder.unreconciledRecoveryRunIds(sessionId: SessionId): Set<RunId> {
     val endpoint = mutableUiState.value.endpoint

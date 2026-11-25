@@ -36,29 +36,52 @@ internal object JourneyGatewaySse {
         script: JourneyRunScript,
         runId: String,
     ) {
-        val interruptAfter = script.interruptAfterEvents
         val events = script.observation
         if (script.liveFraming) {
             exchange.responseBody.write(streamOpenComment)
             exchange.responseBody.flush()
         }
-        events.forEachIndexed { index, event ->
-            if (!script.holdOpen && script.finalStatus != null && index == events.lastIndex) {
-                behavior.observationDelivered[runId] = true
-            }
-            script.idleGapMillis?.let { gapMillis ->
-                Thread.sleep(gapMillis.toLong())
-                exchange.responseBody.write(keepAliveComment)
-                exchange.responseBody.flush()
-            }
-            exchange.responseBody.write(JourneyGatewayJson.renderEvent(script, event, index))
-            exchange.responseBody.flush()
-            if (interruptAfter != null && index + 1 >= interruptAfter) {
-                behavior.interruptedRunIds += runId
-                exchange.close()
-                return
-            }
+        events.withIndex().forEach { indexed ->
+            if (writeObservationEvent(exchange, behavior, script, runId, indexed)) return
         }
+        finishObservation(exchange, behavior, script, runId, events)
+    }
+
+    private fun writeObservationEvent(
+        exchange: HttpExchange,
+        behavior: JourneyGatewayBehavior,
+        script: JourneyRunScript,
+        runId: String,
+        indexed: IndexedValue<JourneyRunEvent>,
+    ): Boolean {
+        val index = indexed.index
+        val event = indexed.value
+        if (!script.holdOpen && script.finalStatus != null && index == script.observation.lastIndex) {
+            behavior.observationDelivered[runId] = true
+        }
+        script.idleGapMillis?.let { gapMillis ->
+            Thread.sleep(gapMillis.toLong())
+            exchange.responseBody.write(keepAliveComment)
+            exchange.responseBody.flush()
+        }
+        exchange.responseBody.write(JourneyGatewayJson.renderEvent(script, event, index))
+        exchange.responseBody.flush()
+        val interruptAfter = script.interruptAfterEvents
+        if (interruptAfter != null && index + 1 >= interruptAfter) {
+            behavior.interruptedRunIds += runId
+            exchange.close()
+            return true
+        }
+        return false
+    }
+
+    private fun finishObservation(
+        exchange: HttpExchange,
+        behavior: JourneyGatewayBehavior,
+        script: JourneyRunScript,
+        runId: String,
+        events: List<JourneyRunEvent>,
+    ) {
         if (script.holdOpen) {
             writeKeepAliveEvents(exchange)
             if (script.finalizeOnDisconnect) {

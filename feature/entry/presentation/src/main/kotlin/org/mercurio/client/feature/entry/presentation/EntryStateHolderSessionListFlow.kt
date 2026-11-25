@@ -79,31 +79,40 @@ internal fun EntryStateHolder.createFirstPageLoadJob(
         mutableUiState.value =
             mutableUiState.value.copy(
                 sessionList =
-                    current.copy(
-                        sessions = if (preserveSessions) current.sessions else emptyList(),
-                        isLoading = !isRefreshing,
+                    beginFirstPageLoad(
+                        current = current,
                         isRefreshing = isRefreshing,
                         isSearching = isSearching,
-                        isLoadingMore = false,
-                        isStale = if (preserveSessions) current.isStale else false,
-                        isCached = if (preserveSessions) current.isCached else false,
-                        isUnavailable = false,
-                        errorCategory = null,
-                        nextOffset = if (preserveSessions) current.nextOffset else null,
-                        sessionMutations =
-                            restoreUnresolvedSessionMutations(
-                                if (preserveSessions) {
-                                    unsentRenameDrafts(current.sessionMutations)
-                                } else {
-                                    emptyMap()
-                                },
-                            ),
+                        preserveSessions = preserveSessions,
                     ),
             )
         createSessionJob {
             loadFirstPage(gateway, request, preserveSessions)
         }
     }
+
+private fun EntryStateHolder.beginFirstPageLoad(
+    current: SessionListUiState,
+    isRefreshing: Boolean,
+    isSearching: Boolean,
+    preserveSessions: Boolean,
+): SessionListUiState =
+    current.copy(
+        sessions = if (preserveSessions) current.sessions else emptyList(),
+        isLoading = !isRefreshing,
+        isRefreshing = isRefreshing,
+        isSearching = isSearching,
+        isLoadingMore = false,
+        isStale = if (preserveSessions) current.isStale else false,
+        isCached = if (preserveSessions) current.isCached else false,
+        isUnavailable = false,
+        errorCategory = null,
+        nextOffset = if (preserveSessions) current.nextOffset else null,
+        sessionMutations =
+            restoreUnresolvedSessionMutations(
+                if (preserveSessions) unsentRenameDrafts(current.sessionMutations) else emptyMap(),
+            ),
+    )
 
 internal suspend fun EntryStateHolder.loadFirstPage(
     gateway: SessionGatewayPort,

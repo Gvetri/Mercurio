@@ -113,18 +113,7 @@ private fun SessionRowContent(
                     onClick = row.onClick,
                     onLongClick = openActions,
                 )
-                .semantics {
-                    this.selected = row.selected
-                    if (!inlineRename) {
-                        customActions =
-                            listOf(
-                                CustomAccessibilityAction(showActionsLabel) {
-                                    onLongPress()
-                                    true
-                                },
-                            )
-                    }
-                }
+                .sessionRowSemantics(row.selected, inlineRename, showActionsLabel, onLongPress)
                 .padding(horizontal = tokens.spacing.m, vertical = tokens.spacing.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -231,6 +220,25 @@ private fun SessionTitleAndPreview(
     }
 }
 
+private fun Modifier.sessionRowSemantics(
+    selected: Boolean,
+    inlineRename: Boolean,
+    showActionsLabel: String,
+    onLongPress: () -> Unit,
+): Modifier =
+    semantics {
+        this.selected = selected
+        if (!inlineRename) {
+            customActions =
+                listOf(
+                    CustomAccessibilityAction(showActionsLabel) {
+                        onLongPress()
+                        true
+                    },
+                )
+        }
+    }
+
 @Composable
 private fun SessionRowMutationFeedback(
     session: SessionItemUiState,
@@ -264,28 +272,39 @@ private fun SessionRowMutationFeedback(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
             )
         }
-        val retryEvent =
-            when (mutation?.retryAction) {
-                SessionMutationAction.PIN -> EntryUiEvent.PinSessionClicked(session.id)
-                SessionMutationAction.UNPIN -> EntryUiEvent.UnpinSessionClicked(session.id)
-                SessionMutationAction.RENAME, SessionMutationAction.DELETE, null -> null
-            }
-        retryEvent?.let { event ->
-            Box(
-                modifier =
-                    Modifier
-                        .heightIn(min = tokens.spacing.xxxl)
-                        .clickable(enabled = enabled && mutation?.pendingAction == null) {
-                            onEvent(event)
-                        },
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Text(
-                    text = stringResource(R.string.action_try_again),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = tokens.colorScheme.primary,
-                )
-            }
+        SessionMutationRetryRow(session = session, mutation = mutation, enabled = enabled, onEvent = onEvent)
+    }
+}
+
+@Composable
+private fun SessionMutationRetryRow(
+    session: SessionItemUiState,
+    mutation: SessionMutationUiState?,
+    enabled: Boolean,
+    onEvent: (EntryUiEvent) -> Unit,
+) {
+    val tokens = LocalHermesDesignTokens.current
+    val retryEvent =
+        when (mutation?.retryAction) {
+            SessionMutationAction.PIN -> EntryUiEvent.PinSessionClicked(session.id)
+            SessionMutationAction.UNPIN -> EntryUiEvent.UnpinSessionClicked(session.id)
+            SessionMutationAction.RENAME, SessionMutationAction.DELETE, null -> null
+        }
+    retryEvent?.let { event ->
+        Box(
+            modifier =
+                Modifier
+                    .heightIn(min = tokens.spacing.xxxl)
+                    .clickable(enabled = enabled && mutation?.pendingAction == null) {
+                        onEvent(event)
+                    },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Text(
+                text = stringResource(R.string.action_try_again),
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.colorScheme.primary,
+            )
         }
     }
 }
