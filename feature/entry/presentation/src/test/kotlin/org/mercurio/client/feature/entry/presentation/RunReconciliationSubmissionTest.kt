@@ -606,6 +606,6 @@ class RunReconciliationSubmissionTest {
             runs.add(run)
             statuses.add(run)
             statuses.add(run)
-            observation = recoveredDeltaObservation(run)
+            repeat(2) { observations.add(recoveredDeltaObservation(run)) }
         }
 }

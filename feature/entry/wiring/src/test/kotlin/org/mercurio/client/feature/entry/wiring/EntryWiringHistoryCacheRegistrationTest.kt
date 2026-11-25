@@ -262,13 +262,13 @@ class EntryWiringHistoryCacheRegistrationTest {
         RunGatewayPort {
         private val historyCalls = AtomicInteger(0)
 
-        override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
+        override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
 
-        override fun createSession(title: String?): Session = session
+        override suspend fun createSession(title: String?): Session = session
 
-        override fun openSession(sessionId: SessionId): Session = session
+        override suspend fun openSession(sessionId: SessionId): Session = session
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             SessionHistory(
                 sessionId = sessionId,
                 messages =
@@ -281,25 +281,25 @@ class EntryWiringHistoryCacheRegistrationTest {
                     ),
             )
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session = session
 
-        override fun deleteSession(sessionId: SessionId): Unit = Unit
+        override suspend fun deleteSession(sessionId: SessionId): Unit = Unit
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult = SessionPinResult(sessionId, false)
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult = SessionPinResult(sessionId, false)
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult = SessionPinResult(sessionId, false)
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = SessionPinResult(sessionId, false)
 
-        override fun createRun(
+        override suspend fun createRun(
             sessionId: SessionId,
             input: String,
         ): Run = Run(RunId("run-1"), sessionId, "completed")
 
-        override fun getRunStatus(runId: RunId): Run = Run(runId, SESSION_ID, "completed")
+        override suspend fun getRunStatus(runId: RunId): Run = Run(runId, SESSION_ID, "completed")
 
-        override fun observeRun(runId: RunId) = error("not used")
+        override suspend fun observeRun(runId: RunId) = error("not used")
 
         companion object {
             val SESSION_ID: SessionId = SessionId("registered-session")

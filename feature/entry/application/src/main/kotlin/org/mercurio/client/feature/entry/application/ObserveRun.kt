@@ -8,7 +8,7 @@ import org.mercurio.client.feature.entry.domain.RunId
 class ObserveRun(
     private val gateway: RunGatewayPort,
 ) {
-    fun execute(runId: RunId): RunEventObservation = gateway.observeRun(runId)
+    suspend fun execute(runId: RunId): RunEventObservation = gateway.observeRun(runId)
 
-    operator fun invoke(runId: RunId): RunEventObservation = execute(runId)
+    suspend operator fun invoke(runId: RunId): RunEventObservation = execute(runId)
 }

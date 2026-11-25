@@ -163,40 +163,40 @@ internal class FakeSessionGateway : SessionGatewayPort {
         createResults += Result.failure(error)
     }
 
-    override fun listSessions(request: SessionListRequest): SessionPage {
+    override suspend fun listSessions(request: SessionListRequest): SessionPage {
         listRequests += request
         onList?.invoke(request)
         return listResults.removeFirst().getOrThrow()
     }
 
-    override fun createSession(title: String?): Session {
+    override suspend fun createSession(title: String?): Session {
         createCalls += 1
         createTitles += title
         operations += "create"
         return createResults.removeFirst().getOrThrow()
     }
 
-    override fun openSession(sessionId: SessionId): Session {
+    override suspend fun openSession(sessionId: SessionId): Session {
         operations += "open"
         openFailure?.let { throw it }
         return requireNotNull(openedSession)
     }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory {
         operations += "history"
         return requireNotNull(openedHistory)
     }
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 }
 
 internal class FakeRunGateway : RunGatewayPort {
@@ -204,18 +204,18 @@ internal class FakeRunGateway : RunGatewayPort {
     val statuses = ArrayDeque<Run>()
     var statusFailure: GatewayException? = null
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run = error("not used")
 
-    override fun getRunStatus(runId: RunId): Run {
+    override suspend fun getRunStatus(runId: RunId): Run {
         statusRequests += runId
         statusFailure?.let { failure -> throw failure }
         return statuses.removeFirst()
     }
 
-    override fun observeRun(runId: RunId): RunEventObservation = ReconciliationScriptedObservation(emptyList())
+    override suspend fun observeRun(runId: RunId): RunEventObservation = ReconciliationScriptedObservation(emptyList())
 }
 
 internal class ScriptedCreateGateway(
@@ -229,12 +229,12 @@ internal class ScriptedCreateGateway(
     var onCreate: (() -> Unit)? = null
     private var created = false
 
-    override fun listSessions(request: SessionListRequest): SessionPage {
+    override suspend fun listSessions(request: SessionListRequest): SessionPage {
         listRequests += request
         return SessionPage(listOf(if (created) createdSession else initialSession), null)
     }
 
-    override fun createSession(title: String?): Session {
+    override suspend fun createSession(title: String?): Session {
         operations += "create"
         createCalls += 1
         onCreate?.invoke()
@@ -242,27 +242,27 @@ internal class ScriptedCreateGateway(
         return createdSession
     }
 
-    override fun openSession(sessionId: SessionId): Session {
+    override suspend fun openSession(sessionId: SessionId): Session {
         operations += "open"
         check(sessionId == createdSession.id) { "Unexpected Session open: $sessionId" }
         return createdSession
     }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory {
         operations += "history"
         return SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
     }
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 }
 
 internal class ScriptedRefreshGateway(
@@ -285,20 +285,20 @@ internal class ScriptedRefreshGateway(
             pinned = false,
         )
 
-    override fun listSessions(request: SessionListRequest): SessionPage {
+    override suspend fun listSessions(request: SessionListRequest): SessionPage {
         listCalls += 1
         onList?.invoke(listCalls)
         return SessionPage(listOf(listedSession), nextPageOffset)
     }
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session {
+    override suspend fun openSession(sessionId: SessionId): Session {
         check(sessionId == this.sessionId) { "Unexpected Session open: $sessionId" }
         return listedSession
     }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory {
         check(sessionId == this.sessionId) { "Unexpected Session history: $sessionId" }
         historyCalls += 1
         onHistory?.invoke(historyCalls)
@@ -308,20 +308,20 @@ internal class ScriptedRefreshGateway(
         )
     }
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult {
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult {
         check(sessionId == this.sessionId) { "Unexpected Session pin: $sessionId" }
         pinCalls += 1
         return SessionPinResult(sessionId, pinned = true)
     }
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 }
 
 internal class ScriptedSessionGateway(
@@ -336,7 +336,7 @@ internal class ScriptedSessionGateway(
         queuedPages += page
     }
 
-    override fun listSessions(request: SessionListRequest): SessionPage {
+    override suspend fun listSessions(request: SessionListRequest): SessionPage {
         val occurrence = requestOccurrences.merge(request, 1, Int::plus)!! - 1
         listRequests += request
         onList?.invoke(request, occurrence)
@@ -345,20 +345,20 @@ internal class ScriptedSessionGateway(
             ?: error("No SessionPage was queued for request $request occurrence $occurrence.")
     }
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session = error("not used")
+    override suspend fun openSession(sessionId: SessionId): Session = error("not used")
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory = error("not used")
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory = error("not used")
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 }

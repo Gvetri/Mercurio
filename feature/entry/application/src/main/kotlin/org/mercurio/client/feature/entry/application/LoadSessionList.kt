@@ -7,5 +7,5 @@ import org.mercurio.client.feature.entry.domain.SessionPage
 class LoadSessionList(
     private val gateway: SessionGatewayPort,
 ) {
-    fun execute(request: SessionListRequest = SessionListRequest()): SessionPage = gateway.listSessions(request)
+    suspend fun execute(request: SessionListRequest = SessionListRequest()): SessionPage = gateway.listSessions(request)
 }

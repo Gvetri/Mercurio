@@ -7,5 +7,5 @@ import org.mercurio.client.feature.entry.domain.SessionPinResult
 class UnpinSession(
     private val gateway: SessionGatewayPort,
 ) {
-    fun execute(sessionId: SessionId): SessionPinResult = gateway.unpinSession(sessionId)
+    suspend fun execute(sessionId: SessionId): SessionPinResult = gateway.unpinSession(sessionId)
 }

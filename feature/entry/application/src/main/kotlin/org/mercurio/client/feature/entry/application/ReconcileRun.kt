@@ -13,7 +13,7 @@ class ReconcileRun(
     private val runGateway: RunGatewayPort,
     private val sessionGateway: SessionGatewayPort,
 ) {
-    fun execute(
+    suspend fun execute(
         runId: RunId,
         sessionId: SessionId,
     ): AuthoritativeRunReconciliation {

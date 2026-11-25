@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runInterruptible
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -32,6 +33,7 @@ import org.mercurio.client.feature.entry.domain.satisfies
 import java.security.GeneralSecurityException
 import java.util.Locale
 import javax.net.ssl.SSLException
+import kotlin.coroutines.cancellation.CancellationException
 
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
@@ -62,7 +64,9 @@ internal class GatewayClientCalls(
         authorizationHeader = "Bearer $bearerToken"
     }
 
-    fun execute(call: GatewayOperationRequest): GatewayHttpResponse {
+    suspend fun execute(call: GatewayOperationRequest): GatewayHttpResponse = callTransport { executeBlocking(call) }
+
+    fun executeBlocking(call: GatewayOperationRequest): GatewayHttpResponse {
         val gatewayRequest =
             request(
                 method = call.method,
@@ -102,12 +106,12 @@ internal class GatewayClientCalls(
             body = body,
         )
 
-    fun openEventStream(
+    suspend fun openEventStream(
         operation: String,
         request: GatewayHttpRequest,
     ): GatewayEventStream {
         val stream =
-            transportCall {
+            callTransport {
                 transport.openEventStream(request)
             }
         return when {
@@ -132,6 +136,17 @@ internal class GatewayClientCalls(
             GatewayException(GatewayErrorCategory.GATEWAY_REQUEST_FAILED)
         }
 
+    private suspend fun <T> callTransport(block: () -> T): T =
+        try {
+            runInterruptible(block = block)
+        } catch (error: GatewayException) {
+            throw error
+        } catch (error: CancellationException) {
+            throw error
+        } catch (expectedError: Exception) {
+            throw mapTransportFailure(expectedError)
+        }
+
     private inline fun <T> transportCall(block: () -> T): T =
         try {
             block()
@@ -148,7 +163,7 @@ internal class GatewayCapabilityOperations(
 ) : GatewayCapabilityPort {
     override fun discoverCapabilities(): GatewayCapabilities {
         val response =
-            calls.execute(
+            calls.executeBlocking(
                 GatewayOperationRequest(
                     operation = "capability discovery",
                     method = "GET",
@@ -172,7 +187,7 @@ internal class GatewayCapabilityOperations(
 internal class GatewaySessionOperations(
     private val calls: GatewayClientCalls,
 ) : SessionGatewayPort {
-    override fun listSessions(request: SessionListRequest): SessionPage {
+    override suspend fun listSessions(request: SessionListRequest): SessionPage {
         if (request.limit <= 0) {
             throw GatewayException(
                 GatewayErrorCategory.GATEWAY_REQUEST_FAILED,
@@ -206,7 +221,7 @@ internal class GatewaySessionOperations(
         )
     }
 
-    override fun createSession(title: String?): Session {
+    override suspend fun createSession(title: String?): Session {
         val body = JsonObject(mapOf("title" to (title?.let(::JsonPrimitive) ?: JsonNull))).toString()
         val response =
             calls.execute(
@@ -224,7 +239,7 @@ internal class GatewaySessionOperations(
         )
     }
 
-    override fun openSession(sessionId: SessionId): Session {
+    override suspend fun openSession(sessionId: SessionId): Session {
         val response =
             calls.execute(
                 GatewayOperationRequest(
@@ -243,7 +258,7 @@ internal class GatewaySessionOperations(
         return session
     }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory {
         val response =
             calls.execute(
                 GatewayOperationRequest(
@@ -262,7 +277,7 @@ internal class GatewaySessionOperations(
         return history
     }
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session {
@@ -286,7 +301,7 @@ internal class GatewaySessionOperations(
         return session
     }
 
-    override fun deleteSession(sessionId: SessionId) {
+    override suspend fun deleteSession(sessionId: SessionId) {
         val response =
             calls.execute(
                 GatewayOperationRequest(
@@ -303,11 +318,12 @@ internal class GatewaySessionOperations(
         )
     }
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = setSessionPinned(sessionId, pinned = true)
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = setSessionPinned(sessionId, pinned = true)
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = setSessionPinned(sessionId, pinned = false)
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult =
+        setSessionPinned(sessionId, pinned = false)
 
-    private fun setSessionPinned(
+    private suspend fun setSessionPinned(
         sessionId: SessionId,
         pinned: Boolean,
     ): SessionPinResult {
@@ -336,12 +352,12 @@ internal class GatewaySessionOperations(
 internal class GatewayRunOperations(
     private val calls: GatewayClientCalls,
 ) : RunGatewayPort {
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run = createRun(RunCreateRequest(sessionId = sessionId, input = input))
 
-    override fun createRun(request: RunCreateRequest): Run {
+    override suspend fun createRun(request: RunCreateRequest): Run {
         val body =
             JsonObject(
                 buildMap {
@@ -370,7 +386,7 @@ internal class GatewayRunOperations(
         return Run(id = admitted.runId, sessionId = request.sessionId, status = admitted.status)
     }
 
-    override fun getRunStatus(runId: RunId): Run {
+    override suspend fun getRunStatus(runId: RunId): Run {
         val response =
             calls.execute(
                 GatewayOperationRequest(
@@ -389,7 +405,7 @@ internal class GatewayRunOperations(
         return run
     }
 
-    override fun observeRun(runId: RunId): RunEventObservation {
+    override suspend fun observeRun(runId: RunId): RunEventObservation {
         val operation = "run observation"
         val gatewayRequest =
             calls.request(
@@ -415,7 +431,7 @@ internal class GatewayModelCatalogOperations(
 ) : ModelGatewayPort {
     override fun fetchModelCatalog(surface: ModelCatalogSurface): ModelCatalog {
         val response =
-            calls.execute(
+            calls.executeBlocking(
                 GatewayOperationRequest(
                     operation = "model catalog",
                     method = surface.method,

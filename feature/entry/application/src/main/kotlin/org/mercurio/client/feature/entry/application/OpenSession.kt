@@ -10,13 +10,13 @@ import org.mercurio.client.feature.entry.domain.SessionId
 class OpenSession(
     private val gateway: SessionGatewayPort,
 ) {
-    fun execute(sessionId: SessionId): OpenedSession =
+    suspend fun execute(sessionId: SessionId): OpenedSession =
         OpenedSession(
             session = executeSession(sessionId),
             history = executeHistory(sessionId),
         )
 
-    fun executeSession(sessionId: SessionId): Session {
+    suspend fun executeSession(sessionId: SessionId): Session {
         val session = gateway.openSession(sessionId)
         if (session.id != sessionId) {
             throw invalidResponse("session.id does not match the requested Session")
@@ -24,7 +24,7 @@ class OpenSession(
         return session
     }
 
-    fun executeHistory(sessionId: SessionId): SessionHistory {
+    suspend fun executeHistory(sessionId: SessionId): SessionHistory {
         val history = gateway.loadSessionHistory(sessionId)
         if (history.sessionId != sessionId) {
             throw invalidResponse("session_id does not match the requested Session")

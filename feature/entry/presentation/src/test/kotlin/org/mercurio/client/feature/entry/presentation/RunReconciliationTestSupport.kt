@@ -10,6 +10,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -329,16 +330,16 @@ internal class ReconciliationFakeGateway(
     val secondObservationRequested = CountDownLatch(1)
     private val observationRequests = mutableListOf<RunId>()
 
-    override fun listSessions(request: SessionListRequest): SessionPage {
+    override suspend fun listSessions(request: SessionListRequest): SessionPage {
         listRequestCount.incrementAndGet()
         return SessionPage(listOf(session), null)
     }
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session = session
+    override suspend fun openSession(sessionId: SessionId): Session = session
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory {
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory {
         val (history, shouldFail) =
             synchronized(this) {
                 historyRequestCount.incrementAndGet()
@@ -357,18 +358,18 @@ internal class ReconciliationFakeGateway(
         return history
     }
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId) = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId) = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run {
@@ -377,12 +378,11 @@ internal class ReconciliationFakeGateway(
         if (blockRunCreation) {
             runStarted.countDown()
             try {
-                check(releaseRun.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                    "Run was not released."
+                runInterruptible {
+                    check(releaseRun.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                        "Run was not released."
+                    }
                 }
-            } catch (error: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw error
             } finally {
                 runFinished.countDown()
             }
@@ -390,7 +390,7 @@ internal class ReconciliationFakeGateway(
         return if (runs.isEmpty()) error("missing run") else runs.removeFirst()
     }
 
-    override fun getRunStatus(runId: RunId): Run {
+    override suspend fun getRunStatus(runId: RunId): Run {
         val (shouldBlock, status) =
             synchronized(this) {
                 statusRequests += runId
@@ -419,7 +419,7 @@ internal class ReconciliationFakeGateway(
         return status
     }
 
-    override fun observeRun(runId: RunId): RunEventObservation {
+    override suspend fun observeRun(runId: RunId): RunEventObservation {
         val shouldBlockOpen =
             synchronized(this) {
                 observationRequests += runId
@@ -454,9 +454,11 @@ internal class ReconciliationFakeGateway(
 }
 
 internal open class ReconciliationScriptedObservation(
-    private val events: List<RunEvent>,
+    events: List<RunEvent>,
 ) : RunEventObservation {
-    override fun iterator(): Iterator<RunEvent> = events.iterator()
+    private val remaining = events.iterator()
+
+    override suspend fun next(): RunEvent? = if (remaining.hasNext()) remaining.next() else null
 
     override fun close() = Unit
 }
@@ -464,19 +466,7 @@ internal open class ReconciliationScriptedObservation(
 internal class ReconciliationThrowingObservation(
     events: List<RunEvent>,
 ) : ReconciliationScriptedObservation(events) {
-    override fun iterator(): Iterator<RunEvent> {
-        val delegate = super.iterator()
-        return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean =
-                if (delegate.hasNext()) {
-                    true
-                } else {
-                    error("stream interrupted")
-                }
-
-            override fun next(): RunEvent = delegate.next()
-        }
-    }
+    override suspend fun next(): RunEvent? = super.next() ?: error("stream interrupted")
 }
 
 internal class ReconciliationDelayedTerminalObservation(
@@ -486,27 +476,15 @@ internal class ReconciliationDelayedTerminalObservation(
     val release = CountDownLatch(1)
     private var emitted = false
 
-    override fun iterator(): Iterator<RunEvent> =
-        object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                started.countDown()
-                try {
-                    check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                        "Observation was not released."
-                    }
-                } catch (error: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    throw error
-                }
-                return !emitted
-            }
-
-            override fun next(): RunEvent {
-                check(!emitted) { "Terminal event was already emitted." }
-                emitted = true
-                return terminalEvent
-            }
+    override suspend fun next(): RunEvent? {
+        if (emitted) return null
+        started.countDown()
+        check(release.await(RECONCILIATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+            "Observation was not released."
         }
+        emitted = true
+        return terminalEvent
+    }
 
     override fun close() {
         release.countDown()
@@ -521,25 +499,16 @@ internal class ReconciliationBlockingObservation(
     val finished = CountDownLatch(1)
     val release = CountDownLatch(1)
     private val closeCount = AtomicInteger(0)
+    private var nextEventIndex = 0
 
-    override fun iterator(): Iterator<RunEvent> {
+    override suspend fun next(): RunEvent? {
         started.countDown()
-        var nextEventIndex = 0
-        return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                if (nextEventIndex < events.size) return true
-                return try {
-                    release.await()
-                    false
-                } catch (error: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    throw error
-                } finally {
-                    finished.countDown()
-                }
-            }
-
-            override fun next(): RunEvent = events[nextEventIndex++]
+        if (nextEventIndex < events.size) return events[nextEventIndex++]
+        return try {
+            release.await()
+            null
+        } finally {
+            finished.countDown()
         }
     }
 
@@ -768,21 +737,13 @@ internal class ReconciliationDelayedUnwindObservation : RunEventObservation {
     val release = CountDownLatch(1)
     private val closeCount = AtomicInteger(0)
 
-    override fun iterator(): Iterator<RunEvent> {
+    override suspend fun next(): RunEvent? {
         started.countDown()
-        return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean =
-                try {
-                    awaitRelease()
-                    false
-                } catch (error: InterruptedException) {
-                    Thread.interrupted()
-                    hasNext()
-                } finally {
-                    finished.countDown()
-                }
-
-            override fun next(): RunEvent = error("not used")
+        return try {
+            awaitRelease()
+            null
+        } finally {
+            finished.countDown()
         }
     }
 

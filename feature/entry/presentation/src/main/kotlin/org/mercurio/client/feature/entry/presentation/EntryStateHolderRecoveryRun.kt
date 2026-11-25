@@ -4,7 +4,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runInterruptible
 import org.mercurio.client.feature.entry.application.ReconcileRun
 import org.mercurio.client.feature.entry.domain.PendingRunSubmissionKey
 import org.mercurio.client.feature.entry.domain.Run
@@ -20,9 +19,7 @@ internal suspend fun EntryStateHolder.recoverRun(
 ): Run? {
     val reconciliation =
         try {
-            runInterruptible {
-                ReconcileRun(context.runGateway, context.sessionGateway).execute(entry.runId, entry.sessionId)
-            }
+            ReconcileRun(context.runGateway, context.sessionGateway).execute(entry.runId, entry.sessionId)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

@@ -144,15 +144,15 @@ internal class ObservationScriptedGateway(
         statusResults += run
     }
 
-    override fun listSessions(request: SessionListRequest): SessionPage =
+    override suspend fun listSessions(request: SessionListRequest): SessionPage =
         SessionPage(
             listOf(session) + additionalSessions,
             null,
         )
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session {
+    override suspend fun openSession(sessionId: SessionId): Session {
         if (failOpenFor == sessionId) error("gateway unavailable")
         if (blockOpenFor == sessionId) {
             openStarted.countDown()
@@ -161,7 +161,7 @@ internal class ObservationScriptedGateway(
         return (listOf(session) + additionalSessions).single { it.id == sessionId }
     }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
         historyBySession[sessionId]
             ?: if (historyResults.isEmpty()) {
                 SessionHistory(sessionId, emptyList())
@@ -169,18 +169,18 @@ internal class ObservationScriptedGateway(
                 historyResults.removeFirst()
             }
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run {
@@ -192,7 +192,7 @@ internal class ObservationScriptedGateway(
         return runResults.removeFirst().also { run -> lastServedStatuses[run.id] = run }
     }
 
-    override fun getRunStatus(runId: RunId): Run {
+    override suspend fun getRunStatus(runId: RunId): Run {
         statusRequests += runId
         if (blockStatus) {
             statusStarted.countDown()
@@ -207,16 +207,18 @@ internal class ObservationScriptedGateway(
         return status
     }
 
-    override fun observeRun(runId: RunId): RunEventObservation {
+    override suspend fun observeRun(runId: RunId): RunEventObservation {
         observedRunIds += runId
         return observation
     }
 }
 
 internal open class ObservationScriptedObservation(
-    private val events: List<RunEvent>,
+    events: List<RunEvent>,
 ) : RunEventObservation {
-    override fun iterator(): Iterator<RunEvent> = events.iterator()
+    private val remaining = events.iterator()
+
+    override suspend fun next(): RunEvent? = if (remaining.hasNext()) remaining.next() else null
 
     override fun close() = Unit
 }
@@ -224,19 +226,7 @@ internal open class ObservationScriptedObservation(
 internal class ObservationThrowingObservation(
     events: List<RunEvent>,
 ) : ObservationScriptedObservation(events) {
-    override fun iterator(): Iterator<RunEvent> {
-        val delegate = super.iterator()
-        return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean =
-                if (delegate.hasNext()) {
-                    true
-                } else {
-                    error("stream interrupted")
-                }
-
-            override fun next(): RunEvent = delegate.next()
-        }
-    }
+    override suspend fun next(): RunEvent? = super.next() ?: error("stream interrupted")
 }
 
 internal class ObservationBlockingObservation : RunEventObservation {
@@ -245,16 +235,11 @@ internal class ObservationBlockingObservation : RunEventObservation {
     val release = CountDownLatch(1)
     private val closeCount = AtomicInteger(0)
 
-    override fun iterator(): Iterator<RunEvent> =
-        object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                started.countDown()
-                release.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-                return false
-            }
-
-            override fun next(): RunEvent = error("not used")
-        }
+    override suspend fun next(): RunEvent? {
+        started.countDown()
+        release.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+        return null
+    }
 
     override fun close() {
         if (closeCount.incrementAndGet() == 1) {
@@ -271,22 +256,15 @@ internal class ObservationDelayedTerminalObservation(
     val release = CountDownLatch(1)
     private var emitted = false
 
-    override fun iterator(): Iterator<RunEvent> =
-        object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean {
-                started.countDown()
-                check(release.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                    "Observation was not released."
-                }
-                return !emitted
-            }
-
-            override fun next(): RunEvent {
-                check(!emitted) { "Terminal event was already emitted." }
-                emitted = true
-                return terminalEvent
-            }
+    override suspend fun next(): RunEvent? {
+        if (emitted) return null
+        started.countDown()
+        check(release.await(OBSERVATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+            "Observation was not released."
         }
+        emitted = true
+        return terminalEvent
+    }
 
     override fun close() {
         release.countDown()

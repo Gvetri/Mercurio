@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -8,6 +9,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,33 +48,34 @@ class DefaultGatewayClientTest {
     private val contractsRoot = repositoryRoot.resolve("fixtures/mercurio/contracts")
 
     @Test
-    fun adapter_executes_every_supported_operation_against_the_client_owned_fixtures() {
-        val transport =
-            RecordingTransport(
-                responses =
-                    listOf(
-                        response("capabilities/success.json"),
-                        response("sessions/list-response-page-1.json"),
-                        response("sessions/create-response.json"),
-                        response("sessions/open-response.json"),
-                        response("sessions/history-response-populated.json"),
-                        response("sessions/rename-response.json"),
-                        response("sessions/delete-response.json"),
-                        response("sessions/pin-response.json"),
-                        response("sessions/unpin-response.json"),
-                        response("runs/create-response.json"),
-                        response("runs/status-response.json"),
-                    ),
-                eventStream = GatewayEventStream(statusCode = 200, lines = sseLines("runs/observation.sse")),
-            )
-        val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
-        val sessionId = SessionId(SESSION_ID)
+    fun adapter_executes_every_supported_operation_against_the_client_owned_fixtures() =
+        runBlocking {
+            val transport =
+                RecordingTransport(
+                    responses =
+                        listOf(
+                            response("capabilities/success.json"),
+                            response("sessions/list-response-page-1.json"),
+                            response("sessions/create-response.json"),
+                            response("sessions/open-response.json"),
+                            response("sessions/history-response-populated.json"),
+                            response("sessions/rename-response.json"),
+                            response("sessions/delete-response.json"),
+                            response("sessions/pin-response.json"),
+                            response("sessions/unpin-response.json"),
+                            response("runs/create-response.json"),
+                            response("runs/status-response.json"),
+                        ),
+                    eventStream = GatewayEventStream(statusCode = 200, lines = sseLines("runs/observation.sse")),
+                )
+            val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
+            val sessionId = SessionId(SESSION_ID)
 
-        assertEveryOperationAgainstFixtures(transport, client, sessionId)
-        assertRecordedRequests(transport)
-    }
+            assertEveryOperationAgainstFixtures(transport, client, sessionId)
+            assertRecordedRequests(transport)
+        }
 
-    private fun assertEveryOperationAgainstFixtures(
+    private suspend fun assertEveryOperationAgainstFixtures(
         transport: RecordingTransport,
         client: GatewayContractPort,
         sessionId: SessionId,
@@ -104,7 +107,7 @@ class DefaultGatewayClientTest {
         assertEquals("completed", client.getRunStatus(RunId(RUN_ID)).status)
         assertEquals(
             listOf(RunEventType.RUNNING, RunEventType.MESSAGE_DELTA, RunEventType.COMPLETED),
-            client.observeRun(RunId(RUN_ID)).toList().map { it.type },
+            client.observeRun(RunId(RUN_ID)).collectEvents().map { it.type },
         )
         assertTrue(transport.eventStreamClosed)
     }
@@ -137,373 +140,393 @@ class DefaultGatewayClientTest {
     }
 
     @Test
-    fun retry_run_creation_uses_the_same_create_contract_and_returns_a_distinct_authoritative_identity() {
-        val transport =
-            RecordingTransport(
-                responses =
-                    listOf(
-                        response("runs/create-response.json"),
-                        response("runs/create-response-retry.json"),
-                    ),
-            )
-        val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
-        val sessionId = SessionId(SESSION_ID)
-
-        val original = client.createRun(sessionId, "")
-        val retried = client.createRun(sessionId, "")
-
-        assertEquals(RUN_ID, original.id.value)
-        assertEquals(RETRY_RUN_ID, retried.id.value)
-        assertNotEquals(original.id, retried.id)
-        assertEquals(sessionId, original.sessionId)
-        assertEquals(sessionId, retried.sessionId)
-        assertEquals(2, transport.requests.size)
-        transport.requests.forEach { request -> assertFixtureRequest(request, "runs/create-request.json") }
-    }
-
-    @Test
-    fun run_reconciliation_uses_the_authoritative_status_then_history_contract_sequence() {
-        val transport =
-            RecordingTransport(
-                responses =
-                    listOf(
-                        response("runs/status-response.json"),
-                        response("sessions/history-response-populated.json"),
-                    ),
-            )
-        val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
-
-        val result = ReconcileRun(client, client).execute(RunId(RUN_ID), SessionId(SESSION_ID))
-
-        assertEquals("completed", result.run.status)
-        assertEquals("Authoritative result", result.history.messages.last().content)
-        assertEquals(RunReconciliationDecision.CONFIRMED, result.decision)
-        assertEquals(
-            listOf(
-                "/v1/runs/$RUN_ID",
-                "/api/sessions/$SESSION_ID/messages",
-            ),
-            transport.requests.map { URI(it.url).path },
-        )
-        assertFixtureRequest(transport.requests[0], "runs/status-request.json")
-        assertFixtureRequest(transport.requests[1], "sessions/history-request.json")
-    }
-
-    @Test
-    fun configured_profile_endpoint_is_used_without_discovery_or_route_extensions() {
-        val transport = RecordingTransport(responses = listOf(response("capabilities/success.json")))
-        val client = DefaultGatewayClient("https://gateway.example/profile-a/", "test-token", transport)
-
-        client.discoverCapabilities()
-
-        assertEquals("https://gateway.example/profile-a/v1/capabilities", transport.requests.single().url)
-    }
-
-    @Test
-    fun session_list_forwards_and_encodes_the_server_limit_and_offset_parameters() {
-        val transport = RecordingTransport(responses = listOf(response("sessions/list-response-page-1.json")))
-        val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
-
-        client.listSessions(
-            SessionListRequest(
-                limit = 7,
-                offset = 42,
-            ),
-        )
-
-        assertEquals(
-            "limit=7&offset=42",
-            URI(transport.requests.single().url).rawQuery,
-        )
-    }
-
-    @Test
-    fun capabilities_allow_unknown_additive_endpoints_but_reject_missing_required_endpoints() {
-        val additiveClient =
-            DefaultGatewayClient(
-                endpoint = "https://gateway.example",
-                bearerToken = "test-token",
-                transport = RecordingTransport(responses = listOf(response("capabilities/unknown-additive.json"))),
-            )
-
-        val capabilities = additiveClient.discoverCapabilities()
-
-        assertTrue(capabilities.supports("gateway_future_endpoint"))
-        assertEquals(11, capabilities.endpoints.size)
-
-        val missingClient =
-            DefaultGatewayClient(
-                endpoint = "https://gateway.example",
-                bearerToken = "test-token",
-                transport = RecordingTransport(responses = listOf(response("capabilities/missing-required.json"))),
-            )
-
-        assertFailure(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE) {
-            missingClient.discoverCapabilities()
-        }
-    }
-
-    @Test
-    fun capabilities_with_a_mismatched_required_path_are_rejected() {
-        val fixture =
-            Json.parseToJsonElement(contractsRoot.resolve("capabilities/success.json").readText()).jsonObject
-        val mismatchedBody =
-            fixture
-                .getValue("response")
-                .jsonObject
-                .getValue("body")
-                .toString()
-                .replace(
-                    "\"/api/sessions/{session_id}/messages\"",
-                    "\"/api/sessions/{session_id}/history\"",
+    fun retry_run_creation_uses_the_same_create_contract_and_returns_a_distinct_authoritative_identity() =
+        runBlocking {
+            val transport =
+                RecordingTransport(
+                    responses =
+                        listOf(
+                            response("runs/create-response.json"),
+                            response("runs/create-response-retry.json"),
+                        ),
                 )
-        val client =
-            DefaultGatewayClient(
-                endpoint = "https://gateway.example",
-                bearerToken = "test-token",
-                transport =
-                    RecordingTransport(
-                        responses = listOf(GatewayHttpResponse(statusCode = 200, body = mismatchedBody)),
-                    ),
-            )
+            val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
+            val sessionId = SessionId(SESSION_ID)
 
-        assertFailure(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE) {
-            client.discoverCapabilities()
+            val original = client.createRun(sessionId, "")
+            val retried = client.createRun(sessionId, "")
+
+            assertEquals(RUN_ID, original.id.value)
+            assertEquals(RETRY_RUN_ID, retried.id.value)
+            assertNotEquals(original.id, retried.id)
+            assertEquals(sessionId, original.sessionId)
+            assertEquals(sessionId, retried.sessionId)
+            assertEquals(2, transport.requests.size)
+            transport.requests.forEach { request -> assertFixtureRequest(request, "runs/create-request.json") }
         }
-    }
 
     @Test
-    fun run_creation_pins_both_the_unset_and_the_selected_model_and_effort_request_shapes() {
-        val transport =
-            RecordingTransport(
-                responses =
-                    listOf(
-                        response("runs/create-response.json"),
-                        response("runs/create-response.json"),
-                    ),
-            )
-        val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
-        val sessionId = SessionId(SESSION_ID)
+    fun run_reconciliation_uses_the_authoritative_status_then_history_contract_sequence() =
+        runBlocking {
+            val transport =
+                RecordingTransport(
+                    responses =
+                        listOf(
+                            response("runs/status-response.json"),
+                            response("sessions/history-response-populated.json"),
+                        ),
+                )
+            val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
 
-        val selected =
-            client.createRun(
-                RunCreateRequest(
-                    sessionId = sessionId,
-                    input = "",
-                    model = "deepseek-v4-flash",
-                    effort = "medium",
+            val result = ReconcileRun(client, client).execute(RunId(RUN_ID), SessionId(SESSION_ID))
+
+            assertEquals("completed", result.run.status)
+            assertEquals("Authoritative result", result.history.messages.last().content)
+            assertEquals(RunReconciliationDecision.CONFIRMED, result.decision)
+            assertEquals(
+                listOf(
+                    "/v1/runs/$RUN_ID",
+                    "/api/sessions/$SESSION_ID/messages",
+                ),
+                transport.requests.map { URI(it.url).path },
+            )
+            assertFixtureRequest(transport.requests[0], "runs/status-request.json")
+            assertFixtureRequest(transport.requests[1], "sessions/history-request.json")
+        }
+
+    @Test
+    fun configured_profile_endpoint_is_used_without_discovery_or_route_extensions() =
+        runBlocking {
+            val transport = RecordingTransport(responses = listOf(response("capabilities/success.json")))
+            val client = DefaultGatewayClient("https://gateway.example/profile-a/", "test-token", transport)
+
+            client.discoverCapabilities()
+
+            assertEquals("https://gateway.example/profile-a/v1/capabilities", transport.requests.single().url)
+        }
+
+    @Test
+    fun session_list_forwards_and_encodes_the_server_limit_and_offset_parameters() =
+        runBlocking {
+            val transport = RecordingTransport(responses = listOf(response("sessions/list-response-page-1.json")))
+            val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
+
+            client.listSessions(
+                SessionListRequest(
+                    limit = 7,
+                    offset = 42,
                 ),
             )
-        val unset = client.createRun(RunCreateRequest(sessionId = sessionId, input = ""))
 
-        assertEquals(RUN_ID, selected.id.value)
-        assertEquals(sessionId, unset.sessionId)
-        assertEquals(2, transport.requests.size)
-        assertFixtureRequest(transport.requests[0], "runs/create-request-model-effort.json")
-        assertFixtureRequest(transport.requests[1], "runs/create-request.json")
-    }
-
-    @Test
-    fun an_advertised_run_models_row_detects_the_pinned_catalog_without_changing_verification() {
-        val success =
-            clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json")).discoverCapabilities()
-        assertEquals(11, success.endpoints.size)
-        assertEquals(ModelCatalogSurface.RUN_MODELS, success.modelCatalogSurface())
-
-        val additive =
-            clientForBody(capabilitiesBodyWithRunModels("capabilities/unknown-additive.json"))
-                .discoverCapabilities()
-        assertEquals(12, additive.endpoints.size)
-        assertEquals(ModelCatalogSurface.RUN_MODELS, additive.modelCatalogSurface())
-
-        val noRow = clientForResponse("capabilities/success.json").discoverCapabilities()
-        assertNull(noRow.modelCatalogSurface())
-    }
-
-    @Test
-    fun the_captured_live_capabilities_detect_the_deployed_surface_and_advertise_no_run_models_row() {
-        val capabilities = clientForResponse("capabilities/captured-live.json").discoverCapabilities()
-
-        assertNull(capabilities.endpoints["run_models"])
-        assertEquals(
-            GatewayEndpoint("GET", "/api/model/options"),
-            capabilities.endpoints["model_options"],
-        )
-        assertEquals(ModelCatalogSurface.MODEL_OPTIONS, capabilities.modelCatalogSurface())
-        assertTrue(capabilities.satisfies(PublicBetaGatewayCapabilityManifest.current))
-    }
-
-    @Test
-    fun a_mismatched_run_models_row_is_not_detected_and_cannot_rescue_missing_required_endpoints() {
-        val wrongMethod =
-            clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", method = "POST"))
-                .discoverCapabilities()
-        assertNull(wrongMethod.modelCatalogSurface())
-
-        val wrongPath =
-            clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", path = "/api/model"))
-                .discoverCapabilities()
-        assertNull(wrongPath.modelCatalogSurface())
-
-        val advertisedButIncomplete =
-            clientForBody(capabilitiesBodyWithRunModels("capabilities/missing-required.json"))
-        assertFailure(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE) {
-            advertisedButIncomplete.discoverCapabilities()
-        }
-    }
-
-    @Test
-    fun authentication_failure_is_safe_and_does_not_expose_the_bearer_token() {
-        val client =
-            DefaultGatewayClient(
-                endpoint = "https://gateway.example",
-                bearerToken = "secret-token",
-                transport = RecordingTransport(responses = listOf(response("connection/authentication-failed.json"))),
+            assertEquals(
+                "limit=7&offset=42",
+                URI(transport.requests.single().url).rawQuery,
             )
-
-        val error = captureFailure { client.discoverCapabilities() }
-
-        assertEquals(GatewayErrorCategory.AUTHENTICATION_FAILED, error.category)
-        assertFalse(error.message.orEmpty().contains("secret-token"))
-        assertFalse(error.message.orEmpty().contains("authentication_failed"))
-    }
-
-    @Test
-    fun invalid_address_and_secure_connection_failures_have_stable_categories() {
-        assertFailure(GatewayErrorCategory.INVALID_ADDRESS) {
-            DefaultGatewayClient("http://gateway.example", "test-token", RecordingTransport())
         }
 
-        listOf(
-            SSLHandshakeException("certificate detail"),
-            SSLPeerUnverifiedException("hostname mismatch"),
-            CertPathValidatorException("unknown certificate authority"),
-        ).forEach { failure ->
-            val secureClient =
+    @Test
+    fun capabilities_allow_unknown_additive_endpoints_but_reject_missing_required_endpoints() =
+        runBlocking {
+            val additiveClient =
                 DefaultGatewayClient(
                     endpoint = "https://gateway.example",
                     bearerToken = "test-token",
-                    transport = RecordingTransport(failure = failure),
+                    transport = RecordingTransport(responses = listOf(response("capabilities/unknown-additive.json"))),
                 )
 
-            val error = captureFailure { secureClient.discoverCapabilities() }
+            val capabilities = additiveClient.discoverCapabilities()
 
-            assertEquals(GatewayErrorCategory.SECURE_CONNECTION_FAILED, error.category)
-            assertFalse(error.message.orEmpty().contains(failure.message.orEmpty()))
+            assertTrue(capabilities.supports("gateway_future_endpoint"))
+            assertEquals(11, capabilities.endpoints.size)
+
+            val missingClient =
+                DefaultGatewayClient(
+                    endpoint = "https://gateway.example",
+                    bearerToken = "test-token",
+                    transport = RecordingTransport(responses = listOf(response("capabilities/missing-required.json"))),
+                )
+
+            assertFailure(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE) {
+                missingClient.discoverCapabilities()
+            }
         }
-    }
 
     @Test
-    fun gateway_transport_failures_are_safe_and_stable() {
-        val client =
-            DefaultGatewayClient(
-                endpoint = "https://gateway.example",
-                bearerToken = "secret-token",
-                transport = RecordingTransport(failure = IOException("Authorization: Bearer ***")),
-            )
+    fun capabilities_with_a_mismatched_required_path_are_rejected() =
+        runBlocking {
+            val fixture =
+                Json.parseToJsonElement(contractsRoot.resolve("capabilities/success.json").readText()).jsonObject
+            val mismatchedBody =
+                fixture
+                    .getValue("response")
+                    .jsonObject
+                    .getValue("body")
+                    .toString()
+                    .replace(
+                        "\"/api/sessions/{session_id}/messages\"",
+                        "\"/api/sessions/{session_id}/history\"",
+                    )
+            val client =
+                DefaultGatewayClient(
+                    endpoint = "https://gateway.example",
+                    bearerToken = "test-token",
+                    transport =
+                        RecordingTransport(
+                            responses = listOf(GatewayHttpResponse(statusCode = 200, body = mismatchedBody)),
+                        ),
+                )
 
-        val error = captureFailure { client.discoverCapabilities() }
-
-        assertEquals(GatewayErrorCategory.GATEWAY_REQUEST_FAILED, error.category)
-        assertFalse(error.message.orEmpty().contains("secret-token"))
-        assertFalse(error.message.orEmpty().contains("Authorization"))
-    }
+            assertFailure(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE) {
+                client.discoverCapabilities()
+            }
+        }
 
     @Test
-    fun malformed_json_fields_and_sse_framing_fail_with_invalid_response() {
-        val invalidJsonClient = clientForResponse("malformed/invalid-json.json")
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { invalidJsonClient.discoverCapabilities() }
+    fun run_creation_pins_both_the_unset_and_the_selected_model_and_effort_request_shapes() =
+        runBlocking {
+            val transport =
+                RecordingTransport(
+                    responses =
+                        listOf(
+                            response("runs/create-response.json"),
+                            response("runs/create-response.json"),
+                        ),
+                )
+            val client = DefaultGatewayClient("https://gateway.example", "test-token", transport)
+            val sessionId = SessionId(SESSION_ID)
 
-        val missingFieldClient = clientForResponse("malformed/missing-required-field.json")
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { missingFieldClient.listSessions() }
-
-        val invalidTypeClient = clientForResponse("malformed/invalid-required-field-type.json")
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { invalidTypeClient.listSessions() }
-
-        val invalidSseClient =
-            DefaultGatewayClient(
-                endpoint = "https://gateway.example",
-                bearerToken = "test-token",
-                transport =
-                    RecordingTransport(
-                        eventStream =
-                            GatewayEventStream(
-                                statusCode = 200,
-                                lines = sseLines("malformed/invalid-sse-framing.sse"),
-                            ),
+            val selected =
+                client.createRun(
+                    RunCreateRequest(
+                        sessionId = sessionId,
+                        input = "",
+                        model = "deepseek-v4-flash",
+                        effort = "medium",
                     ),
-            )
+                )
+            val unset = client.createRun(RunCreateRequest(sessionId = sessionId, input = ""))
 
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            invalidSseClient.observeRun(RunId(RUN_ID)).toList()
+            assertEquals(RUN_ID, selected.id.value)
+            assertEquals(sessionId, unset.sessionId)
+            assertEquals(2, transport.requests.size)
+            assertFixtureRequest(transport.requests[0], "runs/create-request-model-effort.json")
+            assertFixtureRequest(transport.requests[1], "runs/create-request.json")
         }
-    }
-
-    @Test
-    fun resource_identity_mismatches_are_rejected_as_invalid_responses() {
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            clientForResponse("malformed/mismatched-session-response.json").openSession(SessionId(SESSION_ID))
-        }
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            clientForResponse("malformed/mismatched-session-response.json")
-                .renameSession(SessionId(SESSION_ID), "Renamed")
-        }
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            clientForResponse("malformed/mismatched-history-response.json").loadSessionHistory(SessionId(SESSION_ID))
-        }
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            clientForResponse("malformed/mismatched-pin-response.json").pinSession(SessionId(SESSION_ID))
-        }
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            clientForResponse("malformed/mismatched-pin-response.json").unpinSession(SessionId(SESSION_ID))
-        }
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            clientForResponse("malformed/incomplete-run-admission-response.json")
-                .createRun(SessionId(SESSION_ID), "input")
-        }
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            clientForResponse("malformed/mismatched-run-status-response.json").getRunStatus(RunId(RUN_ID))
-        }
-
-        val mismatchedEventClient =
-            DefaultGatewayClient(
-                endpoint = "https://gateway.example",
-                bearerToken = "test-token",
-                transport =
-                    RecordingTransport(
-                        eventStream =
-                            GatewayEventStream(
-                                statusCode = 200,
-                                lines = sseLines("malformed/mismatched-run-event.sse"),
-                            ),
-                    ),
-            )
-        assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
-            mismatchedEventClient.observeRun(RunId(RUN_ID)).toList()
-        }
-    }
 
     @Test
-    fun run_observation_opens_lazily_and_explicit_close_releases_partial_stream() {
-        val transport =
-            RecordingTransport(
-                eventStream = GatewayEventStream(statusCode = 200, lines = sseLines("runs/observation.sse")),
+    fun an_advertised_run_models_row_detects_the_pinned_catalog_without_changing_verification() =
+        runBlocking {
+            val success =
+                clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json")).discoverCapabilities()
+            assertEquals(11, success.endpoints.size)
+            assertEquals(ModelCatalogSurface.RUN_MODELS, success.modelCatalogSurface())
+
+            val additive =
+                clientForBody(capabilitiesBodyWithRunModels("capabilities/unknown-additive.json"))
+                    .discoverCapabilities()
+            assertEquals(12, additive.endpoints.size)
+            assertEquals(ModelCatalogSurface.RUN_MODELS, additive.modelCatalogSurface())
+
+            val noRow = clientForResponse("capabilities/success.json").discoverCapabilities()
+            assertNull(noRow.modelCatalogSurface())
+        }
+
+    @Test
+    fun the_captured_live_capabilities_detect_the_deployed_surface_and_advertise_no_run_models_row() =
+        runBlocking {
+            val capabilities = clientForResponse("capabilities/captured-live.json").discoverCapabilities()
+
+            assertNull(capabilities.endpoints["run_models"])
+            assertEquals(
+                GatewayEndpoint("GET", "/api/model/options"),
+                capabilities.endpoints["model_options"],
             )
-        val observation =
-            DefaultGatewayClient("https://gateway.example", "test-token", transport)
-                .observeRun(RunId(RUN_ID))
+            assertEquals(ModelCatalogSurface.MODEL_OPTIONS, capabilities.modelCatalogSurface())
+            assertTrue(capabilities.satisfies(PublicBetaGatewayCapabilityManifest.current))
+        }
 
-        assertTrue(transport.requests.isEmpty())
-        val iterator = observation.iterator()
-        assertTrue(transport.requests.isNotEmpty())
-        assertTrue(iterator.hasNext())
-        iterator.next()
-        assertFalse(transport.eventStreamClosed)
+    @Test
+    fun a_mismatched_run_models_row_is_not_detected_and_cannot_rescue_missing_required_endpoints() =
+        runBlocking {
+            val wrongMethod =
+                clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", method = "POST"))
+                    .discoverCapabilities()
+            assertNull(wrongMethod.modelCatalogSurface())
 
-        observation.close()
+            val wrongPath =
+                clientForBody(capabilitiesBodyWithRunModels("capabilities/success.json", path = "/api/model"))
+                    .discoverCapabilities()
+            assertNull(wrongPath.modelCatalogSurface())
 
-        assertTrue(transport.eventStreamClosed)
-    }
+            val advertisedButIncomplete =
+                clientForBody(capabilitiesBodyWithRunModels("capabilities/missing-required.json"))
+            assertFailure(GatewayErrorCategory.REQUIRED_FEATURE_UNAVAILABLE) {
+                advertisedButIncomplete.discoverCapabilities()
+            }
+        }
+
+    @Test
+    fun authentication_failure_is_safe_and_does_not_expose_the_bearer_token() =
+        runBlocking {
+            val client =
+                DefaultGatewayClient(
+                    endpoint = "https://gateway.example",
+                    bearerToken = "secret-token",
+                    transport =
+                        RecordingTransport(
+                            responses = listOf(response("connection/authentication-failed.json")),
+                        ),
+                )
+
+            val error = captureFailure { client.discoverCapabilities() }
+
+            assertEquals(GatewayErrorCategory.AUTHENTICATION_FAILED, error.category)
+            assertFalse(error.message.orEmpty().contains("secret-token"))
+            assertFalse(error.message.orEmpty().contains("authentication_failed"))
+        }
+
+    @Test
+    fun invalid_address_and_secure_connection_failures_have_stable_categories() =
+        runBlocking {
+            assertFailure(GatewayErrorCategory.INVALID_ADDRESS) {
+                DefaultGatewayClient("http://gateway.example", "test-token", RecordingTransport())
+            }
+
+            listOf(
+                SSLHandshakeException("certificate detail"),
+                SSLPeerUnverifiedException("hostname mismatch"),
+                CertPathValidatorException("unknown certificate authority"),
+            ).forEach { failure ->
+                val secureClient =
+                    DefaultGatewayClient(
+                        endpoint = "https://gateway.example",
+                        bearerToken = "test-token",
+                        transport = RecordingTransport(failure = failure),
+                    )
+
+                val error = captureFailure { secureClient.discoverCapabilities() }
+
+                assertEquals(GatewayErrorCategory.SECURE_CONNECTION_FAILED, error.category)
+                assertFalse(error.message.orEmpty().contains(failure.message.orEmpty()))
+            }
+        }
+
+    @Test
+    fun gateway_transport_failures_are_safe_and_stable() =
+        runBlocking {
+            val client =
+                DefaultGatewayClient(
+                    endpoint = "https://gateway.example",
+                    bearerToken = "secret-token",
+                    transport = RecordingTransport(failure = IOException("Authorization: Bearer ***")),
+                )
+
+            val error = captureFailure { client.discoverCapabilities() }
+
+            assertEquals(GatewayErrorCategory.GATEWAY_REQUEST_FAILED, error.category)
+            assertFalse(error.message.orEmpty().contains("secret-token"))
+            assertFalse(error.message.orEmpty().contains("Authorization"))
+        }
+
+    @Test
+    fun malformed_json_fields_and_sse_framing_fail_with_invalid_response() =
+        runBlocking {
+            val invalidJsonClient = clientForResponse("malformed/invalid-json.json")
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { invalidJsonClient.discoverCapabilities() }
+
+            val missingFieldClient = clientForResponse("malformed/missing-required-field.json")
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { missingFieldClient.listSessions() }
+
+            val invalidTypeClient = clientForResponse("malformed/invalid-required-field-type.json")
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) { invalidTypeClient.listSessions() }
+
+            val invalidSseClient =
+                DefaultGatewayClient(
+                    endpoint = "https://gateway.example",
+                    bearerToken = "test-token",
+                    transport =
+                        RecordingTransport(
+                            eventStream =
+                                GatewayEventStream(
+                                    statusCode = 200,
+                                    lines = sseLines("malformed/invalid-sse-framing.sse"),
+                                ),
+                        ),
+                )
+
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                invalidSseClient.observeRun(RunId(RUN_ID)).collectEvents()
+            }
+        }
+
+    @Test
+    fun resource_identity_mismatches_are_rejected_as_invalid_responses() =
+        runBlocking {
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                clientForResponse("malformed/mismatched-session-response.json").openSession(SessionId(SESSION_ID))
+            }
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                clientForResponse("malformed/mismatched-session-response.json")
+                    .renameSession(SessionId(SESSION_ID), "Renamed")
+            }
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                clientForResponse(
+                    "malformed/mismatched-history-response.json",
+                ).loadSessionHistory(SessionId(SESSION_ID))
+            }
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                clientForResponse("malformed/mismatched-pin-response.json").pinSession(SessionId(SESSION_ID))
+            }
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                clientForResponse("malformed/mismatched-pin-response.json").unpinSession(SessionId(SESSION_ID))
+            }
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                clientForResponse("malformed/incomplete-run-admission-response.json")
+                    .createRun(SessionId(SESSION_ID), "input")
+            }
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                clientForResponse("malformed/mismatched-run-status-response.json").getRunStatus(RunId(RUN_ID))
+            }
+
+            val mismatchedEventClient =
+                DefaultGatewayClient(
+                    endpoint = "https://gateway.example",
+                    bearerToken = "test-token",
+                    transport =
+                        RecordingTransport(
+                            eventStream =
+                                GatewayEventStream(
+                                    statusCode = 200,
+                                    lines = sseLines("malformed/mismatched-run-event.sse"),
+                                ),
+                        ),
+                )
+            assertFailure(GatewayErrorCategory.INVALID_RESPONSE) {
+                mismatchedEventClient.observeRun(RunId(RUN_ID)).collectEvents()
+            }
+        }
+
+    @Test
+    fun run_observation_opens_lazily_and_explicit_close_releases_partial_stream() =
+        runBlocking {
+            val transport =
+                RecordingTransport(
+                    eventStream = GatewayEventStream(statusCode = 200, lines = sseLines("runs/observation.sse")),
+                )
+            val observation =
+                DefaultGatewayClient("https://gateway.example", "test-token", transport)
+                    .observeRun(RunId(RUN_ID))
+
+            assertTrue(transport.requests.isEmpty())
+            val event = observation.next()
+            assertTrue(transport.requests.isNotEmpty())
+            assertNotNull(event)
+            assertFalse(transport.eventStreamClosed)
+
+            observation.close()
+
+            assertTrue(transport.eventStreamClosed)
+        }
 
     private fun clientForResponse(path: String): GatewayContractPort =
         DefaultGatewayClient(
@@ -588,18 +611,19 @@ class DefaultGatewayClientTest {
         }
     }
 
-    private fun captureFailure(block: () -> Unit): GatewayException {
-        try {
-            block()
-        } catch (error: GatewayException) {
-            return error
+    private fun captureFailure(block: suspend () -> Unit): GatewayException =
+        runBlocking {
+            try {
+                block()
+            } catch (error: GatewayException) {
+                return@runBlocking error
+            }
+            throw AssertionError("Expected GatewayException")
         }
-        throw AssertionError("Expected GatewayException")
-    }
 
     private fun assertFailure(
         category: GatewayErrorCategory,
-        block: () -> Unit,
+        block: suspend () -> Unit,
     ) {
         assertEquals(category, captureFailure(block).category)
     }

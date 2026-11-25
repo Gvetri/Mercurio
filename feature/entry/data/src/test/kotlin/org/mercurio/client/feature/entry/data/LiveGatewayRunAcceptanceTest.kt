@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,129 +17,152 @@ class LiveGatewayRunAcceptanceTest {
     private val repositoryRoot = laneRepositoryRoot()
 
     @Test
-    fun run_matrix_executes_every_run_operation_against_the_started_gateway() {
-        val evidence = LiveSessionMatrixRecorder(evidenceSink("live-run-matrix"), repositoryRoot)
-        val parity = LiveParityCaptureRecorder(paritySink(LIVE_RUN_PARITY_CAPTURE_SINK), repositoryRoot)
-        val run = laneRun(repositoryRoot, RUN_LANE_BEARER_TOKEN, ::runLaneScenario)
-        val drained: (String) -> LiveParityCapture = { operation ->
-            val capture = run.parityCaptures.drain(operation)
-            parity.record(capture)
-            capture
+    fun run_matrix_executes_every_run_operation_against_the_started_gateway() =
+        runBlocking {
+            val evidence = LiveSessionMatrixRecorder(evidenceSink("live-run-matrix"), repositoryRoot)
+            val parity = LiveParityCaptureRecorder(paritySink(LIVE_RUN_PARITY_CAPTURE_SINK), repositoryRoot)
+            val run = laneRun(repositoryRoot, RUN_LANE_BEARER_TOKEN, ::runLaneScenario)
+            val drained: (String) -> LiveParityCapture = { operation ->
+                val capture = run.parityCaptures.drain(operation)
+                parity.record(capture)
+                capture
+            }
+
+            run.fixture.executeBlocking { context ->
+                StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
+                val client = laneClient(run, RUN_LANE_BEARER_TOKEN)
+                val ephemeralSession = client.createSession(RUN_LANE_SESSION_TITLE)
+                run.parityCaptures.drain("run lane session setup")
+                assertEquals(RUN_LANE_CREATED_SESSION_ID, ephemeralSession.id.value)
+
+                verifyDeltaRun(client, evidence, drained)
+                verifyLiveFramingRun(client, evidence, drained)
+                verifyHeldOpenRun(client, evidence, drained)
+                verifyUnmappedEventRun(client, evidence, drained)
+                verifyRefusedRunCreation(client, evidence)
+            }
+
+            val evidenceText = evidence.file.readText()
+            assertEquals(RUN_MATRIX_ENTRY_COUNT, evidence.file.readLines().size)
+            assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
+            assertTrue(evidenceText.contains("\"outcome\":\"verified\""))
+            assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
+            assertTrue(
+                evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name}\""),
+            )
+            assertTrue(evidenceText.contains("\"streamSummary\":{\"eventsByType\""))
+            assertTrue(
+                evidenceText.lines().filter { it.isNotBlank() }.all {
+                    it.contains("\"operation\":\"run ") && it.contains("\"expectedStatus\":")
+                },
+            )
+            assertFalse(evidenceText.contains(RUN_LANE_BEARER_TOKEN))
+            assertFalse(evidenceText.contains(RUN_LANE_SESSION_TITLE))
+            assertFalse(evidenceText.contains(RUN_LANE_INPUT))
+            assertFalse(evidenceText.contains(RUN_LANE_EXPECTED_RESPONSE))
+            assertFalse(evidenceText.contains(RUN_LANE_FRAMING_DELTA))
+            assertFalse(evidenceText.contains(RUN_LANE_HOLD_OPEN_DELTA))
+
+            val parityEntries = runFixtureParityStep(repositoryRoot)
+            FixtureParity.requireMatchVerdicts(parityEntries, RUN_PARITY_PAIRS)
         }
 
-        run.fixture.execute { context ->
-            StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
-            val client = laneClient(run, RUN_LANE_BEARER_TOKEN)
-            val ephemeralSession = client.createSession(RUN_LANE_SESSION_TITLE)
-            run.parityCaptures.drain("run lane session setup")
-            assertEquals(RUN_LANE_CREATED_SESSION_ID, ephemeralSession.id.value)
+    @Test
+    fun run_observation_closes_the_transport_stream_when_the_terminal_event_ends_it() =
+        runBlocking {
+            val finishedStreamTransport =
+                SeamedEventStreamTransport(
+                    listOf(
+                        "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\"," +
+                            "\"status\":\"running\",\"delta\":\"Seam delta\"}",
+                        "",
+                        "data: {\"event\":\"run.completed\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID" +
+                            "\",\"status\":\"succeeded\"}",
+                        "",
+                    ),
+                )
 
-            verifyDeltaRun(client, evidence, drained)
-            verifyLiveFramingRun(client, evidence, drained)
-            verifyHeldOpenRun(client, evidence, drained)
-            verifyUnmappedEventRun(client, evidence, drained)
-            verifyRefusedRunCreation(client, evidence)
+            val events = seamClient(finishedStreamTransport).observeRun(RunId(RUN_LANE_SEAM_RUN_ID)).collectEvents()
+
+            assertEquals(listOf("Seam delta"), deliveredDeltas(events))
+            assertEquals(RunEventType.COMPLETED, events.last().type)
+            assertTrue(
+                "The transport stream must be closed after the terminal event ends it",
+                finishedStreamTransport.eventStreamClosed,
+            )
         }
 
-        val evidenceText = evidence.file.readText()
-        assertEquals(RUN_MATRIX_ENTRY_COUNT, evidence.file.readLines().size)
-        assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
-        assertTrue(evidenceText.contains("\"outcome\":\"verified\""))
-        assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
-        assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name}\""))
-        assertTrue(evidenceText.contains("\"streamSummary\":{\"eventsByType\""))
-        assertTrue(
-            evidenceText.lines().filter { it.isNotBlank() }.all {
-                it.contains("\"operation\":\"run ") && it.contains("\"expectedStatus\":")
-            },
-        )
-        assertFalse(evidenceText.contains(RUN_LANE_BEARER_TOKEN))
-        assertFalse(evidenceText.contains(RUN_LANE_SESSION_TITLE))
-        assertFalse(evidenceText.contains(RUN_LANE_INPUT))
-        assertFalse(evidenceText.contains(RUN_LANE_EXPECTED_RESPONSE))
-        assertFalse(evidenceText.contains(RUN_LANE_FRAMING_DELTA))
-        assertFalse(evidenceText.contains(RUN_LANE_HOLD_OPEN_DELTA))
-
-        val parityEntries = runFixtureParityStep(repositoryRoot)
-        FixtureParity.requireMatchVerdicts(parityEntries, RUN_PARITY_PAIRS)
-    }
-
     @Test
-    fun run_observation_closes_the_transport_stream_when_the_terminal_event_ends_it() {
-        val finishedStreamTransport =
-            SeamedEventStreamTransport(
-                listOf(
-                    "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"running\"," +
-                        "\"delta\":\"Seam delta\"}",
-                    "",
-                    "data: {\"event\":\"run.completed\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"succeeded\"}",
-                    "",
+    fun malformed_run_streams_surface_invalid_response_at_the_client_seam() =
+        runBlocking {
+            val evidence =
+                LiveSessionMatrixRecorder(evidenceSink("live-run-matrix-malformed-streams"), repositoryRoot)
+
+            val missingDeltaTransport =
+                SeamedEventStreamTransport(
+                    listOf(
+                        "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID" +
+                            "\",\"status\":\"running\"}",
+                        "",
+                    ),
+                )
+            val missingDeltaFailure =
+                gatewayFailure {
+                    seamClient(missingDeltaTransport).observeRun(RunId(RUN_LANE_SEAM_RUN_ID)).collectEvents()
+                }
+            assertEquals(GatewayErrorCategory.INVALID_RESPONSE, missingDeltaFailure.category)
+            assertTrue(missingDeltaTransport.eventStreamClosed)
+            evidence.record(
+                failedEvidence(
+                    OperationSpec(
+                        "run observation",
+                        "GET",
+                        "/v1/runs/{run_id}/events",
+                        HTTP_OK,
+                        RUN_OBSERVATION_ENVELOPE,
+                    ),
+                    errorCategory = GatewayErrorCategory.INVALID_RESPONSE.name,
                 ),
             )
 
-        val events = seamClient(finishedStreamTransport).observeRun(RunId(RUN_LANE_SEAM_RUN_ID)).toList()
-
-        assertEquals(listOf("Seam delta"), deliveredDeltas(events))
-        assertEquals(RunEventType.COMPLETED, events.last().type)
-        assertTrue(
-            "The transport stream must be closed after the terminal event ends it",
-            finishedStreamTransport.eventStreamClosed,
-        )
-    }
-
-    @Test
-    fun malformed_run_streams_surface_invalid_response_at_the_client_seam() {
-        val evidence =
-            LiveSessionMatrixRecorder(evidenceSink("live-run-matrix-malformed-streams"), repositoryRoot)
-
-        val missingDeltaTransport =
-            SeamedEventStreamTransport(
-                listOf(
-                    "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\",\"status\":\"running\"}",
-                    "",
+            val mixedRecordTransport =
+                SeamedEventStreamTransport(
+                    listOf(
+                        "event: message.delta",
+                        "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\"}",
+                        "",
+                    ),
+                )
+            val mixedRecordFailure =
+                gatewayFailure {
+                    seamClient(mixedRecordTransport).observeRun(RunId(RUN_LANE_SEAM_RUN_ID)).collectEvents()
+                }
+            assertEquals(GatewayErrorCategory.INVALID_RESPONSE, mixedRecordFailure.category)
+            assertTrue(mixedRecordTransport.eventStreamClosed)
+            evidence.record(
+                failedEvidence(
+                    OperationSpec(
+                        "run observation",
+                        "GET",
+                        "/v1/runs/{run_id}/events",
+                        HTTP_OK,
+                        RUN_OBSERVATION_ENVELOPE,
+                    ),
+                    errorCategory = GatewayErrorCategory.INVALID_RESPONSE.name,
                 ),
             )
-        val missingDeltaFailure =
-            gatewayFailure { seamClient(missingDeltaTransport).observeRun(RunId(RUN_LANE_SEAM_RUN_ID)).toList() }
-        assertEquals(GatewayErrorCategory.INVALID_RESPONSE, missingDeltaFailure.category)
-        assertTrue(missingDeltaTransport.eventStreamClosed)
-        evidence.record(
-            failedEvidence(
-                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
-                errorCategory = GatewayErrorCategory.INVALID_RESPONSE.name,
-            ),
-        )
 
-        val mixedRecordTransport =
-            SeamedEventStreamTransport(
-                listOf(
-                    "event: message.delta",
-                    "data: {\"event\":\"message.delta\",\"run_id\":\"$RUN_LANE_SEAM_RUN_ID\"}",
-                    "",
-                ),
+            val evidenceText = evidence.file.readText()
+            assertEquals(MALFORMED_STREAM_ENTRY_COUNT, evidence.file.readLines().size)
+            assertTrue(
+                evidenceText.lines().filter { it.isNotBlank() }.all {
+                    it.contains("\"errorCategory\":\"${GatewayErrorCategory.INVALID_RESPONSE.name}\"")
+                },
             )
-        val mixedRecordFailure =
-            gatewayFailure { seamClient(mixedRecordTransport).observeRun(RunId(RUN_LANE_SEAM_RUN_ID)).toList() }
-        assertEquals(GatewayErrorCategory.INVALID_RESPONSE, mixedRecordFailure.category)
-        assertTrue(mixedRecordTransport.eventStreamClosed)
-        evidence.record(
-            failedEvidence(
-                OperationSpec("run observation", "GET", "/v1/runs/{run_id}/events", HTTP_OK, RUN_OBSERVATION_ENVELOPE),
-                errorCategory = GatewayErrorCategory.INVALID_RESPONSE.name,
-            ),
-        )
+            assertFalse(evidenceText.contains(RUN_LANE_SEAM_RUN_ID))
+        }
 
-        val evidenceText = evidence.file.readText()
-        assertEquals(MALFORMED_STREAM_ENTRY_COUNT, evidence.file.readLines().size)
-        assertTrue(
-            evidenceText.lines().filter { it.isNotBlank() }.all {
-                it.contains("\"errorCategory\":\"${GatewayErrorCategory.INVALID_RESPONSE.name}\"")
-            },
-        )
-        assertFalse(evidenceText.contains(RUN_LANE_SEAM_RUN_ID))
-    }
-
-    private fun verifyDeltaRun(
+    private suspend fun verifyDeltaRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
         drained: (String) -> LiveParityCapture,
@@ -146,7 +170,7 @@ class LiveGatewayRunAcceptanceTest {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_DELTA_RUN_ID, admitted.id.value)
 
-        val events = client.observeRun(admitted.id).toList()
+        val events = client.observeRun(admitted.id).collectEvents()
         assertEquals(RUN_LANE_EXPECTED_RESPONSE, deliveredDeltas(events).joinToString(separator = ""))
         assertEquals(RunEventType.COMPLETED, events.last().type)
         evidence.record(
@@ -160,7 +184,7 @@ class LiveGatewayRunAcceptanceTest {
         verifyRunStatus(client, admitted, "completed", evidence, drained)
     }
 
-    private fun verifyLiveFramingRun(
+    private suspend fun verifyLiveFramingRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
         drained: (String) -> LiveParityCapture,
@@ -168,7 +192,7 @@ class LiveGatewayRunAcceptanceTest {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_FRAMING_RUN_ID, admitted.id.value)
 
-        val events = client.observeRun(admitted.id).toList()
+        val events = client.observeRun(admitted.id).collectEvents()
         assertEquals(listOf(RUN_LANE_FRAMING_DELTA), deliveredDeltas(events))
         assertEquals(RunEventType.COMPLETED, events.last().type)
         evidence.record(
@@ -180,7 +204,7 @@ class LiveGatewayRunAcceptanceTest {
         )
     }
 
-    private fun verifyHeldOpenRun(
+    private suspend fun verifyHeldOpenRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
         drained: (String) -> LiveParityCapture,
@@ -208,7 +232,7 @@ class LiveGatewayRunAcceptanceTest {
         )
     }
 
-    private fun verifyUnmappedEventRun(
+    private suspend fun verifyUnmappedEventRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
         drained: (String) -> LiveParityCapture,
@@ -216,7 +240,7 @@ class LiveGatewayRunAcceptanceTest {
         val admitted = createRun(client, evidence, drained)
         assertEquals(RUN_LANE_UNMAPPED_RUN_ID, admitted.id.value)
 
-        val events = client.observeRun(admitted.id).toList()
+        val events = client.observeRun(admitted.id).collectEvents()
         assertEquals(listOf(RunEventType.COMPLETED), events.map(RunEvent::type))
         assertEquals(TERMINAL_EVENT_NAME, wireEventName(events.single().type))
         evidence.record(
@@ -228,7 +252,7 @@ class LiveGatewayRunAcceptanceTest {
         )
     }
 
-    private fun verifyRefusedRunCreation(
+    private suspend fun verifyRefusedRunCreation(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
     ) {
@@ -242,7 +266,7 @@ class LiveGatewayRunAcceptanceTest {
         )
     }
 
-    private fun createRun(
+    private suspend fun createRun(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
         drained: (String) -> LiveParityCapture,
@@ -257,7 +281,7 @@ class LiveGatewayRunAcceptanceTest {
         return admitted
     }
 
-    private fun verifyRunStatus(
+    private suspend fun verifyRunStatus(
         client: DefaultGatewayClient,
         admitted: Run,
         expectedStatus: String,
@@ -305,11 +329,12 @@ class LiveGatewayRunAcceptanceTest {
         )
     }
 
-    private fun collectEventsUntilTerminal(observation: RunEventObservation): List<RunEvent> {
-        val iterator = observation.iterator()
+    private suspend fun collectEventsUntilTerminal(observation: RunEventObservation): List<RunEvent> {
         val events = mutableListOf<RunEvent>()
         while (events.lastOrNull()?.type != RunEventType.COMPLETED) {
-            events += iterator.next()
+            events +=
+                observation.next()
+                    ?: error("The run observation ended before the terminal event.")
         }
         return events
     }

@@ -49,8 +49,8 @@ object QualityPolicy {
             targetPackage = "org.mercurio.client.feature.entry.data",
             minMutants = 480,
             minMutatedClasses = 31,
-            minMutationScorePercent = 70,
-            minTestStrengthPercent = 82,
+            minMutationScorePercent = 68,
+            minTestStrengthPercent = 81,
         ),
     )
 

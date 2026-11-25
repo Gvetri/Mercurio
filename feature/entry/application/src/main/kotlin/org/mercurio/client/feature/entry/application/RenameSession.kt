@@ -7,7 +7,7 @@ import org.mercurio.client.feature.entry.domain.SessionId
 class RenameSession(
     private val gateway: SessionGatewayPort,
 ) {
-    fun execute(
+    suspend fun execute(
         sessionId: SessionId,
         title: String,
     ): Session = gateway.renameSession(sessionId, title)

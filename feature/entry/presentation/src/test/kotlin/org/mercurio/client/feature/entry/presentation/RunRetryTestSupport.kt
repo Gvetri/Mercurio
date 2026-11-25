@@ -221,27 +221,27 @@ internal class RetryFakeGateway(
         mutableHistories[history.sessionId] = history
     }
 
-    override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(sessions, null)
+    override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(sessions, null)
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session = sessions.single { it.id == sessionId }
+    override suspend fun openSession(sessionId: SessionId): Session = sessions.single { it.id == sessionId }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
         mutableHistories[sessionId] ?: SessionHistory(sessionId, emptyList())
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run {
@@ -255,17 +255,19 @@ internal class RetryFakeGateway(
         return runResults.removeFirst().getOrThrow()
     }
 
-    override fun createRun(request: RunCreateRequest): Run {
+    override suspend fun createRun(request: RunCreateRequest): Run {
         runCreateRequests += request
         return createRun(request.sessionId, request.input)
     }
 
-    override fun getRunStatus(runId: RunId): Run = mutableRunStatuses[runId] ?: error("not used")
+    override suspend fun getRunStatus(runId: RunId): Run = mutableRunStatuses[runId] ?: error("not used")
 
-    override fun observeRun(runId: RunId): RunEventObservation =
-        object : RunEventObservation {
-            override fun iterator(): Iterator<RunEvent> = runObservations[runId].orEmpty().iterator()
+    override suspend fun observeRun(runId: RunId): RunEventObservation {
+        val remaining = runObservations[runId].orEmpty().iterator()
+        return object : RunEventObservation {
+            override suspend fun next(): RunEvent? = if (remaining.hasNext()) remaining.next() else null
 
             override fun close() = Unit
         }
+    }
 }

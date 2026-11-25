@@ -251,7 +251,7 @@ internal fun laneClient(
         transport = run.parityCaptures,
     )
 
-internal fun gatewayFailure(block: () -> Unit): GatewayException =
+internal suspend fun gatewayFailure(block: suspend () -> Unit): GatewayException =
     try {
         block()
         error("Expected the operation to fail with a GatewayException.")

@@ -267,7 +267,7 @@ class SessionActionMenuIntegrationTest {
             sessions[index] = sessions[index].copy(title = title, pinned = pinned)
         }
 
-        override fun listSessions(request: SessionListRequest): SessionPage =
+        override suspend fun listSessions(request: SessionListRequest): SessionPage =
             if (firstSessionOnSecondPage) {
                 if (request.offset == 0) {
                     SessionPage(sessions.filter { it.id == SECOND }, 1)
@@ -278,17 +278,17 @@ class SessionActionMenuIntegrationTest {
                 SessionPage(sessions.toList(), if (paginationEnabled && request.offset == 0) 2 else null)
             }
 
-        override fun createSession(title: String?): Session = error("Creation is not part of these journeys")
+        override suspend fun createSession(title: String?): Session = error("Creation is not part of these journeys")
 
-        override fun openSession(sessionId: SessionId): Session = sessions.single { it.id == sessionId }
+        override suspend fun openSession(sessionId: SessionId): Session = sessions.single { it.id == sessionId }
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             SessionHistory(
                 sessionId,
                 historyMessages,
             )
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session {
@@ -297,14 +297,14 @@ class SessionActionMenuIntegrationTest {
             return sessions[index].copy(title = confirmedRenameTitle ?: title).also { sessions[index] = it }
         }
 
-        override fun deleteSession(sessionId: SessionId) {
+        override suspend fun deleteSession(sessionId: SessionId) {
             recordMutation(SessionMutationAction.DELETE, sessionId)
             sessions.removeAll { it.id == sessionId }
         }
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult = changePin(sessionId, pinned = true)
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult = changePin(sessionId, pinned = true)
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult = changePin(sessionId, pinned = false)
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = changePin(sessionId, pinned = false)
 
         private fun changePin(
             sessionId: SessionId,

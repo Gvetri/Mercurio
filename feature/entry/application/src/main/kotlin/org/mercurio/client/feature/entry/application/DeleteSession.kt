@@ -6,5 +6,5 @@ import org.mercurio.client.feature.entry.domain.SessionId
 class DeleteSession(
     private val gateway: SessionGatewayPort,
 ) {
-    fun execute(sessionId: SessionId) = gateway.deleteSession(sessionId)
+    suspend fun execute(sessionId: SessionId) = gateway.deleteSession(sessionId)
 }
