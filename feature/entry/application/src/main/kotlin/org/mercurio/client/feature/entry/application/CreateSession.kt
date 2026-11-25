@@ -6,5 +6,5 @@ import org.mercurio.client.feature.entry.domain.SessionGatewayPort
 class CreateSession(
     private val gateway: SessionGatewayPort,
 ) {
-    fun execute(title: String?): Session = gateway.createSession(title)
+    suspend fun execute(title: String?): Session = gateway.createSession(title)
 }

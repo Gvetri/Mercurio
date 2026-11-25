@@ -111,20 +111,16 @@ private class LaneRecordingUncertaintyStore(
 }
 
 private class CountingObservation(
-    private val events: List<RunEvent>,
+    events: List<RunEvent>,
     private val gateway: ObservingGateway,
 ) : RunEventObservation {
-    override fun iterator(): Iterator<RunEvent> =
-        object : Iterator<RunEvent> {
-            val inner = events.iterator()
+    private val remaining = events.iterator()
 
-            override fun hasNext(): Boolean = inner.hasNext()
-
-            override fun next(): RunEvent {
-                gateway.nextCalls += 1
-                return inner.next()
-            }
-        }
+    override suspend fun next(): RunEvent? {
+        if (!remaining.hasNext()) return null
+        gateway.nextCalls += 1
+        return remaining.next()
+    }
 
     override fun close() = Unit
 }
@@ -140,26 +136,27 @@ private class ObservingGateway(
     var nextCalls = 0
     var statusCalls = 0
 
-    override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
+    override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session = session
+    override suspend fun openSession(sessionId: SessionId): Session = session
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory = SessionHistory(sessionId, emptyList())
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        SessionHistory(sessionId, emptyList())
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run {
@@ -167,12 +164,12 @@ private class ObservingGateway(
         return run
     }
 
-    override fun getRunStatus(runId: RunId): Run {
+    override suspend fun getRunStatus(runId: RunId): Run {
         statusCalls += 1
         return run.copy(status = "succeeded")
     }
 
-    override fun observeRun(runId: RunId): RunEventObservation {
+    override suspend fun observeRun(runId: RunId): RunEventObservation {
         observeCalls += 1
         return CountingObservation(listOf(RunEvent(RunEventType.SUCCEEDED, run.id, status = "succeeded")), this)
     }

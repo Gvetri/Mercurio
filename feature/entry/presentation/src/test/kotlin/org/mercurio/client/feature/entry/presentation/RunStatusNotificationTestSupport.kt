@@ -181,49 +181,51 @@ internal class NotificationScriptedGateway(
         statusResults += run
     }
 
-    override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
+    override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session = session
+    override suspend fun openSession(sessionId: SessionId): Session = session
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
         if (historyResults.isEmpty()) {
             SessionHistory(sessionId, emptyList())
         } else {
             historyResults.removeFirst()
         }
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run = runResults.removeFirst()
 
-    override fun getRunStatus(runId: RunId): Run =
+    override suspend fun getRunStatus(runId: RunId): Run =
         if (statusResults.isEmpty()) {
             error("not used")
         } else {
             statusResults.removeFirst()
         }
 
-    override fun observeRun(runId: RunId): RunEventObservation = observation
+    override suspend fun observeRun(runId: RunId): RunEventObservation = observation
 }
 
 internal open class NotificationScriptedObservation(
-    private val events: List<RunEvent>,
+    events: List<RunEvent>,
 ) : RunEventObservation {
-    override fun iterator(): Iterator<RunEvent> = events.iterator()
+    private val remaining = events.iterator()
+
+    override suspend fun next(): RunEvent? = if (remaining.hasNext()) remaining.next() else null
 
     override fun close() = Unit
 }
@@ -231,19 +233,7 @@ internal open class NotificationScriptedObservation(
 internal class NotificationThrowingObservation(
     events: List<RunEvent>,
 ) : NotificationScriptedObservation(events) {
-    override fun iterator(): Iterator<RunEvent> {
-        val delegate = super.iterator()
-        return object : Iterator<RunEvent> {
-            override fun hasNext(): Boolean =
-                if (delegate.hasNext()) {
-                    true
-                } else {
-                    error("stream interrupted")
-                }
-
-            override fun next(): RunEvent = delegate.next()
-        }
-    }
+    override suspend fun next(): RunEvent? = super.next() ?: error("stream interrupted")
 }
 
 internal const val NOTIFICATION_TIMEOUT_MILLIS = 15_000L

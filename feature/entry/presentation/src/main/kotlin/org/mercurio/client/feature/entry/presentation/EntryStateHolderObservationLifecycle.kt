@@ -49,20 +49,26 @@ internal suspend fun EntryStateHolder.drainObservedEvents(
     activeObservation: RunEventObservation,
 ) {
     var reachedTerminalState = false
-    for (event in activeObservation) {
+    var event = activeObservation.next()
+    while (event != null) {
         currentCoroutineContext().ensureActive()
         applyRunEvent(sessionId, event, observationJob)
-        reachedTerminalState =
-            run {
-                observationStateFor(sessionId, run.id)
-                    ?.let { state -> state.state.isTerminal() || !state.run.isActive() } == true
-            }
-        if (reachedTerminalState) break
+        reachedTerminalState = observationReachedTerminalState(sessionId, run.id)
+        event = if (reachedTerminalState) null else activeObservation.next()
     }
     if (!reachedTerminalState) {
         markRunObservationUncertain(sessionId, run.id, observationJob)
     }
 }
+
+private fun EntryStateHolder.observationReachedTerminalState(
+    sessionId: SessionId,
+    runId: RunId,
+): Boolean =
+    run {
+        observationStateFor(sessionId, runId)
+            ?.let { state -> state.state.isTerminal() || !state.run.isActive() } == true
+    }
 
 internal fun EntryStateHolder.closeObservation(
     sessionId: SessionId,

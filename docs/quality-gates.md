@@ -153,9 +153,9 @@ detected count next to the status breakdown.
 
 | Module | Mutants | Mutated classes | Mutation score | Test strength |
 | --- | --- | --- | --- | --- |
-| `:feature:entry:domain` | 185 (measured 197) | 32 (measured 34) | 46% (measured 48.2%) | 82% (measured 85.6%) |
-| `:feature:entry:application` | 115 (measured 121) | 10 (measured 11) | 78% (measured 81.0%) | 82% (measured 85.2%) |
-| `:feature:entry:data` | 480 (measured 503) | 31 (measured 33) | 70% (measured 76.1%) | 82% (measured 86.7%) |
+| `:feature:entry:domain` | 185 (measured 301) | 32 (measured 68) | 46% (measured 55.8%) | 82% (measured 90.8%) |
+| `:feature:entry:application` | 115 (measured 247) | 10 (measured 28) | 78% (measured 79.0%) | 82% (measured 84.1%) |
+| `:feature:entry:data` | 480 (measured 1429) | 31 (measured 82) | 68% (measured 69.1%) | 81% (measured 82.0%) |
 
 `./gradlew mutationVerify` runs the mutation task for each module, then re-reads each report and
 fails unless the report exists, is at least as new as the compiled classes it measures, analyses at

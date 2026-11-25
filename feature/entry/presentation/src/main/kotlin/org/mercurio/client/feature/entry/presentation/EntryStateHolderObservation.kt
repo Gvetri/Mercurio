@@ -7,7 +7,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runInterruptible
 import org.mercurio.client.feature.entry.application.ObserveRun
 import org.mercurio.client.feature.entry.domain.Run
 import org.mercurio.client.feature.entry.domain.RunEventObservation
@@ -253,10 +252,7 @@ internal suspend fun EntryStateHolder.observeRun(
     var shouldReconcile = false
     try {
         currentCoroutineContext().ensureActive()
-        val activeObservation =
-            runInterruptible {
-                ObserveRun(gateway).execute(run.id).also { lateObservation = it }
-            }
+        val activeObservation = ObserveRun(gateway).execute(run.id).also { lateObservation = it }
         observation = activeObservation
         if (registerActiveObservation(sessionId, run, observationJob, activeObservation)) {
             drainObservedEvents(sessionId, run, observationJob, activeObservation)

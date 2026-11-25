@@ -155,34 +155,36 @@ internal class PickerCreateFakeGateway(
         return catalogResult.getOrThrow()
     }
 
-    override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOfNotNull(created), null)
+    override suspend fun listSessions(request: SessionListRequest): SessionPage =
+        SessionPage(listOfNotNull(created), null)
 
-    override fun createSession(title: String?): Session =
+    override suspend fun createSession(title: String?): Session =
         Session(PICKER_CREATED_SESSION_ID, title, "Preview", pinned = false).also { created = it }
 
-    override fun openSession(sessionId: SessionId): Session = created ?: error("session was never created")
+    override suspend fun openSession(sessionId: SessionId): Session = created ?: error("session was never created")
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory = SessionHistory(sessionId, emptyList())
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        SessionHistory(sessionId, emptyList())
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run = error("not used")
 
-    override fun getRunStatus(runId: RunId): Run = error("not used")
+    override suspend fun getRunStatus(runId: RunId): Run = error("not used")
 
-    override fun observeRun(runId: RunId): RunEventObservation = error("not used")
+    override suspend fun observeRun(runId: RunId): RunEventObservation = error("not used")
 }
 
 internal fun pickerHolder(

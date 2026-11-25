@@ -178,27 +178,27 @@ internal class FakeGateway(
         mutableHistories[history.sessionId] = history
     }
 
-    override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(sessions, null)
+    override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(sessions, null)
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session = sessions.single { it.id == sessionId }
+    override suspend fun openSession(sessionId: SessionId): Session = sessions.single { it.id == sessionId }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
         mutableHistories[sessionId] ?: SessionHistory(sessionId, emptyList())
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run {
@@ -213,9 +213,9 @@ internal class FakeGateway(
         return runResults.removeFirst().getOrThrow()
     }
 
-    override fun getRunStatus(runId: RunId): Run = mutableRunStatuses[runId] ?: error("not used")
+    override suspend fun getRunStatus(runId: RunId): Run = mutableRunStatuses[runId] ?: error("not used")
 
-    override fun observeRun(runId: RunId) = error("not used")
+    override suspend fun observeRun(runId: RunId) = error("not used")
 }
 
 internal class FailingShutdownUncertaintyStore : RunSubmissionUncertaintyStore {

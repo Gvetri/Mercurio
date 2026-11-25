@@ -298,16 +298,16 @@ class SessionRenameStateHolderTest {
     ) : SessionGatewayPort {
         var onRename: (() -> Unit)? = null
 
-        override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(listed), null)
+        override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(listed), null)
 
-        override fun createSession(title: String?): Session = error("not used")
+        override suspend fun createSession(title: String?): Session = error("not used")
 
-        override fun openSession(sessionId: SessionId): Session = error("not used")
+        override suspend fun openSession(sessionId: SessionId): Session = error("not used")
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session {
@@ -315,11 +315,11 @@ class SessionRenameStateHolderTest {
             return confirmed
         }
 
-        override fun deleteSession(sessionId: SessionId) = error("not used")
+        override suspend fun deleteSession(sessionId: SessionId) = error("not used")
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
     }
 
     private class FakeSessionGateway(
@@ -329,16 +329,16 @@ class SessionRenameStateHolderTest {
         var renameCalls = 0
         val renameTitles = mutableListOf<String>()
 
-        override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(listed), null)
+        override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(listed), null)
 
-        override fun createSession(title: String?): Session = error("not used")
+        override suspend fun createSession(title: String?): Session = error("not used")
 
-        override fun openSession(sessionId: SessionId): Session = error("not used")
+        override suspend fun openSession(sessionId: SessionId): Session = error("not used")
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session {
@@ -347,10 +347,10 @@ class SessionRenameStateHolderTest {
             return confirmed
         }
 
-        override fun deleteSession(sessionId: SessionId) = error("not used")
+        override suspend fun deleteSession(sessionId: SessionId) = error("not used")
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
     }
 }

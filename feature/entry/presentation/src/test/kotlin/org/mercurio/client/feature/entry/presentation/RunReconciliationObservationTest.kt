@@ -589,17 +589,20 @@ class RunReconciliationObservationTest {
             runs.add(nextRun)
             statuses.add(firstRun.copy(status = "succeeded"))
             statuses.add(nextRun)
-            observation =
-                ReconciliationScriptedObservation(
-                    listOf(
-                        RunEvent(
-                            RunEventType.MESSAGE_DELTA,
-                            nextRun.id,
-                            "running",
-                            "Replacement event",
-                            "delta",
+            repeat(2) {
+                observations.add(
+                    ReconciliationScriptedObservation(
+                        listOf(
+                            RunEvent(
+                                RunEventType.MESSAGE_DELTA,
+                                nextRun.id,
+                                "running",
+                                "Replacement event",
+                                "delta",
+                            ),
                         ),
                     ),
                 )
+            }
         }
 }

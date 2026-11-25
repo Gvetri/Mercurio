@@ -64,7 +64,7 @@ internal fun EntryStateHolder.createSessionJob(
         }
     }
 
-private fun EntryStateHolder.loadRefreshedPage(gateway: SessionGatewayPort): SessionPage? =
+private suspend fun EntryStateHolder.loadRefreshedPage(gateway: SessionGatewayPort): SessionPage? =
     try {
         LoadSessionList(gateway).execute(sessionListRequest(offset = null))
     } catch (error: CancellationException) {

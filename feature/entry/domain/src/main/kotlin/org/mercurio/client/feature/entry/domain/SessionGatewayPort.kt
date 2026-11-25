@@ -1,24 +1,24 @@
 package org.mercurio.client.feature.entry.domain
 
 interface SessionGatewayPort {
-    fun listSessions(request: SessionListRequest): SessionPage
+    suspend fun listSessions(request: SessionListRequest): SessionPage
 
-    fun listSessions(): SessionPage = listSessions(SessionListRequest())
+    suspend fun listSessions(): SessionPage = listSessions(SessionListRequest())
 
-    fun createSession(title: String?): Session
+    suspend fun createSession(title: String?): Session
 
-    fun openSession(sessionId: SessionId): Session
+    suspend fun openSession(sessionId: SessionId): Session
 
-    fun loadSessionHistory(sessionId: SessionId): SessionHistory
+    suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory
 
-    fun renameSession(
+    suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session
 
-    fun deleteSession(sessionId: SessionId)
+    suspend fun deleteSession(sessionId: SessionId)
 
-    fun pinSession(sessionId: SessionId): SessionPinResult
+    suspend fun pinSession(sessionId: SessionId): SessionPinResult
 
-    fun unpinSession(sessionId: SessionId): SessionPinResult
+    suspend fun unpinSession(sessionId: SessionId): SessionPinResult
 }

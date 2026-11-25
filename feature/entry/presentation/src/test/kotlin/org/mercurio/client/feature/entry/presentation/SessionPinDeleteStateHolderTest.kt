@@ -348,36 +348,37 @@ class SessionPinDeleteStateHolderTest {
             deleteResults += Result.success(Unit)
         }
 
-        override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listedSessions.toList(), null)
+        override suspend fun listSessions(request: SessionListRequest): SessionPage =
+            SessionPage(listedSessions.toList(), null)
 
-        override fun createSession(title: String?): Session = error("not used")
+        override suspend fun createSession(title: String?): Session = error("not used")
 
-        override fun openSession(sessionId: SessionId): Session {
+        override suspend fun openSession(sessionId: SessionId): Session {
             openFailure?.let { throw it }
             return listedSessions.first { it.id == sessionId }
         }
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session = error("not used")
 
-        override fun deleteSession(sessionId: SessionId) {
+        override suspend fun deleteSession(sessionId: SessionId) {
             deleteCalls += 1
             if (deleteResults.isEmpty()) return
             deleteResults.removeFirst().getOrThrow()
         }
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult {
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult {
             pinCalls += 1
             pinOperations += sessionId
             return applyPinResult(sessionId, pinResults.removeFirst().getOrThrow())
         }
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult {
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult {
             pinCalls += 1
             pinOperations += sessionId
             return applyPinResult(sessionId, pinResults.removeFirst().getOrThrow())
@@ -407,38 +408,38 @@ class SessionPinDeleteStateHolderTest {
             private set
         var onPin: (() -> Unit)? = null
 
-        override fun listSessions(request: SessionListRequest): SessionPage {
+        override suspend fun listSessions(request: SessionListRequest): SessionPage {
             if (request.offset > 0) {
                 loadMoreCalls += 1
             }
             return SessionPage(listOf(currentSession), if (request.offset == 0) 1 else null)
         }
 
-        override fun createSession(title: String?): Session = error("not used")
+        override suspend fun createSession(title: String?): Session = error("not used")
 
-        override fun openSession(sessionId: SessionId): Session {
+        override suspend fun openSession(sessionId: SessionId): Session {
             openCalls += 1
             error("not used")
         }
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             SessionHistory(sessionId, emptyList<GatewayHistoryMessage>())
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session = error("not used")
 
-        override fun deleteSession(sessionId: SessionId) = error("not used")
+        override suspend fun deleteSession(sessionId: SessionId) = error("not used")
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult {
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult {
             pinCalls += 1
             onPin?.invoke()
             currentSession = currentSession.copy(pinned = true)
             return SessionPinResult(sessionId, pinned = true)
         }
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
     }
 
     private companion object {

@@ -408,7 +408,7 @@ private class BlockingListGateway(
     @Volatile
     var openFailure: GatewayException? = null
 
-    override fun listSessions(request: SessionListRequest): SessionPage {
+    override suspend fun listSessions(request: SessionListRequest): SessionPage {
         val call =
             synchronized(this) {
                 listCalls += 1
@@ -423,23 +423,24 @@ private class BlockingListGateway(
         return SessionPage(listOf(session), null)
     }
 
-    override fun createSession(title: String?): Session = error("not used")
+    override suspend fun createSession(title: String?): Session = error("not used")
 
-    override fun openSession(sessionId: SessionId): Session {
+    override suspend fun openSession(sessionId: SessionId): Session {
         openFailure?.let { throw it }
         return session
     }
 
-    override fun loadSessionHistory(sessionId: SessionId): SessionHistory = SessionHistory(sessionId, emptyList())
+    override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        SessionHistory(sessionId, emptyList())
 
-    override fun renameSession(
+    override suspend fun renameSession(
         sessionId: SessionId,
         title: String,
     ): Session = error("not used")
 
-    override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+    override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-    override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-    override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+    override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 }

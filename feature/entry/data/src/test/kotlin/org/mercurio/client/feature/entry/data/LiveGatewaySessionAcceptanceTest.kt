@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -17,199 +18,211 @@ class LiveGatewaySessionAcceptanceTest {
     private val repositoryRoot = laneRepositoryRoot()
 
     @Test
-    fun refuses_to_target_a_gateway_other_than_the_one_it_started() {
-        val startedEndpoint = URI.create("https://127.0.0.1:49152")
+    fun refuses_to_target_a_gateway_other_than_the_one_it_started() =
+        runBlocking {
+            val startedEndpoint = URI.create("https://127.0.0.1:49152")
 
-        StartedGatewayGuard.requireStartedLoopbackEndpoint(URI.create("http://127.0.0.1:49152"), startedEndpoint)
+            StartedGatewayGuard.requireStartedLoopbackEndpoint(URI.create("http://127.0.0.1:49152"), startedEndpoint)
 
-        val foreignContext = URI.create("http://192.0.2.1:49152")
-        val foreignHostFailure =
-            assertThrows(IllegalArgumentException::class.java) {
-                StartedGatewayGuard.requireStartedLoopbackEndpoint(foreignContext, startedEndpoint)
+            val foreignContext = URI.create("http://192.0.2.1:49152")
+            val foreignHostFailure =
+                assertThrows(IllegalArgumentException::class.java) {
+                    StartedGatewayGuard.requireStartedLoopbackEndpoint(foreignContext, startedEndpoint)
+                }
+            assertTrue(foreignHostFailure.message.orEmpty().contains("loopback"))
+
+            val foreignPortContext = URI.create("http://127.0.0.1:49153")
+            val foreignPortFailure =
+                assertThrows(IllegalArgumentException::class.java) {
+                    StartedGatewayGuard.requireStartedLoopbackEndpoint(foreignPortContext, startedEndpoint)
+                }
+            assertTrue(foreignPortFailure.message.orEmpty().contains("port"))
+
+            val insecureProcessFailure =
+                assertThrows(IllegalArgumentException::class.java) {
+                    StartedGatewayGuard.requireStartedLoopbackEndpoint(
+                        URI.create("http://127.0.0.1:49152"),
+                        URI.create("http://127.0.0.1:49152"),
+                    )
+                }
+            assertTrue(insecureProcessFailure.message.orEmpty().contains("https"))
+        }
+
+    @Test
+    fun session_matrix_executes_every_operation_against_the_started_gateway() =
+        runBlocking {
+            val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix"), repositoryRoot)
+            val parity = LiveParityCaptureRecorder(paritySink(LIVE_SESSION_PARITY_CAPTURE_SINK), repositoryRoot)
+            val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
+            val drained: (String) -> LiveParityCapture = { operation ->
+                val capture = run.parityCaptures.drain(operation)
+                parity.record(capture)
+                capture
             }
-        assertTrue(foreignHostFailure.message.orEmpty().contains("loopback"))
 
-        val foreignPortContext = URI.create("http://127.0.0.1:49153")
-        val foreignPortFailure =
-            assertThrows(IllegalArgumentException::class.java) {
-                StartedGatewayGuard.requireStartedLoopbackEndpoint(foreignPortContext, startedEndpoint)
+            run.fixture.executeBlocking { context ->
+                StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
+                val client = laneClient(run, LANE_BEARER_TOKEN)
+
+                val capabilities = client.discoverCapabilities()
+                evidence.record(
+                    verifiedEvidence(
+                        OperationSpec(
+                            "capability discovery",
+                            "GET",
+                            "/v1/capabilities",
+                            HTTP_OK,
+                            CAPABILITY_DISCOVERY_ENVELOPE,
+                        ),
+                        actualStatus = drained("capability discovery").wireStatus(),
+                    ),
+                )
+                val advertisedEndpoints = capabilities.endpoints.keys
+                val requiredEndpoints = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys
+                assertTrue(advertisedEndpoints.containsAll(requiredEndpoints))
+
+                verifyPagedSessionList(client, evidence, drained)
+                verifyCreatedSessionLifecycle(client, evidence, drained)
             }
-        assertTrue(foreignPortFailure.message.orEmpty().contains("port"))
 
-        val insecureProcessFailure =
-            assertThrows(IllegalArgumentException::class.java) {
-                StartedGatewayGuard.requireStartedLoopbackEndpoint(
-                    URI.create("http://127.0.0.1:49152"),
-                    URI.create("http://127.0.0.1:49152"),
+            val evidenceText = evidence.file.readText()
+            assertEquals(MATRIX_ENTRY_COUNT, evidence.file.readLines().size)
+            assertTrue(evidenceText.contains("\"outcome\":\"verified\""))
+            assertTrue(evidenceText.lines().filter { it.isNotBlank() }.all { it.contains("\"expectedStatus\":") })
+            assertFalse(evidenceText.contains(LANE_BEARER_TOKEN))
+            assertFalse(evidenceText.contains(CREATED_SESSION_ID))
+            assertFalse(evidenceText.contains(SEEDED_PINNED_SESSION_ID))
+            assertFalse(evidenceText.contains(LANE_CREATED_TITLE))
+            assertFalse(evidenceText.contains(SEEDED_FIRST_MESSAGE_CONTENT))
+            assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
+
+            val parityEntries = runFixtureParityStep(repositoryRoot)
+            FixtureParity.requireMatchVerdicts(parityEntries, SESSION_PARITY_PAIRS)
+        }
+
+    @Test
+    fun failing_session_operation_surfaces_its_gateway_error_category() =
+        runBlocking {
+            val evidence =
+                LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-failing-operations"), repositoryRoot)
+            val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
+
+            run.fixture.executeBlocking { _ ->
+                val rejectedCredentials =
+                    gatewayFailure { laneClient(run, WRONG_BEARER_TOKEN).discoverCapabilities() }
+                assertEquals(GatewayErrorCategory.AUTHENTICATION_FAILED, rejectedCredentials.category)
+                evidence.record(
+                    failedEvidence(
+                        OperationSpec(
+                            "capability discovery",
+                            "GET",
+                            "/v1/capabilities",
+                            HTTP_OK,
+                            CAPABILITY_DISCOVERY_ENVELOPE,
+                        ),
+                        errorCategory = GatewayErrorCategory.AUTHENTICATION_FAILED.name,
+                    ),
+                )
+
+                val client = laneClient(run, LANE_BEARER_TOKEN)
+                val created = client.createSession(LANE_CREATED_TITLE)
+                client.deleteSession(created.id)
+                val deletedSessionFailure = gatewayFailure { client.openSession(created.id) }
+                assertEquals(GatewayErrorCategory.GATEWAY_REQUEST_FAILED, deletedSessionFailure.category)
+                evidence.record(
+                    failedEvidence(
+                        OperationSpec("session open", "GET", "/api/sessions/{session_id}", HTTP_OK, SESSION_ENVELOPE),
+                        errorCategory = GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name,
+                    ),
                 )
             }
-        assertTrue(insecureProcessFailure.message.orEmpty().contains("https"))
-    }
 
-    @Test
-    fun session_matrix_executes_every_operation_against_the_started_gateway() {
-        val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix"), repositoryRoot)
-        val parity = LiveParityCaptureRecorder(paritySink(LIVE_SESSION_PARITY_CAPTURE_SINK), repositoryRoot)
-        val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
-        val drained: (String) -> LiveParityCapture = { operation ->
-            val capture = run.parityCaptures.drain(operation)
-            parity.record(capture)
-            capture
+            val evidenceText = evidence.file.readText()
+            assertEquals(FAILED_OPERATION_ENTRY_COUNT, evidence.file.readLines().size)
+            assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
+            assertTrue(
+                evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.AUTHENTICATION_FAILED.name}\""),
+            )
+            assertTrue(
+                evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name}\""),
+            )
+            assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
         }
 
-        run.fixture.execute { context ->
-            StartedGatewayGuard.requireStartedLoopbackEndpoint(context.endpoint, run.process.endpoint)
-            val client = laneClient(run, LANE_BEARER_TOKEN)
+    @Test
+    fun evidence_for_failed_operations_never_contains_the_bearer_value() =
+        runBlocking {
+            val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-redaction"), repositoryRoot)
+            val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
 
-            val capabilities = client.discoverCapabilities()
-            evidence.record(
+            run.fixture.executeBlocking { _ ->
+                val client = laneClient(run, LANE_BEARER_TOKEN)
+                client.createSession(LANE_CREATED_TITLE)
+                evidence.record(
+                    verifiedEvidence(
+                        OperationSpec("session create", "POST", "/api/sessions", HTTP_CREATED, SESSION_ENVELOPE),
+                        actualStatus = run.parityCaptures.drain("session create").wireStatus(),
+                    ),
+                )
+
+                val rejectedCredentials =
+                    gatewayFailure { laneClient(run, WRONG_BEARER_TOKEN).discoverCapabilities() }
+                assertEquals(GatewayErrorCategory.AUTHENTICATION_FAILED, rejectedCredentials.category)
+                evidence.record(
+                    failedEvidence(
+                        OperationSpec(
+                            "capability discovery",
+                            "GET",
+                            "/v1/capabilities",
+                            HTTP_OK,
+                            CAPABILITY_DISCOVERY_ENVELOPE,
+                        ),
+                        errorCategory = GatewayErrorCategory.AUTHENTICATION_FAILED.name,
+                    ),
+                )
+            }
+
+            val evidenceText = evidence.file.readText()
+            assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
+            assertTrue(
+                evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.AUTHENTICATION_FAILED.name}\""),
+            )
+            assertFalse(evidenceText.contains(LANE_BEARER_TOKEN))
+            assertFalse(evidenceText.contains(WRONG_BEARER_TOKEN))
+            assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
+        }
+
+    @Test
+    fun evidence_sink_redacts_sensitive_values_before_writing() =
+        runBlocking {
+            val recorder = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-redaction-seam"), repositoryRoot)
+
+            recorder.record(
                 verifiedEvidence(
                     OperationSpec(
-                        "capability discovery",
+                        "redaction sanity probe",
                         "GET",
-                        "/v1/capabilities",
+                        "/api/sessions",
                         HTTP_OK,
-                        CAPABILITY_DISCOVERY_ENVELOPE,
+                        mapOf(
+                            "authorization" to "Bearer $LANE_BEARER_TOKEN",
+                            "workspace" to repositoryRoot.absolutePath,
+                        ),
                     ),
-                    actualStatus = drained("capability discovery").wireStatus(),
+                    actualStatus = HTTP_CREATED,
                 ),
             )
-            val advertisedEndpoints = capabilities.endpoints.keys
-            val requiredEndpoints = PublicBetaGatewayCapabilityManifest.current.requiredEndpoints.keys
-            assertTrue(advertisedEndpoints.containsAll(requiredEndpoints))
 
-            verifyPagedSessionList(client, evidence, drained)
-            verifyCreatedSessionLifecycle(client, evidence, drained)
+            val sinkText = recorder.file.readText()
+            assertFalse(sinkText.contains(LANE_BEARER_TOKEN))
+            assertFalse(sinkText.contains(repositoryRoot.absolutePath))
+            assertTrue(sinkText.contains("\"authorization\":\"<redacted>\""))
+            assertTrue(sinkText.contains("\"workspace\":\"<workspace>\""))
+            assertTrue(sinkText.contains("\"expectedStatus\":200,\"actualStatus\":201"))
+            assertRecordedMethodsMatch(recorder, OPERATION_METHODS)
         }
 
-        val evidenceText = evidence.file.readText()
-        assertEquals(MATRIX_ENTRY_COUNT, evidence.file.readLines().size)
-        assertTrue(evidenceText.contains("\"outcome\":\"verified\""))
-        assertTrue(evidenceText.lines().filter { it.isNotBlank() }.all { it.contains("\"expectedStatus\":") })
-        assertFalse(evidenceText.contains(LANE_BEARER_TOKEN))
-        assertFalse(evidenceText.contains(CREATED_SESSION_ID))
-        assertFalse(evidenceText.contains(SEEDED_PINNED_SESSION_ID))
-        assertFalse(evidenceText.contains(LANE_CREATED_TITLE))
-        assertFalse(evidenceText.contains(SEEDED_FIRST_MESSAGE_CONTENT))
-        assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
-
-        val parityEntries = runFixtureParityStep(repositoryRoot)
-        FixtureParity.requireMatchVerdicts(parityEntries, SESSION_PARITY_PAIRS)
-    }
-
-    @Test
-    fun failing_session_operation_surfaces_its_gateway_error_category() {
-        val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-failing-operations"), repositoryRoot)
-        val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
-
-        run.fixture.execute { _ ->
-            val rejectedCredentials =
-                gatewayFailure { laneClient(run, WRONG_BEARER_TOKEN).discoverCapabilities() }
-            assertEquals(GatewayErrorCategory.AUTHENTICATION_FAILED, rejectedCredentials.category)
-            evidence.record(
-                failedEvidence(
-                    OperationSpec(
-                        "capability discovery",
-                        "GET",
-                        "/v1/capabilities",
-                        HTTP_OK,
-                        CAPABILITY_DISCOVERY_ENVELOPE,
-                    ),
-                    errorCategory = GatewayErrorCategory.AUTHENTICATION_FAILED.name,
-                ),
-            )
-
-            val client = laneClient(run, LANE_BEARER_TOKEN)
-            val created = client.createSession(LANE_CREATED_TITLE)
-            client.deleteSession(created.id)
-            val deletedSessionFailure = gatewayFailure { client.openSession(created.id) }
-            assertEquals(GatewayErrorCategory.GATEWAY_REQUEST_FAILED, deletedSessionFailure.category)
-            evidence.record(
-                failedEvidence(
-                    OperationSpec("session open", "GET", "/api/sessions/{session_id}", HTTP_OK, SESSION_ENVELOPE),
-                    errorCategory = GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name,
-                ),
-            )
-        }
-
-        val evidenceText = evidence.file.readText()
-        assertEquals(FAILED_OPERATION_ENTRY_COUNT, evidence.file.readLines().size)
-        assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
-        assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.AUTHENTICATION_FAILED.name}\""))
-        assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.GATEWAY_REQUEST_FAILED.name}\""))
-        assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
-    }
-
-    @Test
-    fun evidence_for_failed_operations_never_contains_the_bearer_value() {
-        val evidence = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-redaction"), repositoryRoot)
-        val run = laneRun(repositoryRoot, LANE_BEARER_TOKEN, ::laneScenario)
-
-        run.fixture.execute { _ ->
-            val client = laneClient(run, LANE_BEARER_TOKEN)
-            client.createSession(LANE_CREATED_TITLE)
-            evidence.record(
-                verifiedEvidence(
-                    OperationSpec("session create", "POST", "/api/sessions", HTTP_CREATED, SESSION_ENVELOPE),
-                    actualStatus = run.parityCaptures.drain("session create").wireStatus(),
-                ),
-            )
-
-            val rejectedCredentials =
-                gatewayFailure { laneClient(run, WRONG_BEARER_TOKEN).discoverCapabilities() }
-            assertEquals(GatewayErrorCategory.AUTHENTICATION_FAILED, rejectedCredentials.category)
-            evidence.record(
-                failedEvidence(
-                    OperationSpec(
-                        "capability discovery",
-                        "GET",
-                        "/v1/capabilities",
-                        HTTP_OK,
-                        CAPABILITY_DISCOVERY_ENVELOPE,
-                    ),
-                    errorCategory = GatewayErrorCategory.AUTHENTICATION_FAILED.name,
-                ),
-            )
-        }
-
-        val evidenceText = evidence.file.readText()
-        assertTrue(evidenceText.contains("\"outcome\":\"failed\""))
-        assertTrue(evidenceText.contains("\"errorCategory\":\"${GatewayErrorCategory.AUTHENTICATION_FAILED.name}\""))
-        assertFalse(evidenceText.contains(LANE_BEARER_TOKEN))
-        assertFalse(evidenceText.contains(WRONG_BEARER_TOKEN))
-        assertRecordedMethodsMatch(evidence, OPERATION_METHODS)
-    }
-
-    @Test
-    fun evidence_sink_redacts_sensitive_values_before_writing() {
-        val recorder = LiveSessionMatrixRecorder(evidenceSink("live-session-matrix-redaction-seam"), repositoryRoot)
-
-        recorder.record(
-            verifiedEvidence(
-                OperationSpec(
-                    "redaction sanity probe",
-                    "GET",
-                    "/api/sessions",
-                    HTTP_OK,
-                    mapOf(
-                        "authorization" to "Bearer $LANE_BEARER_TOKEN",
-                        "workspace" to repositoryRoot.absolutePath,
-                    ),
-                ),
-                actualStatus = HTTP_CREATED,
-            ),
-        )
-
-        val sinkText = recorder.file.readText()
-        assertFalse(sinkText.contains(LANE_BEARER_TOKEN))
-        assertFalse(sinkText.contains(repositoryRoot.absolutePath))
-        assertTrue(sinkText.contains("\"authorization\":\"<redacted>\""))
-        assertTrue(sinkText.contains("\"workspace\":\"<workspace>\""))
-        assertTrue(sinkText.contains("\"expectedStatus\":200,\"actualStatus\":201"))
-        assertRecordedMethodsMatch(recorder, OPERATION_METHODS)
-    }
-
-    private fun verifyPagedSessionList(
+    private suspend fun verifyPagedSessionList(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
         drained: (String) -> LiveParityCapture,
@@ -270,7 +283,7 @@ class LiveGatewaySessionAcceptanceTest {
         )
     }
 
-    private fun verifyCreatedSessionLifecycle(
+    private suspend fun verifyCreatedSessionLifecycle(
         client: DefaultGatewayClient,
         evidence: LiveSessionMatrixRecorder,
         drained: (String) -> LiveParityCapture,
@@ -322,7 +335,7 @@ class LiveGatewaySessionAcceptanceTest {
         )
     }
 
-    private fun verifySessionHistory(
+    private suspend fun verifySessionHistory(
         client: DefaultGatewayClient,
         created: Session,
         evidence: LiveSessionMatrixRecorder,

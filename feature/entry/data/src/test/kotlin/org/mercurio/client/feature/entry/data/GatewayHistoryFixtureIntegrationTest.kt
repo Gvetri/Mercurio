@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.data
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -20,42 +21,43 @@ class GatewayHistoryFixtureIntegrationTest {
     private val descriptorFile = repositoryRoot.resolve("fixtures/mercurio/pinned-fixture.properties")
 
     @Test
-    fun synthetic_gateway_history_matches_the_pinned_message_projection() {
-        val sessionId = "session-1"
-        val behavior =
-            SyntheticGatewayBehavior(
-                initialSessions =
-                    listOf(
-                        SyntheticGatewaySession(
-                            id = sessionId,
-                            title = "History",
-                            preview = null,
-                            pinned = false,
-                            history =
-                                listOf(
-                                    SyntheticGatewayMessage(
-                                        id = "message-1",
-                                        role = "assistant",
-                                        content = "Stable history",
-                                        timestamp = "2026-09-08T20:00:00Z",
+    fun synthetic_gateway_history_matches_the_pinned_message_projection() =
+        runBlocking {
+            val sessionId = "session-1"
+            val behavior =
+                SyntheticGatewayBehavior(
+                    initialSessions =
+                        listOf(
+                            SyntheticGatewaySession(
+                                id = sessionId,
+                                title = "History",
+                                preview = null,
+                                pinned = false,
+                                history =
+                                    listOf(
+                                        SyntheticGatewayMessage(
+                                            id = "message-1",
+                                            role = "assistant",
+                                            content = "Stable history",
+                                            timestamp = "2026-09-08T20:00:00Z",
+                                        ),
                                     ),
-                                ),
+                            ),
                         ),
-                    ),
-            )
-        fixture(behavior).execute { context ->
-            val opened = OpenSession(client(context)).execute(SessionId(sessionId))
-            val message = opened.history.messages.single()
-            assertEquals(sessionId, opened.history.sessionId.value)
-            assertEquals("message-1", message.id)
-            assertEquals("assistant", message.role)
-            assertEquals("Stable history", message.content)
-            assertEquals("2026-09-08T20:00:00Z", message.timestamp)
-            assertNull(message.runId)
-            assertNull(message.runStatus)
-            assertNull(message.runResult)
+                )
+            fixture(behavior).executeBlocking { context ->
+                val opened = OpenSession(client(context)).execute(SessionId(sessionId))
+                val message = opened.history.messages.single()
+                assertEquals(sessionId, opened.history.sessionId.value)
+                assertEquals("message-1", message.id)
+                assertEquals("assistant", message.role)
+                assertEquals("Stable history", message.content)
+                assertEquals("2026-09-08T20:00:00Z", message.timestamp)
+                assertNull(message.runId)
+                assertNull(message.runStatus)
+                assertNull(message.runResult)
+            }
         }
-    }
 
     private fun client(context: FixtureTestContext): DefaultGatewayClient =
         DefaultGatewayClient(

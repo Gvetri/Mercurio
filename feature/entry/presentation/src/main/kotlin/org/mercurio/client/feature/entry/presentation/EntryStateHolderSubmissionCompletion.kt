@@ -3,7 +3,6 @@ package org.mercurio.client.feature.entry.presentation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.mercurio.client.feature.entry.application.SubmitMessage
@@ -84,10 +83,8 @@ internal suspend fun EntryStateHolder.submitRun(work: RunSubmissionWork) {
         val run =
             withContext(NonCancellable) {
                 withTimeout(sendTimeoutMillis) {
-                    runInterruptible {
-                        SubmitMessage(submission.gateway)
-                            .execute(submission.sessionId, submission.input, submission.selection)
-                    }
+                    SubmitMessage(submission.gateway)
+                        .execute(submission.sessionId, submission.input, submission.selection)
                 }
             }
         val applied = completeSuccessfulSubmission(submission, run)

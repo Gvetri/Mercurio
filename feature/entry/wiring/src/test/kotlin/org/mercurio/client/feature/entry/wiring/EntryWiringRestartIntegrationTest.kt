@@ -689,13 +689,13 @@ class EntryWiringRestartIntegrationTest {
         val statusStarted = CountDownLatch(1)
         val releaseStatus = CountDownLatch(1)
 
-        override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
+        override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(listOf(session), null)
 
-        override fun createSession(title: String?): Session = error("not used")
+        override suspend fun createSession(title: String?): Session = error("not used")
 
-        override fun openSession(sessionId: SessionId): Session = session
+        override suspend fun openSession(sessionId: SessionId): Session = session
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             if (acceptedRunVisible) {
                 SessionHistory(
                     sessionId,
@@ -736,23 +736,23 @@ class EntryWiringRestartIntegrationTest {
                 SessionHistory(sessionId, emptyList())
             }
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session = error("not used")
 
-        override fun deleteSession(sessionId: SessionId): Unit = error("not used")
+        override suspend fun deleteSession(sessionId: SessionId): Unit = error("not used")
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-        override fun createRun(
+        override suspend fun createRun(
             sessionId: SessionId,
             input: String,
         ): Run {
             runRequests += sessionId to input
-            if (createSignalDelayMillis > 0) Thread.sleep(createSignalDelayMillis)
+            if (createSignalDelayMillis > 0) delay(createSignalDelayMillis)
             if (failCreateAfterAcceptance) {
                 acceptedRunVisible = true
                 error("response lost after acceptance")
@@ -770,7 +770,7 @@ class EntryWiringRestartIntegrationTest {
             return activeRun
         }
 
-        override fun getRunStatus(runId: RunId): Run {
+        override suspend fun getRunStatus(runId: RunId): Run {
             statusRequests += runId
             if (blockStatus) {
                 statusStarted.countDown()
@@ -781,7 +781,7 @@ class EntryWiringRestartIntegrationTest {
             return statusByRun[runId] ?: if (terminal) activeRun.copy(status = "succeeded") else activeRun
         }
 
-        override fun observeRun(runId: RunId): RunEventObservation =
+        override suspend fun observeRun(runId: RunId): RunEventObservation =
             BlockingObservation(observationStarted).also {
                 observations += it
             }
@@ -795,21 +795,16 @@ class EntryWiringRestartIntegrationTest {
         val finished = CountDownLatch(1)
         private val release = CountDownLatch(1)
 
-        override fun iterator(): Iterator<RunEvent> =
-            object : Iterator<RunEvent> {
-                override fun hasNext(): Boolean {
-                    started.countDown()
-                    anyObservationStarted.countDown()
-                    return try {
-                        release.await()
-                        false
-                    } finally {
-                        finished.countDown()
-                    }
-                }
-
-                override fun next(): RunEvent = error("not used")
+        override suspend fun next(): RunEvent? {
+            started.countDown()
+            anyObservationStarted.countDown()
+            return try {
+                release.await()
+                null
+            } finally {
+                finished.countDown()
             }
+        }
 
         override fun close() {
             closed.countDown()

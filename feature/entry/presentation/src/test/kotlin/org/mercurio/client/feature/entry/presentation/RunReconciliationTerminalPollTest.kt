@@ -1,6 +1,7 @@
 package org.mercurio.client.feature.entry.presentation
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -227,23 +228,24 @@ class RunReconciliationTerminalPollTest {
         }
 
     @Test
-    fun the_gateway_double_keeps_each_runs_last_status_after_its_script_is_consumed() {
-        val session = reconciliationSession()
-        val firstRun = Run(RunId("run-status-double-a"), session.id, "completed")
-        val secondRun = Run(RunId("run-status-double-b"), session.id, "running")
-        val gateway =
-            ReconciliationFakeGateway(session).apply {
-                statuses.add(firstRun)
-                statuses.add(secondRun)
-            }
+    fun the_gateway_double_keeps_each_runs_last_status_after_its_script_is_consumed() =
+        runBlocking {
+            val session = reconciliationSession()
+            val firstRun = Run(RunId("run-status-double-a"), session.id, "completed")
+            val secondRun = Run(RunId("run-status-double-b"), session.id, "running")
+            val gateway =
+                ReconciliationFakeGateway(session).apply {
+                    statuses.add(firstRun)
+                    statuses.add(secondRun)
+                }
 
-        assertEquals(firstRun, gateway.getRunStatus(firstRun.id))
-        assertEquals(secondRun, gateway.getRunStatus(secondRun.id))
-        assertEquals(firstRun, gateway.getRunStatus(firstRun.id))
-        assertEquals(secondRun, gateway.getRunStatus(secondRun.id))
-        assertEquals(
-            listOf(firstRun.id, secondRun.id, firstRun.id, secondRun.id),
-            gateway.statusRequests,
-        )
-    }
+            assertEquals(firstRun, gateway.getRunStatus(firstRun.id))
+            assertEquals(secondRun, gateway.getRunStatus(secondRun.id))
+            assertEquals(firstRun, gateway.getRunStatus(firstRun.id))
+            assertEquals(secondRun, gateway.getRunStatus(secondRun.id))
+            assertEquals(
+                listOf(firstRun.id, secondRun.id, firstRun.id, secondRun.id),
+                gateway.statusRequests,
+            )
+        }
 }

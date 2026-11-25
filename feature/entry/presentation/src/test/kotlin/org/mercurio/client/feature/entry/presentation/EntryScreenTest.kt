@@ -617,17 +617,21 @@ class EntryScreenTest {
         private var firstRunHasBeenCreated = false
         private var firstObservationRequested = false
 
-        override fun listSessions(request: SessionListRequest): SessionPage =
+        override suspend fun listSessions(request: SessionListRequest): SessionPage =
             SessionPage(
                 listOf(first, second),
                 nextOffset = null,
             )
 
-        override fun createSession(title: String?): Session = error("not used")
+        override suspend fun createSession(title: String?): Session = error("not used")
 
-        override fun openSession(sessionId: SessionId): Session = listOf(first, second).single { it.id == sessionId }
+        override suspend fun openSession(sessionId: SessionId): Session =
+            listOf(first, second).single {
+                it.id ==
+                    sessionId
+            }
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory =
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory =
             SessionHistory(
                 sessionId = sessionId,
                 messages =
@@ -646,18 +650,18 @@ class EntryScreenTest {
                     },
             )
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session = error("not used")
 
-        override fun deleteSession(sessionId: SessionId) = error("not used")
+        override suspend fun deleteSession(sessionId: SessionId) = error("not used")
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult = error("not used")
 
-        override fun createRun(
+        override suspend fun createRun(
             sessionId: SessionId,
             input: String,
         ): Run =
@@ -670,20 +674,20 @@ class EntryScreenTest {
                 secondRun
             }
 
-        override fun getRunStatus(runId: RunId): Run =
+        override suspend fun getRunStatus(runId: RunId): Run =
             when (runId) {
                 activeRun.id -> activeRun
                 secondRun.id -> secondRun
                 else -> error("Unknown Run: $runId")
             }
 
-        override fun observeRun(runId: RunId): RunEventObservation {
+        override suspend fun observeRun(runId: RunId): RunEventObservation {
             if (runId == activeRun.id && !firstObservationRequested) {
                 firstObservationRequested = true
                 return firstObservation
             }
             return object : RunEventObservation {
-                override fun iterator(): Iterator<RunEvent> = emptyList<RunEvent>().iterator()
+                override suspend fun next(): RunEvent? = null
 
                 override fun close() = Unit
             }
@@ -695,16 +699,11 @@ class EntryScreenTest {
         val closed = CountDownLatch(1)
         private val release = CountDownLatch(1)
 
-        override fun iterator(): Iterator<RunEvent> =
-            object : Iterator<RunEvent> {
-                override fun hasNext(): Boolean {
-                    started.countDown()
-                    release.await(TEST_TIMEOUT_MILLIS * 6, TimeUnit.MILLISECONDS)
-                    return false
-                }
-
-                override fun next(): RunEvent = error("not used")
-            }
+        override suspend fun next(): RunEvent? {
+            started.countDown()
+            release.await(TEST_TIMEOUT_MILLIS * 6, TimeUnit.MILLISECONDS)
+            return null
+        }
 
         override fun close() {
             closed.countDown()

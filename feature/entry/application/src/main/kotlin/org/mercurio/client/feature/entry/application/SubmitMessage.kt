@@ -16,7 +16,7 @@ class SubmitMessage(
      * is set. A null selection keeps the pinned two-key request body: the optional
      * `model` and `effort` keys are omitted, never sent as null.
      */
-    fun execute(
+    suspend fun execute(
         sessionId: SessionId,
         input: String,
         selection: ModelSelection? = null,

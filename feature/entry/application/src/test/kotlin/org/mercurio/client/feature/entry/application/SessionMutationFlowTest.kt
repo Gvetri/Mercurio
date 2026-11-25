@@ -1,5 +1,6 @@
 package org.mercurio.client.feature.entry.application
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.mercurio.client.feature.entry.domain.Session
@@ -12,40 +13,41 @@ import org.mercurio.client.feature.entry.domain.SessionPinResult
 
 class SessionMutationFlowTest {
     @Test
-    fun session_mutation_use_cases_forward_the_exact_gateway_operations() {
-        val sessionId = SessionId("session-one")
-        val renamed = session(sessionId, "Renamed")
-        val gateway = RecordingSessionGateway(renamed)
+    fun session_mutation_use_cases_forward_the_exact_gateway_operations() =
+        runBlocking {
+            val sessionId = SessionId("session-one")
+            val renamed = session(sessionId, "Renamed")
+            val gateway = RecordingSessionGateway(renamed)
 
-        assertEquals(renamed, RenameSession(gateway).execute(sessionId, "Renamed"))
-        assertEquals(Unit, DeleteSession(gateway).execute(sessionId))
-        assertEquals(SessionPinResult(sessionId, pinned = true), PinSession(gateway).execute(sessionId))
-        assertEquals(SessionPinResult(sessionId, pinned = false), UnpinSession(gateway).execute(sessionId))
-        assertEquals(
-            listOf(
-                "rename:session-one:Renamed",
-                "delete:session-one",
-                "pin:session-one",
-                "unpin:session-one",
-            ),
-            gateway.operations,
-        )
-    }
+            assertEquals(renamed, RenameSession(gateway).execute(sessionId, "Renamed"))
+            assertEquals(Unit, DeleteSession(gateway).execute(sessionId))
+            assertEquals(SessionPinResult(sessionId, pinned = true), PinSession(gateway).execute(sessionId))
+            assertEquals(SessionPinResult(sessionId, pinned = false), UnpinSession(gateway).execute(sessionId))
+            assertEquals(
+                listOf(
+                    "rename:session-one:Renamed",
+                    "delete:session-one",
+                    "pin:session-one",
+                    "unpin:session-one",
+                ),
+                gateway.operations,
+            )
+        }
 
     private class RecordingSessionGateway(
         private val renamed: Session,
     ) : SessionGatewayPort {
         val operations = mutableListOf<String>()
 
-        override fun listSessions(request: SessionListRequest): SessionPage = SessionPage(emptyList(), null)
+        override suspend fun listSessions(request: SessionListRequest): SessionPage = SessionPage(emptyList(), null)
 
-        override fun createSession(title: String?): Session = error("not used")
+        override suspend fun createSession(title: String?): Session = error("not used")
 
-        override fun openSession(sessionId: SessionId): Session = error("not used")
+        override suspend fun openSession(sessionId: SessionId): Session = error("not used")
 
-        override fun loadSessionHistory(sessionId: SessionId): SessionHistory = error("not used")
+        override suspend fun loadSessionHistory(sessionId: SessionId): SessionHistory = error("not used")
 
-        override fun renameSession(
+        override suspend fun renameSession(
             sessionId: SessionId,
             title: String,
         ): Session {
@@ -53,16 +55,16 @@ class SessionMutationFlowTest {
             return renamed
         }
 
-        override fun deleteSession(sessionId: SessionId) {
+        override suspend fun deleteSession(sessionId: SessionId) {
             operations += "delete:${sessionId.value}"
         }
 
-        override fun pinSession(sessionId: SessionId): SessionPinResult {
+        override suspend fun pinSession(sessionId: SessionId): SessionPinResult {
             operations += "pin:${sessionId.value}"
             return SessionPinResult(sessionId, pinned = true)
         }
 
-        override fun unpinSession(sessionId: SessionId): SessionPinResult {
+        override suspend fun unpinSession(sessionId: SessionId): SessionPinResult {
             operations += "unpin:${sessionId.value}"
             return SessionPinResult(sessionId, pinned = false)
         }

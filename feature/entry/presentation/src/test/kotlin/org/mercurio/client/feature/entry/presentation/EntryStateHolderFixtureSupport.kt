@@ -151,7 +151,7 @@ internal class FixtureRunGateway(
     val statusRequests = CopyOnWriteArrayList<RunId>()
     val createdRunRequests = CopyOnWriteArrayList<Pair<SessionId, String>>()
 
-    override fun createRun(
+    override suspend fun createRun(
         sessionId: SessionId,
         input: String,
     ): Run {
@@ -159,12 +159,12 @@ internal class FixtureRunGateway(
         return requireNotNull(createdRun) { "Run creation is not configured for this fixture." }
     }
 
-    override fun getRunStatus(runId: RunId): Run {
+    override suspend fun getRunStatus(runId: RunId): Run {
         statusRequests += runId
         return requireNotNull(statuses[runId]) { "No fixture status for $runId" }
     }
 
-    override fun observeRun(runId: RunId): RunEventObservation = error("not used")
+    override suspend fun observeRun(runId: RunId): RunEventObservation = error("not used")
 }
 
 internal class FixtureGatewayConnectionRepository : GatewayConnectionRepository {

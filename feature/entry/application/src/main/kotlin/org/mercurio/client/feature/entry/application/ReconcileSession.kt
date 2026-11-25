@@ -12,7 +12,7 @@ class ReconcileSession(
     private val sessionGateway: SessionGatewayPort,
     private val runGateway: RunGatewayPort,
 ) {
-    fun execute(
+    suspend fun execute(
         sessionId: SessionId,
         knownRunIds: Set<RunId> = emptySet(),
     ): SessionReconciliation {
