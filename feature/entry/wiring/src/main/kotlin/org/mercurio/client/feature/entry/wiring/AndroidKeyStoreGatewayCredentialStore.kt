@@ -12,9 +12,19 @@ import java.io.File
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.util.concurrent.locks.ReentrantLock
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
+import kotlin.concurrent.withLock
 
+/**
+ * The Keystore-tier Gateway credential record: one AtomicFile under the no-backup directory
+ * holding only ciphertext, protected by an AES-256 key that never leaves the AndroidKeyStore.
+ *
+ * This port is synchronous and AtomicFile is not thread-safe, so all file and key operations
+ * serialize on one process-wide reentrant lock. A coroutine mutex needs a suspend boundary this
+ * port cannot offer, and a re-entrant call on the same thread cannot deadlock.
+ */
 class AndroidKeyStoreGatewayCredentialStore(
     context: Context,
 ) : GatewayCredentialStore {
@@ -26,7 +36,7 @@ class AndroidKeyStoreGatewayCredentialStore(
     private val atomicFile = AtomicFile(credentialFile)
 
     override fun load(): String? =
-        synchronized(storageLock) {
+        storageLock.withLock {
             runCatching {
                 val record = EncryptedGatewayCredentialRecord.decode(atomicFile.readFully())
                 AesGcmGatewayCredentialCipher(::loadKey).decrypt(record)
@@ -34,7 +44,7 @@ class AndroidKeyStoreGatewayCredentialStore(
         }
 
     override fun save(credential: String) {
-        synchronized(storageLock) {
+        storageLock.withLock {
             writeRecord(encryptedRecordOf(credential))
         }
     }
@@ -64,7 +74,7 @@ class AndroidKeyStoreGatewayCredentialStore(
     }
 
     override fun clear() {
-        synchronized(storageLock) {
+        storageLock.withLock {
             val credentialFiles = credentialFiles()
             val hasCredentialRecord = credentialFiles.any(File::exists)
             val deletionFailure = deleteAll(credentialFiles)
@@ -137,6 +147,6 @@ class AndroidKeyStoreGatewayCredentialStore(
 
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_SIZE_BITS = 256
-        private val storageLock = Any()
+        private val storageLock = ReentrantLock()
     }
 }

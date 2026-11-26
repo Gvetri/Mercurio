@@ -10,13 +10,21 @@ import java.io.File
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.util.concurrent.locks.ReentrantLock
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
+import kotlin.concurrent.withLock
 
 /**
  * The Keystore-tier blob storage of the history cache: one AtomicFile under the
  * no-backup directory holding only ciphertext, protected by a cache-specific AES-256
  * key that never leaves the AndroidKeyStore and is never persisted alongside content.
+ *
+ * This port is synchronous and AtomicFile is not thread-safe, so every file operation, and the key
+ * deletion that accompanies a clear, serializes on one process-wide reentrant lock. A coroutine
+ * mutex needs a suspend boundary this port cannot offer, and a re-entrant call on the same thread
+ * cannot deadlock. [loadOrCreateKey] runs outside this lock because the cipher calls it from the
+ * cache's read and write paths; it touches only the AndroidKeyStore.
  */
 class AndroidKeyStoreHistoryCacheStorage(
     context: Context,
@@ -29,12 +37,12 @@ class AndroidKeyStoreHistoryCacheStorage(
     private val atomicFile = AtomicFile(cacheFile)
 
     override fun read(): ByteArray? =
-        synchronized(storageLock) {
+        storageLock.withLock {
             runCatching { atomicFile.readFully() }.getOrNull()
         }
 
     override fun write(bytes: ByteArray) {
-        synchronized(storageLock) {
+        storageLock.withLock {
             val stream =
                 try {
                     atomicFile.startWrite()
@@ -53,7 +61,7 @@ class AndroidKeyStoreHistoryCacheStorage(
     }
 
     override fun clear() {
-        synchronized(storageLock) {
+        storageLock.withLock {
             val cacheFiles = cacheFiles()
             val hasCacheRecord = cacheFiles.any(File::exists)
             val deletionFailure = deleteAll(cacheFiles)
@@ -127,6 +135,6 @@ class AndroidKeyStoreHistoryCacheStorage(
 
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_SIZE_BITS = 256
-        private val storageLock = Any()
+        private val storageLock = ReentrantLock()
     }
 }

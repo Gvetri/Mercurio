@@ -221,9 +221,9 @@ detekt is pinned in `gradle/libs.versions.toml` and every Kotlin module applies 
 script declares the strict policy once: `config/detekt/detekt.yml` is layered on detekt's default
 config (`buildUponDefaultConfig`), the analysis fails on any reported finding, and the rules the gate
 relies on are enabled explicitly, so a detekt upgrade cannot quietly turn one of them off —
-`ReturnCount`, `ElseCaseInsteadOfExhaustiveWhen`, `DocumentationOverPrivateFunction`, and
-`DocumentationOverPrivateProperty`. The configuration file carries no comments; its exemptions are
-deliberate, each with its reason here:
+`ReturnCount`, `ForbiddenMethodCall`, `ForbiddenAnnotation`, `ElseCaseInsteadOfExhaustiveWhen`,
+`DocumentationOverPrivateFunction`, and `DocumentationOverPrivateProperty`. The configuration file
+carries no comments; its exemptions are deliberate, each with its reason here:
 
 - `FunctionNaming` keeps `functionPattern: '[a-zA-Z][a-zA-Z0-9]*'`, because Compose functions are
   PascalCase by convention and the pinned rule cannot exempt annotated functions, so the pattern
@@ -254,6 +254,23 @@ deliberate, each with its reason here:
   and `MagicNumber` reports an array index written as a literal, so a decode table names its part
   indexes as constants.
 
+`ForbiddenMethodCall` forbids the Kotlin `synchronized` function and `ForbiddenAnnotation` forbids
+`kotlin.jvm.Synchronized`, so a monitor cannot return to a module that detekt analyzes. Each replacement
+states its own model: the presentation uncertainty store serializes its mutations on one coroutine
+`Mutex` and publishes an immutable record map through an atomic reference, so its non-suspending
+reads take no lock and the record type itself is immutable; the two Keystore stores keep a synchronous
+port, so each serializes its non-thread-safe `AtomicFile` on one process-wide `ReentrantLock`. The
+listener re-entry that #403 cites belongs to the persistent data store's `SharedPreferences` storage:
+an `OnSharedPreferenceChangeListener` can run on the thread that commits the write, so a removal
+issued from the listener could re-enter the writer. #564 already moved that store to a `Mutex`, and
+`SharedPreferencesRunSubmissionUncertaintyStoreTest` pins the contract by removing from another
+dispatcher after the writer's `add` returns. The in-memory presentation store holds no storage and no
+callback, so no such listener exists for it. A mutation also cannot run inside the presentation
+store's critical section at all: `Mutex.withLock` takes a non-suspending action and every mutating
+method is `suspend`.
+`state-holder/no-monitor-locks` still pins the state-holder files, and these two rules cover every
+module source set that detekt analyzes.
+
 `./gradlew detekt` runs the type-resolution tasks (`detektMain` and `detektTest` for every module),
 so a rule that needs binding executes instead of silently skipping. The plain, non-type-resolving
 per-module tasks exist but stay disabled, and the aggregate never runs them.
@@ -271,8 +288,11 @@ build on every reported finding.
 
 The detekt contracts are self-tested as well: `QualityGateConfigurationTest` pins the workflow job,
 the declaration, and the configuration, and `QualityVerificationFailClosedTest` runs the real tasks
-against a deliberate violation of each of the five rules, a clean tree, a committed baseline file,
-and a skipped detekt verification.
+against a deliberate violation of `ReturnCount`, `CyclomaticComplexMethod`,
+`ElseCaseInsteadOfExhaustiveWhen`, `DocumentationOverPrivateFunction`,
+`DocumentationOverPrivateProperty`, `ForbiddenMethodCall`, and `ForbiddenAnnotation`, then checks a
+clean tree, a committed baseline file, and a skipped detekt verification. The rules without a
+violation fixture are pinned through the configuration instead.
 
 ### Comments
 
@@ -316,8 +336,10 @@ rides the checks that already exist:
 
 ## Test thread coordination
 
-A test source carries no `Thread.sleep`, no `CountDownLatch`, no `CompletableFuture`, and no
-`synchronized` block unless it is declared here. A test that observes a flow and a test that mixes
+A test source carries no `Thread.sleep`, no `CountDownLatch`, and no `CompletableFuture`, unless it is
+declared here. It also carries no `synchronized` block: `ForbiddenMethodCall` rejects one in a test
+source as well, so a test double that must serialise uses a coroutine `Mutex` or a gate instead. A
+test that observes a flow and a test that mixes
 suspend work waits through `runTest`, the scheduler (`runCurrent`, `advanceUntilIdle`), Turbine, and
 `CompletableDeferred` or `Channel` gates, so a wait is a scheduler step that can fail rather than a
 wall-clock interval that cannot.

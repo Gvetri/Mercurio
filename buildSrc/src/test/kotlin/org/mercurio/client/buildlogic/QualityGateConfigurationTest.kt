@@ -1201,6 +1201,10 @@ class QualityGateConfigurationTest {
         listOf(
             "ReturnCount:",
             "excludeGuardClauses: false",
+            "ForbiddenMethodCall:",
+            "kotlin.synchronized",
+            "ForbiddenAnnotation:",
+            "kotlin.jvm.Synchronized",
             "ElseCaseInsteadOfExhaustiveWhen:",
             "DocumentationOverPrivateFunction:",
             "DocumentationOverPrivateProperty:",
@@ -1227,6 +1231,19 @@ class QualityGateConfigurationTest {
         )
         listOf("detekt", "detektVerify").forEach { entry ->
             assertTrue("Documentation must name the $entry entry point.", documentation.contains(entry))
+        }
+        listOf("ForbiddenMethodCall", "ForbiddenAnnotation").forEach { rule ->
+            assertTrue("Documentation must record the $rule rule.", documentation.contains(rule))
+        }
+        listOf("ForbiddenMethodCall:", "ForbiddenAnnotation:").forEach { rule ->
+            val lines = configuration.lines()
+            val start = lines.indexOfFirst { line -> line.trim() == rule }
+            assertTrue("The detekt configuration must declare $rule.", start >= 0)
+            val block = lines.drop(start + 1).takeWhile { line -> line.startsWith("    ") }
+            assertTrue(
+                "The $rule rule must not exclude test sources: the ban covers them.",
+                block.none { line -> line.contains("excludes") },
+            )
         }
     }
 

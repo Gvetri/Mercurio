@@ -7,6 +7,16 @@ style:
   ReturnCount:
     active: true
     excludeGuardClauses: false
+  ForbiddenMethodCall:
+    active: true
+    methods:
+      - reason: 'A monitor hides shared-state ownership. Own the state in one confined coroutine, guard it with a Mutex across a suspend boundary, or, where the port cannot suspend, serialize it on one process-wide ReentrantLock.'
+        value: 'kotlin.synchronized'
+  ForbiddenAnnotation:
+    active: true
+    annotations:
+      - reason: 'A monitor hides shared-state ownership. Own the state in one confined coroutine, guard it with a Mutex across a suspend boundary, or, where the port cannot suspend, serialize it on one process-wide ReentrantLock.'
+        value: 'kotlin.jvm.Synchronized'
 
 potential-bugs:
   ElseCaseInsteadOfExhaustiveWhen:
