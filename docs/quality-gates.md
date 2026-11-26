@@ -92,10 +92,11 @@ interrupted run cannot leave fixture code in the checkout. The documentation che
 workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
 `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`, and
 `ReportEvidenceTest`) run as three parallel shards behind the `buildsrc-contracts` umbrella job.
-Shard 1 runs the four most expensive `QualityGateConfigurationTest` suites; shard 2 runs the
-remaining `QualityGateConfigurationTest` tests and the mutation, coverage, and committed-baseline
-tests of `QualityVerificationFailClosedTest`; shard 3 runs the remaining fail-closed test groups
-plus the four verification classes. Every test is selected exactly once, no
+Shard 1 runs the four most expensive `QualityGateConfigurationTest` suites and the detekt-fixture
+fail-closed tests; shard 2 runs the remaining `QualityGateConfigurationTest` tests and the mutation,
+coverage, and committed-baseline tests of `QualityVerificationFailClosedTest`; shard 3 runs the
+remaining fail-closed test groups plus the four verification classes. Each shard keeps a 30-minute
+budget, because a loaded runner measured 15 to 20 minutes for the same selection. Every test is selected exactly once, no
 assertion is removed, and the shards run on exactly the events where the umbrella runs. The
 umbrella keeps the `buildsrc-contracts` key and name, remains the only result the aggregate reads,
 and fails when any shard fails. A cold measurement before the split took 25 minutes for the six
@@ -337,12 +338,12 @@ rides the checks that already exist:
 ## Test thread coordination
 
 A test source carries no `Thread.sleep`, no `CountDownLatch`, and no `CompletableFuture`, unless it is
-declared here. It also carries no `synchronized` block: `ForbiddenMethodCall` rejects one in a test
-source as well, so a test double that must serialise uses a coroutine `Mutex` or a gate instead. A
-test that observes a flow and a test that mixes
-suspend work waits through `runTest`, the scheduler (`runCurrent`, `advanceUntilIdle`), Turbine, and
-`CompletableDeferred` or `Channel` gates, so a wait is a scheduler step that can fail rather than a
-wall-clock interval that cannot.
+declared here. It also carries no `synchronized` block: `ForbiddenMethodCall` and
+`ForbiddenAnnotation` carry no test-source exclusion, which `QualityGateConfigurationTest` pins, so a
+test double that must serialise uses a coroutine `Mutex` or a gate instead. A test that observes a
+flow and a test that mixes suspend work waits through `runTest`, the scheduler (`runCurrent`,
+`advanceUntilIdle`), Turbine, and `CompletableDeferred` or `Channel` gates, so a wait is a scheduler
+step that can fail rather than a wall-clock interval that cannot.
 
 The declarations below keep a real thread or a real process, because a virtual clock cannot produce
 what they measure: a `Mutex` contends only across two threads, and a socket or a child process

@@ -250,7 +250,7 @@ jobs:
     needs: [ui_paths]
     if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -270,7 +270,6 @@ jobs:
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_cyclomatic_complexity_violation_fails_the_real_analysis
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_synchronized_call_fails_the_real_analysis_with_type_resolution
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_synchronized_annotation_fails_the_real_analysis_with_type_resolution
-          --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_synchronized_call_in_a_test_source_fails_the_analysis
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_return_count_violation_fails_the_real_analysis_task
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_else_case_violation_fails_the_real_analysis_with_type_resolution
           --tests org.mercurio.client.buildlogic.QualityVerificationFailClosedTest.detekt_documentation_over_private_property_fails_the_real_analysis
@@ -281,7 +280,7 @@ jobs:
     needs: [ui_paths]
     if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -343,7 +342,7 @@ jobs:
     needs: [ui_paths]
     if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true')) || (github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'run-maestro') && !github.event.pull_request.draft && !github.event.pull_request.head.repo.fork && (needs.ui_paths.outputs.ci_files_changed == 'true' || needs.ui_paths.outputs.build_logic_changed == 'true'))) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

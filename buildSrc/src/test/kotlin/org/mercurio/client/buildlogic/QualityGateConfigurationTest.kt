@@ -1913,7 +1913,7 @@ class QualityGateConfigurationTest {
                 Regex("./gradlew -p buildSrc test").findAll(shardJob).count(),
             )
             assertTrue("Shard $shard must keep the CI --no-daemon shape.", shardJob.contains("--no-daemon"))
-            assertEquals("Shard $shard must keep a timeout above the 12-minute target.", "20", jobValue(shardJob, "timeout-minutes"))
+            assertEquals("Shard $shard must keep a timeout above the 12-minute target.", "30", jobValue(shardJob, "timeout-minutes"))
         }
         val selections =
             shardJobs.flatMap { shardJob ->

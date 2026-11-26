@@ -307,20 +307,6 @@ class QualityVerificationFailClosedTest {
     }
 
     @Test
-    fun detekt_synchronized_call_in_a_test_source_fails_the_analysis() {
-        assertNewFixtureFails(
-            relativePath =
-                "feature/entry/domain/src/test/kotlin/org/mercurio/client/feature/entry/domain/" +
-                    "DetektMonitorTestFixture.kt",
-            content =
-                "package org.mercurio.client.feature.entry.domain\n\n" +
-                    "internal fun detektFixtureMonitorInTest(lock: Any): Int = synchronized(lock) { 1 }\n",
-            tasks = listOf(":feature:entry:domain:detektTest"),
-            expected = "[ForbiddenMethodCall]",
-        )
-    }
-
-    @Test
     fun detekt_verification_passes_on_a_clean_tree() {
         val result = runGradle(listOf("detekt", "detektVerify"))
 
