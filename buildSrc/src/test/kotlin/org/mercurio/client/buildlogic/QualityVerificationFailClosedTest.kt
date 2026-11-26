@@ -275,6 +275,38 @@ class QualityVerificationFailClosedTest {
     }
 
     @Test
+    fun detekt_synchronized_call_fails_the_real_analysis_with_type_resolution() {
+        assertNewFixtureFails(
+            relativePath =
+                "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/" +
+                    "DetektMonitorCallFixture.kt",
+            content =
+                "package org.mercurio.client.feature.entry.domain\n\n" +
+                    "internal fun detektFixtureMonitorCall(lock: Any): Int = synchronized(lock) { 1 }\n",
+            tasks = listOf(":feature:entry:domain:detektMain"),
+            expected = "[ForbiddenMethodCall]",
+        )
+    }
+
+    @Test
+    fun detekt_synchronized_annotation_fails_the_real_analysis_with_type_resolution() {
+        assertNewFixtureFails(
+            relativePath =
+                "feature/entry/domain/src/main/kotlin/org/mercurio/client/feature/entry/domain/" +
+                    "DetektMonitorAnnotationFixture.kt",
+            content =
+                "package org.mercurio.client.feature.entry.domain\n\n" +
+                    "internal class DetektMonitorAnnotationFixture {\n" +
+                    "    private val value = 1\n\n" +
+                    "    @Synchronized\n" +
+                    "    fun read(): Int = value\n" +
+                    "}\n",
+            tasks = listOf(":feature:entry:domain:detektMain"),
+            expected = "[ForbiddenAnnotation]",
+        )
+    }
+
+    @Test
     fun detekt_verification_passes_on_a_clean_tree() {
         val result = runGradle(listOf("detekt", "detektVerify"))
 

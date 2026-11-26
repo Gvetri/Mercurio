@@ -9,82 +9,42 @@ internal object ProcessRunSubmissionUncertaintyStore : UncertaintyStoreState() {
         key: PendingRunSubmissionKey,
         runId: RunId,
         attemptId: String?,
-    ): Boolean =
-        synchronized(lock) {
-            val current = keys[key] ?: return false
-            if (attemptId != null && current.attemptId != attemptId) return false
-            current.boundRunId = runId
-            true
-        }
+    ): Boolean = updateIfMatching(key, attemptId) { record -> record.copy(boundRunId = runId) }
 
-    override fun boundRunId(key: PendingRunSubmissionKey): RunId? = synchronized(lock) { keys[key]?.boundRunId }
+    override fun boundRunId(key: PendingRunSubmissionKey): RunId? = records.get()[key]?.boundRunId
 
     override suspend fun markSettled(
         key: PendingRunSubmissionKey,
         attemptId: String?,
-    ): Boolean =
-        synchronized(lock) {
-            val current = keys[key] ?: return false
-            if (attemptId != null && current.attemptId != attemptId) return false
-            current.settled = true
-            true
-        }
+    ): Boolean = updateIfMatching(key, attemptId) { record -> record.copy(settled = true) }
 
-    override fun isSettled(key: PendingRunSubmissionKey): Boolean = synchronized(lock) { keys[key]?.settled == true }
+    override fun isSettled(key: PendingRunSubmissionKey): Boolean = records.get()[key]?.settled == true
 
     override suspend fun markAmbiguous(
         key: PendingRunSubmissionKey,
         attemptId: String?,
-    ): Boolean =
-        synchronized(lock) {
-            val current = keys[key] ?: return false
-            if (attemptId != null && current.attemptId != attemptId) return false
-            current.requiresRunMatch = true
-            true
-        }
+    ): Boolean = updateIfMatching(key, attemptId) { record -> record.copy(requiresRunMatch = true) }
 
-    override fun requiresRunMatch(key: PendingRunSubmissionKey): Boolean =
-        synchronized(lock) {
-            keys[key]?.requiresRunMatch == true
-        }
+    override fun requiresRunMatch(key: PendingRunSubmissionKey): Boolean = records.get()[key]?.requiresRunMatch == true
 
     override suspend fun removeIfKnownRunIdsMatch(
         key: PendingRunSubmissionKey,
         knownRunIds: Set<RunId>,
         attemptId: String?,
     ): Boolean =
-        synchronized(lock) {
-            val current = keys[key]
-            if (
-                current == null ||
-                current.knownRunIds.toSet() != knownRunIds ||
-                !current.matchesAttempt(attemptId)
-            ) {
-                false
-            } else {
-                keys.remove(key)
-                true
-            }
+        removeIfMatching(key) { record ->
+            record.knownRunIds == knownRunIds && record.matchesAttempt(attemptId)
         }
-
-    private fun UncertaintyRecord.matchesSnapshot(snapshot: RunSubmissionUncertaintySnapshot): Boolean =
-        attemptId == snapshot.attemptId &&
-            knownRunIds.toSet() == snapshot.knownRunIds &&
-            boundRunId == snapshot.boundRunId &&
-            settled == snapshot.settled &&
-            requiresRunMatch == snapshot.requiresRunMatch
 
     override suspend fun removeIfSnapshotMatches(
         key: PendingRunSubmissionKey,
         snapshot: RunSubmissionUncertaintySnapshot,
-    ): Boolean =
-        synchronized(lock) {
-            val current = keys[key] ?: return@synchronized false
-            if (current.matchesSnapshot(snapshot)) {
-                keys.remove(key)
-                true
-            } else {
-                false
-            }
-        }
+    ): Boolean = removeIfMatching(key) { record -> record.matchesSnapshot(snapshot) }
+
+    private fun UncertaintyRecord.matchesSnapshot(snapshot: RunSubmissionUncertaintySnapshot): Boolean =
+        attemptId == snapshot.attemptId &&
+            knownRunIds == snapshot.knownRunIds &&
+            boundRunId == snapshot.boundRunId &&
+            settled == snapshot.settled &&
+            requiresRunMatch == snapshot.requiresRunMatch
 }
