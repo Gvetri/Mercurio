@@ -92,10 +92,11 @@ interrupted run cannot leave fixture code in the checkout. The documentation che
 workflow-contract classes (`QualityGateConfigurationTest`, `QualityVerificationFailClosedTest`,
 `CoverageEvidenceTest`, `MutationEvidenceTest`, `BoundaryDoubleVerifierTest`, and
 `ReportEvidenceTest`) run as three parallel shards behind the `buildsrc-contracts` umbrella job.
-Shard 1 runs the four most expensive `QualityGateConfigurationTest` suites and the detekt-fixture
-fail-closed tests; shard 2 runs the remaining `QualityGateConfigurationTest` tests and the mutation,
-coverage, and committed-baseline tests of `QualityVerificationFailClosedTest`; shard 3 runs the
-remaining fail-closed test groups plus the four verification classes. Each shard keeps a 30-minute
+Shard 1 runs the four most expensive `QualityGateConfigurationTest` suites plus six of the eight
+detekt-fixture fail-closed cases; shard 2 runs the remaining `QualityGateConfigurationTest` tests and
+the mutation, coverage, and committed-baseline tests of `QualityVerificationFailClosedTest`; shard 3
+runs the remaining fail-closed groups, including the clean-tree analysis and the private-function
+fixture, plus the four verification classes. Each shard keeps a 30-minute
 budget, because a loaded runner measured 15 to 20 minutes for the same selection. Every test is selected exactly once, no
 assertion is removed, and the shards run on exactly the events where the umbrella runs. The
 umbrella keeps the `buildsrc-contracts` key and name, remains the only result the aggregate reads,
